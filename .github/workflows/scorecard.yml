@@ -70,14 +70,3 @@ jobs:
         with:
           sarif_file: results.sarif
 
-      # Generate summary for PR comments
-      - name: "Generate scorecard summary"
-        if: github.event_name == 'pull_request'
-        run: |
-          echo "## 🔒 OSSF Scorecard Security Analysis" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "This PR has been analyzed by OSSF Scorecard for supply chain security." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📊 **Results uploaded to Security tab**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔍 Review the security findings in the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning)" >> $GITHUB_STEP_SUMMARY
