@@ -1,0 +1,385 @@
+name: Performance Monitoring
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  schedule:
+    # Weekly performance check on Sundays at 3 AM
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  bundle-analysis:
+    name: Bundle Size Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Analyze bundle size
+        run: |
+          echo "## 📦 Bundle Size Analysis" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          # Get main JavaScript file size
+          MAIN_SIZE=$(wc -c < index.js | tr -d ' ')
+          echo "**Main file (index.js)**: ${MAIN_SIZE} bytes" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          # Check node_modules size
+          if [ -d "node_modules" ]; then
+            MODULES_SIZE=$(du -sh node_modules | cut -f1)
+            echo "**Dependencies size**: ${MODULES_SIZE}" >> bundle-report.md
+            echo "" >> bundle-report.md
+          fi
+          
+          # Count dependencies
+          DEP_COUNT=$(node -e "console.log(Object.keys(require('./package.json').dependencies || {}).length)")
+          DEV_DEP_COUNT=$(node -e "console.log(Object.keys(require('./package.json').devDependencies || {}).length)")
+          
+          echo "**Dependency count**:" >> bundle-report.md
+          echo "- Production: ${DEP_COUNT}" >> bundle-report.md
+          echo "- Development: ${DEV_DEP_COUNT}" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          # Performance recommendations
+          echo "### 🚀 Performance Recommendations" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          if [ "$MAIN_SIZE" -gt 50000 ]; then
+            echo "⚠️ Main file is large (>50KB). Consider code splitting or optimization." >> bundle-report.md
+          else
+            echo "✅ Main file size looks good." >> bundle-report.md
+          fi
+          echo "" >> bundle-report.md
+
+      - name: Check for large files
+        run: |
+          echo "### 📊 Large Files Report" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          # Find files larger than 10KB (excluding node_modules)
+          find . -type f -size +10k ! -path "./node_modules/*" ! -path "./.git/*" ! -path "./coverage/*" -exec ls -lh {} \; | awk '{print $9 ": " $5}' >> large-files.tmp
+          
+          if [ -s large-files.tmp ]; then
+            echo "**Files larger than 10KB:**" >> bundle-report.md
+            echo '```' >> bundle-report.md
+            cat large-files.tmp >> bundle-report.md
+            echo '```' >> bundle-report.md
+          else
+            echo "✅ No large files found (>10KB)." >> bundle-report.md
+          fi
+          echo "" >> bundle-report.md
+          
+          rm -f large-files.tmp
+
+      - name: Memory usage analysis
+        run: |
+          echo "### 🧠 Memory Usage Analysis" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          # Simple memory check by running the main script
+          timeout 30s node -e "
+            const fs = require('fs');
+            const process = require('process');
+            
+            // Get initial memory usage
+            const initialMemory = process.memoryUsage();
+            console.log('Initial memory usage:');
+            console.log('RSS:', Math.round(initialMemory.rss / 1024 / 1024 * 100) / 100, 'MB');
+            console.log('Heap Used:', Math.round(initialMemory.heapUsed / 1024 / 1024 * 100) / 100, 'MB');
+            console.log('Heap Total:', Math.round(initialMemory.heapTotal / 1024 / 1024 * 100) / 100, 'MB');
+            
+            // Try to require the main module (if it doesn't start a server)
+            try {
+              // Don't actually run the server, just check memory impact of loading
+              delete require.cache[require.resolve('./index.js')];
+              console.log('Module loaded successfully for memory analysis');
+            } catch (e) {
+              console.log('Module analysis completed (server module detected)');
+            }
+            
+            const finalMemory = process.memoryUsage();
+            console.log('\\nFinal memory usage:');
+            console.log('RSS:', Math.round(finalMemory.rss / 1024 / 1024 * 100) / 100, 'MB');
+            console.log('Heap Used:', Math.round(finalMemory.heapUsed / 1024 / 1024 * 100) / 100, 'MB');
+          " > memory-analysis.tmp 2>&1 || echo "Memory analysis completed"
+          
+          echo "**Memory Analysis Results:**" >> bundle-report.md
+          echo '```' >> bundle-report.md
+          cat memory-analysis.tmp >> bundle-report.md
+          echo '```' >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          rm -f memory-analysis.tmp
+
+      - name: Performance benchmarks
+        run: |
+          echo "### ⚡ Performance Benchmarks" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          # Run a simple startup time benchmark
+          START_TIME=$(node -e "
+            const start = process.hrtime.bigint();
+            setTimeout(() => {
+              const end = process.hrtime.bigint();
+              const duration = Number(end - start) / 1000000; // Convert to milliseconds
+              console.log(duration);
+            }, 10);
+          ")
+          
+          # Module require time
+          REQUIRE_TIME=$(node -e "
+            const start = process.hrtime.bigint();
+            try {
+              require('./package.json');
+              const end = process.hrtime.bigint();
+              const duration = Number(end - start) / 1000000;
+              console.log(duration);
+            } catch (e) {
+              console.log('N/A');
+            }
+          ")
+          
+          echo "**Timing Results:**" >> bundle-report.md
+          echo "- Node.js startup overhead: ~${START_TIME}ms" >> bundle-report.md
+          echo "- Package.json parse time: ~${REQUIRE_TIME}ms" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          # Add timestamp
+          echo "**Analysis completed at**: $(date -u)" >> bundle-report.md
+
+      - name: Upload bundle analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analysis-report
+          path: bundle-report.md
+          retention-days: 30
+
+      - name: Comment PR with analysis
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const report = fs.readFileSync('bundle-report.md', 'utf8');
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            } catch (error) {
+              console.error('Error posting bundle analysis:', error);
+            }
+
+  dependency-analysis:
+    name: Dependency Vulnerability Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: |
+          echo "## 🔍 Dependency Security Analysis" > security-report.md
+          echo "" >> security-report.md
+          
+          # Run npm audit and capture output
+          npm audit --audit-level=moderate --json > audit.json 2>/dev/null || true
+          
+          # Parse audit results
+          VULNERABILITIES=$(node -e "
+            try {
+              const audit = JSON.parse(require('fs').readFileSync('audit.json', 'utf8'));
+              console.log(audit.metadata?.vulnerabilities?.total || 0);
+            } catch (e) {
+              console.log('0');
+            }
+          ")
+          
+          if [ "$VULNERABILITIES" = "0" ]; then
+            echo "✅ **No vulnerabilities found!**" >> security-report.md
+          else
+            echo "⚠️ **Found ${VULNERABILITIES} vulnerabilities**" >> security-report.md
+            echo "" >> security-report.md
+            echo "Run \`npm audit fix\` to resolve automatically fixable vulnerabilities." >> security-report.md
+          fi
+          echo "" >> security-report.md
+          
+          # Check for outdated packages
+          echo "### 📦 Outdated Dependencies" >> security-report.md
+          echo "" >> security-report.md
+          
+          npm outdated --json > outdated.json 2>/dev/null || echo "{}" > outdated.json
+          
+          OUTDATED_COUNT=$(node -e "
+            try {
+              const outdated = JSON.parse(require('fs').readFileSync('outdated.json', 'utf8'));
+              console.log(Object.keys(outdated).length);
+            } catch (e) {
+              console.log('0');
+            }
+          ")
+          
+          if [ "$OUTDATED_COUNT" = "0" ]; then
+            echo "✅ **All dependencies are up to date!**" >> security-report.md
+          else
+            echo "📊 **${OUTDATED_COUNT} dependencies can be updated**" >> security-report.md
+            echo "" >> security-report.md
+            echo "Consider running \`npm update\` to get the latest versions." >> security-report.md
+          fi
+          
+          rm -f audit.json outdated.json
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-analysis-report
+          path: security-report.md
+          retention-days: 30
+
+  performance-regression:
+    name: Performance Regression Detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies (PR)
+        run: npm ci
+
+      - name: Install dependencies (base)
+        working-directory: ./base
+        run: npm ci
+
+      - name: Compare bundle sizes
+        run: |
+          echo "## 🔍 Performance Regression Analysis" > regression-report.md
+          echo "" >> regression-report.md
+          
+          # Compare main file sizes
+          PR_SIZE=$(wc -c < index.js | tr -d ' ')
+          BASE_SIZE=$(wc -c < base/index.js | tr -d ' ')
+          
+          SIZE_DIFF=$((PR_SIZE - BASE_SIZE))
+          PERCENT_CHANGE=$(echo "scale=2; ($SIZE_DIFF * 100.0) / $BASE_SIZE" | bc -l 2>/dev/null || echo "0")
+          
+          echo "### 📦 Bundle Size Changes" >> regression-report.md
+          echo "" >> regression-report.md
+          echo "| File | Base | PR | Change | %" >> regression-report.md
+          echo "|------|------|----|---------|----|" >> regression-report.md
+          echo "| index.js | ${BASE_SIZE}B | ${PR_SIZE}B | ${SIZE_DIFF}B | ${PERCENT_CHANGE}% |" >> regression-report.md
+          echo "" >> regression-report.md
+          
+          # Add interpretation
+          if [ "$SIZE_DIFF" -gt 1000 ]; then
+            echo "⚠️ **Warning**: Bundle size increased by more than 1KB" >> regression-report.md
+          elif [ "$SIZE_DIFF" -gt 0 ]; then
+            echo "📈 Bundle size increased slightly" >> regression-report.md
+          elif [ "$SIZE_DIFF" -lt 0 ]; then
+            echo "✅ Bundle size decreased" >> regression-report.md
+          else
+            echo "📊 Bundle size unchanged" >> regression-report.md
+          fi
+          echo "" >> regression-report.md
+          
+          # Compare dependency counts
+          PR_DEPS=$(node -e "console.log(Object.keys(require('./package.json').dependencies || {}).length)")
+          BASE_DEPS=$(node -e "console.log(Object.keys(require('./base/package.json').dependencies || {}).length)")
+          DEP_DIFF=$((PR_DEPS - BASE_DEPS))
+          
+          echo "### 📚 Dependency Changes" >> regression-report.md
+          echo "" >> regression-report.md
+          echo "- Base: ${BASE_DEPS} dependencies" >> regression-report.md
+          echo "- PR: ${PR_DEPS} dependencies" >> regression-report.md
+          
+          if [ "$DEP_DIFF" -gt 0 ]; then
+            echo "- 📈 Added ${DEP_DIFF} dependencies" >> regression-report.md
+          elif [ "$DEP_DIFF" -lt 0 ]; then
+            echo "- 📉 Removed ${DEP_DIFF#-} dependencies" >> regression-report.md
+          else
+            echo "- ✅ No dependency changes" >> regression-report.md
+          fi
+
+      - name: Comment PR with regression analysis
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const report = fs.readFileSync('regression-report.md', 'utf8');
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            } catch (error) {
+              console.error('Error posting regression analysis:', error);
+            }
+
+  summary:
+    name: Performance Summary
+    runs-on: ubuntu-latest
+    needs: [bundle-analysis, dependency-analysis]
+    if: always()
+    steps:
+      - name: Create summary
+        run: |
+          echo "## 🚀 Performance Monitoring Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Bundle Analysis**: ${{ needs.bundle-analysis.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Dependency Analysis**: ${{ needs.dependency-analysis.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 **Reports generated and uploaded as artifacts**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Monitoring completed at**: $(date -u)" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,315 @@
+name: Release Automation
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of release'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+          - prerelease
+      dry_run:
+        description: 'Dry run (no actual release)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  check-changes:
+    name: Check for Release-worthy Changes
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      release_type: ${{ steps.check.outputs.release_type }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check conventional commits
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            
+            // Get commits since last release
+            let commits = [];
+            try {
+              const output = execSync('git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges', { encoding: 'utf8' });
+              commits = output.trim().split('\n').filter(line => line.trim());
+            } catch (e) {
+              // If no tags exist, get all commits
+              const output = execSync('git log --oneline --no-merges', { encoding: 'utf8' });
+              commits = output.trim().split('\n').filter(line => line.trim());
+            }
+            
+            if (commits.length === 0 || (commits.length === 1 && !commits[0])) {
+              console.log('No new commits found');
+              core.setOutput('should_release', 'false');
+              return;
+            }
+            
+            console.log(`Analyzing ${commits.length} commits:`);
+            commits.forEach(commit => console.log(`  ${commit}`));
+            
+            let hasBreaking = false;
+            let hasFeature = false;
+            let hasFix = false;
+            
+            for (const commit of commits) {
+              const msg = commit.toLowerCase();
+              if (msg.includes('breaking change') || msg.includes('!:')) {
+                hasBreaking = true;
+              } else if (msg.startsWith('feat:') || msg.startsWith('feature:')) {
+                hasFeature = true;
+              } else if (msg.startsWith('fix:') || msg.startsWith('bugfix:')) {
+                hasFix = true;
+              }
+            }
+            
+            let releaseType = 'none';
+            if (hasBreaking) {
+              releaseType = 'major';
+            } else if (hasFeature) {
+              releaseType = 'minor';
+            } else if (hasFix) {
+              releaseType = 'patch';
+            }
+            
+            // Override with manual input if provided
+            const manualType = '${{ github.event.inputs.release_type }}';
+            if (manualType && manualType !== 'auto') {
+              releaseType = manualType;
+            }
+            
+            const shouldRelease = releaseType !== 'none' || '${{ github.event.inputs.dry_run }}' === 'true';
+            
+            console.log(`Release decision: ${shouldRelease ? 'YES' : 'NO'} (type: ${releaseType})`);
+            
+            core.setOutput('should_release', shouldRelease.toString());
+            core.setOutput('release_type', releaseType);
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: check-changes
+    if: needs.check-changes.outputs.should_release == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run linting
+        run: npm run lint || npx eslint .
+
+      - name: Generate changelog
+        id: changelog
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            
+            // Get current version
+            const package = require('./package.json');
+            const currentVersion = package.version;
+            
+            // Get commits since last release
+            let commits = [];
+            try {
+              const output = execSync('git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%h %s" --no-merges', { encoding: 'utf8' });
+              commits = output.trim().split('\n').filter(line => line.trim());
+            } catch (e) {
+              const output = execSync('git log --pretty=format:"%h %s" --no-merges', { encoding: 'utf8' });
+              commits = output.trim().split('\n').filter(line => line.trim());
+            }
+            
+            // Categorize commits
+            const features = [];
+            const fixes = [];
+            const breaking = [];
+            const other = [];
+            
+            commits.forEach(commit => {
+              const [hash, ...msgParts] = commit.split(' ');
+              const msg = msgParts.join(' ');
+              const lowerMsg = msg.toLowerCase();
+              
+              if (lowerMsg.includes('breaking change') || lowerMsg.includes('!:')) {
+                breaking.push(`- ${msg} (${hash})`);
+              } else if (lowerMsg.startsWith('feat:') || lowerMsg.startsWith('feature:')) {
+                features.push(`- ${msg.replace(/^feat:\s?/i, '').replace(/^feature:\s?/i, '')} (${hash})`);
+              } else if (lowerMsg.startsWith('fix:') || lowerMsg.startsWith('bugfix:')) {
+                fixes.push(`- ${msg.replace(/^fix:\s?/i, '').replace(/^bugfix:\s?/i, '')} (${hash})`);
+              } else {
+                other.push(`- ${msg} (${hash})`);
+              }
+            });
+            
+            // Generate changelog
+            let changelog = `## Changes\n\n`;
+            
+            if (breaking.length > 0) {
+              changelog += `### 💥 Breaking Changes\n${breaking.join('\n')}\n\n`;
+            }
+            if (features.length > 0) {
+              changelog += `### ✨ New Features\n${features.join('\n')}\n\n`;
+            }
+            if (fixes.length > 0) {
+              changelog += `### 🐛 Bug Fixes\n${fixes.join('\n')}\n\n`;
+            }
+            if (other.length > 0) {
+              changelog += `### 📝 Other Changes\n${other.join('\n')}\n\n`;
+            }
+            
+            changelog += `**Full Changelog**: https://github.com/${{ github.repository }}/compare/v${currentVersion}...HEAD`;
+            
+            core.setOutput('changelog', changelog);
+            return changelog;
+
+      - name: Bump version
+        id: version
+        run: |
+          RELEASE_TYPE="${{ needs.check-changes.outputs.release_type }}"
+          echo "Release type: $RELEASE_TYPE"
+          
+          if [ "$RELEASE_TYPE" = "none" ]; then
+            echo "No version bump needed"
+            echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          else
+            NEW_VERSION=$(npm version $RELEASE_TYPE --no-git-tag-version)
+            echo "version=${NEW_VERSION#v}" >> $GITHUB_OUTPUT
+            echo "Bumped to version: $NEW_VERSION"
+          fi
+
+      - name: Commit version bump
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+
+      - name: Create Git tag
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+
+      - name: Push changes
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git push origin main
+          git push origin "v${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          release_name: Release v${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+
+      - name: Dry run summary
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "## 🧪 Dry Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Would create release:** v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Changelog preview:**" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.changelog.outputs.changelog }}' >> $GITHUB_STEP_SUMMARY
+
+  notify:
+    name: Post-release Notifications
+    runs-on: ubuntu-latest
+    needs: [check-changes, release]
+    if: success() && needs.check-changes.outputs.should_release == 'true' && github.event.inputs.dry_run != 'true'
+    steps:
+      - name: Update README badge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.log('🎉 Release completed successfully!');
+            console.log('Consider updating documentation or notifying stakeholders.');
+
+      - name: Create follow-up issue for documentation
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: `📝 Update documentation for release v${{ steps.version.outputs.version }}`,
+              body: `## Post-release Documentation Tasks
+              
+              A new release has been created. Please review and update:
+              
+              - [ ] Update CHANGELOG.md with detailed changes
+              - [ ] Review README.md for any needed updates
+              - [ ] Update any version-specific documentation
+              - [ ] Notify users about breaking changes (if any)
+              - [ ] Update examples if API changed
+              
+              **Release**: v${{ steps.version.outputs.version }}
+              **Auto-created by**: Release automation workflow`,
+              labels: ['documentation', 'automated', 'post-release']
+            });
+
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    needs: [check-changes, release]
+    if: always()
+    steps:
+      - name: Workflow summary
+        run: |
+          echo "## 🚀 Release Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Should Release**: ${{ needs.check-changes.outputs.should_release }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Type**: ${{ needs.check-changes.outputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Dry Run**: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.release.result }}" = "success" ]; then
+            echo "✅ **Release Status**: Completed successfully" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.check-changes.outputs.should_release }}" = "false" ]; then
+            echo "⏭️ **Release Status**: Skipped (no release-worthy changes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Release Status**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi

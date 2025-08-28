@@ -1,0 +1,73 @@
+# Configuration for PR file-based labeling
+
+# Documentation changes
+documentation:
+  - changed-files:
+    - any-glob-to-any-file: ['**/*.md', 'docs/**', '*.rst', '*.txt']
+
+# Code changes
+code:
+  - changed-files:
+    - any-glob-to-any-file: ['**/*.js', '**/*.mjs', '**/*.ts', '**/*.tsx']
+
+# Test changes
+testing:
+  - changed-files:
+    - any-glob-to-any-file: ['test/**', '**/*.test.*', '**/*.spec.*', '**/tests/**', '**/__tests__/**']
+
+# Configuration changes
+configuration:
+  - changed-files:
+    - any-glob-to-any-file: 
+      - '*.json'
+      - '*.yml' 
+      - '*.yaml'
+      - '.env*'
+      - '.*rc*'
+      - '*.config.*'
+      - 'package.json'
+      - 'package-lock.json'
+
+# GitHub Actions / CI changes
+ci-cd:
+  - changed-files:
+    - any-glob-to-any-file: ['.github/**', 'Dockerfile', 'docker-compose.*', '*.Dockerfile']
+
+# Security related
+security:
+  - changed-files:
+    - any-glob-to-any-file: 
+      - '.audit-ci.json'
+      - '.github/workflows/codeql.yml'
+      - '.github/workflows/scorecard.yml'
+      - '.github/codeql/**'
+
+# Dependencies
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file: ['package.json', 'package-lock.json', 'npm-shrinkwrap.json']
+
+# Database related
+database:
+  - changed-files:
+    - any-glob-to-any-file: ['**/*sql*', '**/*db*', '**/*database*']
+
+# MCP specific
+mcp:
+  - changed-files:
+    - any-glob-to-any-file: ['index.js', '**/*mcp*']
+
+# Git hooks
+hooks:
+  - changed-files:
+    - any-glob-to-any-file: ['.git/hooks/**', '.husky/**']
+
+# Tooling
+tooling:
+  - changed-files:
+    - any-glob-to-any-file: 
+      - '.eslintrc.*'
+      - '.prettier*'
+      - '.markdownlint*'
+      - 'vitest.config.*'
+      - '.gitignore'

@@ -1,0 +1,59 @@
+# Configuration for automatic issue labeling based on content
+
+bug:
+  - '\b(bug|error|issue|problem|broken|fail|crash|exception)\b'
+  - '\b(not working|doesn\'t work|does not work)\b'
+
+enhancement:
+  - '\b(feature|enhancement|improvement|request)\b'
+  - '\b(add|implement|support|include)\b'
+
+documentation:
+  - '\b(doc|docs|documentation|readme|guide)\b'
+  - '\b(typo|spelling|grammar)\b'
+
+question:
+  - '\b(question|how to|help|support)\b'
+  - '\?'
+
+security:
+  - '\b(security|vulnerability|exploit|CVE|authentication|authorization)\b'
+  - '\b(password|token|credential|secret)\b'
+
+performance:
+  - '\b(performance|speed|slow|fast|optimization|memory|cpu)\b'
+  - '\b(timeout|latency|response time)\b'
+
+database:
+  - '\b(sql server|mssql|database|connection|query)\b'
+  - '\b(table|schema|stored procedure)\b'
+
+mcp:
+  - '\b(mcp|model context protocol|warp)\b'
+  - '\b(tool|execute|list|describe)\b'
+
+testing:
+  - '\b(test|testing|spec|coverage|vitest)\b'
+  - '\b(unit test|integration test)\b'
+
+configuration:
+  - '\b(config|configuration|setup|install)\b'
+  - '\b(environment|env|variable)\b'
+
+dependencies:
+  - '\b(dependency|package|npm|node_modules)\b'
+  - '\b(version|update|upgrade)\b'
+
+ci-cd:
+  - '\b(ci|cd|github actions|workflow|build|deploy)\b'
+  - '\b(pipeline|automation)\b'
+
+duplicate:
+  - '\b(duplicate|duplicated|same as|similar to)\b'
+
+wontfix:
+  - '\b(wont fix|will not fix|by design)\b'
+
+good first issue:
+  - '\b(good first issue|beginner|easy|starter)\b'
+  - '\b(newcomer|first contribution)\b'

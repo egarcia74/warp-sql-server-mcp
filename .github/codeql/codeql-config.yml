@@ -1,0 +1,44 @@
+name: "CodeQL Config"
+
+# Disable default queries and run only security-focused ones
+disable-default-queries: false
+
+# Additional query packs to run
+packs:
+  - codeql/javascript-queries:AlertSuppression.ql
+  - codeql/javascript-queries:Security.ql
+  - codeql/javascript-queries:experimental/Security.ql
+
+# Custom queries
+queries:
+  - name: security-extended
+    uses: security-extended
+  - name: security-and-quality
+    uses: security-and-quality
+
+# Paths to ignore during analysis
+paths-ignore:
+  - node_modules/
+  - coverage/
+  - dist/
+  - build/
+  - '**/*.test.js'
+  - '**/*.spec.js'
+  - '**/__tests__/**'
+  - '**/__mocks__/**'
+  - test/setup.js
+
+# Paths to include (overrides ignore rules)
+paths:
+  - src/
+  - index.js
+  - '**/*.js'
+  - '**/*.mjs'
+  - '**/*.ts'
+
+# Query filters
+query-filters:
+  - exclude:
+      id: js/unused-local-variable
+  - include:
+      tags: security

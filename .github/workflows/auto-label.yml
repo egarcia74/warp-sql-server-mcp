@@ -1,0 +1,141 @@
+name: Auto Label PRs and Issues
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issues:
+    types: [opened, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  auto-label:
+    name: Auto Label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Label PRs based on changed files
+      - name: Label PRs by file changes
+        if: github.event_name == 'pull_request'
+        uses: actions/labeler@v5
+        with:
+          configuration-path: .github/labeler.yml
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          sync-labels: true
+
+      # Label based on PR size
+      - name: Label PR size
+        if: github.event_name == 'pull_request'
+        uses: pascalgn/size-label-action@v0.5.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          sizes: >
+            {
+              "xs": 10,
+              "s": 30,
+              "m": 100,
+              "l": 500,
+              "xl": 1000,
+              "xxl": 2000
+            }
+
+      # Auto-label issues based on content
+      - name: Label issues by content
+        if: github.event_name == 'issues'
+        uses: github/issue-labeler@v3.4
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/issue-labeler.yml
+          include-title: true
+          include-body: true
+
+      # Label for first-time contributors
+      - name: Label first-time contributor
+        if: github.event_name == 'pull_request'
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-message: |
+            👋 Thanks for your first contribution to this project! 
+            
+            We appreciate you taking the time to contribute. Your PR will be reviewed soon.
+            
+            Please make sure:
+            - [ ] You've read our contributing guidelines
+            - [ ] Tests pass locally
+            - [ ] Code follows our style guide
+            
+            Welcome to the community! 🎉
+          issue-message: |
+            👋 Thanks for opening your first issue! 
+            
+            We appreciate you taking the time to report this. Someone will look into it soon.
+            
+            Please make sure you've provided all the necessary information to help us understand and reproduce the issue.
+
+      # Auto-assign reviewers for PRs
+      - name: Auto-assign reviewers
+        if: github.event_name == 'pull_request'
+        uses: kentaro-m/auto-assign-action@v1.2.6
+        with:
+          configuration-path: .github/auto_assign.yml
+
+  dependency-label:
+    name: Label Dependencies
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && contains(github.head_ref, 'dependabot')
+    steps:
+      - name: Add dependency labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            const prTitle = context.payload.pull_request.title.toLowerCase();
+            
+            const labels = [];
+            
+            if (prTitle.includes('deps:')) {
+              labels.push('dependencies');
+            }
+            
+            if (prTitle.includes('deps-dev:')) {
+              labels.push('dependencies', 'dev-dependencies');
+            }
+            
+            if (prTitle.includes('security')) {
+              labels.push('security');
+            }
+            
+            if (prTitle.includes('@types/')) {
+              labels.push('typescript');
+            }
+            
+            if (prTitle.includes('eslint') || prTitle.includes('prettier')) {
+              labels.push('tooling');
+            }
+            
+            if (prTitle.includes('vitest') || prTitle.includes('test')) {
+              labels.push('testing');
+            }
+            
+            if (prTitle.includes('@azure/') || prTitle.includes('mssql')) {
+              labels.push('azure', 'database');
+            }
+            
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: number,
+                labels
+              });
+            }

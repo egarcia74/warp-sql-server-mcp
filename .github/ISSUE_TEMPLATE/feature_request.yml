@@ -1,0 +1,134 @@
+name: ✨ Feature Request
+description: Suggest an idea for this project
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+assignees:
+  - egarcia74
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! ✨
+        
+        Before submitting:
+        - Search existing issues to see if someone has already suggested this
+        - Consider if this fits the scope of this MCP server
+        - Think about backwards compatibility
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of what you want to happen.
+      placeholder: I would like to see...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: I'm frustrated when... / It would be helpful if...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see implemented.
+      placeholder: |
+        The feature could work by...
+        - New MCP tool: `new_tool_name`
+        - Parameters: ...
+        - Expected output: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered.
+      placeholder: I also considered... / Another approach could be...
+
+  - type: dropdown
+    id: feature-category
+    attributes:
+      label: Feature Category
+      description: What category does this feature fall into?
+      options:
+        - New MCP Tool
+        - Database Operation Enhancement
+        - Authentication/Security
+        - Performance Improvement
+        - Developer Experience
+        - Documentation
+        - Configuration
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Low - Nice to have
+        - Medium - Would be helpful
+        - High - Important for my use case
+        - Critical - Blocking my work
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use Cases
+      description: Describe specific use cases where this feature would be valuable
+      placeholder: |
+        1. When working with large datasets...
+        2. For users who need to...
+        3. In scenarios where...
+
+  - type: textarea
+    id: sql-context
+    attributes:
+      label: SQL Server Context
+      description: How does this relate to SQL Server functionality?
+      placeholder: |
+        - SQL Server feature: T-SQL functions, stored procedures, etc.
+        - Database versions affected: 2016, 2019, 2022
+        - Specific SQL operations: SELECT, INSERT, etc.
+
+  - type: textarea
+    id: implementation-ideas
+    attributes:
+      label: Implementation Ideas
+      description: Any ideas on how this could be implemented? (optional)
+      placeholder: |
+        - Could use SQL Server's ... feature
+        - Might require changes to...
+        - Similar to existing tool...
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Would you be willing to help implement this feature?
+      options:
+        - label: I'd be willing to submit a PR for this feature
+        - label: I can help with testing
+        - label: I can help with documentation
+        - label: I can provide SQL Server expertise
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

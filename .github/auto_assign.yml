@@ -1,0 +1,48 @@
+# Set to true to add reviewers to pull requests
+addReviewers: true
+
+# Set to true to add assignees to pull requests
+addAssignees: false
+
+# A list of reviewers to be added to pull requests (GitHub user name)
+reviewers: 
+  - egarcia74
+
+# A list of assignees to be added to pull requests (GitHub user name)
+assignees: []
+
+# Number of reviewers added to the pull request
+# Set 0 to add all the reviewers (default: 0)
+numberOfReviewers: 1
+
+# Number of assignees to add to the pull request
+# Set to 0 to add all the assignees to the pull request (default: 0)
+numberOfAssignees: 0
+
+# Set to true to skip adding reviewers/assignees when a pull request has an empty body
+skipDraftPR: true
+
+# Keywords list that will be skipped from adding reviewers/assignees
+skipKeywords:
+  - wip
+  - draft
+  - do not review
+
+# List of GitHub logins to skip as reviewers
+skipUsers:
+  - dependabot[bot]
+  - github-actions[bot]
+
+# Review assignment based on file changes
+# Assign reviewers based on modified files
+fileAssignees:
+  '*.md':
+    - egarcia74
+  '*.js':
+    - egarcia74
+  'test/**':
+    - egarcia74
+  '.github/**':
+    - egarcia74
+  'package*.json':
+    - egarcia74

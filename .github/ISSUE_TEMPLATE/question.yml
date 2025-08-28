@@ -1,0 +1,121 @@
+name: ❓ Question / Help
+description: Ask a question or get help with setup/configuration
+title: "[Question]: "
+labels: ["question", "help wanted"]
+assignees:
+  - egarcia74
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reaching out for help! ❓
+        
+        Before asking:
+        - Check the README.md for setup instructions
+        - Look through existing issues and discussions
+        - Make sure you've followed the troubleshooting guide
+
+  - type: dropdown
+    id: question-type
+    attributes:
+      label: Question Type
+      description: What type of help do you need?
+      options:
+        - Setup/Installation
+        - Configuration
+        - SQL Server Connection Issues
+        - MCP Client Integration (Warp, Claude, etc.)
+        - Authentication Problems
+        - Performance Questions
+        - Usage/How-to
+        - General Question
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+      placeholder: How do I...? / I'm trying to... / I don't understand...
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-tried
+    attributes:
+      label: What have you tried?
+      description: What steps have you already taken to solve this?
+      placeholder: |
+        - Read the documentation
+        - Tried configuration X
+        - Searched for similar issues
+        - etc.
+
+  - type: textarea
+    id: current-setup
+    attributes:
+      label: Current Setup
+      description: Describe your current configuration (remove sensitive information)
+      placeholder: |
+        - Platform: Windows/macOS/Linux
+        - Node.js version: 18.x
+        - SQL Server version: 2019
+        - MCP Client: Warp/Claude Desktop
+        - Connection type: SQL Auth/Windows Auth
+        - Environment: Development/Production
+
+  - type: textarea
+    id: error-messages
+    attributes:
+      label: Error Messages (if any)
+      description: Include any error messages you're seeing
+      render: shell
+
+  - type: textarea
+    id: config-sample
+    attributes:
+      label: Configuration Sample
+      description: Share relevant configuration (remove passwords/secrets)
+      render: json
+      placeholder: |
+        {
+          "SQL_SERVER_HOST": "localhost",
+          "SQL_SERVER_PORT": "1433",
+          "SQL_SERVER_DATABASE": "master",
+          "SQL_SERVER_USER": "username",
+          "SQL_SERVER_PASSWORD": "[REDACTED]"
+        }
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      description: How urgent is this question?
+      options:
+        - Low - Just curious
+        - Medium - Would like to know
+        - High - Blocking my work
+        - Critical - Production issue
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm you've done these steps
+      options:
+        - label: I've read the README.md documentation
+        - label: I've checked existing issues for similar questions
+        - label: I've removed any sensitive information from my question
+        - label: I've provided enough context for someone to help me
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

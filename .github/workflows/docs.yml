@@ -1,0 +1,430 @@
+name: Documentation Automation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'README.md'
+      - 'index.js'
+      - 'package.json'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'README.md'
+      - 'index.js'
+      - 'package.json'
+  schedule:
+    # Weekly documentation health check
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  validate-docs:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'yes'
+          config-file: '.github/markdown-link-check.json'
+          folder-path: '.'
+          max-depth: 3
+
+      - name: Check for broken internal links
+        run: |
+          echo "## 🔍 Documentation Link Validation" > link-report.md
+          echo "" >> link-report.md
+          
+          # Check if we have any markdown files
+          if find . -name "*.md" -not -path "./node_modules/*" | head -1 | grep -q .; then
+            echo "✅ Markdown files found, validation completed by link checker" >> link-report.md
+          else
+            echo "⚠️ No markdown files found for validation" >> link-report.md
+          fi
+          
+          # Check README sections
+          if grep -q "## Table of Contents\|## Features\|## Installation" README.md; then
+            echo "✅ README.md has proper sections" >> link-report.md
+          else
+            echo "⚠️ README.md might be missing standard sections" >> link-report.md
+          fi
+
+      - name: Validate MCP tool documentation
+        run: |
+          echo "" >> link-report.md
+          echo "### 🔧 MCP Tool Documentation Check" >> link-report.md
+          echo "" >> link-report.md
+          
+          # Extract tools from index.js and check if documented
+          node -e "
+            const fs = require('fs');
+            const indexContent = fs.readFileSync('index.js', 'utf8');
+            const readmeContent = fs.readFileSync('README.md', 'utf8');
+            
+            // Extract tool definitions (simplified)
+            const toolRegex = /name:\s*['\"]([^'\"]+)['\"]/g;
+            const tools = [];
+            let match;
+            
+            while ((match = toolRegex.exec(indexContent)) !== null) {
+              tools.push(match[1]);
+            }
+            
+            console.log('Found tools:', tools.join(', '));
+            
+            let documentedTools = 0;
+            let undocumentedTools = [];
+            
+            tools.forEach(tool => {
+              if (readmeContent.includes(tool)) {
+                documentedTools++;
+              } else {
+                undocumentedTools.push(tool);
+              }
+            });
+            
+            const report = [
+              '**Tools found in code**: ' + tools.length,
+              '**Tools documented in README**: ' + documentedTools,
+              undocumentedTools.length > 0 ? 
+                '**Undocumented tools**: ' + undocumentedTools.join(', ') : 
+                '✅ **All tools are documented**'
+            ].join('\n');
+            
+            fs.writeFileSync('tool-docs-report.txt', report);
+          "
+          
+          cat tool-docs-report.txt >> link-report.md
+
+      - name: Upload documentation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-validation-report
+          path: link-report.md
+          retention-days: 30
+
+  update-toc:
+    name: Update Table of Contents
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Table of Contents
+        uses: technote-space/toc-generator@v4
+        with:
+          TARGET_FILES: 'README.md'
+          TOC_TITLE: '## Table of Contents'
+          FOLDING: false
+          MAX_HEADER_LEVEL: 3
+          COMMIT_MESSAGE: 'docs: update table of contents'
+          COMMIT_NAME: 'github-actions[bot]'
+          COMMIT_EMAIL: 'github-actions[bot]@users.noreply.github.com'
+
+  check-outdated-docs:
+    name: Check for Outdated Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check documentation freshness
+        run: |
+          echo "## 📅 Documentation Freshness Report" > freshness-report.md
+          echo "" >> freshness-report.md
+          
+          # Check when each markdown file was last updated
+          echo "### File Last Modified Dates" >> freshness-report.md
+          echo "" >> freshness-report.md
+          echo "| File | Last Modified | Days Ago |" >> freshness-report.md
+          echo "|------|---------------|----------|" >> freshness-report.md
+          
+          find . -name "*.md" -not -path "./node_modules/*" | while read file; do
+            if [ -f "$file" ]; then
+              last_modified=$(git log -1 --format="%ci" -- "$file" 2>/dev/null || echo "Unknown")
+              if [ "$last_modified" != "Unknown" ]; then
+                days_ago=$(( ($(date +%s) - $(date -d "$last_modified" +%s)) / 86400 ))
+                echo "| $file | $last_modified | $days_ago |" >> freshness-report.md
+              else
+                echo "| $file | Never committed | N/A |" >> freshness-report.md
+              fi
+            fi
+          done
+          
+          echo "" >> freshness-report.md
+          
+          # Check for very old files (>90 days)
+          echo "### 🚨 Potentially Outdated Files" >> freshness-report.md
+          echo "" >> freshness-report.md
+          
+          old_files_found=false
+          find . -name "*.md" -not -path "./node_modules/*" | while read file; do
+            if [ -f "$file" ]; then
+              last_modified=$(git log -1 --format="%ci" -- "$file" 2>/dev/null)
+              if [ -n "$last_modified" ]; then
+                days_ago=$(( ($(date +%s) - $(date -d "$last_modified" +%s)) / 86400 ))
+                if [ $days_ago -gt 90 ]; then
+                  echo "⚠️ **$file** - Not updated in $days_ago days" >> freshness-report.md
+                  old_files_found=true
+                fi
+              fi
+            fi
+          done
+          
+          if [ "$old_files_found" != "true" ]; then
+            echo "✅ All documentation files are reasonably fresh" >> freshness-report.md
+          fi
+
+      - name: Upload freshness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-freshness-report
+          path: freshness-report.md
+          retention-days: 30
+
+  generate-api-docs:
+    name: Generate API Documentation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate MCP Tools API Documentation
+        run: |
+          echo "# MCP Tools API Reference" > API.md
+          echo "" >> API.md
+          echo "This document is auto-generated from the source code." >> API.md
+          echo "" >> API.md
+          echo "_Last updated: $(date -u)_" >> API.md
+          echo "" >> API.md
+          
+          # Extract MCP tools documentation from source
+          node -e "
+            const fs = require('fs');
+            const content = fs.readFileSync('index.js', 'utf8');
+            
+            // Simple extraction of tool definitions
+            const toolSections = content.split('tools: [')[1]?.split(']')[0] || '';
+            
+            // Extract individual tools (this is a simplified approach)
+            const toolMatches = content.match(/{\s*name:\s*['\"]([^'\"]+)['\"]/g) || [];
+            
+            let apiDoc = '';
+            
+            toolMatches.forEach(match => {
+              const toolName = match.match(/name:\s*['\"]([^'\"]+)['\"]/)[1];
+              apiDoc += '## \`' + toolName + '\`\n\n';
+              
+              // Try to find description
+              const toolStart = content.indexOf(match);
+              const nextTool = content.indexOf('name:', toolStart + 1);
+              const toolSection = content.substring(toolStart, nextTool > 0 ? nextTool : content.length);
+              
+              const descMatch = toolSection.match(/description:\s*['\"]([^'\"]+)['\"]/);
+              if (descMatch) {
+                apiDoc += '**Description:** ' + descMatch[1] + '\n\n';
+              }
+              
+              // Try to find input schema
+              if (toolSection.includes('inputSchema')) {
+                apiDoc += '**Input Schema:** Available\n\n';
+              }
+              
+              apiDoc += '---\n\n';
+            });
+            
+            if (apiDoc) {
+              fs.writeFileSync('api-content.md', apiDoc);
+            } else {
+              fs.writeFileSync('api-content.md', 'No tools found in source code.\n');
+            }
+          "
+          
+          cat api-content.md >> API.md
+          
+          # Commit if there are changes
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add API.md
+          git diff --staged --quiet || git commit -m "docs: update API documentation [skip ci]"
+          git push origin main || true
+
+  spell-check:
+    name: Spell Check Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run spell check
+        uses: streetsidesoftware/cspell-action@v6
+        with:
+          files: "**/*.md"
+          config: ".github/cspell.json"
+          inline: "error"
+
+  accessibility-check:
+    name: Documentation Accessibility Check  
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check markdown accessibility
+        run: |
+          echo "## ♿ Accessibility Check Report" > accessibility-report.md
+          echo "" >> accessibility-report.md
+          
+          # Check for alt text on images
+          echo "### 🖼️ Image Alt Text Check" >> accessibility-report.md
+          echo "" >> accessibility-report.md
+          
+          images_without_alt=0
+          find . -name "*.md" -not -path "./node_modules/*" | xargs grep -n "!\[" | while read line; do
+            if echo "$line" | grep -q "!\[\]"; then
+              echo "⚠️ Missing alt text: $line" >> accessibility-report.md
+              images_without_alt=$((images_without_alt + 1))
+            fi
+          done
+          
+          if [ $images_without_alt -eq 0 ]; then
+            echo "✅ All images have alt text" >> accessibility-report.md
+          fi
+          
+          echo "" >> accessibility-report.md
+          
+          # Check for proper heading hierarchy
+          echo "### 📝 Heading Hierarchy Check" >> accessibility-report.md
+          echo "" >> accessibility-report.md
+          
+          find . -name "*.md" -not -path "./node_modules/*" | while read file; do
+            echo "**$file:**" >> accessibility-report.md
+            grep "^#" "$file" | head -5 >> accessibility-report.md || echo "No headings found" >> accessibility-report.md
+            echo "" >> accessibility-report.md
+          done
+
+      - name: Upload accessibility report
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-report
+          path: accessibility-report.md
+          retention-days: 30
+
+  pr-docs-check:
+    name: PR Documentation Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Check for documentation updates
+        id: docs-check
+        run: |
+          echo "## 📚 Documentation Review" > pr-docs-report.md
+          echo "" >> pr-docs-report.md
+          
+          # Check if code changes require doc updates
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "index.js"; then
+            echo "🔍 **Code changes detected in index.js**" >> pr-docs-report.md
+            echo "" >> pr-docs-report.md
+            
+            if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "\.md$"; then
+              echo "✅ Documentation files were also updated" >> pr-docs-report.md
+            else
+              echo "⚠️ **Consider updating documentation** - Code changes detected but no markdown files updated" >> pr-docs-report.md
+            fi
+            echo "" >> pr-docs-report.md
+          fi
+          
+          # Check for new MCP tools
+          new_tools=$(git diff origin/${{ github.base_ref }}...HEAD index.js | grep "^+" | grep -c "name:" || echo "0")
+          removed_tools=$(git diff origin/${{ github.base_ref }}...HEAD index.js | grep "^-" | grep -c "name:" || echo "0")
+          
+          if [ "$new_tools" -gt 0 ] || [ "$removed_tools" -gt 0 ]; then
+            echo "🔧 **MCP Tool Changes Detected:**" >> pr-docs-report.md
+            echo "- New tools: $new_tools" >> pr-docs-report.md
+            echo "- Removed tools: $removed_tools" >> pr-docs-report.md
+            echo "" >> pr-docs-report.md
+            echo "📝 **Please ensure README.md reflects these changes**" >> pr-docs-report.md
+            echo "" >> pr-docs-report.md
+          fi
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const report = fs.readFileSync('pr-docs-report.md', 'utf8');
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            } catch (error) {
+              console.error('Error posting documentation review:', error);
+            }
+
+  summary:
+    name: Documentation Summary
+    runs-on: ubuntu-latest
+    needs: [validate-docs, check-outdated-docs, spell-check, accessibility-check]
+    if: always()
+    steps:
+      - name: Create summary
+        run: |
+          echo "## 📖 Documentation Automation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Validation**: ${{ needs.validate-docs.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Freshness Check**: ${{ needs.check-outdated-docs.result }}" >> $GITHUB_STEP_SUMMARY  
+          echo "**Spell Check**: ${{ needs.spell-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Accessibility**: ${{ needs.accessibility-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 **All reports uploaded as artifacts**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Analysis completed at**: $(date -u)" >> $GITHUB_STEP_SUMMARY
