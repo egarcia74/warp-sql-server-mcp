@@ -4,13 +4,17 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-This is a Model Context Protocol (MCP) server that enables Warp to interact with Microsoft SQL Server databases. The project provides a bridge between Warp's AI capabilities and SQL Server through the MCP standard, allowing for database operations, schema inspection, and data retrieval.
+This is a Model Context Protocol (MCP) server that enables Warp to interact with
+Microsoft SQL Server databases. The project provides a bridge between Warp's AI
+capabilities and SQL Server through the MCP standard, allowing for database
+operations, schema inspection, and data retrieval.
 
 ## Architecture
 
 ### Core Components
 
-- **SqlServerMCP Class** (`index.js`): Main MCP server implementation that handles database connections and tool execution
+- **SqlServerMCP Class** (`index.js`): Main MCP server implementation that handles
+  database connections and tool execution
 - **MCP Tools**: 8 different database operation tools exposed through the MCP interface
 - **Connection Management**: Handles both SQL Server authentication and Windows authentication
 - **Error Handling**: Comprehensive error handling with structured MCP error responses
@@ -62,6 +66,41 @@ npm run test:coverage
 npm run test:ui
 ```
 
+### Code Quality and Formatting
+
+```bash
+# Lint code for issues
+npm run lint
+
+# Lint and auto-fix issues
+npm run lint:fix
+
+# Format code with Prettier
+npm run format
+
+# Check formatting without making changes
+npm run format:check
+
+# Lint markdown files
+npm run markdown:lint
+
+# Fix markdown formatting issues
+npm run markdown:fix
+```
+
+### Git Hooks and CI
+
+```bash
+# Install git hooks (pre-commit and pre-push)
+npm run hooks:install
+
+# Run the full CI pipeline locally
+npm run ci
+
+# Run pre-commit checks manually
+npm run precommit
+```
+
 ### Environment Setup
 
 ```bash
@@ -109,7 +148,9 @@ For Windows Authentication (leave user/password empty):
 
 ## Warp Integration
 
-**⚠️ CRITICAL**: MCP servers run in isolated environments and do NOT automatically load `.env` files. All configuration must be explicitly provided through Warp's MCP configuration.
+**⚠️ CRITICAL**: MCP servers run in isolated environments and do NOT
+automatically load `.env` files. All configuration must be explicitly provided
+through Warp's MCP configuration.
 
 ### Required MCP Configuration
 
@@ -138,9 +179,11 @@ In Warp's MCP settings, you must provide ALL environment variables:
 
 ### Connection Initialization
 
-The MCP server initializes the database connection pool at startup (not on first request) to eliminate timeout issues during initial MCP tool calls.
+The MCP server initializes the database connection pool at startup (not on first
+request) to eliminate timeout issues during initial MCP tool calls.
 
-The server communicates via stdio transport and provides structured responses for all database operations.
+The server communicates via stdio transport and provides structured responses
+for all database operations.
 
 ## Testing Architecture
 
@@ -176,7 +219,8 @@ test/
 ### Connection Pooling
 
 - Uses `mssql` package connection pooling for efficient database connections
-- **Startup Initialization**: Connection pool established at server startup to eliminate first-request delays
+- **Startup Initialization**: Connection pool established at server startup to eliminate
+  first-request delays
 - Automatic connection reuse and cleanup
 - Configurable connection timeout and exponential backoff retry logic
 - Optimized pool settings for MCP server environment
@@ -192,6 +236,75 @@ test/
 - Uses parameterized queries where possible to prevent SQL injection
 - Dynamic schema/database switching support
 - Proper SQL escaping and quoting for identifiers
+
+## Development Workflow
+
+### Code Quality Standards
+
+This project maintains high code quality through automated tooling:
+
+- **ESLint**: Modern flat config setup for JavaScript linting with focus on code
+  quality (formatting handled by Prettier)
+- **Prettier**: Authoritative code formatter handling all style concerns
+  including indentation
+- **Markdownlint**: Documentation formatting and consistency
+- **Vitest**: Fast, modern testing framework with coverage reporting
+- **Git Hooks**: Automated pre-commit and pre-push quality checks
+
+### Git Workflow Integration
+
+The project includes automated quality gates:
+
+#### Pre-commit Hook
+
+- Runs ESLint to check for code quality issues
+- Validates Prettier formatting
+- Executes markdown linting
+- Runs full test suite to ensure no regressions
+
+#### Pre-push Hook
+
+- All pre-commit checks plus:
+- Full test suite with coverage reporting
+- Comprehensive linting validation
+- Ensures code meets quality standards before sharing
+
+### Resolving Quality Check Issues
+
+If git hooks block your commit/push:
+
+```bash
+# Fix linting issues automatically
+npm run lint:fix
+
+# Fix formatting issues
+npm run format
+
+# Fix markdown issues
+npm run markdown:fix
+
+# Then retry your git operation
+git commit -m "Your message"
+```
+
+### ESLint and Prettier Integration
+
+The project uses a coordinated approach:
+
+- **ESLint focuses on code quality**: Logic errors, unused variables, best practices
+- **Prettier handles formatting**: Indentation, spacing, line breaks, quotes
+- **No conflicts**: ESLint's `indent` rule is disabled to prevent formatting
+  conflicts
+
+### CI/CD Pipeline
+
+GitHub Actions workflow validates:
+
+- Code linting (ESLint)
+- Format checking (Prettier)
+- Documentation linting (Markdownlint)
+- Full test suite execution
+- Coverage reporting with Codecov integration
 
 ## Development Notes
 
@@ -222,5 +335,6 @@ When adding new database operations:
 
 - **NTLM Authentication Errors**: Ensure proper authentication method is selected based on provided credentials
 - **Connection Timeouts**: Disable SSL encryption (`SQL_SERVER_ENCRYPT=false`) for local development
-- **Missing Environment Variables**: MCP servers require explicit configuration - `.env` files are not loaded
+- **Missing Environment Variables**: MCP servers require explicit configuration -
+  `.env` files are not loaded
 - **First Request Delays**: Connection pool initialization at startup eliminates timeout issues
