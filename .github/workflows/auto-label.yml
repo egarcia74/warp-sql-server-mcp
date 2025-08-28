@@ -62,7 +62,7 @@ jobs:
       # Label for first-time contributors
       - name: Label first-time contributor
         if: github.event_name == 'pull_request'
-        uses: actions/first-interaction@v1
+        uses: actions/first-interaction@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           pr-message: |
