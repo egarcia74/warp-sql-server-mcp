@@ -1,6 +1,6 @@
 {
   "name": "warp-sql-server-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for connecting Warp to SQL Server",
   "main": "index.js",
   "type": "module",
