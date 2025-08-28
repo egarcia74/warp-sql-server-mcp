@@ -194,6 +194,14 @@ jobs:
           </body>
           </html>
           EOF
+          
+          # Copy coverage reports to docs directory
+          if [ -d "coverage" ]; then
+            echo "Copying coverage reports to docs/coverage..."
+            cp -r coverage docs/
+          else
+            echo "Warning: Coverage directory not found"
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
