@@ -1,0 +1,1 @@
+This is a test file to validate that the size-label workflow is working correctly.
