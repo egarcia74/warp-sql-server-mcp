@@ -34,7 +34,7 @@
   "author": "Eduardo Garcia",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.4.0",
+    "@modelcontextprotocol/sdk": "^0.7.0",
     "dotenv": "^17.2.1",
     "mssql": "^10.0.2"
   },
