@@ -8,7 +8,7 @@ ensure all functionality works correctly and provide confidence for ongoing deve
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
 - **Total Tests**: 56 tests
 - **Status**: ✅ All passing
-- **Coverage**: 60.25% statements, 78.04% branches, 83.33% functions
+- **Coverage**: 61.04% statements, 77.89% branches, 91.66% functions
 - **Test Type**: Unit tests with mocked SQL Server connections
 
 ## 📁 Test Structure
@@ -162,6 +162,26 @@ Tests the `export_table_csv` MCP tool:
 - **✅ Combined Filters**: WHERE + LIMIT working together
 - **✅ Empty Results**: Graceful handling of no matching records
 
+### 10. **Server Startup and Runtime Tests** (7 tests)
+
+Tests the MCP server lifecycle, startup, and runtime behavior:
+
+#### Server Runtime Management
+
+- **✅ Successful Startup**: Tests server startup with successful database connection
+- **✅ Database Connection Failure**: Handles graceful startup when database connection fails
+- **✅ Server Connection Errors**: Manages server connection errors during startup
+- **✅ Multiple Connection Failures**: Handles both database and server connection failures
+
+#### Entry Point Execution
+
+- **✅ Main Module Execution**: Tests server creation and startup when run as main module
+- **✅ Entry Point Error Handling**: Validates error handling in main entry point
+
+#### Integration Scenarios
+
+- **✅ Complete Startup Flow**: Tests the full server startup flow with all components
+
 ## 🏗️ Test Architecture
 
 ### Mock Strategy
@@ -246,6 +266,7 @@ The comprehensive test suite specifically prevents:
 3. **SQL Injection**: Tests proper parameter handling and escaping
 4. **Connection Issues**: Validates all authentication methods and error scenarios
 5. **Data Format Issues**: Ensures proper JSON/CSV output formatting
+6. **Server Lifecycle Issues**: Tests server startup, runtime, and error handling scenarios
 
 ### Error Scenario Coverage
 
@@ -261,7 +282,7 @@ Tests cover all major error conditions:
 
 ## 📈 Coverage Analysis
 
-### Current Coverage (60.25% statements)
+### Current Coverage (61.04% statements)
 
 **Covered Areas:**
 
