@@ -54,7 +54,7 @@ if command -v npx >/dev/null 2>&1; then
   
   # Check markdown
   if find . -name "*.md" -not -path "./node_modules/*" | head -1 | grep -q .; then
-    if ! npx markdownlint-cli2 "**/*.md" --ignore-path .gitignore; then
+    if ! npx markdownlint-cli2; then
       echo "[pre-push] Markdown lint failed. Push aborted."
       exit 1
     fi

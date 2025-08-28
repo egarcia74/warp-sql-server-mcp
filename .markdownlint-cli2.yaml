@@ -1,0 +1,12 @@
+globs: ["**/*.md"]
+ignores: 
+  - "**/node_modules/**"
+  - "**/coverage/**"
+  - "**/.git/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/*.log"
+  - ".gitignore"
+  - "**/.gitignore"
+config:
+  extends: ".markdownlint.json"

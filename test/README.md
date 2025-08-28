@@ -1,6 +1,7 @@
 # Test Suite Documentation
 
-This directory contains the comprehensive test suite for the Warp SQL Server MCP server. The tests ensure all functionality works correctly and provide confidence for ongoing development.
+This directory contains the comprehensive test suite for the Warp SQL Server MCP server. The tests
+ensure all functionality works correctly and provide confidence for ongoing development.
 
 ## 🧪 Test Overview
 
@@ -353,4 +354,6 @@ npx vitest --reporter=verbose
 node --inspect-brk ./node_modules/.bin/vitest
 ```
 
-This comprehensive test suite ensures the Warp SQL Server MCP server is robust, reliable, and ready for production use. The tests provide confidence for ongoing development and help prevent regressions as new features are added.
+This comprehensive test suite ensures the Warp SQL Server MCP server is robust, reliable, and
+ready for production use. The tests provide confidence for ongoing development and help prevent
+regressions as new features are added.
