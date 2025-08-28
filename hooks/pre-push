@@ -38,7 +38,7 @@ if command -v npx >/dev/null 2>&1; then
   
   # Check JavaScript files
   if find . -name "*.js" -not -path "./node_modules/*" -not -path "./coverage/*" | head -1 | grep -q .; then
-    if ! npx eslint . --ext .js,.mjs,.cjs --ignore-path .gitignore; then
+    if ! npx eslint .; then
       echo "[pre-push] ESLint check failed. Push aborted."
       exit 1
     fi
