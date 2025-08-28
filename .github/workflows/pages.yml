@@ -39,8 +39,11 @@ jobs:
           # Create docs directory
           mkdir -p docs
           
+          # Extract version from package.json
+          VERSION=$(cat package.json | grep '"version":' | cut -d'"' -f4)
+          
           # Generate documentation index
-          cat > docs/index.html << 'EOF'
+          cat > docs/index.html << EOF
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -119,7 +122,7 @@ jobs:
                   <h1>🗄️ Warp SQL Server MCP</h1>
                   <p>Model Context Protocol server for SQL Server integration with Warp terminal</p>
                   <div>
-                      <span class="badge">v1.0.0</span>
+                      <span class="badge">v$VERSION</span>
                       <span class="badge">Node.js 18+</span>
                       <span class="badge">MCP</span>
                       <span class="badge">SQL Server</span>
@@ -136,7 +139,7 @@ jobs:
                   <div class="card">
                       <h3>🚀 Latest Release</h3>
                       <p>Download the latest version and view the changelog.</p>
-                      <a href="https://github.com/egarcia74/warp-sql-server-mcp/releases/latest">Download v1.0.0 →</a>
+                      <a href="https://github.com/egarcia74/warp-sql-server-mcp/releases/latest">Download v$VERSION →</a>
                   </div>
 
                   <div class="card">
