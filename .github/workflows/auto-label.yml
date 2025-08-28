@@ -58,6 +58,8 @@ jobs:
           configuration-path: .github/issue-labeler.yml
           include-title: true
           include-body: true
+          enable-versioned-regex: 1
+          sync-labels: 0
 
       # Label for first-time contributors
       - name: Label first-time contributor
