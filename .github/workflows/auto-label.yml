@@ -34,7 +34,7 @@ jobs:
       # Label based on PR size
       - name: Label PR size
         if: github.event_name == 'pull_request'
-        uses: pascalgn/size-label-action@v0.5.0
+        uses: pascalgn/size-label-action@v0.5.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -47,6 +47,7 @@ jobs:
               "xl": 1000,
               "xxl": 2000
             }
+          ignore-if-labels-missing: true
 
       # Auto-label issues based on content
       - name: Label issues by content
