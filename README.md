@@ -1,11 +1,18 @@
 # Warp SQL Server MCP
 
+## Build & Quality Status
+
 [![CI](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/codeql.yml)
 [![OSSF Scorecard](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/scorecard.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/scorecard.yml)
+
+## Automation & Monitoring
+
 [![Performance Monitoring](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/performance.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/performance.yml)
 [![Documentation](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/docs.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/docs.yml)
 [![Auto Label](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/auto-label.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/auto-label.yml)
+
+## Project Info
 
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -16,8 +23,6 @@
 
 A Model Context Protocol (MCP) server that provides Warp with the ability to connect to and
 interact with Microsoft SQL Server databases.
-
-> **Status**: All GitHub Actions workflows are now passing! ✅
 
 ## Features
 
