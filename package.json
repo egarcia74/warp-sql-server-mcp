@@ -36,7 +36,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.7.0",
     "dotenv": "^17.2.1",
-    "mssql": "^10.0.2"
+    "mssql": "^11.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
