@@ -1,6 +1,7 @@
 # Warp SQL Server MCP
 
-A Model Context Protocol (MCP) server that provides Warp with the ability to connect to and interact with Microsoft SQL Server databases.
+A Model Context Protocol (MCP) server that provides Warp with the ability to connect to and
+interact with Microsoft SQL Server databases.
 
 ## Features
 
@@ -124,7 +125,9 @@ SQL_SERVER_TRUST_CERT=true
 
 ## Configuration for Warp and MCP Clients
 
-> **⚠️ CRITICAL:** MCP servers run in isolated environments and **do not automatically load `.env` files**. You must explicitly provide all configuration through environment variables in your MCP client configuration.
+> **⚠️ CRITICAL:** MCP servers run in isolated environments and **do not automatically load
+> `.env` files**. You must explicitly provide all configuration through environment variables in
+> your MCP client configuration.
 
 ### Method 1: Warp MCP Settings (Recommended)
 
@@ -161,7 +164,8 @@ SQL_SERVER_TRUST_CERT=true
 
 4. **Authentication Options**:
    - **For SQL Server Authentication**: Include `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`
-   - **For Windows Authentication**: Omit `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`, optionally add `SQL_SERVER_DOMAIN`
+   - **For Windows Authentication**: Omit `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`,
+     optionally add `SQL_SERVER_DOMAIN`
 
 5. **Save Configuration** and restart the MCP server
 
