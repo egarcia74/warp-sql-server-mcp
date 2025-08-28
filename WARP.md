@@ -185,6 +185,56 @@ request) to eliminate timeout issues during initial MCP tool calls.
 The server communicates via stdio transport and provides structured responses
 for all database operations.
 
+## Documentation System
+
+### Auto-Generated Documentation
+
+The project features an enhanced auto-generated documentation system that keeps API
+documentation perfectly synchronized with the codebase:
+
+#### Documentation Generation Scripts
+
+- **`extract-docs.js`**: Parses MCP tool definitions from source code and extracts
+  structured information including tool names, descriptions, parameters, and usage examples
+- **`generate-tools-html.js`**: Creates comprehensive HTML documentation with parameter
+  tables, required/optional field indicators, and example usages
+- **`generate-landing-page.js`**: Generates a dynamic landing page listing all MCP tools
+  with tool counts and consistent styling
+
+#### Live Documentation Sites
+
+- **GitHub Pages**: [https://egarcia74.github.io/warp-sql-server-mcp/](https://egarcia74.github.io/warp-sql-server-mcp/)
+- **Tool API Reference**: [https://egarcia74.github.io/warp-sql-server-mcp/tools.html](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)
+
+#### Continuous Integration
+
+Documentation is automatically updated:
+
+- **On every push**: GitHub Actions extracts tool definitions and regenerates HTML
+- **Zero drift**: Documentation stays perfectly synchronized with code changes
+- **Automated deployment**: Generated docs are published to GitHub Pages automatically
+
+#### For Contributors
+
+To update documentation locally:
+
+```bash
+# Extract tool definitions from source code
+node scripts/extract-docs.js
+
+# Generate comprehensive tools documentation
+node scripts/generate-tools-html.js
+
+# Generate landing page with tool listing
+node scripts/generate-landing-page.js
+```
+
+Generated files:
+
+- `docs/tools.json`: Extracted tool definitions
+- `docs/index.html`: Landing page
+- `docs/tools.html`: Detailed API documentation
+
 ## Testing Architecture
 
 📖 **For comprehensive test documentation, see [test/README.md](test/README.md)**
@@ -213,6 +263,8 @@ test/
 - **Query Analysis Tests** (4): Execution plans and performance analysis
 - **Foreign Key Tests** (3): Relationship discovery and schema filtering
 - **CSV Export Tests** (14): CSV generation with advanced filtering capabilities
+- **Server Startup and Runtime** (7): Connection pool initialization, error handling scenarios
+- **Error Handling and Edge Cases** (10): Comprehensive error condition testing
 
 ## Key Implementation Details
 
