@@ -9,62 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2025-08-28
 
-### Security
-
-- Upgrade mssql dependency from v10.0.2 to v11.0.1 for enhanced security and compatibility ([55cc852](https://github.com/egarcia74/warp-sql-server-mcp/commit/55cc852))
-
-### Added
-
-- Coverage report copying to documentation deployment for better CI/CD integration ([aa5790f](https://github.com/egarcia74/warp-sql-server-mcp/commit/aa5790f))
-- Comprehensive CHANGELOG.md with complete release history and standardized format ([22de509](https://github.com/egarcia74/warp-sql-server-mcp/commit/22de509))
-
-### Fixed
-
-- Sync package.json version with latest release v1.1.1 ([bb8ec8d](https://github.com/egarcia74/warp-sql-server-mcp/commit/bb8ec8d))
-- Suppress GitHub Actions workflow warnings with proper documentation ([6a6130b](https://github.com/egarcia74/warp-sql-server-mcp/commit/6a6130b))
-- Fix hardcoded version in GitHub Pages deployment for dynamic versioning ([f14fcc3](https://github.com/egarcia74/warp-sql-server-mcp/commit/f14fcc3))
-- Fix Auto Label workflow: Add missing enable-versioned-regex parameter ([8e532c2](https://github.com/egarcia74/warp-sql-server-mcp/commit/8e532c2))
-- Fix dead links: Remove OSSF Scorecard badge references ([a884ef7](https://github.com/egarcia74/warp-sql-server-mcp/commit/a884ef7))
-- Update documentation with correct defaults and remove hardcoded credentials ([decc089](https://github.com/egarcia74/warp-sql-server-mcp/commit/decc089))
-
-### Enhanced
-
-- Enhanced GitHub Actions workflow documentation and annotations for better maintainability
-- Reduced linter noise with proper workflow comments and documentation
-- Better GitHub Pages integration with dynamic version detection
-- Cleaner documentation with fixed badges and links
-- Improved overall project documentation quality and consistency
-
-## [1.1.1] - 2025-08-28
-
-### Bug Fixes
-
-- Configure git user identity for release workflow tagging ([6331756](https://github.com/egarcia74/warp-sql-server-mcp/commit/6331756))
-- Silence OSSF scorecard warnings and fix release workflow issues ([203a45a](https://github.com/egarcia74/warp-sql-server-mcp/commit/203a45a))
-
-### Changed
-
-- Disabled OSSF Scorecard workflow to reduce noise from security warnings
-- Modified release workflow to work with protected branch rules
-- Removed automatic version bumping in release workflow to prevent conflicts with branch protection
-
-## [1.1.0] - 2025-08-28
-
-### New Features
-
-- Enhanced release automation workflow
-- Improved GitHub Actions workflows with better error handling
-
-### Improvements
-
-- Various workflow configuration improvements
-- Better handling of protected branch scenarios
-
-## [1.0.0] - 2025-08-28
+**Note**: This is the initial clean release. Previous versions (v1.0.0-v1.1.1) were
+removed for security reasons.
 
 ### Features
 
-- Initial release of Warp SQL Server MCP
 - Complete MCP server implementation for SQL Server connectivity
 - 8 comprehensive MCP tools:
   - `execute_query` - Execute arbitrary SQL queries
@@ -77,17 +26,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `export_table_csv` - Export table data in CSV format
 - Support for both SQL Server Authentication and Windows Authentication
 - Comprehensive error handling and connection management
-- Extensive test suite with 44+ tests covering all functionality
+- Extensive test suite with 56 tests covering all functionality
 - Complete documentation with platform-specific setup guides
 - GitHub Actions CI/CD pipeline with automated testing and releases
 
-### Security Features
+### Security
 
+- Upgrade mssql dependency to v11.0.1 for enhanced security and compatibility
 - Secure environment variable configuration for database credentials
 - Proper connection pooling and timeout handling
 - SSL/TLS encryption support for production environments
+- Comprehensive release process documentation
 
-[1.2.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.1.1...v1.2.0
-[1.1.1]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.0.0
+### Documentation
+
+- Coverage report copying to documentation deployment for better CI/CD integration
+- Comprehensive CHANGELOG.md with standardized format
+- Enhanced GitHub Actions workflow documentation and annotations
+- Reduced linter noise with proper workflow comments
+- Better GitHub Pages integration with dynamic version detection
+- Cleaner documentation with fixed badges and links
+- Complete release process guide in WARP.md
+- Updated test documentation with current coverage and test counts
+
+[1.2.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.2.0
