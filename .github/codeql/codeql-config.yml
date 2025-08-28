@@ -5,11 +5,9 @@ disable-default-queries: false
 
 # Additional query packs to run
 packs:
-  - codeql/javascript-queries:AlertSuppression.ql
-  - codeql/javascript-queries:Security.ql
-  - codeql/javascript-queries:experimental/Security.ql
+  - codeql/javascript-queries
 
-# Custom queries
+# Custom queries - use built-in query suites
 queries:
   - name: security-extended
     uses: security-extended
