@@ -38,15 +38,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          sizes: >
+          sizes: |
             {
-              "tiny": 0,
-              "xs": 10,
-              "s": 30,
-              "m": 100,
-              "l": 500,
-              "xl": 1000,
-              "xxl": 2000
+              "0": "tiny",
+              "10": "xs",
+              "30": "s", 
+              "100": "m",
+              "500": "l",
+              "1000": "xl",
+              "2000": "xxl"
             }
 
       # Auto-label issues based on content
