@@ -6,7 +6,15 @@
       "env": {
         "SQL_SERVER_HOST": "localhost",
         "SQL_SERVER_PORT": "1433",
-        "SQL_SERVER_DATABASE": "master"
+        "SQL_SERVER_DATABASE": "master",
+        "SQL_SERVER_USER": "your_username",
+        "SQL_SERVER_PASSWORD": "your_password",
+        "SQL_SERVER_ENCRYPT": "false",
+        "SQL_SERVER_TRUST_CERT": "true",
+        "SQL_SERVER_CONNECT_TIMEOUT_MS": "3000",
+        "SQL_SERVER_REQUEST_TIMEOUT_MS": "10000",
+        "SQL_SERVER_MAX_RETRIES": "1",
+        "SQL_SERVER_RETRY_DELAY_MS": "200"
       }
     }
   }
