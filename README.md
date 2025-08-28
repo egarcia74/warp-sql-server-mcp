@@ -34,12 +34,14 @@ A Model Context Protocol (MCP) server that provides Warp with the ability to con
 ### 🪟 **Windows Setup**
 
 **Advantages on Windows:**
+
 - Native SQL Server integration
 - Superior Windows Authentication support
 - Seamless domain integration
 - Fewer cross-platform authentication issues
 
 **Prerequisites:**
+
 1. **Node.js 18+**: Download from [nodejs.org](https://nodejs.org/)
 2. **SQL Server**: SQL Server Express (free) or full SQL Server
 3. **SQL Server Configuration**:
@@ -48,6 +50,7 @@ A Model Context Protocol (MCP) server that provides Warp with the ability to con
    - Configure Windows Firewall if needed
 
 **Installation:**
+
 ```powershell
 # Clone the repository
 git clone <repository-url>
@@ -61,6 +64,7 @@ copy .env.example .env
 ```
 
 **Configuration (.env file):**
+
 ```bash
 # For Windows Authentication (Recommended)
 SQL_SERVER_HOST=localhost
@@ -83,6 +87,7 @@ SQL_SERVER_TRUST_CERT=true
 ### 🍎🐧 **macOS/Linux Setup**
 
 **Installation:**
+
 ```bash
 # Clone the repository
 git clone <repository-url>
@@ -96,6 +101,7 @@ cp .env.example .env
 ```
 
 **Configuration (.env file):**
+
 ```bash
 # For SQL Server Authentication (Most common on macOS/Linux)
 SQL_SERVER_HOST=localhost  # or remote SQL Server IP
@@ -391,6 +397,7 @@ For complete test documentation including:
 ### 🪟 **Windows-Specific Troubleshooting**
 
 **SQL Server Configuration:**
+
 1. **Enable TCP/IP Protocol**:
    - Open "SQL Server Configuration Manager"
    - Navigate to "SQL Server Network Configuration" → "Protocols for [Instance]"
@@ -412,6 +419,7 @@ For complete test documentation including:
    - No username/password required in configuration
 
 **Testing Connection:**
+
 ```powershell
 # Test SQL Server connectivity
 telnet localhost 1433
@@ -426,6 +434,7 @@ netstat -an | findstr :1433
 ### 🍎🐧 **macOS/Linux-Specific Troubleshooting**
 
 **Connection Testing:**
+
 ```bash
 # Test SQL Server connectivity
 telnet localhost 1433
@@ -437,6 +446,7 @@ nmap -p 1433 localhost
 ```
 
 **Common Issues:**
+
 1. **Remote SQL Server**: Often requires SQL Server Authentication
 2. **SSL/TLS**: May need `SQL_SERVER_ENCRYPT=true` for remote connections
 3. **Network**: Check firewall rules on SQL Server host
