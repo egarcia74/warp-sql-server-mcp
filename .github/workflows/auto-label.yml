@@ -40,6 +40,7 @@ jobs:
         with:
           sizes: >
             {
+              "tiny": 0,
               "xs": 10,
               "s": 30,
               "m": 100,
@@ -47,7 +48,6 @@ jobs:
               "xl": 1000,
               "xxl": 2000
             }
-          ignore-if-labels-missing: true
 
       # Auto-label issues based on content
       - name: Label issues by content
@@ -62,7 +62,7 @@ jobs:
       # Label for first-time contributors
       - name: Label first-time contributor
         if: github.event_name == 'pull_request'
-        uses: actions/first-interaction@v1
+        uses: actions/first-interaction@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           pr-message: |
@@ -86,7 +86,7 @@ jobs:
       # Auto-assign reviewers for PRs
       - name: Auto-assign reviewers
         if: github.event_name == 'pull_request'
-        uses: kentaro-m/auto-assign-action@v1.2.6
+        uses: kentaro-m/auto-assign-action@v2.0.0
         with:
           configuration-path: .github/auto_assign.yml
 
