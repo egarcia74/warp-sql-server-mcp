@@ -1,0 +1,124 @@
+name: 🐛 Bug Report
+description: File a bug report to help us improve
+title: "[Bug]: "
+labels: ["bug", "triage"]
+assignees:
+  - egarcia74
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! 🐛
+        
+        Before submitting, please:
+        - Search existing issues to avoid duplicates
+        - Make sure you're using the latest version
+        - Check if this is a question rather than a bug (use Discussions for questions)
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what you see!
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Configure MCP server with...
+        2. Run command '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: What platform are you running on?
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      description: What version of Node.js are you running?
+      placeholder: "18.17.0"
+    validations:
+      required: true
+
+  - type: input
+    id: mcp-version
+    attributes:
+      label: MCP Server Version
+      description: What version of this MCP server are you using?
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: sql-server-config
+    attributes:
+      label: SQL Server Configuration
+      description: Please share your SQL Server setup (remove sensitive info)
+      placeholder: |
+        - SQL Server version: 2019
+        - Connection type: SQL Server Authentication
+        - Database: TestDB
+        - Any relevant environment variables (without secrets)
+    validations:
+      required: false
+
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: Error Messages/Logs
+      description: Please copy and paste any relevant log output
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: mcp-config
+    attributes:
+      label: MCP Configuration
+      description: Share your MCP client configuration (remove sensitive data)
+      render: json
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here
+      placeholder: Screenshots, network setup, firewall settings, etc.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

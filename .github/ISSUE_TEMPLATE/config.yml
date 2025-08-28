@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/egarcia74/warp-sql-server-mcp/discussions
+    about: Ask questions, share ideas, and discuss with the community
+  - name: 📖 Documentation
+    url: https://github.com/egarcia74/warp-sql-server-mcp#readme
+    about: Read the project documentation and setup guides
+  - name: 🔍 Search Issues
+    url: https://github.com/egarcia74/warp-sql-server-mcp/issues?q=is%3Aissue
+    about: Search existing issues before creating a new one

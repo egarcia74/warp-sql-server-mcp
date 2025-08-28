@@ -1,0 +1,33 @@
+{
+  "allowlist": [],
+  "denylist": [],
+  "levels": {
+    "low": false,
+    "moderate": false,
+    "high": true,
+    "critical": true
+  },
+  "report-type": "full",
+  "retry": {
+    "count": 3,
+    "delay": 1000
+  },
+  "skip-dev": false,
+  "whitelist": [],
+  "output-format": "text",
+  "pass-enoaudit": false,
+  "show-found": true,
+  "show-not-found": false,
+  "summary": true,
+  "advisories": [],
+  "path-whitelist": [],
+  "registry": "https://registry.npmjs.org/",
+  "report": {
+    "full": true,
+    "summary": true
+  },
+  "exclude": {
+    "1002": "Reason: This is a false positive for our use case",
+    "1003": "Reason: Low severity issue that doesn't apply to our architecture"
+  }
+}
