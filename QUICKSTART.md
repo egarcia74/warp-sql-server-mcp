@@ -135,7 +135,6 @@ Add these to your environment variables:
 ## Get Help
 
 - 📋 **[Issues](https://github.com/egarcia74/warp-sql-server-mcp/issues)** - Report bugs or request features
-- 💬 **[Discussions](https://github.com/egarcia74/warp-sql-server-mcp/discussions)** - Community help
 - 📖 **[Full Documentation](README.md)** - Complete setup and usage guide
 
 ---

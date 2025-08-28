@@ -330,8 +330,8 @@ If you discover a security vulnerability, please:
 ## 📚 Additional Resources
 
 - [OWASP SQL Injection Prevention](https://owasp.org/www-project-cheat-sheets/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
-- [SQL Server Security Best Practices](https://docs.microsoft.com/en-us/sql/relational-databases/security/security-best-practices-and-label-security)
-- [Database Security Guidelines](https://www.cisecurity.org/controls/database-security)
+- [Microsoft SQL Server Security Documentation](https://learn.microsoft.com/en-us/sql/relational-databases/security/)
+- [CIS Database Security Guidelines](https://www.cisecurity.org/controls/v8/)
 
 ---
 
