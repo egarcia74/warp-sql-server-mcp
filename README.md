@@ -4,7 +4,6 @@
 
 [![CI](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/codeql.yml)
-[![OSSF Scorecard](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/scorecard.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/scorecard.yml)
 
 ## Automation & Monitoring
 
