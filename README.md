@@ -12,68 +12,249 @@ A Model Context Protocol (MCP) server that provides Warp with the ability to con
 
 ## Available Tools
 
+### Database Operations
+
 1. **execute_query**: Execute any SQL query on the connected database
 2. **list_databases**: List all user databases on the SQL Server instance
 3. **list_tables**: List all tables in a specific database/schema
 4. **describe_table**: Get detailed schema information for a table
 5. **get_table_data**: Retrieve sample data from tables with optional filtering
+6. **explain_query**: Analyze query performance with execution plans and cost information
+7. **list_foreign_keys**: Discover foreign key relationships and constraints in a schema
+8. **export_table_csv**: Export table data in CSV format with optional filtering
 
 ## Prerequisites
 
-- Node.js 18.0.0 or higher
-- SQL Server instance running on localhost:1433 (or configured host/port)
-- Appropriate database permissions for the connecting user
+- **Node.js 18.0.0 or higher** (works on Windows, macOS, and Linux)
+- **SQL Server instance** running on localhost:1433 (or configured host/port)
+- **Appropriate database permissions** for the connecting user
 
-## Installation
+## Platform-Specific Setup
 
-1. Clone or download this repository
-2. Install dependencies:
+### 🪟 **Windows Setup**
 
-   ```bash
-   npm install
+**Advantages on Windows:**
+- Native SQL Server integration
+- Superior Windows Authentication support
+- Seamless domain integration
+- Fewer cross-platform authentication issues
+
+**Prerequisites:**
+1. **Node.js 18+**: Download from [nodejs.org](https://nodejs.org/)
+2. **SQL Server**: SQL Server Express (free) or full SQL Server
+3. **SQL Server Configuration**:
+   - Enable TCP/IP protocol in SQL Server Configuration Manager
+   - Start SQL Server Browser service (for named instances)
+   - Configure Windows Firewall if needed
+
+**Installation:**
+```powershell
+# Clone the repository
+git clone <repository-url>
+cd warp-sql-server-mcp
+
+# Install dependencies
+npm install
+
+# Copy environment template
+copy .env.example .env
+```
+
+**Configuration (.env file):**
+```bash
+# For Windows Authentication (Recommended)
+SQL_SERVER_HOST=localhost
+SQL_SERVER_PORT=1433
+SQL_SERVER_DATABASE=master
+# Leave these empty for Windows auth:
+SQL_SERVER_USER=
+SQL_SERVER_PASSWORD=
+SQL_SERVER_DOMAIN=YOURDOMAIN  # Optional: your Windows domain
+
+# For SQL Server Authentication
+# SQL_SERVER_USER=your_sql_username
+# SQL_SERVER_PASSWORD=your_sql_password
+
+# Connection settings
+SQL_SERVER_ENCRYPT=false
+SQL_SERVER_TRUST_CERT=true
+```
+
+### 🍎🐧 **macOS/Linux Setup**
+
+**Installation:**
+```bash
+# Clone the repository
+git clone <repository-url>
+cd warp-sql-server-mcp
+
+# Install dependencies
+npm install
+
+# Copy environment template
+cp .env.example .env
+```
+
+**Configuration (.env file):**
+```bash
+# For SQL Server Authentication (Most common on macOS/Linux)
+SQL_SERVER_HOST=localhost  # or remote SQL Server IP
+SQL_SERVER_PORT=1433
+SQL_SERVER_DATABASE=master
+SQL_SERVER_USER=your_username
+SQL_SERVER_PASSWORD=your_password
+
+# For Windows Authentication (if connecting to domain SQL Server)
+# SQL_SERVER_USER=
+# SQL_SERVER_PASSWORD=
+# SQL_SERVER_DOMAIN=YOURDOMAIN
+
+# Connection settings
+SQL_SERVER_ENCRYPT=false  # Set to true for remote/production
+SQL_SERVER_TRUST_CERT=true
+```
+
+## Common Configuration
+
+## Configuration for Warp and MCP Clients
+
+> **⚠️ CRITICAL:** MCP servers run in isolated environments and **do not automatically load `.env` files**. You must explicitly provide all configuration through environment variables in your MCP client configuration.
+
+### Method 1: Warp MCP Settings (Recommended)
+
+1. **Open Warp Settings**:
+   - Open Warp Terminal
+   - Press `Cmd+,` or go to `Warp → Settings`
+   - Navigate to the **MCP** section
+
+2. **Add New MCP Server**:
+   - Click "Add MCP Server"
+   - **Name**: `sql-server`
+   - **Command**: `node`
+   - **Args** (choose based on your platform):
+     - **Windows**: `["C:\\Users\\YourName\\path\\to\\warp-sql-server-mcp\\index.js"]`
+     - **macOS/Linux**: `["/Users/YourName/path/to/warp-sql-server-mcp/index.js"]`
+
+3. **Environment Variables** (Click "Add Environment Variable" for each):
+
+   ```json
+   {
+     "SQL_SERVER_HOST": "localhost",
+     "SQL_SERVER_PORT": "1433",
+     "SQL_SERVER_DATABASE": "master",
+     "SQL_SERVER_USER": "your_username",
+     "SQL_SERVER_PASSWORD": "your_password",
+     "SQL_SERVER_ENCRYPT": "false",
+     "SQL_SERVER_TRUST_CERT": "true",
+     "SQL_SERVER_CONNECT_TIMEOUT_MS": "3000",
+     "SQL_SERVER_REQUEST_TIMEOUT_MS": "10000",
+     "SQL_SERVER_MAX_RETRIES": "1",
+     "SQL_SERVER_RETRY_DELAY_MS": "200"
+   }
    ```
 
-3. Copy the environment template and configure your connection:
+4. **Authentication Options**:
+   - **For SQL Server Authentication**: Include `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`
+   - **For Windows Authentication**: Omit `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`, optionally add `SQL_SERVER_DOMAIN`
 
-   ```bash
-   cp .env.example .env
-   ```
+5. **Save Configuration** and restart the MCP server
 
-4. Edit `.env` with your SQL Server connection details:
+### Method 2: JSON Configuration File
 
-   ```bash
-   # For SQL Server Authentication
-   SQL_SERVER_HOST=localhost
-   SQL_SERVER_PORT=1433
-   SQL_SERVER_DATABASE=master
-   SQL_SERVER_USER=your_username
-   SQL_SERVER_PASSWORD=your_password
-   
-   # For Windows Authentication (leave USER and PASSWORD empty)
-   # SQL_SERVER_DOMAIN=your_domain
-   ```
+Create or update your MCP configuration file (e.g., `warp-mcp-config.json`):
 
-## Configuration for Warp
+```json
+{
+  "mcpServers": {
+    "sql-server": {
+      "command": "node",
+      "args": ["/path/to/your/warp-sql-server-mcp/index.js"],
+      "env": {
+        "SQL_SERVER_HOST": "localhost",
+        "SQL_SERVER_PORT": "1433",
+        "SQL_SERVER_DATABASE": "master",
+        "SQL_SERVER_USER": "your_username",
+        "SQL_SERVER_PASSWORD": "your_password",
+        "SQL_SERVER_ENCRYPT": "false",
+        "SQL_SERVER_TRUST_CERT": "true",
+        "SQL_SERVER_CONNECT_TIMEOUT_MS": "3000",
+        "SQL_SERVER_REQUEST_TIMEOUT_MS": "10000",
+        "SQL_SERVER_MAX_RETRIES": "1",
+        "SQL_SERVER_RETRY_DELAY_MS": "200"
+      }
+    }
+  }
+}
+```
 
-### Method 1: Using Warp's MCP Settings
+**Import into Warp**:
 
-1. Open Warp and go to Settings
-2. Navigate to the MCP section
-3. Add a new MCP server with these settings:
-   - **Name**: sql-server
-   - **Command**: node
-   - **Args**: `["/Users/egarcia74/Source/Repos/GitHub/warp-sql-server-mcp/index.js"]`
-   - **Environment Variables**:
-     - `SQL_SERVER_HOST`: localhost
-     - `SQL_SERVER_PORT`: 1433
-     - `SQL_SERVER_DATABASE`: master
-     - Add authentication variables as needed
+1. Save the JSON configuration file
+2. In Warp Settings → MCP, click "Import Configuration"
+3. Select your JSON file
 
-### Method 2: Using Configuration File
+### Configuration for Other MCP Clients
 
-1. Use the provided `warp-mcp-config.json` configuration
-2. Update the paths and environment variables as needed
-3. Import this configuration into Warp
+For other MCP-compatible systems (Claude Desktop, etc.), use a similar JSON structure:
+
+```json
+{
+  "mcpServers": {
+    "sql-server": {
+      "command": "node",
+      "args": ["/absolute/path/to/index.js"],
+      "env": {
+        // Environment variables as shown above
+      }
+    }
+  }
+}
+```
+
+### Environment Variables Reference
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SQL_SERVER_HOST` | Yes | `localhost` | SQL Server hostname |
+| `SQL_SERVER_PORT` | Yes | `1433` | SQL Server port |
+| `SQL_SERVER_DATABASE` | Yes | `master` | Initial database |
+| `SQL_SERVER_USER` | For SQL Auth | - | Database username |
+| `SQL_SERVER_PASSWORD` | For SQL Auth | - | Database password |
+| `SQL_SERVER_DOMAIN` | For Windows Auth | - | Windows domain |
+| `SQL_SERVER_ENCRYPT` | No | `false` | Enable SSL/TLS |
+| `SQL_SERVER_TRUST_CERT` | No | `true` | Trust server certificate |
+| `SQL_SERVER_CONNECT_TIMEOUT_MS` | No | `3000` | Connection timeout |
+| `SQL_SERVER_REQUEST_TIMEOUT_MS` | No | `10000` | Query timeout |
+| `SQL_SERVER_MAX_RETRIES` | No | `1` | Connection retry attempts |
+| `SQL_SERVER_RETRY_DELAY_MS` | No | `200` | Retry delay |
+
+### Troubleshooting Configuration
+
+**Common Issues:**
+
+1. **"NTLM authentication error"**
+   - Ensure `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD` are set for SQL Server auth
+   - Or omit both for Windows authentication
+
+2. **"Connection timeout"**
+   - Set `SQL_SERVER_ENCRYPT=false` for local development
+   - Verify SQL Server is running on the specified port
+   - Check firewall settings
+
+3. **"Server not found"**
+   - Verify `SQL_SERVER_HOST` and `SQL_SERVER_PORT` are correct
+   - Test connectivity: `telnet localhost 1433`
+
+4. **"Login failed"**
+   - Verify username/password in `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`
+   - Ensure the user has database access permissions
+
+**Verification Steps:**
+
+1. Check MCP server logs in Warp for startup messages
+2. Look for: "Database connection pool initialized successfully"
+3. Test with simple query: "List all databases"
+4. Check Warp's MCP server status in Settings
 
 ## Usage Examples
 
@@ -155,25 +336,131 @@ To test the server standalone:
 npm start
 ```
 
+## Testing
+
+This project includes comprehensive unit tests for all functionality using Vitest.
+
+📖 **For detailed test documentation, see [test/README.md](test/README.md)**
+
+### Quick Start
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode (reruns on file changes)
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run tests with UI (if available)
+npm run test:ui
+```
+
+### Test Overview
+
+- **Total Tests**: 44 tests covering all MCP tools and functionality
+- **Test Framework**: Vitest with comprehensive mocking
+- **Coverage**: 60.25% statements, 78.04% branches, 83.33% functions
+- **Architecture**: Unit tests with mocked SQL Server connections for reliability and speed
+
+### Test Categories
+
+The test suite covers:
+
+- **Core functionality**: All 8 MCP tools (execute_query, list_databases, etc.)
+- **Connection handling**: Database connection logic and authentication methods
+- **Error scenarios**: Comprehensive error handling and edge cases
+- **Advanced features**: Query analysis, foreign keys, CSV export with filtering
+- **WHERE clause filtering**: 16 comprehensive filtering tests preventing parameter bugs
+
+### Documentation
+
+For complete test documentation including:
+
+- Detailed test breakdowns by category
+- Test architecture and mocking strategy
+- Development workflow and best practices
+- Coverage analysis and debugging guides
+
+**👉 See [test/README.md](test/README.md)**
+
 ## Troubleshooting
 
-### Connection Issues
+### 🪟 **Windows-Specific Troubleshooting**
 
-- Verify SQL Server is running and accepting connections on port 1433
-- Check firewall settings
-- Ensure TCP/IP protocol is enabled in SQL Server Configuration Manager
-- Verify authentication credentials
+**SQL Server Configuration:**
+1. **Enable TCP/IP Protocol**:
+   - Open "SQL Server Configuration Manager"
+   - Navigate to "SQL Server Network Configuration" → "Protocols for [Instance]"
+   - Enable "TCP/IP" protocol
+   - Restart SQL Server service
+
+2. **SQL Server Browser Service**:
+   - Open "Services" (services.msc)
+   - Start "SQL Server Browser" service
+   - Set to "Automatic" startup type
+
+3. **Windows Firewall**:
+   - Add inbound rule for port 1433
+   - Or temporarily disable firewall for testing
+
+4. **Windows Authentication**:
+   - Works seamlessly with domain accounts
+   - Run Warp as the user who needs database access
+   - No username/password required in configuration
+
+**Testing Connection:**
+```powershell
+# Test SQL Server connectivity
+telnet localhost 1433
+
+# Check SQL Server services
+Get-Service -Name "*SQL*"
+
+# Verify port is listening
+netstat -an | findstr :1433
+```
+
+### 🍎🐧 **macOS/Linux-Specific Troubleshooting**
+
+**Connection Testing:**
+```bash
+# Test SQL Server connectivity
+telnet localhost 1433
+# or
+nc -zv localhost 1433
+
+# Check if port is reachable
+nmap -p 1433 localhost
+```
+
+**Common Issues:**
+1. **Remote SQL Server**: Often requires SQL Server Authentication
+2. **SSL/TLS**: May need `SQL_SERVER_ENCRYPT=true` for remote connections
+3. **Network**: Check firewall rules on SQL Server host
+4. **Docker**: If using SQL Server in Docker, ensure port mapping
+
+### General Connection Issues
+
+- **Verify SQL Server is running** and accepting connections on port 1433
+- **Check firewall settings** on both client and server
+- **Ensure TCP/IP protocol is enabled** in SQL Server Configuration Manager
+- **Verify authentication credentials** are correct
 
 ### Permission Issues
 
-- Ensure the connecting user has appropriate database permissions
-- For Windows Authentication, run the process with appropriate user context
+- **Ensure the connecting user has appropriate database permissions**
+- **For Windows Authentication**: Run the process with appropriate user context
+- **For SQL Server Authentication**: Verify the SQL login exists and has permissions
 
 ### Network Issues
 
-- Test connectivity using tools like `telnet localhost 1433`
-- Check SQL Server network configuration
-- Verify named pipes vs TCP/IP settings
+- **Test connectivity** using tools like `telnet localhost 1433`
+- **Check SQL Server network configuration**
+- **Verify named pipes vs TCP/IP settings**
+- **Check for VPN or proxy interference**
 
 ## Contributing
 
