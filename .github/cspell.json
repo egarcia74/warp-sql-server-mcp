@@ -108,7 +108,11 @@
     "CSRF",
     "XSS",
     "CVE",
-    "OWASP"
+    "OWASP",
+    "Prieto",
+    "Eduardo",
+    "Garcia",
+    "egarcia74"
   ],
   "flagWords": [],
   "ignorePaths": [

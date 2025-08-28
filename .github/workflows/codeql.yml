@@ -73,12 +73,6 @@ jobs:
         # Wait for all queries to complete
         wait-for-processing: true
 
-    # Optional: Upload SARIF file to show in security tab
-    - name: Upload SARIF results
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: /home/runner/work/_temp/codeql_databases/javascript/results.sarif
 
   dependency-review:
     name: Dependency Security Review
