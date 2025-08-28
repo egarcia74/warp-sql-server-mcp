@@ -20,9 +20,12 @@ pids
 # Logs
 logs
 *.log
-
 # Coverage directory used by tools like istanbul
 coverage/
+*.lcov
+
+# Credential removal script (temporary)
+fix-credentials.sh
 .nyc_output
 
 # Dependency directories

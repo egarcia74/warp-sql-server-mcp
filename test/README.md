@@ -6,7 +6,7 @@ ensure all functionality works correctly and provide confidence for ongoing deve
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 44 tests
+- **Total Tests**: 56 tests
 - **Status**: ✅ All passing
 - **Coverage**: 60.25% statements, 78.04% branches, 83.33% functions
 - **Test Type**: Unit tests with mocked SQL Server connections
@@ -17,7 +17,7 @@ ensure all functionality works correctly and provide confidence for ongoing deve
 test/
 ├── README.md              # This documentation
 ├── setup.js               # Global test setup and mock configurations
-├── sqlserver-mcp.test.js   # Main test suite (44 tests)
+├── sqlserver-mcp.test.js   # Main test suite (56 tests)
 └── vitest.config.js        # Test configuration (in root directory)
 ```
 

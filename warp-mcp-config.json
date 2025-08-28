@@ -11,10 +11,13 @@
         "SQL_SERVER_PASSWORD": "your_password",
         "SQL_SERVER_ENCRYPT": "false",
         "SQL_SERVER_TRUST_CERT": "true",
-        "SQL_SERVER_CONNECT_TIMEOUT_MS": "3000",
-        "SQL_SERVER_REQUEST_TIMEOUT_MS": "10000",
-        "SQL_SERVER_MAX_RETRIES": "1",
-        "SQL_SERVER_RETRY_DELAY_MS": "200"
+        "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
+        "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
+        "SQL_SERVER_MAX_RETRIES": "3",
+        "SQL_SERVER_RETRY_DELAY_MS": "1000",
+        "SQL_SERVER_POOL_MAX": "10",
+        "SQL_SERVER_POOL_MIN": "0",
+        "SQL_SERVER_POOL_IDLE_TIMEOUT_MS": "30000"
       }
     }
   }

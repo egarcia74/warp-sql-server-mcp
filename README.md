@@ -175,10 +175,10 @@ SQL_SERVER_TRUST_CERT=true
      "SQL_SERVER_PASSWORD": "your_password",
      "SQL_SERVER_ENCRYPT": "false",
      "SQL_SERVER_TRUST_CERT": "true",
-     "SQL_SERVER_CONNECT_TIMEOUT_MS": "3000",
-     "SQL_SERVER_REQUEST_TIMEOUT_MS": "10000",
-     "SQL_SERVER_MAX_RETRIES": "1",
-     "SQL_SERVER_RETRY_DELAY_MS": "200"
+     "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
+     "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
+     "SQL_SERVER_MAX_RETRIES": "3",
+     "SQL_SERVER_RETRY_DELAY_MS": "1000"
    }
    ```
 
@@ -207,10 +207,10 @@ Create or update your MCP configuration file (e.g., `warp-mcp-config.json`):
         "SQL_SERVER_PASSWORD": "your_password",
         "SQL_SERVER_ENCRYPT": "false",
         "SQL_SERVER_TRUST_CERT": "true",
-        "SQL_SERVER_CONNECT_TIMEOUT_MS": "3000",
-        "SQL_SERVER_REQUEST_TIMEOUT_MS": "10000",
-        "SQL_SERVER_MAX_RETRIES": "1",
-        "SQL_SERVER_RETRY_DELAY_MS": "200"
+        "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
+        "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
+        "SQL_SERVER_MAX_RETRIES": "3",
+        "SQL_SERVER_RETRY_DELAY_MS": "1000"
       }
     }
   }
@@ -253,10 +253,10 @@ For other MCP-compatible systems (Claude Desktop, etc.), use a similar JSON stru
 | `SQL_SERVER_DOMAIN`             | For Windows Auth | -           | Windows domain            |
 | `SQL_SERVER_ENCRYPT`            | No               | `false`     | Enable SSL/TLS            |
 | `SQL_SERVER_TRUST_CERT`         | No               | `true`      | Trust server certificate  |
-| `SQL_SERVER_CONNECT_TIMEOUT_MS` | No               | `3000`      | Connection timeout        |
-| `SQL_SERVER_REQUEST_TIMEOUT_MS` | No               | `10000`     | Query timeout             |
-| `SQL_SERVER_MAX_RETRIES`        | No               | `1`         | Connection retry attempts |
-| `SQL_SERVER_RETRY_DELAY_MS`     | No               | `200`       | Retry delay               |
+| `SQL_SERVER_CONNECT_TIMEOUT_MS` | No               | `10000`     | Connection timeout        |
+| `SQL_SERVER_REQUEST_TIMEOUT_MS` | No               | `30000`     | Query timeout             |
+| `SQL_SERVER_MAX_RETRIES`        | No               | `3`         | Connection retry attempts |
+| `SQL_SERVER_RETRY_DELAY_MS`     | No               | `1000`      | Retry delay               |
 
 ### Troubleshooting Configuration
 
@@ -390,7 +390,7 @@ npm run test:ui
 
 ### Test Overview
 
-- **Total Tests**: 44 tests covering all MCP tools and functionality
+- **Total Tests**: 56 tests covering all MCP tools and functionality
 - **Test Framework**: Vitest with comprehensive mocking
 - **Coverage**: 60.25% statements, 78.04% branches, 83.33% functions
 - **Architecture**: Unit tests with mocked SQL Server connections for reliability and speed

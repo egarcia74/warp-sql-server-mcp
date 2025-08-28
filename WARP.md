@@ -135,16 +135,16 @@ For Windows Authentication (leave user/password empty):
 
 ### Timeout and Retry Configuration
 
-- `SQL_SERVER_CONNECT_TIMEOUT_MS`: Connection timeout in milliseconds (default: 3000)
-- `SQL_SERVER_REQUEST_TIMEOUT_MS`: Query request timeout in milliseconds (default: 10000)
-- `SQL_SERVER_MAX_RETRIES`: Maximum connection retry attempts (default: 1)
-- `SQL_SERVER_RETRY_DELAY_MS`: Delay between retries in milliseconds (default: 200)
+- `SQL_SERVER_CONNECT_TIMEOUT_MS`: Connection timeout in milliseconds (default: 10000)
+- `SQL_SERVER_REQUEST_TIMEOUT_MS`: Query request timeout in milliseconds (default: 30000)
+- `SQL_SERVER_MAX_RETRIES`: Maximum connection retry attempts (default: 3)
+- `SQL_SERVER_RETRY_DELAY_MS`: Delay between retries in milliseconds (default: 1000)
 
 ### Connection Pool Settings
 
-- `SQL_SERVER_POOL_MAX`: Maximum pool connections (default: 5)
+- `SQL_SERVER_POOL_MAX`: Maximum pool connections (default: 10)
 - `SQL_SERVER_POOL_MIN`: Minimum pool connections (default: 0)
-- `SQL_SERVER_POOL_IDLE_TIMEOUT_MS`: Pool idle timeout in milliseconds (default: 15000)
+- `SQL_SERVER_POOL_IDLE_TIMEOUT_MS`: Pool idle timeout in milliseconds (default: 30000)
 
 ## Warp Integration
 
@@ -165,10 +165,10 @@ In Warp's MCP settings, you must provide ALL environment variables:
   "SQL_SERVER_PASSWORD": "your_password",
   "SQL_SERVER_ENCRYPT": "false",
   "SQL_SERVER_TRUST_CERT": "true",
-  "SQL_SERVER_CONNECT_TIMEOUT_MS": "3000",
-  "SQL_SERVER_REQUEST_TIMEOUT_MS": "10000",
-  "SQL_SERVER_MAX_RETRIES": "1",
-  "SQL_SERVER_RETRY_DELAY_MS": "200"
+  "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
+  "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
+  "SQL_SERVER_MAX_RETRIES": "3",
+  "SQL_SERVER_RETRY_DELAY_MS": "1000"
 }
 ```
 
@@ -191,7 +191,7 @@ for all database operations.
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 44 tests cover all MCP tools, connection handling, and error scenarios
+- **Comprehensive Coverage**: 56 tests cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 
 ### Test Structure
@@ -200,11 +200,11 @@ for all database operations.
 test/
 ├── README.md              # 📖 Comprehensive test documentation
 ├── setup.js               # Global mocks and test data definitions
-├── sqlserver-mcp.test.js   # Main test suite (44 tests)
+├── sqlserver-mcp.test.js   # Main test suite (56 tests)
 └── ../vitest.config.js     # Test configuration
 ```
 
-### Test Categories (44 total tests)
+### Test Categories (56 total tests)
 
 - **Database Connection Tests** (4): Connection handling, authentication, error scenarios
 - **Query Execution Tests** (3): SQL query execution and database switching
