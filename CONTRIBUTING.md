@@ -2,7 +2,8 @@
 
 Thank you for your interest in contributing to the Warp SQL Server MCP project!
 
-**🚀 New to this project?** Start with the [Quick Start Guide](QUICKSTART.md) to get familiar with the MCP server functionality before diving into development.
+**🚀 New to this project?** Start with the [Quick Start Guide](QUICKSTART.md) to get
+familiar with the MCP server functionality before diving into development.
 
 ## Development Setup
 

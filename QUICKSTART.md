@@ -76,7 +76,7 @@ If you see database results, you're all set!
 
 You'll see this in your logs:
 
-```text
+```bash
 Security: 🔒 SECURE (RO, DML-, DDL-)
 ```
 

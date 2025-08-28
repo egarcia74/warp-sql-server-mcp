@@ -11,9 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - Security Features
 
-- **🔒 Three-Tier Graduated Safety System**: Revolutionary security architecture for production database safety
-  - **Read-Only Mode**: `SQL_SERVER_READ_ONLY` (default: `true`) - Restricts to SELECT queries only
-  - **Destructive Operations Control**: `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` (default: `false`) - Controls INSERT/UPDATE/DELETE
+- **🔒 Three-Tier Graduated Safety System**: Revolutionary security architecture for
+  production database safety
+  - **Read-Only Mode**: `SQL_SERVER_READ_ONLY` (default: `true`) - Restricts to SELECT
+    queries only
+  - **Destructive Operations Control**: `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS`
+    (default: `false`) - Controls INSERT/UPDATE/DELETE
   - **Schema Changes Control**: `SQL_SERVER_ALLOW_SCHEMA_CHANGES` (default: `false`) - Controls CREATE/DROP/ALTER
   - **Secure by Default**: Maximum security out-of-the-box with explicit opt-in for dangerous operations
   - **Comprehensive Query Validation**: Advanced regex-based SQL parsing to enforce security policies
@@ -22,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **🛡️ Production Security Features**
   - **Startup Security Summary**: Visual security status display in MCP logs with emoji indicators
-  - **Security Level Indicators**: `🔒 SECURE` / `⚠️ UNSAFE` status with detailed breakdown (RO/RW, DML±, DDL±)
+  - **Security Level Indicators**: `🔒 SECURE` / `⚠️ UNSAFE` status with detailed
+    breakdown (RO/RW, DML±, DDL±)
   - **Configuration Validation**: Automatic detection and warning of unsafe production configurations
   - **Audit Trail**: Security decisions logged for compliance and troubleshooting
   - **Comprehensive Documentation**: Dedicated `SECURITY.md` with threat model and deployment guidelines
@@ -99,7 +103,7 @@ removed for security reasons.
 - Complete documentation with platform-specific setup guides
 - GitHub Actions CI/CD pipeline with automated testing and releases
 
-### Security & Dependencies
+### Dependencies & Infrastructure
 
 - Upgrade mssql dependency to v11.0.1 for enhanced security and compatibility
 - Secure environment variable configuration for database credentials
