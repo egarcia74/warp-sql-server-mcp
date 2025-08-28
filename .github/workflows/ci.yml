@@ -85,7 +85,7 @@ jobs:
           files: ./coverage/lcov.info
           flags: unittests
           name: codecov-warp-sql-server-mcp
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN }} # yamllint disable-line
         continue-on-error: true
 
   security:
