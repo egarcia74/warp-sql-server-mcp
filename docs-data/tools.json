@@ -1,0 +1,221 @@
+{
+  "version": "1.2.0",
+  "generatedAt": "2025-08-28T18:40:50.771Z",
+  "toolsCount": 8,
+  "tools": [
+    {
+      "name": "execute_query",
+      "description": "Execute a SQL query on the connected SQL Server database",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "The SQL query to execute"
+        },
+        "database": {
+          "type": "string",
+          "description": "Optional: Database name to use for this query"
+        }
+      },
+      "required": ["query"],
+      "examples": {
+        "basic": {
+          "query": "SELECT * FROM your_table"
+        },
+        "advanced": {
+          "query": "SELECT * FROM your_table",
+          "database": "MyDatabase"
+        }
+      }
+    },
+    {
+      "name": "list_databases",
+      "description": "List all databases on the SQL Server instance",
+      "parameters": {},
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {}
+      }
+    },
+    {
+      "name": "list_tables",
+      "description": "List all tables in a specific database",
+      "parameters": {
+        "database": {
+          "type": "string",
+          "description": "Database name (optional, uses current database if not specified)"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name (optional, defaults to dbo)"
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "database": "MyDatabase",
+          "schema": "dbo"
+        }
+      }
+    },
+    {
+      "name": "describe_table",
+      "description": "Get the schema information for a specific table",
+      "parameters": {
+        "table_name": {
+          "type": "string",
+          "description": "Name of the table to describe"
+        },
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name (optional, defaults to dbo)"
+        }
+      },
+      "required": ["table_name"],
+      "examples": {
+        "basic": {
+          "table_name": "your_table_name"
+        },
+        "advanced": {
+          "table_name": "your_table_name",
+          "database": "MyDatabase",
+          "schema": "dbo"
+        }
+      }
+    },
+    {
+      "name": "get_table_data",
+      "description": "Get sample data from a table with optional filtering and limiting",
+      "parameters": {
+        "table_name": {
+          "type": "string",
+          "description": "Name of the table"
+        },
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name (optional, defaults to dbo)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of rows to return (optional, defaults to 100)"
+        },
+        "where": {
+          "type": "string",
+          "description": "WHERE clause conditions (optional)"
+        }
+      },
+      "required": ["table_name"],
+      "examples": {
+        "basic": {
+          "table_name": "your_table_name"
+        },
+        "advanced": {
+          "table_name": "your_table_name",
+          "database": "MyDatabase",
+          "schema": "dbo",
+          "limit": 50,
+          "where": "id > 100"
+        }
+      }
+    },
+    {
+      "name": "explain_query",
+      "description": "Get the execution plan for a SQL query to analyze performance",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "The SQL query to analyze"
+        },
+        "database": {
+          "type": "string",
+          "description": "Optional: Database name to use for this query"
+        },
+        "include_actual_plan": {
+          "type": "boolean",
+          "description": "Include actual execution statistics (optional, defaults to false)"
+        }
+      },
+      "required": ["query"],
+      "examples": {
+        "basic": {
+          "query": "SELECT * FROM your_table"
+        },
+        "advanced": {
+          "query": "SELECT * FROM your_table",
+          "database": "MyDatabase",
+          "include_actual_plan": true
+        }
+      }
+    },
+    {
+      "name": "list_foreign_keys",
+      "description": "List all foreign key relationships in a schema",
+      "parameters": {
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name (optional, defaults to dbo)"
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "database": "MyDatabase",
+          "schema": "dbo"
+        }
+      }
+    },
+    {
+      "name": "export_table_csv",
+      "description": "Export table data in CSV format",
+      "parameters": {
+        "table_name": {
+          "type": "string",
+          "description": "Name of the table to export"
+        },
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name (optional, defaults to dbo)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of rows to export (optional)"
+        },
+        "where": {
+          "type": "string",
+          "description": "WHERE clause conditions (optional)"
+        }
+      },
+      "required": ["table_name"],
+      "examples": {
+        "basic": {
+          "table_name": "your_table_name"
+        },
+        "advanced": {
+          "table_name": "your_table_name",
+          "database": "MyDatabase",
+          "schema": "dbo",
+          "limit": 50,
+          "where": "id > 100"
+        }
+      }
+    }
+  ]
+}

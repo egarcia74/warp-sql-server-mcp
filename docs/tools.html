@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Tools - Warp SQL Server MCP Documentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        .nav {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .nav a {
+            color: #007bff;
+            text-decoration: none;
+            margin: 0 1rem;
+            font-weight: 500;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .tool {
+            background: white;
+            margin: 2rem 0;
+            padding: 2rem;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tool h2 {
+            color: #495057;
+            margin-top: 0;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 0.5rem;
+        }
+        .tool-name {
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: #f1f3f4;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-size: 1.1em;
+        }
+        .description {
+            font-size: 1.1em;
+            margin: 1rem 0;
+            color: #6c757d;
+        }
+        .section {
+            margin: 1.5rem 0;
+        }
+        .section h3 {
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+        .parameters-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        .parameters-table th,
+        .parameters-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .parameters-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+        .param-name {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-weight: 600;
+            color: #007bff;
+        }
+        .param-type {
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: #e9ecef;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .required {
+            background: #dc3545;
+            color: white;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .optional {
+            background: #28a745;
+            color: white;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .example {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+        }
+        .example h4 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .example-code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 5px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            margin: 0.5rem 0;
+        }
+        .no-params {
+            color: #6c757d;
+            font-style: italic;
+            text-align: center;
+            padding: 1rem;
+        }
+        .toc {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .toc h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .toc ul {
+            margin: 0.5rem 0;
+        }
+        .toc a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛠️ MCP Tools Documentation</h1>
+        <p>Detailed reference for all available SQL Server MCP tools</p>
+        <div>
+            <strong>Version 1.2.0 • 8 Tools Available</strong>
+        </div>
+    </div>
+
+    <div class="nav">
+        <a href="../">← Back to Main Documentation</a>
+        <a href="#toc">Table of Contents</a>
+        <a href="https://github.com/egarcia74/warp-sql-server-mcp">GitHub Repository</a>
+    </div>
+
+    <div class="toc" id="toc">
+        <h3>📋 Table of Contents</h3>
+        <ul>
+            <li><a href="#execute_query">execute_query</a> - Execute a SQL query on the connected SQL Server database</li>
+            <li><a href="#list_databases">list_databases</a> - List all databases on the SQL Server instance</li>
+            <li><a href="#list_tables">list_tables</a> - List all tables in a specific database</li>
+            <li><a href="#describe_table">describe_table</a> - Get the schema information for a specific table</li>
+            <li><a href="#get_table_data">get_table_data</a> - Get sample data from a table with optional filtering and limiting</li>
+            <li><a href="#explain_query">explain_query</a> - Get the execution plan for a SQL query to analyze performance</li>
+            <li><a href="#list_foreign_keys">list_foreign_keys</a> - List all foreign key relationships in a schema</li>
+            <li><a href="#export_table_csv">export_table_csv</a> - Export table data in CSV format</li>
+        </ul>
+    </div>
+
+    <div class="tool" id="execute_query">
+        <h2><span class="tool-name">execute_query</span></h2>
+        <div class="description">Execute a SQL query on the connected SQL Server database</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">query</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="required">REQUIRED</span></td>
+                    <td>The SQL query to execute</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Optional: Database name to use for this query</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔹 Basic Usage</h4>
+                <div class="example-code">{
+  "tool": "execute_query",
+  "arguments": {
+    "query": "SELECT * FROM your_table"
+  }
+}</div>
+            </div>            <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "execute_query",
+  "arguments": {
+    "query": "SELECT * FROM your_table",
+    "database": "MyDatabase"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="list_databases">
+        <h2><span class="tool-name">list_databases</span></h2>
+        <div class="description">List all databases on the SQL Server instance</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+            <div class="no-params">No parameters required</div>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔹 Usage</h4>
+                <div class="example-code">{
+  "tool": "list_databases",
+  "arguments": {}
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="list_tables">
+        <h2><span class="tool-name">list_tables</span></h2>
+        <div class="description">List all tables in a specific database</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional, uses current database if not specified)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">schema</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Schema name (optional, defaults to dbo)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "list_tables",
+  "arguments": {
+    "database": "MyDatabase",
+    "schema": "dbo"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="describe_table">
+        <h2><span class="tool-name">describe_table</span></h2>
+        <div class="description">Get the schema information for a specific table</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">table_name</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="required">REQUIRED</span></td>
+                    <td>Name of the table to describe</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">schema</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Schema name (optional, defaults to dbo)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔹 Basic Usage</h4>
+                <div class="example-code">{
+  "tool": "describe_table",
+  "arguments": {
+    "table_name": "your_table_name"
+  }
+}</div>
+            </div>            <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "describe_table",
+  "arguments": {
+    "table_name": "your_table_name",
+    "database": "MyDatabase",
+    "schema": "dbo"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="get_table_data">
+        <h2><span class="tool-name">get_table_data</span></h2>
+        <div class="description">Get sample data from a table with optional filtering and limiting</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">table_name</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="required">REQUIRED</span></td>
+                    <td>Name of the table</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">schema</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Schema name (optional, defaults to dbo)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">limit</span></td>
+                    <td><span class="param-type">number</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Maximum number of rows to return (optional, defaults to 100)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">where</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>WHERE clause conditions (optional)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔹 Basic Usage</h4>
+                <div class="example-code">{
+  "tool": "get_table_data",
+  "arguments": {
+    "table_name": "your_table_name"
+  }
+}</div>
+            </div>            <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "get_table_data",
+  "arguments": {
+    "table_name": "your_table_name",
+    "database": "MyDatabase",
+    "schema": "dbo",
+    "limit": 50,
+    "where": "id > 100"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="explain_query">
+        <h2><span class="tool-name">explain_query</span></h2>
+        <div class="description">Get the execution plan for a SQL query to analyze performance</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">query</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="required">REQUIRED</span></td>
+                    <td>The SQL query to analyze</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Optional: Database name to use for this query</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">include_actual_plan</span></td>
+                    <td><span class="param-type">boolean</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Include actual execution statistics (optional, defaults to false)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔹 Basic Usage</h4>
+                <div class="example-code">{
+  "tool": "explain_query",
+  "arguments": {
+    "query": "SELECT * FROM your_table"
+  }
+}</div>
+            </div>            <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "explain_query",
+  "arguments": {
+    "query": "SELECT * FROM your_table",
+    "database": "MyDatabase",
+    "include_actual_plan": true
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="list_foreign_keys">
+        <h2><span class="tool-name">list_foreign_keys</span></h2>
+        <div class="description">List all foreign key relationships in a schema</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">schema</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Schema name (optional, defaults to dbo)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "list_foreign_keys",
+  "arguments": {
+    "database": "MyDatabase",
+    "schema": "dbo"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="export_table_csv">
+        <h2><span class="tool-name">export_table_csv</span></h2>
+        <div class="description">Export table data in CSV format</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">table_name</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="required">REQUIRED</span></td>
+                    <td>Name of the table to export</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">schema</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Schema name (optional, defaults to dbo)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">limit</span></td>
+                    <td><span class="param-type">number</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Maximum number of rows to export (optional)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">where</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>WHERE clause conditions (optional)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔹 Basic Usage</h4>
+                <div class="example-code">{
+  "tool": "export_table_csv",
+  "arguments": {
+    "table_name": "your_table_name"
+  }
+}</div>
+            </div>            <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "export_table_csv",
+  "arguments": {
+    "table_name": "your_table_name",
+    "database": "MyDatabase",
+    "schema": "dbo",
+    "limit": 50,
+    "where": "id > 100"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <footer style="margin-top: 3rem; text-align: center; color: #6c757d; border-top: 1px solid #e9ecef; padding-top: 1rem;">
+        <p>Generated automatically from code • Last updated: 29/08/2025</p>
+    </footer>
+</body>
+</html>
