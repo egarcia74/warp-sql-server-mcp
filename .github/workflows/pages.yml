@@ -1,0 +1,213 @@
+name: Deploy Documentation to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests for coverage
+        run: npm run test:coverage
+
+      - name: Generate API documentation
+        run: |
+          # Create docs directory
+          mkdir -p docs
+          
+          # Generate documentation index
+          cat > docs/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Warp SQL Server MCP - Documentation</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                      line-height: 1.6;
+                      max-width: 1200px;
+                      margin: 0 auto;
+                      padding: 2rem;
+                      color: #333;
+                  }
+                  .header {
+                      text-align: center;
+                      margin-bottom: 3rem;
+                      padding: 2rem;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      border-radius: 8px;
+                  }
+                  .grid {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                      gap: 2rem;
+                      margin: 2rem 0;
+                  }
+                  .card {
+                      background: #f8f9fa;
+                      padding: 1.5rem;
+                      border-radius: 8px;
+                      border: 1px solid #e9ecef;
+                      transition: transform 0.2s ease;
+                  }
+                  .card:hover {
+                      transform: translateY(-2px);
+                      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                  }
+                  .card h3 {
+                      margin-top: 0;
+                      color: #495057;
+                  }
+                  .card p {
+                      color: #6c757d;
+                  }
+                  .card a {
+                      color: #007bff;
+                      text-decoration: none;
+                      font-weight: 500;
+                  }
+                  .card a:hover {
+                      text-decoration: underline;
+                  }
+                  .badge {
+                      display: inline-block;
+                      padding: 0.25rem 0.5rem;
+                      background: #28a745;
+                      color: white;
+                      border-radius: 3px;
+                      font-size: 0.75rem;
+                      margin: 0.25rem;
+                  }
+                  .code {
+                      background: #f1f3f4;
+                      padding: 0.2rem 0.4rem;
+                      border-radius: 3px;
+                      font-family: 'Monaco', 'Consolas', monospace;
+                      font-size: 0.9em;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="header">
+                  <h1>🗄️ Warp SQL Server MCP</h1>
+                  <p>Model Context Protocol server for SQL Server integration with Warp terminal</p>
+                  <div>
+                      <span class="badge">v1.0.0</span>
+                      <span class="badge">Node.js 18+</span>
+                      <span class="badge">MCP</span>
+                      <span class="badge">SQL Server</span>
+                  </div>
+              </div>
+
+              <div class="grid">
+                  <div class="card">
+                      <h3>📖 README</h3>
+                      <p>Complete setup guide, installation instructions, and usage examples.</p>
+                      <a href="https://github.com/egarcia74/warp-sql-server-mcp#readme">View README →</a>
+                  </div>
+
+                  <div class="card">
+                      <h3>🚀 Latest Release</h3>
+                      <p>Download the latest version and view the changelog.</p>
+                      <a href="https://github.com/egarcia74/warp-sql-server-mcp/releases/latest">Download v1.0.0 →</a>
+                  </div>
+
+                  <div class="card">
+                      <h3>🧪 Test Coverage</h3>
+                      <p>View detailed test coverage reports and test results.</p>
+                      <a href="./coverage/index.html">Coverage Report →</a>
+                  </div>
+
+                  <div class="card">
+                      <h3>📋 Available Tools</h3>
+                      <p>Complete list of MCP tools provided by this server:</p>
+                      <ul>
+                          <li><span class="code">executeQuery</span> - Execute SQL queries</li>
+                          <li><span class="code">listDatabases</span> - List available databases</li>
+                          <li><span class="code">listTables</span> - List tables in a database</li>
+                          <li><span class="code">describeTable</span> - Get table schema</li>
+                          <li><span class="code">getTableData</span> - Retrieve filtered data</li>
+                          <li><span class="code">explainQuery</span> - Query execution plans</li>
+                          <li><span class="code">listForeignKeys</span> - Foreign key relationships</li>
+                          <li><span class="code">exportTableCsv</span> - Export to CSV</li>
+                      </ul>
+                  </div>
+
+                  <div class="card">
+                      <h3>⚙️ Configuration</h3>
+                      <p>Environment variables and configuration options:</p>
+                      <ul>
+                          <li><span class="code">DB_SERVER</span> - SQL Server hostname</li>
+                          <li><span class="code">DB_DATABASE</span> - Default database</li>
+                          <li><span class="code">DB_USER</span> - SQL Server username (optional)</li>
+                          <li><span class="code">DB_PASSWORD</span> - SQL Server password (optional)</li>
+                          <li><span class="code">DB_ENCRYPT</span> - Enable encryption (default: true)</li>
+                          <li><span class="code">DB_TRUST_SERVER_CERTIFICATE</span> - Trust self-signed certificates</li>
+                      </ul>
+                  </div>
+
+                  <div class="card">
+                      <h3>🔗 Links</h3>
+                      <p>Useful resources and links:</p>
+                      <ul>
+                          <li><a href="https://github.com/egarcia74/warp-sql-server-mcp">GitHub Repository</a></li>
+                          <li><a href="https://github.com/egarcia74/warp-sql-server-mcp/issues">Report Issues</a></li>
+                          <li><a href="https://modelcontextprotocol.io/docs">MCP Documentation</a></li>
+                          <li><a href="https://www.warp.dev/">Warp Terminal</a></li>
+                      </ul>
+                  </div>
+              </div>
+
+              <footer style="margin-top: 3rem; text-align: center; color: #6c757d; border-top: 1px solid #e9ecef; padding-top: 1rem;">
+                  <p>Built with ❤️ for the MCP ecosystem | Documentation generated automatically</p>
+              </footer>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './docs'
+
+  deploy:
+    name: Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
