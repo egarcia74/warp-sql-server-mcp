@@ -229,7 +229,7 @@ jobs:
   generate-api-docs:
     name: Generate API Documentation
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -257,40 +257,106 @@ jobs:
             const fs = require('fs');
             const content = fs.readFileSync('index.js', 'utf8');
             
-            // Simple extraction of tool definitions
-            const toolSections = content.split('tools: [')[1]?.split(']')[0] || '';
+            // More sophisticated tool extraction
+            const tools = [];
             
-            // Extract individual tools (this is a simplified approach)
-            const toolMatches = content.match(/{\s*name:\s*['\"]([^'\"]+)['\"]/g) || [];
+            // Find the tools array section
+            const toolsMatch = content.match(/tools:\s*\[([\s\S]*?)\]/m);
+            if (toolsMatch) {
+              const toolsSection = toolsMatch[1];
+              
+              // Split by tool objects (looking for patterns that start with name:)
+              const toolBlocks = toolsSection.split(/(?=\s*{\s*name:)/);
+              
+              for (const block of toolBlocks) {
+                if (!block.trim()) continue;
+                
+                // Extract tool properties
+                const nameMatch = block.match(/name:\s*['\"]([^'\"]+)['\"]/);
+                const descMatch = block.match(/description:\s*['\"]([^'\"]*)['\"]/);
+                const schemaMatch = block.match(/inputSchema:\s*({[\s\S]*?})/);
+                
+                if (nameMatch) {
+                  const tool = {
+                    name: nameMatch[1],
+                    description: descMatch ? descMatch[1] : 'No description available',
+                    hasInputSchema: !!schemaMatch,
+                    inputSchema: schemaMatch ? schemaMatch[1] : null
+                  };
+                  tools.push(tool);
+                }
+              }
+            }
             
+            // Generate comprehensive documentation
             let apiDoc = '';
             
-            toolMatches.forEach(match => {
-              const toolName = match.match(/name:\s*['\"]([^'\"]+)['\"]/)[1];
-              apiDoc += '## \`' + toolName + '\`\n\n';
+            if (tools.length > 0) {
+              apiDoc += '## Overview\n\n';
+              apiDoc += 'This MCP server provides **' + tools.length + ' tools** for SQL Server database operations.\n\n';
+              apiDoc += '### Available Tools\n\n';
               
-              // Try to find description
-              const toolStart = content.indexOf(match);
-              const nextTool = content.indexOf('name:', toolStart + 1);
-              const toolSection = content.substring(toolStart, nextTool > 0 ? nextTool : content.length);
+              // Generate table of contents
+              for (const tool of tools) {
+                apiDoc += '- [\`' + tool.name + '\`](#' + tool.name.toLowerCase().replace(/_/g, '-') + ')\n';
+              }
+              apiDoc += '\n---\n\n';
               
-              const descMatch = toolSection.match(/description:\s*['\"]([^'\"]+)['\"]/);
-              if (descMatch) {
-                apiDoc += '**Description:** ' + descMatch[1] + '\n\n';
+              // Generate detailed documentation for each tool
+              for (const tool of tools) {
+                apiDoc += '## \`' + tool.name + '\`\n\n';
+                apiDoc += '**Description:** ' + tool.description + '\n\n';
+                
+                if (tool.hasInputSchema) {
+                  apiDoc += '**Input Schema:** ✅ Available\n\n';
+                  
+                  // Try to extract required parameters
+                  if (tool.inputSchema) {
+                    try {
+                      if (tool.inputSchema.includes('required')) {
+                        const requiredMatch = tool.inputSchema.match(/required:\s*\[(.*?)\]/);
+                        if (requiredMatch) {
+                          const required = requiredMatch[1].split(',').map(p => p.trim().replace(/['\"]/g, ''));
+                          apiDoc += '**Required Parameters:** ' + required.join(', ') + '\n\n';
+                        }
+                      }
+                      
+                      if (tool.inputSchema.includes('properties')) {
+                        apiDoc += '**Parameters:** See input schema for detailed parameter definitions\n\n';
+                      }
+                    } catch (e) {
+                      apiDoc += '**Parameters:** Complex schema available\n\n';
+                    }
+                  }
+                } else {
+                  apiDoc += '**Input Schema:** ❌ No input parameters\n\n';
+                }
+                
+                // Add usage example
+                apiDoc += '**Example Usage:**\n';
+                apiDoc += '\`\`\`json\n';
+                apiDoc += '{\n';
+                apiDoc += '  \"tool\": \"' + tool.name + '\",\n';
+                apiDoc += '  \"arguments\": {\n';
+                apiDoc += '    // Add appropriate parameters here\n';
+                apiDoc += '  }\n';
+                apiDoc += '}\n';
+                apiDoc += '\`\`\`\n\n';
+                
+                apiDoc += '---\n\n';
               }
               
-              // Try to find input schema
-              if (toolSection.includes('inputSchema')) {
-                apiDoc += '**Input Schema:** Available\n\n';
-              }
+              // Add footer
+              apiDoc += '## Notes\n\n';
+              apiDoc += '- All tools require a valid SQL Server connection\n';
+              apiDoc += '- Connection parameters are configured via environment variables\n';
+              apiDoc += '- For the most up-to-date tool definitions, see \`index.js\`\n';
               
-              apiDoc += '---\n\n';
-            });
-            
-            if (apiDoc) {
               fs.writeFileSync('api-content.md', apiDoc);
+              console.log('Generated API documentation for ' + tools.length + ' tools');
             } else {
-              fs.writeFileSync('api-content.md', 'No tools found in source code.\n');
+              fs.writeFileSync('api-content.md', 'No MCP tools found in source code.\n');
+              console.log('No tools found in index.js');
             }
           "
           
