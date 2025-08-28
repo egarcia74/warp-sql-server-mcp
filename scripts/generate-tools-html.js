@@ -195,7 +195,7 @@ function generateToolsHTML() {
     </div>
 
     <div class="nav">
-        <a href="../">← Back to Main Documentation</a>
+        <a href="./">← Back to Main Documentation</a>
         <a href="#toc">Table of Contents</a>
         <a href="https://github.com/egarcia74/warp-sql-server-mcp">GitHub Repository</a>
     </div>
