@@ -167,12 +167,13 @@ jobs:
                       <h3>⚙️ Configuration</h3>
                       <p>Environment variables and configuration options:</p>
                       <ul>
-                          <li><span class="code">DB_SERVER</span> - SQL Server hostname</li>
-                          <li><span class="code">DB_DATABASE</span> - Default database</li>
-                          <li><span class="code">DB_USER</span> - SQL Server username (optional)</li>
-                          <li><span class="code">DB_PASSWORD</span> - SQL Server password (optional)</li>
-                          <li><span class="code">DB_ENCRYPT</span> - Enable encryption (default: true)</li>
-                          <li><span class="code">DB_TRUST_SERVER_CERTIFICATE</span> - Trust self-signed certificates</li>
+                          <li><span class="code">SQL_SERVER_HOST</span> - SQL Server hostname</li>
+                          <li><span class="code">SQL_SERVER_PORT</span> - SQL Server port (default: 1433)</li>
+                          <li><span class="code">SQL_SERVER_DATABASE</span> - Initial database (default: master)</li>
+                          <li><span class="code">SQL_SERVER_USER</span> - SQL Server username (optional)</li>
+                          <li><span class="code">SQL_SERVER_PASSWORD</span> - SQL Server password (optional)</li>
+                          <li><span class="code">SQL_SERVER_ENCRYPT</span> - Enable encryption (default: false)</li>
+                          <li><span class="code">SQL_SERVER_TRUST_CERT</span> - Trust server certificate (default: true)</li>
                       </ul>
                   </div>
 
