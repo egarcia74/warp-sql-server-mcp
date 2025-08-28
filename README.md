@@ -1,3 +1,5 @@
+[![MSeeP.ai Security Assessment Badge](https://mseep.net/pr/egarcia74-warp-sql-server-mcp-badge.png)](https://mseep.ai/app/egarcia74-warp-sql-server-mcp)
+
 # Warp SQL Server MCP
 
 ## Build & Quality Status
