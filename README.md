@@ -1,5 +1,19 @@
 # Warp SQL Server MCP
 
+[![CI](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/codeql.yml)
+[![OSSF Scorecard](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/scorecard.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/scorecard.yml)
+[![Performance Monitoring](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/performance.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/performance.yml)
+[![Documentation](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/docs.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/docs.yml)
+[![Auto Label](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/auto-label.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/auto-label.yml)
+
+[![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen.svg)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/egarcia74/warp-sql-server-mcp/pulls)
+[![Issues](https://img.shields.io/github/issues/egarcia74/warp-sql-server-mcp.svg)](https://github.com/egarcia74/warp-sql-server-mcp/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/egarcia74/warp-sql-server-mcp.svg)](https://github.com/egarcia74/warp-sql-server-mcp/commits/main)
+[![GitHub Stars](https://img.shields.io/github/stars/egarcia74/warp-sql-server-mcp.svg?style=social)](https://github.com/egarcia74/warp-sql-server-mcp/stargazers)
+
 A Model Context Protocol (MCP) server that provides Warp with the ability to connect to and
 interact with Microsoft SQL Server databases.
 
