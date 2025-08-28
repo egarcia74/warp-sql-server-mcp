@@ -149,6 +149,22 @@ GitHub Actions automatically runs:
 
    The pre-commit hook will automatically run checks.
 
+   **If the pre-commit hook blocks your commit:**
+
+   ```bash
+   # Fix formatting issues automatically
+   npm run format
+
+   # Fix linting issues automatically
+   npm run lint:fix
+
+   # Fix markdown issues automatically
+   npm run markdown:fix
+
+   # Then retry the commit
+   git commit -m "your commit message"
+   ```
+
 5. **Push and create a Pull Request**
    ```bash
    git push origin feature/your-feature-name
