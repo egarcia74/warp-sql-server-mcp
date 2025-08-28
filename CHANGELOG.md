@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- Upgrade mssql dependency from v10.0.2 to v11.0.1 ([55cc852](https://github.com/egarcia74/warp-sql-server-mcp/commit/55cc852))
+
+### Added
+
+- Coverage report copying to documentation deployment ([aa5790f](https://github.com/egarcia74/warp-sql-server-mcp/commit/aa5790f))
+- Comprehensive CHANGELOG.md with complete release history ([22de509](https://github.com/egarcia74/warp-sql-server-mcp/commit/22de509))
+
+### Bug Fixes
+
+- Sync package.json version with latest release v1.1.1 ([bb8ec8d](https://github.com/egarcia74/warp-sql-server-mcp/commit/bb8ec8d))
+- Suppress GitHub Actions workflow warnings with documentation ([6a6130b](https://github.com/egarcia74/warp-sql-server-mcp/commit/6a6130b))
+- Fix hardcoded version in GitHub Pages deployment ([f14fcc3](https://github.com/egarcia74/warp-sql-server-mcp/commit/f14fcc3))
+- Fix Auto Label workflow: Add missing enable-versioned-regex parameter ([8e532c2](https://github.com/egarcia74/warp-sql-server-mcp/commit/8e532c2))
+- Fix dead links: Remove OSSF Scorecard badge references ([a884ef7](https://github.com/egarcia74/warp-sql-server-mcp/commit/a884ef7))
+
+### Enhancements
+
+- Enhanced GitHub Actions workflow documentation and annotations
+- Reduced linter noise with proper workflow comments
+- Better GitHub Pages integration with dynamic version detection
+- Cleaner documentation with fixed badges and links
+
 ## [1.1.1] - 2025-08-28
 
 ### Fixed
@@ -20,12 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.0] - 2025-08-28
 
-### Added
+### New Features
 
 - Enhanced release automation workflow
 - Improved GitHub Actions workflows with better error handling
 
-### Improved
+### Improvements
 
 - Various workflow configuration improvements
 - Better handling of protected branch scenarios
@@ -51,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Complete documentation with platform-specific setup guides
 - GitHub Actions CI/CD pipeline with automated testing and releases
 
-### Security
+### Security Features
 
 - Secure environment variable configuration for database credentials
 - Proper connection pooling and timeout handling
