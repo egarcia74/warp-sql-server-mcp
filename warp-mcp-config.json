@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "sql-server": {
+      "command": "node",
+      "args": ["/Users/egarcia74/Source/Repos/GitHub/warp-sql-server-mcp/index.js"],
+      "env": {
+        "SQL_SERVER_HOST": "localhost",
+        "SQL_SERVER_PORT": "1433",
+        "SQL_SERVER_DATABASE": "master"
+      }
+    }
+  }
+}
