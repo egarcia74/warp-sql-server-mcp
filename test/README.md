@@ -64,7 +64,7 @@ Tests the core database connection functionality:
 expect(sql.connect).toHaveBeenCalledWith(
   expect.objectContaining({
     server: 'localhost',
-    port: 1433,
+    port: 1433
     // ... other config options
   })
 );
@@ -179,7 +179,7 @@ The tests use comprehensive mocking to ensure:
 vi.mock('mssql', () => ({
   default: { connect: vi.fn(), ConnectionPool: vi.fn() },
   connect: vi.fn(),
-  ConnectionPool: vi.fn(),
+  ConnectionPool: vi.fn()
 }));
 
 // Mock request/pool objects
@@ -193,10 +193,18 @@ Structured test data provides realistic scenarios:
 
 ```javascript
 const testData = {
-  sampleDatabases: [/* User databases with metadata */],
-  sampleTables: [/* Table definitions */],
-  sampleTableSchema: [/* Column definitions with types */],
-  sampleTableData: [/* Sample rows for testing */]
+  sampleDatabases: [
+    /* User databases with metadata */
+  ],
+  sampleTables: [
+    /* Table definitions */
+  ],
+  sampleTableSchema: [
+    /* Column definitions with types */
+  ],
+  sampleTableData: [
+    /* Sample rows for testing */
+  ]
 };
 ```
 

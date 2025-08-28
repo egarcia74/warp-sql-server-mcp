@@ -10,12 +10,12 @@ try {
   const server = new Server(
     {
       name: 'warp-sql-server-mcp-test',
-      version: '1.0.0',
+      version: '1.0.0'
     },
     {
       capabilities: {
-        tools: {},
-      },
+        tools: {}
+      }
     }
   );
 
@@ -27,21 +27,20 @@ try {
         description: 'Test tool',
         inputSchema: {
           type: 'object',
-          properties: {},
-        },
-      },
-    ],
+          properties: {}
+        }
+      }
+    ]
   }));
 
   console.log('✅ MCP server structure is valid');
   console.log('✅ SDK imports are working correctly');
   console.log('✅ Tool handler setup is functional');
-  
+
   console.log('\nNext steps:');
   console.log('1. Configure your SQL Server connection in .env file');
   console.log('2. Add the MCP server to Warp settings');
   console.log('3. Test with your SQL Server instance');
-  
 } catch (error) {
   console.error('❌ Error:', error.message);
   process.exit(1);

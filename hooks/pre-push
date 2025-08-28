@@ -1,0 +1,66 @@
+#!/bin/bash
+# pre-push: Run comprehensive tests before pushing
+set -euo pipefail
+
+echo "[pre-push] Running pre-push checks..."
+
+# Check if we're in a Node.js project
+if [ ! -f "package.json" ]; then
+  echo "[pre-push] No package.json found, skipping Node.js checks"
+  exit 0
+fi
+
+# Run full test suite
+if grep -q '"test"' package.json; then
+  echo "[pre-push] Running full test suite..."
+  if ! npm test; then
+    echo "[pre-push] Tests failed. Push aborted."
+    exit 1
+  fi
+  echo "[pre-push] All tests passed."
+else
+  echo "[pre-push] No test script found in package.json, skipping tests."
+fi
+
+# Run test coverage check if available
+if grep -q '"test:coverage"' package.json; then
+  echo "[pre-push] Running test coverage check..."
+  if ! npm run test:coverage; then
+    echo "[pre-push] Coverage check failed. Push aborted."
+    exit 1
+  fi
+  echo "[pre-push] Coverage check passed."
+fi
+
+# Run lint check to ensure code quality
+if command -v npx >/dev/null 2>&1; then
+  echo "[pre-push] Running comprehensive lint check..."
+  
+  # Check JavaScript files
+  if find . -name "*.js" -not -path "./node_modules/*" -not -path "./coverage/*" | head -1 | grep -q .; then
+    if ! npx eslint . --ext .js,.mjs,.cjs --ignore-path .gitignore; then
+      echo "[pre-push] ESLint check failed. Push aborted."
+      exit 1
+    fi
+    echo "[pre-push] ESLint check passed."
+  fi
+  
+  # Check formatting
+  if ! npx prettier --check "**/*.{js,mjs,cjs,json,md}" --ignore-path .gitignore; then
+    echo "[pre-push] Prettier formatting check failed. Run 'npm run format' to fix."
+    exit 1
+  fi
+  echo "[pre-push] Prettier formatting check passed."
+  
+  # Check markdown
+  if find . -name "*.md" -not -path "./node_modules/*" | head -1 | grep -q .; then
+    if ! npx markdownlint-cli2 "**/*.md" --ignore-path .gitignore; then
+      echo "[pre-push] Markdown lint failed. Push aborted."
+      exit 1
+    fi
+    echo "[pre-push] Markdown lint passed."
+  fi
+fi
+
+echo "[pre-push] All pre-push checks passed! 🚀"
+exit 0

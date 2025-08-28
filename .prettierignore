@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Coverage
+coverage/
+
+# Logs
+*.log
+
+# Build outputs
+dist/
+build/
+
+# Git
+.git/
+
+# Other
+.env
+.env.*
+!.env.example
+
+# Lock files
+package-lock.json
+yarn.lock
+
+# Vitest
+.vitest/

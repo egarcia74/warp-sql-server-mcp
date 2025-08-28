@@ -6,7 +6,7 @@ import {
   CallToolRequestSchema,
   ErrorCode,
   ListToolsRequestSchema,
-  McpError,
+  McpError
 } from '@modelcontextprotocol/sdk/types.js';
 import sql from 'mssql';
 import dotenv from 'dotenv';
@@ -19,12 +19,12 @@ class SqlServerMCP {
     this.server = new Server(
       {
         name: 'warp-sql-server-mcp',
-        version: '1.0.0',
+        version: '1.0.0'
       },
       {
         capabilities: {
-          tools: {},
-        },
+          tools: {}
+        }
       }
     );
 
@@ -46,7 +46,7 @@ class SqlServerMCP {
       }
       return this.pool;
     }
-    
+
     if (process.env.NODE_ENV !== 'test') {
       console.error('Establishing new database connection...');
     }
@@ -61,15 +61,15 @@ class SqlServerMCP {
         encrypt: process.env.SQL_SERVER_ENCRYPT === 'true' || false,
         trustServerCertificate: process.env.SQL_SERVER_TRUST_CERT === 'true' || true,
         enableArithAbort: true,
-        requestTimeout: this.requestTimeout,
+        requestTimeout: this.requestTimeout
       },
       connectionTimeout: this.connectionTimeout,
       requestTimeout: this.requestTimeout,
       pool: {
         max: parseInt(process.env.SQL_SERVER_POOL_MAX || '10'),
         min: parseInt(process.env.SQL_SERVER_POOL_MIN || '0'),
-        idleTimeoutMillis: parseInt(process.env.SQL_SERVER_POOL_IDLE_TIMEOUT_MS || '30000'),
-      },
+        idleTimeoutMillis: parseInt(process.env.SQL_SERVER_POOL_IDLE_TIMEOUT_MS || '30000')
+      }
     };
 
     // Handle Windows Authentication if no user/password provided
@@ -77,7 +77,7 @@ class SqlServerMCP {
       baseConfig.authentication = {
         type: 'ntlm',
         options: {
-          domain: process.env.SQL_SERVER_DOMAIN || '',
+          domain: process.env.SQL_SERVER_DOMAIN || ''
         }
       };
       // Remove user/password for Windows auth
@@ -107,7 +107,7 @@ class SqlServerMCP {
         }
         if (attempt >= this.maxRetries) break;
         const delay = this.retryDelay * Math.pow(2, attempt - 1);
-        await new Promise((res) => setTimeout(res, delay));
+        await new Promise(res => setTimeout(res, delay));
       }
     }
 
@@ -128,23 +128,23 @@ class SqlServerMCP {
             properties: {
               query: {
                 type: 'string',
-                description: 'The SQL query to execute',
+                description: 'The SQL query to execute'
               },
               database: {
                 type: 'string',
-                description: 'Optional: Database name to use for this query',
-              },
+                description: 'Optional: Database name to use for this query'
+              }
             },
-            required: ['query'],
-          },
+            required: ['query']
+          }
         },
         {
           name: 'list_databases',
           description: 'List all databases on the SQL Server instance',
           inputSchema: {
             type: 'object',
-            properties: {},
-          },
+            properties: {}
+          }
         },
         {
           name: 'list_tables',
@@ -154,14 +154,14 @@ class SqlServerMCP {
             properties: {
               database: {
                 type: 'string',
-                description: 'Database name (optional, uses current database if not specified)',
+                description: 'Database name (optional, uses current database if not specified)'
               },
               schema: {
                 type: 'string',
-                description: 'Schema name (optional, defaults to dbo)',
-              },
-            },
-          },
+                description: 'Schema name (optional, defaults to dbo)'
+              }
+            }
+          }
         },
         {
           name: 'describe_table',
@@ -171,19 +171,19 @@ class SqlServerMCP {
             properties: {
               table_name: {
                 type: 'string',
-                description: 'Name of the table to describe',
+                description: 'Name of the table to describe'
               },
               database: {
                 type: 'string',
-                description: 'Database name (optional)',
+                description: 'Database name (optional)'
               },
               schema: {
                 type: 'string',
-                description: 'Schema name (optional, defaults to dbo)',
-              },
+                description: 'Schema name (optional, defaults to dbo)'
+              }
             },
-            required: ['table_name'],
-          },
+            required: ['table_name']
+          }
         },
         {
           name: 'get_table_data',
@@ -193,27 +193,27 @@ class SqlServerMCP {
             properties: {
               table_name: {
                 type: 'string',
-                description: 'Name of the table',
+                description: 'Name of the table'
               },
               database: {
                 type: 'string',
-                description: 'Database name (optional)',
+                description: 'Database name (optional)'
               },
               schema: {
                 type: 'string',
-                description: 'Schema name (optional, defaults to dbo)',
+                description: 'Schema name (optional, defaults to dbo)'
               },
               limit: {
                 type: 'number',
-                description: 'Maximum number of rows to return (optional, defaults to 100)',
+                description: 'Maximum number of rows to return (optional, defaults to 100)'
               },
               where: {
                 type: 'string',
-                description: 'WHERE clause conditions (optional)',
-              },
+                description: 'WHERE clause conditions (optional)'
+              }
             },
-            required: ['table_name'],
-          },
+            required: ['table_name']
+          }
         },
         {
           name: 'explain_query',
@@ -223,19 +223,19 @@ class SqlServerMCP {
             properties: {
               query: {
                 type: 'string',
-                description: 'The SQL query to analyze',
+                description: 'The SQL query to analyze'
               },
               database: {
                 type: 'string',
-                description: 'Optional: Database name to use for this query',
+                description: 'Optional: Database name to use for this query'
               },
               include_actual_plan: {
                 type: 'boolean',
-                description: 'Include actual execution statistics (optional, defaults to false)',
-              },
+                description: 'Include actual execution statistics (optional, defaults to false)'
+              }
             },
-            required: ['query'],
-          },
+            required: ['query']
+          }
         },
         {
           name: 'list_foreign_keys',
@@ -245,14 +245,14 @@ class SqlServerMCP {
             properties: {
               database: {
                 type: 'string',
-                description: 'Database name (optional)',
+                description: 'Database name (optional)'
               },
               schema: {
                 type: 'string',
-                description: 'Schema name (optional, defaults to dbo)',
-              },
-            },
-          },
+                description: 'Schema name (optional, defaults to dbo)'
+              }
+            }
+          }
         },
         {
           name: 'export_table_csv',
@@ -262,32 +262,32 @@ class SqlServerMCP {
             properties: {
               table_name: {
                 type: 'string',
-                description: 'Name of the table to export',
+                description: 'Name of the table to export'
               },
               database: {
                 type: 'string',
-                description: 'Database name (optional)',
+                description: 'Database name (optional)'
               },
               schema: {
                 type: 'string',
-                description: 'Schema name (optional, defaults to dbo)',
+                description: 'Schema name (optional, defaults to dbo)'
               },
               limit: {
                 type: 'number',
-                description: 'Maximum number of rows to export (optional)',
+                description: 'Maximum number of rows to export (optional)'
               },
               where: {
                 type: 'string',
-                description: 'WHERE clause conditions (optional)',
-              },
+                description: 'WHERE clause conditions (optional)'
+              }
             },
-            required: ['table_name'],
-          },
-        },
-      ],
+            required: ['table_name']
+          }
+        }
+      ]
     }));
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async request => {
       const { name, arguments: args } = request.params;
 
       try {
@@ -296,16 +296,16 @@ class SqlServerMCP {
         switch (name) {
           case 'execute_query':
             return await this.executeQuery(args.query, args.database);
-          
+
           case 'list_databases':
             return await this.listDatabases();
-          
+
           case 'list_tables':
             return await this.listTables(args.database, args.schema);
-          
+
           case 'describe_table':
             return await this.describeTable(args.table_name, args.database, args.schema);
-          
+
           case 'get_table_data':
             return await this.getTableData(
               args.table_name,
@@ -314,17 +314,13 @@ class SqlServerMCP {
               args.limit,
               args.where
             );
-          
+
           case 'explain_query':
-            return await this.explainQuery(
-              args.query,
-              args.database,
-              args.include_actual_plan
-            );
-          
+            return await this.explainQuery(args.query, args.database, args.include_actual_plan);
+
           case 'list_foreign_keys':
             return await this.listForeignKeys(args.database, args.schema);
-          
+
           case 'export_table_csv':
             return await this.exportTableCsv(
               args.table_name,
@@ -333,12 +329,9 @@ class SqlServerMCP {
               args.limit,
               args.where
             );
-          
+
           default:
-            throw new McpError(
-              ErrorCode.MethodNotFound,
-              `Unknown tool: ${name}`
-            );
+            throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
         }
       } catch (error) {
         if (error instanceof McpError) {
@@ -356,30 +349,31 @@ class SqlServerMCP {
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
-      
+
       if (database) {
         await request.query(`USE [${database}]`);
       }
 
       const result = await request.query(query);
-      
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              rowsAffected: result.rowsAffected,
-              recordset: result.recordset,
-              recordsets: result.recordsets,
-            }, null, 2),
-          },
-        ],
+            text: JSON.stringify(
+              {
+                rowsAffected: result.rowsAffected,
+                recordset: result.recordset,
+                recordsets: result.recordsets
+              },
+              null,
+              2
+            )
+          }
+        ]
       };
     } catch (error) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Query execution failed: ${error.message}`
-      );
+      throw new McpError(ErrorCode.InternalError, `Query execution failed: ${error.message}`);
     }
   }
 
@@ -403,21 +397,18 @@ class SqlServerMCP {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result.recordset, null, 2),
-          },
-        ],
+            text: JSON.stringify(result.recordset, null, 2)
+          }
+        ]
       };
     } catch (error) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to list databases: ${error.message}`
-      );
+      throw new McpError(ErrorCode.InternalError, `Failed to list databases: ${error.message}`);
     }
   }
 
   async listTables(database = null, schema = 'dbo') {
     try {
-      let query = `
+      const query = `
         SELECT 
           t.TABLE_CATALOG as database_name,
           t.TABLE_SCHEMA as schema_name,
@@ -430,7 +421,7 @@ class SqlServerMCP {
 
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
-      
+
       if (database) {
         await request.query(`USE [${database}]`);
       }
@@ -441,15 +432,12 @@ class SqlServerMCP {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result.recordset, null, 2),
-          },
-        ],
+            text: JSON.stringify(result.recordset, null, 2)
+          }
+        ]
       };
     } catch (error) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to list tables: ${error.message}`
-      );
+      throw new McpError(ErrorCode.InternalError, `Failed to list tables: ${error.message}`);
     }
   }
 
@@ -457,7 +445,7 @@ class SqlServerMCP {
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
-      
+
       if (database) {
         await request.query(`USE [${database}]`);
       }
@@ -491,15 +479,12 @@ class SqlServerMCP {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(result.recordset, null, 2),
-          },
-        ],
+            text: JSON.stringify(result.recordset, null, 2)
+          }
+        ]
       };
     } catch (error) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to describe table: ${error.message}`
-      );
+      throw new McpError(ErrorCode.InternalError, `Failed to describe table: ${error.message}`);
     }
   }
 
@@ -507,13 +492,13 @@ class SqlServerMCP {
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
-      
+
       if (database) {
         await request.query(`USE [${database}]`);
       }
 
       let query = `SELECT TOP ${limit} * FROM [${schema}].[${tableName}]`;
-      
+
       if (whereClause) {
         query += ` WHERE ${whereClause}`;
       }
@@ -524,19 +509,20 @@ class SqlServerMCP {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              table: `${schema}.${tableName}`,
-              rowCount: result.recordset.length,
-              data: result.recordset,
-            }, null, 2),
-          },
-        ],
+            text: JSON.stringify(
+              {
+                table: `${schema}.${tableName}`,
+                rowCount: result.recordset.length,
+                data: result.recordset
+              },
+              null,
+              2
+            )
+          }
+        ]
       };
     } catch (error) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to get table data: ${error.message}`
-      );
+      throw new McpError(ErrorCode.InternalError, `Failed to get table data: ${error.message}`);
     }
   }
 
@@ -544,14 +530,14 @@ class SqlServerMCP {
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
-      
+
       if (database) {
         await request.query(`USE [${database}]`);
       }
 
       // Enable showplan and optionally include actual execution statistics
-      let setupQueries = [];
-      
+      const setupQueries = [];
+
       if (includeActualPlan) {
         setupQueries.push('SET STATISTICS IO ON');
         setupQueries.push('SET STATISTICS TIME ON');
@@ -559,22 +545,34 @@ class SqlServerMCP {
       } else {
         setupQueries.push('SET SHOWPLAN_ALL ON');
       }
-      
+
       // Execute setup queries
       for (const setupQuery of setupQueries) {
         await request.query(setupQuery);
       }
-      
+
       // Get execution plan
       const planResult = await request.query(query);
-      
+
       // Turn off showplan (do not fail overall if cleanup steps fail)
-      try { await request.query('SET SHOWPLAN_ALL OFF'); } catch {}
-      if (includeActualPlan) {
-        try { await request.query('SET STATISTICS IO OFF'); } catch {}
-        try { await request.query('SET STATISTICS TIME OFF'); } catch {}
+      try {
+        await request.query('SET SHOWPLAN_ALL OFF');
+      } catch {
+        /* ignore cleanup errors */
       }
-      
+      if (includeActualPlan) {
+        try {
+          await request.query('SET STATISTICS IO OFF');
+        } catch {
+          /* ignore cleanup errors */
+        }
+        try {
+          await request.query('SET STATISTICS TIME OFF');
+        } catch {
+          /* ignore cleanup errors */
+        }
+      }
+
       // Also get query cost information
       const costQuery = `
         SELECT TOP 1
@@ -589,7 +587,7 @@ class SqlServerMCP {
         WHERE st.text LIKE '%' + REPLACE('${query.replace(/'/g, "''").substring(0, 50)}', '''', '''''') + '%'
         ORDER BY qs.total_worker_time DESC
       `;
-      
+
       let costInfo = null;
       try {
         const costResult = await request.query(costQuery);
@@ -603,21 +601,22 @@ class SqlServerMCP {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              query: query,
-              execution_plan: planResult.recordset,
-              cost_information: costInfo,
-              plan_type: includeActualPlan ? 'actual' : 'estimated',
-              recordsets_count: planResult.recordsets.length
-            }, null, 2),
-          },
-        ],
+            text: JSON.stringify(
+              {
+                query: query,
+                execution_plan: planResult.recordset,
+                cost_information: costInfo,
+                plan_type: includeActualPlan ? 'actual' : 'estimated',
+                recordsets_count: planResult.recordsets.length
+              },
+              null,
+              2
+            )
+          }
+        ]
       };
     } catch (error) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to explain query: ${error.message}`
-      );
+      throw new McpError(ErrorCode.InternalError, `Failed to explain query: ${error.message}`);
     }
   }
 
@@ -625,7 +624,7 @@ class SqlServerMCP {
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
-      
+
       if (database) {
         await request.query(`USE [${database}]`);
       }
@@ -655,34 +654,41 @@ class SqlServerMCP {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              schema: schema,
-              foreign_keys: result.recordset,
-              count: result.recordset.length
-            }, null, 2),
-          },
-        ],
+            text: JSON.stringify(
+              {
+                schema: schema,
+                foreign_keys: result.recordset,
+                count: result.recordset.length
+              },
+              null,
+              2
+            )
+          }
+        ]
       };
     } catch (error) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to list foreign keys: ${error.message}`
-      );
+      throw new McpError(ErrorCode.InternalError, `Failed to list foreign keys: ${error.message}`);
     }
   }
 
-  async exportTableCsv(tableName, database = null, schema = 'dbo', limit = null, whereClause = null) {
+  async exportTableCsv(
+    tableName,
+    database = null,
+    schema = 'dbo',
+    limit = null,
+    whereClause = null
+  ) {
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
-      
+
       if (database) {
         await request.query(`USE [${database}]`);
       }
 
       // Build the query
       let query = `SELECT${limit ? ` TOP ${limit}` : ''} * FROM [${schema}].[${tableName}]`;
-      
+
       if (whereClause) {
         query += ` WHERE ${whereClause}`;
       }
@@ -695,14 +701,18 @@ class SqlServerMCP {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
-                table: `${schema}.${tableName}`,
-                csv_data: '',
-                row_count: 0,
-                format: 'csv'
-              }, null, 2),
-            },
-          ],
+              text: JSON.stringify(
+                {
+                  table: `${schema}.${tableName}`,
+                  csv_data: '',
+                  row_count: 0,
+                  format: 'csv'
+                },
+                null,
+                2
+              )
+            }
+          ]
         };
       }
 
@@ -719,7 +729,11 @@ class SqlServerMCP {
           }
           // Escape commas and quotes in CSV
           const stringValue = String(value);
-          if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+          if (
+            stringValue.includes(',') ||
+            stringValue.includes('"') ||
+            stringValue.includes('\n')
+          ) {
             return `"${stringValue.replace(/"/g, '""')}"`;
           }
           return stringValue;
@@ -731,15 +745,19 @@ class SqlServerMCP {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({
-              table: `${schema}.${tableName}`,
-              csv_data: csvContent,
-              row_count: result.recordset.length,
-              column_count: headers.length,
-              format: 'csv'
-            }, null, 2),
-          },
-        ],
+            text: JSON.stringify(
+              {
+                table: `${schema}.${tableName}`,
+                csv_data: csvContent,
+                row_count: result.recordset.length,
+                column_count: headers.length,
+                format: 'csv'
+              },
+              null,
+              2
+            )
+          }
+        ]
       };
     } catch (error) {
       throw new McpError(
@@ -751,7 +769,7 @@ class SqlServerMCP {
 
   async run() {
     console.error('Starting Warp SQL Server MCP server...');
-    
+
     // Initialize database connection pool at startup
     try {
       await this.connectToDatabase();
@@ -760,7 +778,7 @@ class SqlServerMCP {
       console.error('Failed to initialize database connection pool:', error.message);
       console.error('Server will continue but database operations may fail');
     }
-    
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Warp SQL Server MCP server running on stdio');
