@@ -77,9 +77,9 @@ jobs:
               const msg = commit.toLowerCase();
               if (msg.includes('breaking change') || msg.includes('!:')) {
                 hasBreaking = true;
-              } else if (msg.startsWith('feat:') || msg.startsWith('feature:')) {
+              } else if (msg.includes('feat:') || msg.includes('feature:')) {
                 hasFeature = true;
-              } else if (msg.startsWith('fix:') || msg.startsWith('bugfix:')) {
+              } else if (msg.includes('fix:') || msg.includes('bugfix:')) {
                 hasFix = true;
               }
             }
