@@ -43,7 +43,9 @@ For detailed setup, continue reading below.
 
 ## 🔒 Security
 
-> **✨ NEW**: This MCP now includes a revolutionary **three-tier graduated safety system** designed to prevent accidental or malicious database operations while providing the flexibility needed for different environments.
+> **✨ NEW**: This MCP now includes a revolutionary **three-tier graduated safety system**
+> designed to prevent accidental or malicious database operations while providing the
+> flexibility needed for different environments.
 
 ### 🛡️ Three-Tier Safety System
 
@@ -582,7 +584,7 @@ For other MCP-compatible systems (Claude Desktop, etc.), use a similar JSON stru
 | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | **SECURE**     | When `true`, allows INSERT/UPDATE/DELETE |
 | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | **SECURE**     | When `true`, allows CREATE/DROP/ALTER    |
 
-⚠️ **Important**: These settings significantly impact security. See [Security section](#security) for detailed guidance.
+⚠️ **Important**: These settings significantly impact security. See [Security section](#-security) for detailed guidance.
 
 ### Troubleshooting Configuration
 

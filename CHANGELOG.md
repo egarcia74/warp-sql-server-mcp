@@ -99,7 +99,7 @@ removed for security reasons.
 - Complete documentation with platform-specific setup guides
 - GitHub Actions CI/CD pipeline with automated testing and releases
 
-### Security
+### Security & Dependencies
 
 - Upgrade mssql dependency to v11.0.1 for enhanced security and compatibility
 - Secure environment variable configuration for database credentials

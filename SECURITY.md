@@ -2,7 +2,9 @@
 
 ## 🔒 Overview
 
-Warp SQL Server MCP implements a **three-tier graduated security system** designed to prevent accidental or malicious database operations. This system provides granular control over what SQL operations are permitted, with secure defaults that prioritize safety over functionality.
+Warp SQL Server MCP implements a **three-tier graduated security system** designed to prevent
+accidental or malicious database operations. This system provides granular control over what
+SQL operations are permitted, with secure defaults that prioritize safety over functionality.
 
 **🚀 First time setup?** Start with the [Quick Start Guide](QUICKSTART.md) to get the server running with secure defaults, then return here for detailed security configuration.
 
@@ -96,7 +98,7 @@ The MCP server includes a comprehensive query validation engine that:
 
 ### Validation Logic
 
-```
+```text
 ┌─────────────────┐
 │   SQL Query     │
 └─────────────────┘
@@ -228,7 +230,7 @@ Before deploying to production:
 
 The MCP server prints a configuration summary at startup showing current security status:
 
-```
+```text
 Connected to localhost:1433/master (Windows Auth)
 Security: 🔒 SECURE (RO, DML-, DDL-)
 ```
