@@ -17,6 +17,8 @@
 A Model Context Protocol (MCP) server that provides Warp with the ability to connect to and
 interact with Microsoft SQL Server databases.
 
+> **Status**: All GitHub Actions workflows are now passing! ✅
+
 ## Features
 
 - **Database Connection**: Connect to SQL Server on localhost:1433 (configurable)
