@@ -35,7 +35,8 @@ export default [
       'no-var': 'error',
       semi: ['error', 'always'],
       quotes: ['error', 'single', { avoidEscape: true }],
-      indent: ['error', 2],
+      // Disable indent rule - let Prettier handle formatting
+      indent: 'off',
       'comma-dangle': ['error', 'never'],
       'object-curly-spacing': ['error', 'always'],
       'array-bracket-spacing': ['error', 'never'],
@@ -49,7 +50,7 @@ export default [
     ignores: ['node_modules/**', 'coverage/**', '.git/**', 'dist/**', 'build/**']
   },
   {
-    files: ['test/**/*.js', '**/*.test.js', '**/*.spec.js'],
+    files: ['**/*.test.js', '**/*.spec.js', 'tests/**/*.js'],
     languageOptions: {
       globals: {
         describe: 'readonly',
