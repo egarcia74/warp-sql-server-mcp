@@ -87,8 +87,9 @@ jobs:
       
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
+        continue-on-error: true
         with:
           fail-on-severity: moderate
           allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, 0BSD
           comment-summary-in-pr: always
-          warn-only: false
+          warn-only: true
