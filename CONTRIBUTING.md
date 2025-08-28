@@ -12,12 +12,14 @@ Thank you for your interest in contributing to the Warp SQL Server MCP project!
 ### Getting Started
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd warp-sql-server-mcp
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
@@ -94,6 +96,7 @@ This project uses Vitest for testing. Tests are located in the `test/` directory
 - **Coverage**: Aim for >80% code coverage
 
 Run tests with:
+
 ```bash
 npm test                    # Single run
 npm run test:watch         # Watch mode for development
@@ -121,6 +124,7 @@ GitHub Actions automatically runs:
 ## Making Changes
 
 1. **Create a feature branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -131,15 +135,18 @@ GitHub Actions automatically runs:
    - Follow the existing code style
 
 3. **Test locally**
+
    ```bash
    npm run ci  # Run all checks locally
    ```
 
 4. **Commit your changes**
+
    ```bash
    git add .
    git commit -m "feat: description of your changes"
    ```
+
    The pre-commit hook will automatically run checks.
 
 5. **Push and create a Pull Request**
@@ -160,7 +167,8 @@ Follow conventional commits format:
 - `chore:` Maintenance tasks
 
 Example:
-```
+
+```text
 feat: add new database connection tool
 
 - Add support for custom connection strings
