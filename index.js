@@ -36,7 +36,99 @@ class SqlServerMCP {
     this.maxRetries = parseInt(process.env.SQL_SERVER_MAX_RETRIES || '3');
     this.retryDelay = parseInt(process.env.SQL_SERVER_RETRY_DELAY_MS || '1000'); // 1s
 
+    // Safety configuration with secure defaults
+    this.readOnlyMode = process.env.SQL_SERVER_READ_ONLY !== 'false'; // Default: true
+    this.allowDestructiveOperations =
+      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS === 'true'; // Default: false
+    this.allowSchemaChanges = process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES === 'true'; // Default: false
+
+    // Define dangerous SQL patterns
+    this.destructivePatterns = [
+      /^\s*(DELETE|UPDATE|INSERT|TRUNCATE)\s+/i,
+      /^\s*EXEC(UTE)?\s+/i,
+      /^\s*CALL\s+/i,
+      /;\s*(DELETE|UPDATE|INSERT|TRUNCATE)\s+/i // Multi-statement
+    ];
+
+    this.schemaChangePatterns = [
+      /^\s*(CREATE|DROP|ALTER)\s+/i,
+      /^\s*(GRANT|REVOKE)\s+/i,
+      /;\s*(CREATE|DROP|ALTER|GRANT|REVOKE)\s+/i // Multi-statement
+    ];
+
     this.setupToolHandlers();
+  }
+
+  /**
+   * Validates a SQL query against safety policies
+   * @param {string} query - SQL query to validate
+   * @returns {object} - Validation result with allowed flag and reason
+   */
+  validateQuery(query) {
+    const trimmedQuery = query.trim();
+
+    // Always allow empty queries (though they're pointless)
+    if (!trimmedQuery) {
+      return { allowed: true, reason: 'Empty query' };
+    }
+
+    // Check read-only mode first (most restrictive)
+    if (this.readOnlyMode) {
+      // In read-only mode, only allow SELECT, SHOW, DESCRIBE, EXPLAIN, etc.
+      const readOnlyPatterns = [
+        /^\s*SELECT\s+/i,
+        /^\s*SHOW\s+/i,
+        /^\s*DESCRIBE\s+/i,
+        /^\s*DESC\s+/i,
+        /^\s*EXPLAIN\s+/i,
+        /^\s*WITH\s+[\s\S]*?\bSELECT\s+/i // CTE queries - improved to handle multi-line
+      ];
+
+      const isReadOnlyQuery = readOnlyPatterns.some(pattern => pattern.test(trimmedQuery));
+
+      if (!isReadOnlyQuery) {
+        return {
+          allowed: false,
+          reason:
+            'Read-only mode is enabled. Only SELECT queries are allowed. Set SQL_SERVER_READ_ONLY=false to disable.',
+          queryType: 'non-select'
+        };
+      }
+    }
+
+    // Check for destructive operations (if not in read-only mode)
+    if (!this.readOnlyMode) {
+      const hasDestructiveOps = this.destructivePatterns.some(pattern =>
+        pattern.test(trimmedQuery)
+      );
+
+      if (hasDestructiveOps && !this.allowDestructiveOperations) {
+        return {
+          allowed: false,
+          reason:
+            'Destructive operations (INSERT/UPDATE/DELETE) are disabled. Set SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true to enable.',
+          queryType: 'destructive'
+        };
+      }
+    }
+
+    // Check for schema changes (if not in read-only mode)
+    if (!this.readOnlyMode) {
+      const hasSchemaChanges = this.schemaChangePatterns.some(pattern =>
+        pattern.test(trimmedQuery)
+      );
+
+      if (hasSchemaChanges && !this.allowSchemaChanges) {
+        return {
+          allowed: false,
+          reason:
+            'Schema changes (CREATE/DROP/ALTER) are disabled. Set SQL_SERVER_ALLOW_SCHEMA_CHANGES=true to enable.',
+          queryType: 'schema'
+        };
+      }
+    }
+
+    return { allowed: true, reason: 'Query validation passed' };
   }
 
   async connectToDatabase() {
@@ -347,6 +439,15 @@ class SqlServerMCP {
 
   async executeQuery(query, database = null) {
     try {
+      // Safety validation
+      const validation = this.validateQuery(query);
+      if (!validation.allowed) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Query blocked by safety policy: ${validation.reason}`
+        );
+      }
+
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
 
@@ -364,7 +465,13 @@ class SqlServerMCP {
               {
                 rowsAffected: result.rowsAffected,
                 recordset: result.recordset,
-                recordsets: result.recordsets
+                recordsets: result.recordsets,
+                // Include safety info in response
+                safetyInfo: {
+                  readOnlyMode: this.readOnlyMode,
+                  destructiveOperationsAllowed: this.allowDestructiveOperations,
+                  schemaChangesAllowed: this.allowSchemaChanges
+                }
               },
               null,
               2
@@ -373,6 +480,9 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      if (error instanceof McpError) {
+        throw error; // Re-throw MCP errors (including safety violations)
+      }
       throw new McpError(ErrorCode.InternalError, `Query execution failed: ${error.message}`);
     }
   }
@@ -767,9 +877,44 @@ class SqlServerMCP {
     }
   }
 
-  async run() {
-    console.error('Starting Warp SQL Server MCP server...');
+  /**
+   * Prints a summary of the current configuration for debugging and auditing
+   */
+  printConfigurationSummary() {
+    if (process.env.NODE_ENV === 'test') {
+      return; // Skip printing during tests
+    }
 
+    // Build configuration details
+    const host = process.env.SQL_SERVER_HOST || 'localhost';
+    const port = process.env.SQL_SERVER_PORT || '1433';
+    const database = process.env.SQL_SERVER_DATABASE || 'master';
+    const auth = process.env.SQL_SERVER_USER ? 'SQL Auth' : 'Windows Auth';
+
+    const isInSafeMode =
+      this.readOnlyMode && !this.allowDestructiveOperations && !this.allowSchemaChanges;
+    const securityLevel = isInSafeMode ? '🔒 SECURE' : '⚠️  UNSAFE';
+    const readOnlyStatus = this.readOnlyMode ? 'RO' : 'RW';
+    const destructiveStatus = this.allowDestructiveOperations ? 'DML+' : 'DML-';
+    const schemaStatus = this.allowSchemaChanges ? 'DDL+' : 'DDL-';
+
+    // Output connection and security info as separate calls for better MCP CLI visibility
+    console.error(`Connected to ${host}:${port}/${database} (${auth})`);
+    console.error(
+      `Security: ${securityLevel} (${readOnlyStatus}, ${destructiveStatus}, ${schemaStatus})`
+    );
+
+    // Add warning if unsafe
+    if (!isInSafeMode) {
+      const warnings = [];
+      if (!this.readOnlyMode) warnings.push('Read-write mode');
+      if (this.allowDestructiveOperations) warnings.push('DML allowed');
+      if (this.allowSchemaChanges) warnings.push('DDL allowed');
+      console.error(`WARNING: ${warnings.join(', ')} - consider stricter settings for production`);
+    }
+  }
+
+  async run() {
     // Initialize database connection pool at startup
     try {
       await this.connectToDatabase();
@@ -781,6 +926,12 @@ class SqlServerMCP {
 
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
+
+    console.error('Starting Warp SQL Server MCP server...');
+
+    // Print configuration summary after server is connected
+    this.printConfigurationSummary();
+
     console.error('Warp SQL Server MCP server running on stdio');
   }
 }

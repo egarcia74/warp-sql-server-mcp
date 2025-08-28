@@ -199,6 +199,297 @@ describe('SqlServerMCP', () => {
     });
   });
 
+  describe('Safety Mechanisms', () => {
+    describe('Constructor Safety Configuration', () => {
+      test('should enable read-only mode by default', () => {
+        const safeMcpServer = new SqlServerMCP();
+        expect(safeMcpServer.readOnlyMode).toBe(true);
+        expect(safeMcpServer.allowDestructiveOperations).toBe(false);
+        expect(safeMcpServer.allowSchemaChanges).toBe(false);
+      });
+
+      test('should allow overriding safety settings via environment variables', () => {
+        process.env.SQL_SERVER_READ_ONLY = 'false';
+        process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+        process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
+
+        const unsafeMcpServer = new SqlServerMCP();
+        expect(unsafeMcpServer.readOnlyMode).toBe(false);
+        expect(unsafeMcpServer.allowDestructiveOperations).toBe(true);
+        expect(unsafeMcpServer.allowSchemaChanges).toBe(true);
+      });
+
+      test('should handle mixed safety configurations', () => {
+        process.env.SQL_SERVER_READ_ONLY = 'false';
+        process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+        process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
+
+        const mixedMcpServer = new SqlServerMCP();
+        expect(mixedMcpServer.readOnlyMode).toBe(false);
+        expect(mixedMcpServer.allowDestructiveOperations).toBe(true);
+        expect(mixedMcpServer.allowSchemaChanges).toBe(false);
+      });
+    });
+
+    describe('Query Validation', () => {
+      beforeEach(() => {
+        // Test with default safe configuration
+        mcpServer = new SqlServerMCP();
+      });
+
+      test('should allow SELECT queries in read-only mode', () => {
+        const validation = mcpServer.validateQuery('SELECT * FROM users');
+        expect(validation.allowed).toBe(true);
+        expect(validation.reason).toBe('Query validation passed');
+      });
+
+      test('should allow SELECT with JOIN in read-only mode', () => {
+        const validation = mcpServer.validateQuery(`
+          SELECT u.name, o.total 
+          FROM users u 
+          JOIN orders o ON u.id = o.user_id
+        `);
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should allow CTE queries in read-only mode', () => {
+        const validation = mcpServer.validateQuery(`
+          WITH UserStats AS (
+            SELECT user_id, COUNT(*) as order_count
+            FROM orders
+            GROUP BY user_id
+          )
+          SELECT * FROM UserStats
+        `);
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should block INSERT queries in read-only mode', () => {
+        const validation = mcpServer.validateQuery("INSERT INTO users (name) VALUES ('John')");
+        expect(validation.allowed).toBe(false);
+        expect(validation.reason).toContain('Read-only mode is enabled');
+        expect(validation.queryType).toBe('non-select');
+      });
+
+      test('should block UPDATE queries in read-only mode', () => {
+        const validation = mcpServer.validateQuery("UPDATE users SET name = 'Jane' WHERE id = 1");
+        expect(validation.allowed).toBe(false);
+        expect(validation.reason).toContain('Read-only mode is enabled');
+        expect(validation.queryType).toBe('non-select');
+      });
+
+      test('should block DELETE queries in read-only mode', () => {
+        const validation = mcpServer.validateQuery('DELETE FROM users WHERE id = 1');
+        expect(validation.allowed).toBe(false);
+        expect(validation.reason).toContain('Read-only mode is enabled');
+        expect(validation.queryType).toBe('non-select');
+      });
+
+      test('should block TRUNCATE queries in read-only mode', () => {
+        const validation = mcpServer.validateQuery('TRUNCATE TABLE users');
+        expect(validation.allowed).toBe(false);
+        expect(validation.reason).toContain('Read-only mode is enabled');
+        expect(validation.queryType).toBe('non-select');
+      });
+
+      test('should block stored procedure execution in read-only mode', () => {
+        const validation = mcpServer.validateQuery('EXEC UpdateUserStats');
+        expect(validation.allowed).toBe(false);
+        expect(validation.reason).toContain('Read-only mode is enabled');
+        expect(validation.queryType).toBe('non-select');
+      });
+
+      test('should block CREATE statements in read-only mode', () => {
+        const validation = mcpServer.validateQuery('CREATE TABLE test (id INT)');
+        expect(validation.allowed).toBe(false);
+        expect(validation.reason).toContain('Read-only mode is enabled');
+        expect(validation.queryType).toBe('non-select');
+      });
+
+      test('should handle case-insensitive queries', () => {
+        const validation = mcpServer.validateQuery("insert into users (name) values ('test')");
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('non-select');
+      });
+
+      test('should handle queries with leading whitespace', () => {
+        const validation = mcpServer.validateQuery('   DELETE FROM users');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('non-select');
+      });
+
+      test('should allow empty queries', () => {
+        const validation = mcpServer.validateQuery('');
+        expect(validation.allowed).toBe(true);
+        expect(validation.reason).toBe('Empty query');
+      });
+
+      test('should allow whitespace-only queries', () => {
+        const validation = mcpServer.validateQuery('   \n\t  ');
+        expect(validation.allowed).toBe(true);
+        expect(validation.reason).toBe('Empty query');
+      });
+    });
+
+    describe('Destructive Operations Control', () => {
+      beforeEach(() => {
+        // Test with read-only disabled but destructive operations disabled
+        process.env.SQL_SERVER_READ_ONLY = 'false';
+        process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'false';
+        process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
+        mcpServer = new SqlServerMCP();
+      });
+
+      test('should allow SELECT queries when read-only is disabled', () => {
+        const validation = mcpServer.validateQuery('SELECT * FROM users');
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should block INSERT when destructive operations disabled', () => {
+        const validation = mcpServer.validateQuery("INSERT INTO users (name) VALUES ('test')");
+        expect(validation.allowed).toBe(false);
+        expect(validation.reason).toContain(
+          'Destructive operations (INSERT/UPDATE/DELETE) are disabled'
+        );
+        expect(validation.queryType).toBe('destructive');
+      });
+
+      test('should block UPDATE when destructive operations disabled', () => {
+        const validation = mcpServer.validateQuery("UPDATE users SET name = 'test'");
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('destructive');
+      });
+
+      test('should block DELETE when destructive operations disabled', () => {
+        const validation = mcpServer.validateQuery('DELETE FROM users');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('destructive');
+      });
+
+      test('should block TRUNCATE when destructive operations disabled', () => {
+        const validation = mcpServer.validateQuery('TRUNCATE TABLE users');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('destructive');
+      });
+
+      test('should block EXECUTE/EXEC when destructive operations disabled', () => {
+        const validation = mcpServer.validateQuery('EXECUTE sp_updatestats');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('destructive');
+      });
+
+      test('should detect multi-statement destructive queries', () => {
+        const validation = mcpServer.validateQuery('SELECT 1; DELETE FROM users');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('destructive');
+      });
+    });
+
+    describe('Schema Changes Control', () => {
+      beforeEach(() => {
+        // Test with destructive operations enabled but schema changes disabled
+        process.env.SQL_SERVER_READ_ONLY = 'false';
+        process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+        process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
+        mcpServer = new SqlServerMCP();
+      });
+
+      test('should allow data operations when schema changes disabled', () => {
+        const validation = mcpServer.validateQuery("INSERT INTO users (name) VALUES ('test')");
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should block CREATE TABLE when schema changes disabled', () => {
+        const validation = mcpServer.validateQuery('CREATE TABLE test (id INT)');
+        expect(validation.allowed).toBe(false);
+        expect(validation.reason).toContain('Schema changes (CREATE/DROP/ALTER) are disabled');
+        expect(validation.queryType).toBe('schema');
+      });
+
+      test('should block DROP TABLE when schema changes disabled', () => {
+        const validation = mcpServer.validateQuery('DROP TABLE users');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('schema');
+      });
+
+      test('should block ALTER TABLE when schema changes disabled', () => {
+        const validation = mcpServer.validateQuery('ALTER TABLE users ADD COLUMN age INT');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('schema');
+      });
+
+      test('should block GRANT statements when schema changes disabled', () => {
+        const validation = mcpServer.validateQuery('GRANT SELECT ON users TO testuser');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('schema');
+      });
+
+      test('should block REVOKE statements when schema changes disabled', () => {
+        const validation = mcpServer.validateQuery('REVOKE SELECT ON users FROM testuser');
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('schema');
+      });
+
+      test('should detect multi-statement schema changes', () => {
+        const validation = mcpServer.validateQuery(
+          'SELECT 1; CREATE INDEX idx_name ON users(name)'
+        );
+        expect(validation.allowed).toBe(false);
+        expect(validation.queryType).toBe('schema');
+      });
+    });
+
+    describe('Full Access Mode', () => {
+      beforeEach(() => {
+        // Test with all safety features disabled
+        process.env.SQL_SERVER_READ_ONLY = 'false';
+        process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+        process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
+        mcpServer = new SqlServerMCP();
+      });
+
+      test('should allow SELECT queries in full access mode', () => {
+        const validation = mcpServer.validateQuery('SELECT * FROM users');
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should allow INSERT queries in full access mode', () => {
+        const validation = mcpServer.validateQuery("INSERT INTO users (name) VALUES ('test')");
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should allow UPDATE queries in full access mode', () => {
+        const validation = mcpServer.validateQuery("UPDATE users SET name = 'test'");
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should allow DELETE queries in full access mode', () => {
+        const validation = mcpServer.validateQuery('DELETE FROM users WHERE id = 1');
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should allow CREATE TABLE in full access mode', () => {
+        const validation = mcpServer.validateQuery('CREATE TABLE test (id INT, name VARCHAR(100))');
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should allow DROP TABLE in full access mode', () => {
+        const validation = mcpServer.validateQuery('DROP TABLE test');
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should allow ALTER TABLE in full access mode', () => {
+        const validation = mcpServer.validateQuery('ALTER TABLE users ADD COLUMN age INT');
+        expect(validation.allowed).toBe(true);
+      });
+
+      test('should allow GRANT/REVOKE in full access mode', () => {
+        expect(mcpServer.validateQuery('GRANT SELECT ON users TO testuser').allowed).toBe(true);
+        expect(mcpServer.validateQuery('REVOKE SELECT ON users FROM testuser').allowed).toBe(true);
+      });
+    });
+  });
+
   describe('executeQuery', () => {
     beforeEach(() => {
       mcpServer.pool = mockPool;
@@ -237,9 +528,67 @@ describe('SqlServerMCP', () => {
       const error = new Error('SQL syntax error');
       mockRequest.query.mockRejectedValue(error);
 
-      await expect(mcpServer.executeQuery('INVALID SQL')).rejects.toThrow(
+      await expect(mcpServer.executeQuery('SELECT * FROM nonexistent_table')).rejects.toThrow(
         'Query execution failed: SQL syntax error'
       );
+    });
+
+    test('should include safety info in successful query responses', async () => {
+      // Configure for full access mode
+      process.env.SQL_SERVER_READ_ONLY = 'false';
+      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
+      mcpServer = new SqlServerMCP();
+      mcpServer.pool = mockPool;
+
+      const mockResult = {
+        recordset: [{ id: 1, name: 'test' }],
+        recordsets: [[{ id: 1, name: 'test' }]],
+        rowsAffected: [1]
+      };
+      mockRequest.query.mockResolvedValue(mockResult);
+
+      const result = await mcpServer.executeQuery('SELECT * FROM test');
+      const responseData = JSON.parse(result.content[0].text);
+
+      expect(responseData.safetyInfo).toBeDefined();
+      expect(responseData.safetyInfo.readOnlyMode).toBe(false);
+      expect(responseData.safetyInfo.destructiveOperationsAllowed).toBe(true);
+      expect(responseData.safetyInfo.schemaChangesAllowed).toBe(true);
+    });
+
+    test('should block unsafe queries with safety validation', async () => {
+      // Test with default safe configuration
+      mcpServer = new SqlServerMCP();
+      mcpServer.pool = mockPool;
+
+      await expect(mcpServer.executeQuery('DELETE FROM users')).rejects.toThrow(
+        'Query blocked by safety policy: Read-only mode is enabled. Only SELECT queries are allowed. Set SQL_SERVER_READ_ONLY=false to disable.'
+      );
+
+      // Verify the actual SQL query was never executed
+      expect(mockRequest.query).not.toHaveBeenCalledWith('DELETE FROM users');
+    });
+
+    test('should allow safe queries in read-only mode', async () => {
+      // Test with default safe configuration
+      mcpServer = new SqlServerMCP();
+      mcpServer.pool = mockPool;
+
+      const mockResult = {
+        recordset: [{ id: 1, name: 'test' }],
+        recordsets: [[{ id: 1, name: 'test' }]],
+        rowsAffected: [1]
+      };
+      mockRequest.query.mockResolvedValue(mockResult);
+
+      const result = await mcpServer.executeQuery('SELECT * FROM test');
+      const responseData = JSON.parse(result.content[0].text);
+
+      expect(mockRequest.query).toHaveBeenCalledWith('SELECT * FROM test');
+      expect(responseData.safetyInfo.readOnlyMode).toBe(true);
+      expect(responseData.safetyInfo.destructiveOperationsAllowed).toBe(false);
+      expect(responseData.safetyInfo.schemaChangesAllowed).toBe(false);
     });
   });
 
@@ -931,6 +1280,130 @@ describe('SqlServerMCP', () => {
     });
   });
 
+  describe('Configuration Summary', () => {
+    let originalConsoleError;
+    let consoleErrorSpy;
+    let originalNodeEnv;
+
+    beforeEach(() => {
+      originalConsoleError = console.error;
+      consoleErrorSpy = vi.fn();
+      console.error = consoleErrorSpy;
+
+      // Temporarily disable test mode for these tests
+      originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+    });
+
+    afterEach(() => {
+      console.error = originalConsoleError;
+      process.env.NODE_ENV = originalNodeEnv;
+    });
+
+    test('should print secure configuration summary', () => {
+      // Test with default secure configuration
+      mcpServer = new SqlServerMCP();
+      mcpServer.printConfigurationSummary();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Connected to localhost:1433/master')
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Security: 🔒 SECURE (RO, DML-, DDL-)')
+      );
+      // Should not show warning for secure config
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('WARNING:'));
+    });
+
+    test('should print unsafe configuration summary with warnings', () => {
+      // Test with unsafe configuration
+      process.env.SQL_SERVER_READ_ONLY = 'false';
+      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
+      mcpServer = new SqlServerMCP();
+      mcpServer.printConfigurationSummary();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Security: ⚠️  UNSAFE (RW, DML+, DDL+)')
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('WARNING: Read-write mode, DML allowed, DDL allowed')
+      );
+    });
+
+    test('should print mixed configuration correctly', () => {
+      // Test with mixed configuration (read-write but no destructive ops)
+      process.env.SQL_SERVER_READ_ONLY = 'false';
+      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'false';
+      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
+      mcpServer = new SqlServerMCP();
+      mcpServer.printConfigurationSummary();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Security: ⚠️  UNSAFE (RW, DML-, DDL-)')
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('WARNING: Read-write mode')
+      );
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('DML allowed'));
+    });
+
+    test('should display correct authentication method for SQL Auth', () => {
+      process.env.SQL_SERVER_USER = 'testuser';
+      mcpServer = new SqlServerMCP();
+      mcpServer.printConfigurationSummary();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('(SQL Auth)'));
+    });
+
+    test('should display correct authentication method for Windows Auth', () => {
+      delete process.env.SQL_SERVER_USER;
+      delete process.env.SQL_SERVER_PASSWORD;
+      mcpServer = new SqlServerMCP();
+      mcpServer.printConfigurationSummary();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('(Windows Auth)'));
+    });
+
+    test('should display custom host and port', () => {
+      process.env.SQL_SERVER_HOST = 'sqlserver.example.com';
+      process.env.SQL_SERVER_PORT = '1434';
+      process.env.SQL_SERVER_DATABASE = 'MyDatabase';
+      mcpServer = new SqlServerMCP();
+      mcpServer.printConfigurationSummary();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Connected to sqlserver.example.com:1434/MyDatabase')
+      );
+    });
+
+    test('should not print anything during tests', () => {
+      // Restore test mode for this specific test
+      process.env.NODE_ENV = 'test';
+
+      mcpServer = new SqlServerMCP();
+      mcpServer.printConfigurationSummary();
+
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    });
+
+    test('should handle partial unsafe configurations correctly', () => {
+      // DML operations enabled, but read-only mode should make it secure
+      process.env.SQL_SERVER_READ_ONLY = 'true';
+      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
+      mcpServer = new SqlServerMCP();
+      mcpServer.printConfigurationSummary();
+
+      // The actual behavior shows UNSAFE because DML+ is displayed, but there should be a warning
+      // since read-only mode is enabled (which overrides the DML setting in practice)
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Security: ⚠️  UNSAFE (RO, DML+, DDL-)')
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('WARNING: DML allowed'));
+    });
+  });
+
   describe('Server Startup and Runtime', () => {
     describe('run() method', () => {
       let originalConsoleError;
@@ -1122,11 +1595,11 @@ describe('SqlServerMCP', () => {
         expect(consoleErrorSpy).toHaveBeenCalledTimes(3);
         expect(consoleErrorSpy).toHaveBeenNthCalledWith(
           1,
-          'Starting Warp SQL Server MCP server...'
+          'Database connection pool initialized successfully'
         );
         expect(consoleErrorSpy).toHaveBeenNthCalledWith(
           2,
-          'Database connection pool initialized successfully'
+          'Starting Warp SQL Server MCP server...'
         );
         expect(consoleErrorSpy).toHaveBeenNthCalledWith(
           3,

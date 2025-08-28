@@ -24,13 +24,326 @@
 A Model Context Protocol (MCP) server that provides Warp with the ability to connect to and
 interact with Microsoft SQL Server databases.
 
+## 🚀 Quick Start
+
+**New to this project?** Get up and running in under 5 minutes!
+
+**👉 [Quick Start Guide →](QUICKSTART.md)**
+
+For detailed setup, continue reading below.
+
 ## Features
 
 - **Database Connection**: Connect to SQL Server on localhost:1433 (configurable)
-- **Query Execution**: Execute arbitrary SQL queries
+- **Query Execution**: Execute arbitrary SQL queries with graduated safety controls
 - **Schema Inspection**: List databases, tables, and describe table structures
 - **Data Retrieval**: Get sample data from tables with filtering and limiting
 - **Authentication**: Support for both SQL Server authentication and Windows authentication
+- **🔒 Security**: Three-tier graduated safety system with secure defaults
+
+## 🔒 Security
+
+> **✨ NEW**: This MCP now includes a revolutionary **three-tier graduated safety system** designed to prevent accidental or malicious database operations while providing the flexibility needed for different environments.
+
+### 🛡️ Three-Tier Safety System
+
+The MCP server implements three independent security layers that can be configured separately:
+
+| Security Level                | Environment Variable                      | Default | Impact                        |
+| ----------------------------- | ----------------------------------------- | ------- | ----------------------------- |
+| **🔒 Read-Only Mode**         | `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed   |
+| **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE |
+| **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER    |
+
+### 🏗️ Security Configurations
+
+#### 🔒 **Maximum Security** (Default - Production Recommended)
+
+```bash
+SQL_SERVER_READ_ONLY=true                      # Only SELECT allowed
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false  # No data modifications
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
+```
+
+**✅ Allowed Operations:**
+
+- SELECT queries (JOINs, CTEs, subqueries)
+- Database and table inspection
+- Query performance analysis
+- Data export (CSV)
+
+**❌ Blocked Operations:**
+
+- INSERT, UPDATE, DELETE, TRUNCATE
+- CREATE, DROP, ALTER operations
+- Stored procedure execution
+
+**🎯 Perfect For:** Production monitoring, business intelligence, reporting, data analysis
+
+#### 📊 **Data Analysis Mode**
+
+```bash
+SQL_SERVER_READ_ONLY=false                     # Enable write operations
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true   # Allow data modifications
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # Block schema changes
+```
+
+**✅ Additional Operations Allowed:**
+
+- INSERT, UPDATE, DELETE operations
+- Data import/migration
+- ETL processes
+
+**❌ Still Blocked:**
+
+- CREATE, DROP, ALTER operations
+- Schema modifications
+
+**🎯 Perfect For:** Development environments, data migration, ETL processes, application testing
+
+#### 🛠️ **Full Development Mode** (Use with Caution)
+
+```bash
+SQL_SERVER_READ_ONLY=false                     # Enable write operations
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true   # Allow data modifications
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=true          # Allow schema changes
+```
+
+**✅ All Operations Allowed:**
+
+- Complete SQL functionality
+- Database schema modifications
+- Index and constraint management
+
+**⚠️ WARNING:** This provides unrestricted database access. Only use in isolated development environments!
+
+**🎯 Perfect For:** Database development, schema migration, isolated development environments
+
+### 🚨 Security Status Monitoring
+
+#### Startup Security Summary
+
+The MCP server displays security status on startup in the Warp logs:
+
+```bash
+# Maximum Security (Default)
+Security: 🔒 SECURE (RO, DML-, DDL-)
+
+# Data Analysis Mode
+Security: ⚠️ UNSAFE (RW, DML+, DDL-)
+WARNING: Read-write mode, DML allowed - consider stricter settings for production
+
+# Full Development Mode
+Security: ⚠️ UNSAFE (RW, DML+, DDL+)
+WARNING: Read-write mode, DML allowed, DDL allowed - consider stricter settings for production
+```
+
+#### Runtime Security Information
+
+Every query response includes current security status:
+
+```json
+{
+  "safetyInfo": {
+    "readOnlyMode": true,
+    "destructiveOperationsAllowed": false,
+    "schemaChangesAllowed": false
+  }
+}
+```
+
+### 🔍 Query Validation
+
+The MCP server includes intelligent query validation that:
+
+1. **Analyzes SQL patterns** before execution
+2. **Blocks dangerous operations** based on current security settings
+3. **Provides clear error messages** explaining why operations were blocked
+4. **Suggests configuration changes** when operations are blocked
+
+**Example Security Block:**
+
+```bash
+# Attempting INSERT in read-only mode
+❌ Query blocked by safety policy: Read-only mode is enabled.
+   Only SELECT queries are allowed.
+   Set SQL_SERVER_READ_ONLY=false to disable.
+```
+
+### 🏥 Production Deployment
+
+#### Recommended Production Configuration
+
+```bash
+# PRODUCTION SECURITY SETTINGS (Mandatory)
+SQL_SERVER_READ_ONLY=true
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=false
+
+# ADDITIONAL SECURITY SETTINGS
+SQL_SERVER_ENCRYPT=true
+SQL_SERVER_TRUST_CERT=false
+SQL_SERVER_CONNECT_TIMEOUT_MS=5000
+SQL_SERVER_REQUEST_TIMEOUT_MS=10000
+```
+
+#### Security Validation Checklist
+
+Before deploying to production:
+
+- [ ] ✅ **Read-only mode enabled** (`SQL_SERVER_READ_ONLY=true`)
+- [ ] ✅ **Destructive operations blocked** (`SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false`)
+- [ ] ✅ **Schema changes blocked** (`SQL_SERVER_ALLOW_SCHEMA_CHANGES=false`)
+- [ ] ✅ **Encryption enabled** (`SQL_SERVER_ENCRYPT=true`)
+- [ ] ✅ **Certificate validation enabled** (`SQL_SERVER_TRUST_CERT=false`)
+- [ ] ✅ **Security warnings appear in logs** during startup
+- [ ] ✅ **Test blocked operations** return appropriate error messages
+- [ ] ✅ **Document security settings** in deployment documentation
+
+### 🔧 Migration from Previous Versions
+
+**⚠️ Breaking Change Notice**: Starting with this version, the MCP server defaults to maximum security (read-only mode).
+
+**If you need write access**, explicitly configure:
+
+```bash
+# For data modification capabilities
+SQL_SERVER_READ_ONLY=false
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true
+
+# For full database operations (development only)
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
+```
+
+### 📚 Additional Security Resources
+
+- **[Complete Security Documentation](SECURITY.md)** - Comprehensive security guide
+- **[Threat Model Analysis](SECURITY.md#threat-model)** - What threats are mitigated
+- **[Security Testing Guide](SECURITY.md#testing-security-features)** - How to validate security features
+- **[Deployment Guidelines](SECURITY.md#production-deployment-guidelines)** - Environment-specific recommendations
+
+## 🎯 Use Cases
+
+This MCP transforms Warp into a **lightweight, AI-powered database client** perfect for developers, analysts, DBAs, and business users. Here are the most valuable use cases:
+
+### 🔍 **Database Analysis & Exploration**
+
+#### **Schema Discovery**
+
+- **Reverse engineer** legacy databases without documentation
+- **Quick database audits** to understand structure and relationships
+- **New team onboarding** - rapidly explore unfamiliar database schemas
+- **Data migration planning** - understand source system structure
+
+#### **Data Quality Assessment**
+
+- Spot-check data integrity across tables
+- Identify orphaned records or referential integrity issues
+- Sample data for quality analysis before major operations
+
+### 📊 **Business Intelligence & Reporting**
+
+#### **Ad-hoc Analysis**
+
+- Quick business questions: _"How many orders are pending?"_
+- Revenue analysis: _"What are our top-selling products?"_
+- Customer insights: _"Which customers haven't placed orders recently?"_
+- Inventory monitoring: _"What products are low in stock?"_
+
+#### **Data Export for Analysis**
+
+- Export filtered datasets to CSV for Excel/BI tool analysis
+- Extract sample data for testing or development environments
+- Generate reports for stakeholders who prefer spreadsheet format
+
+### 🛠️ **Development & DevOps**
+
+#### **Database Troubleshooting**
+
+- **Query performance tuning** using execution plan analysis
+- Debug slow queries by examining actual vs estimated plans
+- Identify missing indexes or inefficient query patterns
+- Monitor query execution costs
+
+#### **Development Support**
+
+- **API development** - quickly test database queries during development
+- **Data seeding** - understand existing data patterns for test data creation
+- **Schema validation** - verify database changes deployed correctly
+- **Integration testing** - validate data flows between systems
+
+### 🔧 **Database Administration**
+
+#### **Maintenance & Monitoring**
+
+- Quick health checks across multiple databases
+- Verify foreign key constraints are properly implemented
+- Monitor table sizes and row counts
+- Validate data consistency after migrations
+
+#### **Documentation & Compliance**
+
+- Generate schema documentation automatically
+- Create data dictionaries for compliance audits
+- Document foreign key relationships for impact analysis
+- Export metadata for governance tools
+
+### 🎓 **Education & Training**
+
+#### **SQL Learning**
+
+- Safe environment to explore database concepts
+- Learn complex JOIN patterns on real data
+- Practice query optimization techniques
+- Understand execution plans and performance tuning
+
+#### **Database Design Training**
+
+- Analyze well-designed schemas from existing databases
+- Study foreign key implementation patterns
+- Learn normalization principles from real examples
+
+### 🚀 **AI-Powered Database Operations**
+
+#### **Natural Language to SQL**
+
+With Warp's AI capabilities, you can:
+
+- Ask: _"Show me customers who haven't placed orders"_
+- Query: _"What's our revenue by product category?"_
+- Analyze: _"Which products are selling best this month?"_
+- Optimize: _"Why is this query running slowly?"_
+
+#### **Automated Insights**
+
+- Generate business reports through conversational queries
+- Perform data analysis without writing complex SQL
+- Get explanations of query performance issues in plain English
+
+### 🏢 **Enterprise Scenarios**
+
+#### **Multi-Database Management**
+
+- Compare schemas across development/staging/production
+- Validate data consistency across environments
+- Monitor multiple SQL Server instances from one interface
+- Coordinate database operations across teams
+
+#### **Legacy System Integration**
+
+- Understand undocumented legacy database structures
+- Extract data from legacy systems for modernization projects
+- Bridge between old systems and modern applications
+- Support gradual migration strategies
+
+### 💡 **Why This MCP is Particularly Powerful**
+
+1. **Zero Configuration** - No need to install heavy database tools
+2. **AI Integration** - Natural language queries through Warp
+3. **Flexible Access** - Full SQL capabilities from simple queries to complex operations
+4. **Fast Iteration** - Quick feedback loop for analysis and development
+5. **Cross-Platform** - Works on any system where Warp runs
+6. **Comprehensive** - All essential database operations in one tool
 
 ## Available Tools
 
@@ -244,6 +557,8 @@ For other MCP-compatible systems (Claude Desktop, etc.), use a similar JSON stru
 
 ### Environment Variables Reference
 
+#### Core Connection Settings
+
 | Variable                        | Required         | Default     | Description               |
 | ------------------------------- | ---------------- | ----------- | ------------------------- |
 | `SQL_SERVER_HOST`               | Yes              | `localhost` | SQL Server hostname       |
@@ -258,6 +573,16 @@ For other MCP-compatible systems (Claude Desktop, etc.), use a similar JSON stru
 | `SQL_SERVER_REQUEST_TIMEOUT_MS` | No               | `30000`     | Query timeout             |
 | `SQL_SERVER_MAX_RETRIES`        | No               | `3`         | Connection retry attempts |
 | `SQL_SERVER_RETRY_DELAY_MS`     | No               | `1000`      | Retry delay               |
+
+#### 🔒 Security Configuration (NEW)
+
+| Variable                                  | Default | Security Level | Description                              |
+| ----------------------------------------- | ------- | -------------- | ---------------------------------------- |
+| `SQL_SERVER_READ_ONLY`                    | `true`  | **SECURE**     | When `true`, only SELECT queries allowed |
+| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | **SECURE**     | When `true`, allows INSERT/UPDATE/DELETE |
+| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | **SECURE**     | When `true`, allows CREATE/DROP/ALTER    |
+
+⚠️ **Important**: These settings significantly impact security. See [Security section](#security) for detailed guidance.
 
 ### Troubleshooting Configuration
 

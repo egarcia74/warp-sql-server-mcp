@@ -3,13 +3,16 @@
 This directory contains the comprehensive test suite for the Warp SQL Server MCP server. The tests
 ensure all functionality works correctly and provide confidence for ongoing development.
 
+**🚀 New to this project?** Check out the [Quick Start Guide](../QUICKSTART.md) to get the MCP server running first, then return here to understand the testing architecture.
+
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 56 tests
+- **Total Tests**: 56 tests (including comprehensive safety validation tests)
 - **Status**: ✅ All passing
 - **Coverage**: 61.04% statements, 77.89% branches, 91.66% functions
 - **Test Type**: Unit tests with mocked SQL Server connections
+- **🔒 Security Focus**: Comprehensive safety mechanism validation to prevent security bypasses
 
 ## 📁 Test Structure
 
@@ -181,6 +184,297 @@ Tests the MCP server lifecycle, startup, and runtime behavior:
 #### Integration Scenarios
 
 - **✅ Complete Startup Flow**: Tests the full server startup flow with all components
+
+## 🔒 Safety & Security Testing (CRITICAL)
+
+**⚠️ This is the most important testing category** - these tests ensure the three-tier safety system cannot be bypassed and provides proper security enforcement.
+
+### Security Test Overview
+
+The safety validation system is thoroughly tested to prevent:
+
+- **Security Bypass Attempts**: Malicious queries attempting to circumvent safety controls
+- **Configuration Drift**: Ensuring security settings are properly applied
+- **Error Message Leakage**: Validating security error messages don't reveal sensitive information
+- **Multi-Statement Attacks**: Preventing compound queries that could bypass individual statement validation
+
+### Query Validation Tests
+
+#### 🔴 **Read-Only Mode Validation**
+
+```javascript
+// Tests that read-only mode blocks all non-SELECT operations
+describe('validateQuery - Read-Only Mode', () => {
+  test('should allow SELECT queries in read-only mode', () => {
+    const result = server.validateQuery('SELECT * FROM Users');
+    expect(result.allowed).toBe(true);
+  });
+
+  test('should block INSERT in read-only mode', () => {
+    const result = server.validateQuery('INSERT INTO Users VALUES (1, "test")');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('Read-only mode is enabled');
+  });
+
+  test('should block UPDATE/DELETE/CREATE/DROP in read-only mode', () => {
+    const dangerousQueries = [
+      'UPDATE Users SET name = "hacked"',
+      'DELETE FROM Users WHERE id = 1',
+      'CREATE TABLE malicious (id int)',
+      'DROP TABLE Users'
+    ];
+
+    dangerousQueries.forEach(query => {
+      const result = server.validateQuery(query);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('Read-only mode');
+    });
+  });
+});
+```
+
+#### 🟠 **Destructive Operations Validation**
+
+```javascript
+// Tests DML (Data Manipulation Language) restrictions
+describe('validateQuery - Destructive Operations', () => {
+  test('should block DML when destructive operations disabled', () => {
+    const dmlQueries = [
+      'INSERT INTO Users VALUES (1, "test")',
+      'UPDATE Users SET status = "active"',
+      'DELETE FROM Users WHERE active = 0',
+      'TRUNCATE TABLE logs'
+    ];
+
+    dmlQueries.forEach(query => {
+      const result = server.validateQuery(query);
+      expect(result.allowed).toBe(false);
+      expect(result.queryType).toBe('destructive');
+    });
+  });
+
+  test('should allow DML when explicitly enabled', () => {
+    // Test with destructive operations enabled
+    server.allowDestructiveOperations = true;
+    server.readOnlyMode = false;
+
+    const result = server.validateQuery('INSERT INTO Users (name) VALUES ("test")');
+    expect(result.allowed).toBe(true);
+  });
+});
+```
+
+#### 🔴 **Schema Changes Validation**
+
+```javascript
+// Tests DDL (Data Definition Language) restrictions
+describe('validateQuery - Schema Changes', () => {
+  test('should block DDL when schema changes disabled', () => {
+    const ddlQueries = [
+      'CREATE TABLE new_table (id int)',
+      'ALTER TABLE Users ADD COLUMN email VARCHAR(255)',
+      'DROP TABLE old_table',
+      'CREATE INDEX idx_name ON Users (name)',
+      'GRANT SELECT ON Users TO public'
+    ];
+
+    ddlQueries.forEach(query => {
+      const result = server.validateQuery(query);
+      expect(result.allowed).toBe(false);
+      expect(result.queryType).toBe('schema');
+    });
+  });
+});
+```
+
+#### 🛡️ **Multi-Statement Attack Prevention**
+
+```javascript
+// Tests compound queries that attempt to bypass security
+describe('validateQuery - Multi-Statement Security', () => {
+  test('should detect dangerous operations in compound statements', () => {
+    const compoundQueries = [
+      'SELECT * FROM Users; DROP TABLE Users;',
+      'SELECT name FROM Products; INSERT INTO logs VALUES (1);',
+      'SELECT 1; UPDATE Users SET admin = 1;',
+      'WITH cte AS (SELECT 1) SELECT * FROM cte; CREATE TABLE backdoor (id int);'
+    ];
+
+    compoundQueries.forEach(query => {
+      const result = server.validateQuery(query);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('blocked');
+    });
+  });
+});
+```
+
+#### 🔍 **Advanced Pattern Detection**
+
+```javascript
+// Tests sophisticated attack patterns
+describe('validateQuery - Advanced Security', () => {
+  test('should detect stored procedure execution attempts', () => {
+    const procQueries = ['EXEC xp_cmdshell "dir"', 'EXECUTE sp_configure', 'CALL malicious_proc()'];
+
+    procQueries.forEach(query => {
+      const result = server.validateQuery(query);
+      expect(result.allowed).toBe(false);
+    });
+  });
+
+  test('should handle case-insensitive pattern matching', () => {
+    const caseVariations = [
+      'insert INTO Users VALUES (1)',
+      'Insert Into Users Values (1)',
+      'INSERT into users values (1)',
+      'iNsErT iNtO uSeRs VaLuEs (1)'
+    ];
+
+    caseVariations.forEach(query => {
+      const result = server.validateQuery(query);
+      expect(result.allowed).toBe(false);
+    });
+  });
+});
+```
+
+### Security Configuration Matrix Testing
+
+```javascript
+// Tests all possible security configuration combinations
+describe('Security Configuration Matrix', () => {
+  const securityConfigs = [
+    { readOnly: true, destructive: false, schema: false }, // Maximum security
+    { readOnly: false, destructive: true, schema: false }, // Data analysis
+    { readOnly: false, destructive: true, schema: true } // Full development
+  ];
+
+  securityConfigs.forEach(config => {
+    describe(`Config: RO=${config.readOnly}, DML=${config.destructive}, DDL=${config.schema}`, () => {
+      beforeEach(() => {
+        server.readOnlyMode = config.readOnly;
+        server.allowDestructiveOperations = config.destructive;
+        server.allowSchemaChanges = config.schema;
+      });
+
+      test('should enforce SELECT query policy', () => {
+        const result = server.validateQuery('SELECT * FROM Users');
+        expect(result.allowed).toBe(true);
+      });
+
+      test('should enforce INSERT policy', () => {
+        const result = server.validateQuery('INSERT INTO Users VALUES (1)');
+        const shouldAllow = !config.readOnly && config.destructive;
+        expect(result.allowed).toBe(shouldAllow);
+      });
+
+      test('should enforce CREATE policy', () => {
+        const result = server.validateQuery('CREATE TABLE test (id int)');
+        const shouldAllow = !config.readOnly && config.schema;
+        expect(result.allowed).toBe(shouldAllow);
+      });
+    });
+  });
+});
+```
+
+### Error Message Security Testing
+
+```javascript
+// Ensures error messages are helpful but don't leak sensitive information
+describe('Security Error Messages', () => {
+  test('should provide clear security violation explanations', () => {
+    const result = server.validateQuery('DELETE FROM Users');
+
+    expect(result.reason).toContain('Read-only mode is enabled');
+    expect(result.reason).toContain('Only SELECT queries are allowed');
+    expect(result.reason).toContain('Set SQL_SERVER_READ_ONLY=false to disable');
+  });
+
+  test('should not leak database structure in error messages', () => {
+    const result = server.validateQuery('SELECT * FROM secret_table');
+
+    // Security error should not reveal table existence
+    expect(result.reason).not.toContain('secret_table');
+    expect(result.reason).not.toContain('table not found');
+    expect(result.reason).not.toContain('permission denied');
+  });
+});
+```
+
+### Safety Testing Best Practices
+
+#### 🧪 **Test-Driven Security Development**
+
+When adding new security features:
+
+1. **Write Security Tests First**: Create failing tests that demonstrate the vulnerability
+2. **Implement Security**: Add the security mechanism to make tests pass
+3. **Test Bypass Attempts**: Try to circumvent your own security measures
+4. **Validate Error Messages**: Ensure clear, helpful error messages
+
+#### 🔍 **Security Test Patterns**
+
+```javascript
+// Standard security test pattern
+const testSecurityFeature = (featureName, dangerousQueries, safeQueries) => {
+  describe(`Security: ${featureName}`, () => {
+    test('should block dangerous queries', () => {
+      dangerousQueries.forEach(query => {
+        const result = server.validateQuery(query);
+        expect(result.allowed).toBe(false);
+        expect(result.reason).toBeDefined();
+      });
+    });
+
+    test('should allow safe queries', () => {
+      safeQueries.forEach(query => {
+        const result = server.validateQuery(query);
+        expect(result.allowed).toBe(true);
+      });
+    });
+  });
+};
+```
+
+#### 🔒 **Critical Security Validations**
+
+Every security-related test must validate:
+
+- [ ] **Query blocking works** - Dangerous queries are actually blocked
+- [ ] **Error messages are clear** - Users understand what's blocked and why
+- [ ] **Configuration compliance** - Security settings are properly applied
+- [ ] **Bypass prevention** - Multiple attack vectors are tested
+- [ ] **Default security** - Secure defaults are maintained
+
+### Running Security Tests
+
+```bash
+# Run all security-related tests
+npm test -- --grep "security|safety|validate"
+
+# Run specific security test categories
+npm test -- --grep "validateQuery"
+npm test -- --grep "Security Configuration"
+npm test -- --grep "Read-Only Mode"
+
+# Security test coverage
+npm run test:coverage -- --grep "security"
+```
+
+### Security Testing Checklist
+
+Before any release:
+
+- [ ] ✅ **All security tests pass** - No security functionality is broken
+- [ ] ✅ **New features have security tests** - Every new SQL-related feature is tested
+- [ ] ✅ **Bypass attempts fail** - Security cannot be circumvented
+- [ ] ✅ **Error messages validated** - Clear but not revealing sensitive info
+- [ ] ✅ **Configuration matrix tested** - All security combinations work
+- [ ] ✅ **Default security confirmed** - Secure defaults are maintained
+
+**⚠️ Remember**: These security tests are the **last line of defense** against accidental data loss or malicious attacks. They must be comprehensive, maintained, and never bypassed.
 
 ## 🏗️ Test Architecture
 

@@ -2,12 +2,26 @@
 
 Thank you for your interest in contributing to the Warp SQL Server MCP project!
 
+**🚀 New to this project?** Start with the [Quick Start Guide](QUICKSTART.md) to get familiar with the MCP server functionality before diving into development.
+
 ## Development Setup
 
 ### Prerequisites
 
 - Node.js 18.0.0 or higher
 - npm (comes with Node.js)
+- SQL Server instance (for integration testing - optional)
+
+### 🧪 Test-Driven Development (TDD) - MANDATORY
+
+**🎯 This project strictly follows Test-Driven Development. ALL new functionality must be test-driven.**
+
+#### TDD is enforced through
+
+- Pre-commit hooks that require passing tests
+- Code review process that validates TDD practices
+- CI/CD pipeline that enforces test coverage requirements
+- Security testing requirements for all SQL-related functionality
 
 ### Getting Started
 
@@ -121,6 +135,174 @@ GitHub Actions automatically runs:
 - **Security audit** with npm audit
 - **Coverage reporting** with Codecov (when configured)
 
+## 🔒 Safety Testing Requirements (CRITICAL)
+
+### Security Testing for Contributors
+
+**⚠️ ALL SQL-related functionality MUST include comprehensive safety tests.**
+
+#### Mandatory Safety Test Categories
+
+For any new MCP tool or functionality that interacts with the database:
+
+1. **Read-Only Mode Testing**
+
+   ```javascript
+   describe('new_tool read-only mode', () => {
+     beforeEach(() => {
+       // Set up read-only mode
+       process.env.SQL_SERVER_READ_ONLY = 'true';
+       process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'false';
+       process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
+     });
+
+     test('should allow SELECT operations', async () => {
+       // Test that SELECT operations work
+     });
+
+     test('should block non-SELECT operations', async () => {
+       // Test that INSERT/UPDATE/DELETE/CREATE/etc are blocked
+       // Must return proper error message explaining the restriction
+     });
+   });
+   ```
+
+2. **Destructive Operations Testing**
+
+   ```javascript
+   describe('new_tool destructive operations', () => {
+     test('should respect destructive operations setting', async () => {
+       // Test with SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false
+       // Ensure DML operations are blocked
+     });
+
+     test('should allow DML when enabled', async () => {
+       // Test with SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true
+       // Ensure DML operations work
+     });
+   });
+   ```
+
+3. **Schema Changes Testing**
+
+   ```javascript
+   describe('new_tool schema changes', () => {
+     test('should respect schema changes setting', async () => {
+       // Test with SQL_SERVER_ALLOW_SCHEMA_CHANGES=false
+       // Ensure DDL operations are blocked
+     });
+
+     test('should allow DDL when enabled', async () => {
+       // Test with SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
+       // Ensure DDL operations work
+     });
+   });
+   ```
+
+4. **Error Message Testing**
+   ```javascript
+   describe('new_tool error messages', () => {
+     test('should provide clear security error messages', async () => {
+       // Verify error messages explain:
+       // - What was blocked
+       // - Why it was blocked
+       // - How to enable the functionality if needed
+     });
+   });
+   ```
+
+#### Safety Testing Checklist
+
+Before submitting a PR with SQL functionality:
+
+- [ ] **Read-only mode tests** - Verify tool respects read-only restrictions
+- [ ] **DML restriction tests** - Test destructive operations controls
+- [ ] **DDL restriction tests** - Test schema change controls
+- [ ] **Error message validation** - Ensure clear, helpful error messages
+- [ ] **Security bypass testing** - Attempt to circumvent security (must fail)
+- [ ] **Edge case testing** - Test unusual SQL patterns and edge cases
+- [ ] **Multi-statement testing** - Ensure multi-statement SQL is properly validated
+- [ ] **Configuration matrix testing** - Test all security configuration combinations
+
+### 🧪 TDD Workflow for Safety Features
+
+#### Step-by-Step Safety TDD Process
+
+1. **Write Security Tests First** (🔴 RED Phase)
+
+   ```bash
+   # Start with failing security tests
+   npm run test:watch  # Keep running during development
+   ```
+
+2. **Implement Basic Functionality** (🟢 GREEN Phase)
+
+   ```bash
+   # Write minimal code to make security tests pass
+   # Security validation should be implemented FIRST
+   ```
+
+3. **Add Feature Logic** (🟡 REFACTOR Phase)
+
+   ```bash
+   # Add the actual functionality while keeping security tests passing
+   ```
+
+4. **Comprehensive Testing** (🔒 SECURITY Phase)
+   ```bash
+   # Add edge cases, error conditions, and bypass attempts
+   npm run test:coverage  # Verify coverage includes security paths
+   ```
+
+#### Security Test Examples
+
+**Query Validation Testing:**
+
+```javascript
+test('validateQuery should block dangerous patterns', () => {
+  const server = new SqlServerMCP();
+
+  // Test various dangerous patterns
+  const dangerousQueries = [
+    'DROP TABLE Users',
+    "INSERT INTO Users VALUES (1, 'test')",
+    'DELETE FROM Users WHERE id = 1',
+    "UPDATE Users SET name = 'hacked'",
+    "EXEC xp_cmdshell 'dir'",
+    'CREATE TABLE malicious (id int)'
+  ];
+
+  dangerousQueries.forEach(query => {
+    const result = server.validateQuery(query);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('blocked');
+  });
+});
+```
+
+**Multi-Configuration Testing:**
+
+```javascript
+const securityConfigs = [
+  { readOnly: true, destructive: false, schema: false }, // Maximum security
+  { readOnly: false, destructive: true, schema: false }, // Data analysis
+  { readOnly: false, destructive: true, schema: true } // Full development
+];
+
+securityConfigs.forEach(config => {
+  describe(`Security config: RO=${config.readOnly}, DML=${config.destructive}, DDL=${config.schema}`, () => {
+    // Test each configuration thoroughly
+  });
+});
+```
+
+### Safety Testing Resources
+
+- **Existing Tests**: See `test/sqlserver-mcp.test.js` for security test examples
+- **Test Patterns**: Follow established patterns for validateQuery testing
+- **Security Documentation**: Review `SECURITY.md` for threat model details
+- **Mock Data**: Use existing mock data and patterns for consistency
+
 ## Making Changes
 
 1. **Create a feature branch**
@@ -129,10 +311,13 @@ GitHub Actions automatically runs:
    git checkout -b feature/your-feature-name
    ```
 
-2. **Make your changes**
-   - Write tests for new functionality
-   - Update documentation as needed
-   - Follow the existing code style
+2. **Make your changes (TDD Process)**
+   - **STEP 1**: Write comprehensive safety tests FIRST
+   - **STEP 2**: Write tests for functionality
+   - **STEP 3**: Implement security validation
+   - **STEP 4**: Implement core functionality
+   - **STEP 5**: Update documentation as needed
+   - **STEP 6**: Follow the existing code style
 
 3. **Test locally**
 

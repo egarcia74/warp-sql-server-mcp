@@ -4,19 +4,25 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-This is a Model Context Protocol (MCP) server that enables Warp to interact with
-Microsoft SQL Server databases. The project provides a bridge between Warp's AI
-capabilities and SQL Server through the MCP standard, allowing for database
+This is a **secure** Model Context Protocol (MCP) server that enables Warp to interact with
+Microsoft SQL Server databases safely and securely. The project provides a bridge between
+Warp's AI capabilities and SQL Server through the MCP standard, featuring a revolutionary
+**three-tier graduated safety system** for production database security, comprehensive database
 operations, schema inspection, and data retrieval.
+
+**🚀 Quick Start**: New users should begin with the [Quick Start Guide](QUICKSTART.md) for a 5-minute setup walkthrough.
 
 ## Architecture
 
 ### Core Components
 
 - **SqlServerMCP Class** (`index.js`): Main MCP server implementation that handles
-  database connections and tool execution
+  database connections, security validation, and tool execution
+- **🔒 Three-Tier Safety System**: Revolutionary security architecture with graduated safety levels
+- **Query Validation Engine**: Intelligent SQL parsing and security policy enforcement
 - **MCP Tools**: 8 different database operation tools exposed through the MCP interface
 - **Connection Management**: Handles both SQL Server authentication and Windows authentication
+- **Security Monitoring**: Runtime security status reporting and startup security summaries
 - **Error Handling**: Comprehensive error handling with structured MCP error responses
 
 ### MCP Tools Available
@@ -146,6 +152,57 @@ For Windows Authentication (leave user/password empty):
 - `SQL_SERVER_POOL_MIN`: Minimum pool connections (default: 0)
 - `SQL_SERVER_POOL_IDLE_TIMEOUT_MS`: Pool idle timeout in milliseconds (default: 30000)
 
+### 🔒 Security Configuration (NEW - CRITICAL)
+
+**⚠️ BREAKING CHANGE**: Starting with v1.3.0, the MCP server defaults to maximum security.
+
+#### Three-Tier Safety System
+
+| Variable                                  | Default | Security Level | Impact                      |
+| ----------------------------------------- | ------- | -------------- | --------------------------- |
+| `SQL_SERVER_READ_ONLY`                    | `true`  | **SECURE**     | Only SELECT queries allowed |
+| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | **SECURE**     | Blocks INSERT/UPDATE/DELETE |
+| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | **SECURE**     | Blocks CREATE/DROP/ALTER    |
+
+#### Security Configurations
+
+**🔒 Maximum Security (Default - Production Recommended):**
+
+```bash
+SQL_SERVER_READ_ONLY=true                      # Only SELECT allowed
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false  # No data modifications
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
+```
+
+**📊 Data Analysis Mode:**
+
+```bash
+SQL_SERVER_READ_ONLY=false                     # Enable write operations
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true   # Allow data modifications
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # Block schema changes
+```
+
+**🛠️ Full Development Mode (Use with Caution):**
+
+```bash
+SQL_SERVER_READ_ONLY=false                     # Enable write operations
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true   # Allow data modifications
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=true          # Allow schema changes
+```
+
+#### Security Status Monitoring
+
+The MCP server displays security status at startup:
+
+```bash
+# Maximum Security (Default)
+Security: 🔒 SECURE (RO, DML-, DDL-)
+
+# Unsafe Configuration
+Security: ⚠️ UNSAFE (RW, DML+, DDL+)
+WARNING: Read-write mode, DML allowed, DDL allowed - consider stricter settings for production
+```
+
 ## Warp Integration
 
 **⚠️ CRITICAL**: MCP servers run in isolated environments and do NOT
@@ -155,6 +212,29 @@ through Warp's MCP configuration.
 ### Required MCP Configuration
 
 In Warp's MCP settings, you must provide ALL environment variables:
+
+#### 🔒 Production Configuration (Maximum Security - Recommended)
+
+```json
+{
+  "SQL_SERVER_HOST": "localhost",
+  "SQL_SERVER_PORT": "1433",
+  "SQL_SERVER_DATABASE": "master",
+  "SQL_SERVER_USER": "your_username",
+  "SQL_SERVER_PASSWORD": "your_password",
+  "SQL_SERVER_ENCRYPT": "true",
+  "SQL_SERVER_TRUST_CERT": "false",
+  "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
+  "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
+  "SQL_SERVER_MAX_RETRIES": "3",
+  "SQL_SERVER_RETRY_DELAY_MS": "1000",
+  "SQL_SERVER_READ_ONLY": "true",
+  "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
+  "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false"
+}
+```
+
+#### 📊 Development Configuration (Data Analysis Mode)
 
 ```json
 {
@@ -168,7 +248,31 @@ In Warp's MCP settings, you must provide ALL environment variables:
   "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
   "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
   "SQL_SERVER_MAX_RETRIES": "3",
-  "SQL_SERVER_RETRY_DELAY_MS": "1000"
+  "SQL_SERVER_RETRY_DELAY_MS": "1000",
+  "SQL_SERVER_READ_ONLY": "false",
+  "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true",
+  "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false"
+}
+```
+
+#### 🛠️ Full Development Configuration (Use with Caution)
+
+```json
+{
+  "SQL_SERVER_HOST": "localhost",
+  "SQL_SERVER_PORT": "1433",
+  "SQL_SERVER_DATABASE": "master",
+  "SQL_SERVER_USER": "your_username",
+  "SQL_SERVER_PASSWORD": "your_password",
+  "SQL_SERVER_ENCRYPT": "false",
+  "SQL_SERVER_TRUST_CERT": "true",
+  "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
+  "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
+  "SQL_SERVER_MAX_RETRIES": "3",
+  "SQL_SERVER_RETRY_DELAY_MS": "1000",
+  "SQL_SERVER_READ_ONLY": "false",
+  "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true",
+  "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "true"
 }
 ```
 
@@ -595,14 +699,84 @@ For reference, recent version history:
 
 ## Development Notes
 
-### Adding New MCP Tools
+### 🧪 Test-Driven Development (TDD) - CRITICAL PRACTICE
 
-When adding new database operations:
+**🎯 This project follows strict Test-Driven Development practices. ALWAYS write tests first!**
 
-1. Add the tool definition to the `ListToolsRequestSchema` handler
-2. Implement the corresponding method in the `SqlServerMCP` class
-3. Add the case handler in the `CallToolRequestSchema` switch statement
-4. Create comprehensive tests following existing patterns
+#### TDD Workflow for New Features
+
+**❗ MANDATORY PROCESS:**
+
+1. **Write the Test First** (🔴 RED phase)
+
+   ```bash
+   # Create failing tests that describe the desired behavior
+   npm run test:watch  # Keep this running during development
+   ```
+
+2. **Write Minimal Code** (🟢 GREEN phase)
+
+   ```bash
+   # Write just enough code to make the test pass
+   # Don't worry about optimization yet
+   ```
+
+3. **Refactor and Optimize** (🟡 REFACTOR phase)
+
+   ```bash
+   # Improve code quality while keeping tests passing
+   npm run test:coverage  # Verify coverage remains high
+   ```
+
+4. **Security Validation** (🔒 SECURITY phase)
+   ```bash
+   # Test security features for any new functionality
+   # Ensure safety mechanisms can't be bypassed
+   ```
+
+#### TDD Benefits in This Project
+
+- **🔒 Security Assurance**: Tests validate that safety mechanisms can't be bypassed
+- **🛡️ Regression Prevention**: Comprehensive test suite prevents breaking changes
+- **📚 Documentation**: Tests serve as living documentation of expected behavior
+- **🚀 Confidence**: Deploy with confidence knowing all scenarios are tested
+
+### Adding New MCP Tools (TDD Process)
+
+When adding new database operations, **ALWAYS follow TDD**:
+
+1. **Write comprehensive tests first** (following existing test patterns in `test/sqlserver-mcp.test.js`)
+   - Test normal operation
+   - Test error conditions
+   - Test security boundaries
+   - Test edge cases
+
+2. **Add the tool definition** to the `ListToolsRequestSchema` handler
+3. **Implement the corresponding method** in the `SqlServerMCP` class
+4. **Add the case handler** in the `CallToolRequestSchema` switch statement
+5. **Run tests continuously** during development to ensure correctness
+6. **Validate security implications** - ensure new tools respect safety settings
+
+#### Security Testing Requirements
+
+For any new functionality that executes SQL:
+
+```javascript
+// Example: Test security validation for new tool
+describe('new_tool security validation', () => {
+  test('should respect read-only mode', async () => {
+    // Test that tool is blocked in read-only mode if it modifies data
+  });
+
+  test('should respect destructive operations setting', async () => {
+    // Test DML restrictions
+  });
+
+  test('should respect schema changes setting', async () => {
+    // Test DDL restrictions
+  });
+});
+```
 
 ### Database Compatibility
 
