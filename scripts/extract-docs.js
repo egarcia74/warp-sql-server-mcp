@@ -114,7 +114,7 @@ function parseIndividualTool(toolContent) {
     name,
     description,
     parameters: properties,
-    required: required || []
+    required: required
   };
 }
 
