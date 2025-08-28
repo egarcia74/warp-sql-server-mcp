@@ -130,9 +130,11 @@ function generateLandingPageHTML() {
 
     <div class="grid">
         <div class="card">
-            <h3>📖 README</h3>
-            <p>Complete setup guide, installation instructions, and usage examples.</p>
-            <a href="https://github.com/egarcia74/warp-sql-server-mcp#readme">View README →</a>
+            <h3>📚 Documentation</h3>
+            <p>Complete setup guides, installation instructions, and usage examples.</p>
+            <a href="https://github.com/egarcia74/warp-sql-server-mcp#readme">📖 README →</a>
+            <br><br>
+            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/QUICKSTART.md">🚀 Quick Start Guide →</a>
         </div>
 
         <div class="card">
@@ -179,7 +181,6 @@ ${toolListHTML}
                 <li><span class="code">SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS</span> - Allow INSERT/UPDATE/DELETE (default: false)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_SCHEMA_CHANGES</span> - Allow CREATE/DROP/ALTER (default: false)</li>
             </ul>
-            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/QUICKSTART.md">📚 Quick Start Guide →</a>
         </div>
 
         <div class="card">
