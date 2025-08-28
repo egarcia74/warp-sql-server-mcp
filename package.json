@@ -1,7 +1,7 @@
 {
   "name": "warp-sql-server-mcp",
-  "version": "1.2.0",
-  "description": "MCP server for connecting Warp to SQL Server",
+  "version": "1.3.0",
+  "description": "Secure MCP server for connecting Warp to SQL Server with graduated safety levels and comprehensive database operations",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -29,7 +29,11 @@
     "mcp",
     "sql-server",
     "warp",
-    "database"
+    "database",
+    "security",
+    "safety",
+    "read-only",
+    "enterprise"
   ],
   "author": "Eduardo Garcia",
   "license": "MIT",

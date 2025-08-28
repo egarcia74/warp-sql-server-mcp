@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [1.3.0] - 2025-08-28
+
+### Added - Security Features
+
+- **🔒 Three-Tier Graduated Safety System**: Revolutionary security architecture for production database safety
+  - **Read-Only Mode**: `SQL_SERVER_READ_ONLY` (default: `true`) - Restricts to SELECT queries only
+  - **Destructive Operations Control**: `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` (default: `false`) - Controls INSERT/UPDATE/DELETE
+  - **Schema Changes Control**: `SQL_SERVER_ALLOW_SCHEMA_CHANGES` (default: `false`) - Controls CREATE/DROP/ALTER
+  - **Secure by Default**: Maximum security out-of-the-box with explicit opt-in for dangerous operations
+  - **Comprehensive Query Validation**: Advanced regex-based SQL parsing to enforce security policies
+  - **Clear Security Feedback**: Detailed error messages explaining why operations are blocked
+  - **Runtime Security Status**: Every response includes current safety configuration for transparency
+
+- **🛡️ Production Security Features**
+  - **Startup Security Summary**: Visual security status display in MCP logs with emoji indicators
+  - **Security Level Indicators**: `🔒 SECURE` / `⚠️ UNSAFE` status with detailed breakdown (RO/RW, DML±, DDL±)
+  - **Configuration Validation**: Automatic detection and warning of unsafe production configurations
+  - **Audit Trail**: Security decisions logged for compliance and troubleshooting
+  - **Comprehensive Documentation**: Dedicated `SECURITY.md` with threat model and deployment guidelines
+
+- **📋 Configuration Management**
+  - **Enhanced .env.example**: Comprehensive security configuration examples with detailed explanations
+  - **Environment-Specific Templates**: Production, staging, and development configuration patterns
+  - **Security Checklist**: Production deployment validation checklist
+  - **Migration Guide**: Clear upgrade path for existing installations
+
+### Added - Documentation & Tooling
 
 - **Enhanced Auto-Generated Documentation System**: Complete overhaul of documentation generation
   - `scripts/extract-docs.js` - Automatically parses MCP tool definitions from source code
@@ -20,6 +46,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Professional styling with table of contents, navigation, and responsive design
   - Automatic rebuilds on every push via GitHub Actions integration
 
+### Security
+
+- **🚨 BREAKING CHANGE**: Default behavior now prioritizes security over functionality
+  - **New installations default to read-only mode** - only SELECT queries allowed
+  - **Existing configurations may need updates** - see migration guide in SECURITY.md
+  - **Explicit configuration required** for write operations in production
+- **Comprehensive Security Testing**: 100% coverage of security validation logic
+- **Threat Model Documentation**: Detailed analysis of mitigated and unmitigated threats
+- **Security Response Process**: Formal vulnerability disclosure and response procedures
+
 ### Enhanced Documentation
 
 - Enhanced online documentation site with auto-generated content
@@ -27,6 +63,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dynamic tool counting and version display throughout documentation
 - Professional documentation layout with improved navigation and styling
 - Added comprehensive documentation section to README.md explaining the auto-generation system
+
+### Added - User Experience
+
+- **🚀 Quick Start Guide**: New QUICKSTART.md providing 5-minute setup walkthrough
+  - Step-by-step installation and configuration
+  - Security defaults explanation
+  - Basic testing and troubleshooting
+  - Cross-references to detailed documentation
+- **📚 Enhanced User Onboarding**: Quick Start references added throughout documentation
+  - Prominent Quick Start links in README.md, SECURITY.md, CONTRIBUTING.md, WARP.md
+  - Improved navigation for new users
+  - Better documentation discoverability
 
 ## [1.2.0] - 2025-08-28
 
@@ -70,4 +118,5 @@ removed for security reasons.
 - Complete release process guide in WARP.md
 - Updated test documentation with current coverage and test counts
 
+[1.3.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.2.0
