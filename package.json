@@ -1,0 +1,30 @@
+{
+  "name": "warp-sql-server-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for connecting Warp to SQL Server",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "mcp",
+    "sql-server",
+    "warp",
+    "database"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0",
+    "dotenv": "^17.2.1",
+    "mssql": "^10.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
