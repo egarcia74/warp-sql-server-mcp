@@ -28,16 +28,19 @@ A Model Context Protocol (MCP) server that provides Warp with the ability to con
 
 1. Clone or download this repository
 2. Install dependencies:
+
    ```bash
    npm install
    ```
 
 3. Copy the environment template and configure your connection:
+
    ```bash
    cp .env.example .env
    ```
 
 4. Edit `.env` with your SQL Server connection details:
+
    ```bash
    # For SQL Server Authentication
    SQL_SERVER_HOST=localhost
@@ -77,22 +80,26 @@ A Model Context Protocol (MCP) server that provides Warp with the ability to con
 Once configured, you can use the MCP tools in Warp:
 
 ### List all databases
-```
+
+```text
 Please list all databases on the SQL Server
 ```
 
 ### Execute a query
-```
+
+```text
 Execute this SQL query: SELECT TOP 10 * FROM Users ORDER BY CreatedDate DESC
 ```
 
 ### Describe a table structure
-```
+
+```text
 Can you describe the structure of the Orders table?
 ```
 
 ### Get sample data with filtering
-```
+
+```text
 Show me 50 rows from the Products table where Price > 100
 ```
 
@@ -106,14 +113,18 @@ Show me 50 rows from the Products table where Price > 100
 ## Authentication Methods
 
 ### SQL Server Authentication
+
 Set these environment variables:
+
 ```bash
 SQL_SERVER_USER=your_username
 SQL_SERVER_PASSWORD=your_password
 ```
 
 ### Windows Authentication
+
 Leave `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD` empty. Optionally set:
+
 ```bash
 SQL_SERVER_DOMAIN=your_domain
 ```
@@ -121,6 +132,7 @@ SQL_SERVER_DOMAIN=your_domain
 ## Error Handling
 
 The MCP server includes comprehensive error handling for:
+
 - Connection failures
 - Authentication issues
 - SQL syntax errors
@@ -132,11 +144,13 @@ All errors are returned as structured MCP error responses with descriptive messa
 ## Development
 
 To run in development mode with auto-restart:
+
 ```bash
 npm run dev
 ```
 
 To test the server standalone:
+
 ```bash
 npm start
 ```
@@ -144,16 +158,19 @@ npm start
 ## Troubleshooting
 
 ### Connection Issues
+
 - Verify SQL Server is running and accepting connections on port 1433
 - Check firewall settings
 - Ensure TCP/IP protocol is enabled in SQL Server Configuration Manager
 - Verify authentication credentials
 
 ### Permission Issues
+
 - Ensure the connecting user has appropriate database permissions
 - For Windows Authentication, run the process with appropriate user context
 
 ### Network Issues
+
 - Test connectivity using tools like `telnet localhost 1433`
 - Check SQL Server network configuration
 - Verify named pipes vs TCP/IP settings
@@ -170,4 +187,4 @@ npm start
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-Copyright (c) 2025 Eduardo Garcia
+Copyright (c) 2025 Eduardo Garcia-Prieto
