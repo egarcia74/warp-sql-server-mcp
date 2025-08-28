@@ -306,6 +306,241 @@ GitHub Actions workflow validates:
 - Full test suite execution
 - Coverage reporting with Codecov integration
 
+## Release Process
+
+### Overview
+
+This project follows a structured release process with automated quality gates and
+comprehensive documentation. The process ensures consistent, high-quality releases
+with proper versioning, changelog maintenance, and artifact creation.
+
+### Release Types
+
+Follows [Semantic Versioning](https://semver.org/):
+
+- **Patch (x.x.X)**: Bug fixes, documentation updates, minor improvements
+- **Minor (x.X.x)**: New features, dependency updates, significant enhancements
+- **Major (X.x.x)**: Breaking changes, major architectural changes
+
+### Prerequisites
+
+- All development work completed and merged to `main`
+- Working directory clean (no uncommitted changes)
+- GitHub CLI (`gh`) installed and authenticated
+- All tests passing locally
+
+### Step-by-Step Release Process
+
+#### 1. Pre-Release Quality Verification
+
+```bash
+# Run the complete CI pipeline locally
+npm run ci
+```
+
+**Expected Output**: All linting, formatting, markdown checks, and tests should pass.
+
+#### 2. Analyze Changes and Determine Version
+
+Review the `[Unreleased]` section in `CHANGELOG.md` to determine the appropriate version bump:
+
+- **Security updates** (like dependency upgrades): Usually minor or patch
+- **New features**: Minor version bump
+- **Breaking changes**: Major version bump
+- **Bug fixes only**: Patch version bump
+
+#### 3. Update CHANGELOG.md
+
+Move items from `[Unreleased]` section to a new version section:
+
+```markdown
+## [Unreleased]
+
+## [X.Y.Z] - YYYY-MM-DD
+
+### Security
+
+- List security-related changes
+
+### Added
+
+- List new features
+
+### Fixed
+
+- List bug fixes
+
+### Enhanced
+
+- List improvements and enhancements
+```
+
+Update the version links at the bottom:
+
+```markdown
+[X.Y.Z]: https://github.com/egarcia74/warp-sql-server-mcp/compare/vPREV...vX.Y.Z
+```
+
+#### 4. Update package.json Version
+
+```json
+{
+  "version": "X.Y.Z"
+}
+```
+
+#### 5. Commit Version Changes
+
+```bash
+git add CHANGELOG.md package.json
+git commit -m "chore: bump version to vX.Y.Z
+
+- Update CHANGELOG.md with vX.Y.Z release notes
+- Update package.json version to X.Y.Z
+- Include summary of key changes"
+git push origin main
+```
+
+**Note**: Pre-commit hooks will run automatically and must pass.
+
+#### 6. Create and Push Git Tag
+
+```bash
+git tag -a vX.Y.Z -m "Release vX.Y.Z
+
+🔒 Security Updates:
+- List security changes
+
+✨ New Features:
+- List new features
+
+🐛 Bug Fixes:
+- List bug fixes
+
+📈 Enhancements:
+- List enhancements"
+
+git push origin vX.Y.Z
+```
+
+#### 7. Create GitHub Release
+
+```bash
+gh release create vX.Y.Z --title "Release vX.Y.Z" --notes "## vX.Y.Z - YYYY-MM-DD
+
+### 🔒 Security Updates
+- List security changes
+
+### ✨ Added Features
+- List new features
+
+### 🐛 Bug Fixes
+- List bug fixes
+
+### 📈 Enhancements
+- List enhancements
+
+**Full Changelog**: https://github.com/egarcia74/warp-sql-server-mcp/compare/vPREV...vX.Y.Z"
+```
+
+#### 8. Verify Release
+
+Confirm the release was created successfully:
+
+```bash
+gh release view vX.Y.Z
+git tag --list | grep vX.Y.Z
+```
+
+### Alternative: Automated Release Workflow
+
+The project includes a GitHub Actions workflow for releases that can be manually triggered:
+
+1. Go to:
+   `https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/release.yml`
+2. Click "Run workflow"
+3. Select release type: `auto`, `patch`, `minor`, `major`, or `prerelease`
+4. Optionally enable "Dry run" to preview without creating the release
+5. Click "Run workflow"
+
+**Note**: The automated workflow is currently set to `workflow_dispatch`
+(manual trigger) to provide better control over releases.
+
+### Post-Release Tasks
+
+1. **Verify Artifacts**: Check that the GitHub release contains correct information
+2. **Update Documentation**: Ensure any version-specific documentation is updated
+3. **Notify Users**: Consider updating README badges or notifying users of significant changes
+4. **Monitor**: Watch for any issues reported after the release
+
+### Quality Gates
+
+The release process includes several automated quality gates:
+
+- **Pre-commit hooks**: ESLint, Prettier, Markdownlint, full test suite
+- **Pre-push hooks**: All pre-commit checks plus coverage reporting
+- **CI/CD Pipeline**: Multi-Node.js version testing, security audits, integration tests
+- **Release Workflow**: Automated changelog generation and artifact creation
+
+### Best Practices
+
+1. **Always test locally** before releasing
+2. **Keep CHANGELOG.md up to date** throughout development
+3. **Use conventional commit messages** to help with automated changelog generation
+4. **Version dependencies carefully** - security updates should be released promptly
+5. **Document breaking changes clearly** in both changelog and release notes
+6. **Tag releases immediately** after version commits to maintain consistency
+7. **Verify release artifacts** before announcing to users
+
+### Troubleshooting
+
+#### Pre-commit Hooks Fail
+
+```bash
+# Fix linting issues
+npm run lint:fix
+
+# Fix formatting issues
+npm run format
+
+# Fix markdown issues
+npm run markdown:fix
+
+# Re-run tests
+npm test
+
+# Then retry the commit
+git commit -m "Your message"
+```
+
+#### GitHub CLI Authentication
+
+```bash
+# Check authentication status
+gh auth status
+
+# Login if needed
+gh auth login
+```
+
+#### Release Workflow Issues
+
+If the automated release workflow fails:
+
+1. Check the GitHub Actions logs for specific errors
+2. Ensure all environment variables are properly configured
+3. Verify branch protection rules don't conflict with the workflow
+4. Fall back to manual release creation using GitHub CLI
+
+### Version History Reference
+
+For reference, recent version history:
+
+- **v1.2.0** (2025-08-28): Security updates, new features, bug fixes, enhancements
+- **v1.1.1** (2025-08-28): Release workflow fixes, OSSF scorecard adjustments
+- **v1.1.0** (2025-08-28): Enhanced release automation, workflow improvements
+- **v1.0.0** (2025-08-28): Initial release with complete MCP server implementation
+
 ## Development Notes
 
 ### Adding New MCP Tools
