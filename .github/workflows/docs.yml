@@ -130,25 +130,38 @@ jobs:
           retention-days: 30
 
   update-toc:
-    name: Update Table of Contents
+    name: Check Table of Contents
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Table of Contents
-        uses: technote-space/toc-generator@v4
+      - name: Check if TOC needs update
+        run: |
+          echo "## 📑 Table of Contents Check" > toc-check-report.md
+          echo "" >> toc-check-report.md
+          
+          # Simple check for basic README structure
+          if grep -q "## Table of Contents" README.md; then
+            echo "✅ Table of Contents section exists" >> toc-check-report.md
+          else
+            echo "ℹ️ No Table of Contents found - could be added for better navigation" >> toc-check-report.md
+          fi
+          
+          # Check for proper heading structure
+          heading_count=$(grep -c "^#" README.md || true)
+          echo "📊 Found $heading_count headings in README.md" >> toc-check-report.md
+          
+          if [ $heading_count -gt 5 ]; then
+            echo "💡 With $heading_count headings, a Table of Contents would improve navigation" >> toc-check-report.md
+          fi
+
+      - name: Upload TOC check report
+        uses: actions/upload-artifact@v4
         with:
-          TARGET_FILES: 'README.md'
-          TOC_TITLE: '## Table of Contents'
-          FOLDING: false
-          MAX_HEADER_LEVEL: 3
-          COMMIT_MESSAGE: 'docs: update table of contents'
-          COMMIT_NAME: 'github-actions[bot]'
-          COMMIT_EMAIL: 'github-actions[bot]@users.noreply.github.com'
+          name: toc-check-report
+          path: toc-check-report.md
+          retention-days: 30
 
   check-outdated-docs:
     name: Check for Outdated Documentation
@@ -282,13 +295,13 @@ jobs:
           "
           
           cat api-content.md >> API.md
-          
-          # Commit if there are changes
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add API.md
-          git diff --staged --quiet || git commit -m "docs: update API documentation [skip ci]"
-          git push origin main || true
+
+      - name: Upload API docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-docs
+          path: API.md
+          retention-days: 30
 
   spell-check:
     name: Spell Check Documentation
