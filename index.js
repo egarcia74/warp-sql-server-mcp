@@ -19,7 +19,7 @@ class SqlServerMCP {
     this.server = new Server(
       {
         name: 'warp-sql-server-mcp',
-        version: '1.0.0'
+        version: '1.3.0'
       },
       {
         capabilities: {
