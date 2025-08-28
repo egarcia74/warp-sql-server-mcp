@@ -1,0 +1,87 @@
+#!/bin/bash
+# pre-commit: Run linting and formatting checks before commit
+set -euo pipefail
+
+echo "[pre-commit] Running pre-commit checks..."
+
+# Check if we're in a Node.js project
+if [ ! -f "package.json" ]; then
+  echo "[pre-commit] No package.json found, skipping Node.js checks"
+  exit 0
+fi
+
+# Run ESLint on staged JavaScript files
+js_files=""
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+  js_files="$js_files '$file'"
+done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|mjs|cjs)$' || true)
+
+if [ -n "$js_files" ]; then
+  if command -v npx >/dev/null 2>&1; then
+    echo "[pre-commit] Running ESLint on staged JavaScript files..."
+    # shellcheck disable=SC2086
+    if ! eval npx eslint $js_files; then
+      echo "[pre-commit] ESLint failed. Please fix the issues above."
+      exit 1
+    fi
+    echo "[pre-commit] ESLint passed."
+  else
+    echo "[pre-commit] npx not found, skipping ESLint."
+  fi
+fi
+
+# Run Prettier check on staged files
+staged_files=""
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+  staged_files="$staged_files '$file'"
+done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|mjs|cjs|json|md)$' || true)
+
+if [ -n "$staged_files" ]; then
+  if command -v npx >/dev/null 2>&1; then
+    echo "[pre-commit] Running Prettier check on staged files..."
+    # shellcheck disable=SC2086
+    if ! eval npx prettier --check $staged_files; then
+      echo "[pre-commit] Prettier check failed. Run 'npm run format' to fix formatting issues."
+      exit 1
+    fi
+    echo "[pre-commit] Prettier check passed."
+  else
+    echo "[pre-commit] npx not found, skipping Prettier check."
+  fi
+fi
+
+# Lint markdown files with markdownlint-cli2
+md_files=""
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+  md_files="$md_files '$file'"
+done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.md$' || true)
+
+if [ -n "$md_files" ]; then
+  if command -v npx >/dev/null 2>&1; then
+    echo "[pre-commit] Running markdownlint on staged markdown files..."
+    # shellcheck disable=SC2086
+    if ! eval npx markdownlint-cli2 $md_files; then
+      echo "[pre-commit] markdownlint failed."
+      exit 1
+    fi
+    echo "[pre-commit] Markdown lint passed."
+  else
+    echo "[pre-commit] npx not found, skipping markdown lint."
+  fi
+fi
+
+# Run tests in pre-commit if they are fast (skip if they take too long)
+if [ -f "package.json" ] && grep -q '"test"' package.json; then
+  echo "[pre-commit] Running quick test suite..."
+  if ! npm run test 2>/dev/null; then
+    echo "[pre-commit] Tests failed. Please fix failing tests before committing."
+    exit 1
+  fi
+  echo "[pre-commit] Tests passed."
+fi
+
+echo "[pre-commit] All checks passed!"
+exit 0

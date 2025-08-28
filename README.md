@@ -219,20 +219,20 @@ For other MCP-compatible systems (Claude Desktop, etc.), use a similar JSON stru
 
 ### Environment Variables Reference
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SQL_SERVER_HOST` | Yes | `localhost` | SQL Server hostname |
-| `SQL_SERVER_PORT` | Yes | `1433` | SQL Server port |
-| `SQL_SERVER_DATABASE` | Yes | `master` | Initial database |
-| `SQL_SERVER_USER` | For SQL Auth | - | Database username |
-| `SQL_SERVER_PASSWORD` | For SQL Auth | - | Database password |
-| `SQL_SERVER_DOMAIN` | For Windows Auth | - | Windows domain |
-| `SQL_SERVER_ENCRYPT` | No | `false` | Enable SSL/TLS |
-| `SQL_SERVER_TRUST_CERT` | No | `true` | Trust server certificate |
-| `SQL_SERVER_CONNECT_TIMEOUT_MS` | No | `3000` | Connection timeout |
-| `SQL_SERVER_REQUEST_TIMEOUT_MS` | No | `10000` | Query timeout |
-| `SQL_SERVER_MAX_RETRIES` | No | `1` | Connection retry attempts |
-| `SQL_SERVER_RETRY_DELAY_MS` | No | `200` | Retry delay |
+| Variable                        | Required         | Default     | Description               |
+| ------------------------------- | ---------------- | ----------- | ------------------------- |
+| `SQL_SERVER_HOST`               | Yes              | `localhost` | SQL Server hostname       |
+| `SQL_SERVER_PORT`               | Yes              | `1433`      | SQL Server port           |
+| `SQL_SERVER_DATABASE`           | Yes              | `master`    | Initial database          |
+| `SQL_SERVER_USER`               | For SQL Auth     | -           | Database username         |
+| `SQL_SERVER_PASSWORD`           | For SQL Auth     | -           | Database password         |
+| `SQL_SERVER_DOMAIN`             | For Windows Auth | -           | Windows domain            |
+| `SQL_SERVER_ENCRYPT`            | No               | `false`     | Enable SSL/TLS            |
+| `SQL_SERVER_TRUST_CERT`         | No               | `true`      | Trust server certificate  |
+| `SQL_SERVER_CONNECT_TIMEOUT_MS` | No               | `3000`      | Connection timeout        |
+| `SQL_SERVER_REQUEST_TIMEOUT_MS` | No               | `10000`     | Query timeout             |
+| `SQL_SERVER_MAX_RETRIES`        | No               | `1`         | Connection retry attempts |
+| `SQL_SERVER_RETRY_DELAY_MS`     | No               | `200`       | Retry delay               |
 
 ### Troubleshooting Configuration
 

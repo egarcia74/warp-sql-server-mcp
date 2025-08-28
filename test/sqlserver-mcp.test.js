@@ -4,10 +4,10 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 vi.mock('mssql', () => ({
   default: {
     connect: vi.fn(),
-    ConnectionPool: vi.fn(),
+    ConnectionPool: vi.fn()
   },
   connect: vi.fn(),
-  ConnectionPool: vi.fn(),
+  ConnectionPool: vi.fn()
 }));
 
 // Mock environment variables
@@ -16,12 +16,12 @@ const originalEnv = process.env;
 // Mock objects for testing
 const mockRequest = {
   query: vi.fn(),
-  timeout: 30000,
+  timeout: 30000
 };
 
 const mockPool = {
   request: vi.fn(() => mockRequest),
-  connected: true,
+  connected: true
 };
 
 // Mock test data
@@ -117,7 +117,7 @@ describe('SqlServerMCP', () => {
     // Create an actual SqlServerMCP instance for testing
     // Mock the server setup to prevent actual MCP server initialization
     vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-    
+
     mcpServer = new SqlServerMCP();
     mcpServer.pool = null; // Reset pool
   });
@@ -173,9 +173,9 @@ describe('SqlServerMCP', () => {
 
     test('should reuse existing connection if already connected', async () => {
       mcpServer.pool = { connected: true };
-      
+
       const result = await mcpServer.connectToDatabase();
-      
+
       expect(sql.connect).not.toHaveBeenCalled();
       expect(result).toBe(mcpServer.pool);
     });
@@ -246,13 +246,9 @@ describe('SqlServerMCP', () => {
 
       const result = await mcpServer.listDatabases();
 
-      expect(mockRequest.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT')
-      );
-      expect(mockRequest.query).toHaveBeenCalledWith(
-        expect.stringContaining('sys.databases')
-      );
-      
+      expect(mockRequest.query).toHaveBeenCalledWith(expect.stringContaining('SELECT'));
+      expect(mockRequest.query).toHaveBeenCalledWith(expect.stringContaining('sys.databases'));
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData).toEqual(testData.sampleDatabases);
     });
@@ -285,7 +281,7 @@ describe('SqlServerMCP', () => {
       expect(mockRequest.query).toHaveBeenCalledWith(
         expect.stringContaining("WHERE t.TABLE_SCHEMA = 'dbo'")
       );
-      
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData).toEqual(testData.sampleTables);
     });
@@ -317,7 +313,7 @@ describe('SqlServerMCP', () => {
       expect(mockRequest.query).toHaveBeenCalledWith(
         expect.stringContaining("WHERE c.TABLE_NAME = 'Users'")
       );
-      
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData).toEqual(testData.sampleTableSchema);
     });
@@ -329,12 +325,8 @@ describe('SqlServerMCP', () => {
 
       await mcpServer.describeTable('Users');
 
-      expect(mockRequest.query).toHaveBeenCalledWith(
-        expect.stringContaining('PRIMARY KEY')
-      );
-      expect(mockRequest.query).toHaveBeenCalledWith(
-        expect.stringContaining('is_primary_key')
-      );
+      expect(mockRequest.query).toHaveBeenCalledWith(expect.stringContaining('PRIMARY KEY'));
+      expect(mockRequest.query).toHaveBeenCalledWith(expect.stringContaining('is_primary_key'));
     });
   });
 
@@ -350,10 +342,8 @@ describe('SqlServerMCP', () => {
 
       const result = await mcpServer.getTableData('Users');
 
-      expect(mockRequest.query).toHaveBeenCalledWith(
-        'SELECT TOP 100 * FROM [dbo].[Users]'
-      );
-      
+      expect(mockRequest.query).toHaveBeenCalledWith('SELECT TOP 100 * FROM [dbo].[Users]');
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData.table).toBe('dbo.Users');
       expect(responseData.rowCount).toBe(3);
@@ -373,7 +363,13 @@ describe('SqlServerMCP', () => {
     test('should handle complex WHERE clauses with AND conditions', async () => {
       mockRequest.query.mockResolvedValue({ recordset: [] });
 
-      await mcpServer.getTableData('Users', null, 'dbo', 50, "status = 'active' AND created_date > '2023-01-01'");
+      await mcpServer.getTableData(
+        'Users',
+        null,
+        'dbo',
+        50,
+        "status = 'active' AND created_date > '2023-01-01'"
+      );
 
       expect(mockRequest.query).toHaveBeenCalledWith(
         "SELECT TOP 50 * FROM [dbo].[Users] WHERE status = 'active' AND created_date > '2023-01-01'"
@@ -403,7 +399,13 @@ describe('SqlServerMCP', () => {
     test('should handle OR conditions in WHERE clause', async () => {
       mockRequest.query.mockResolvedValue({ recordset: [] });
 
-      await mcpServer.getTableData('Users', null, 'dbo', 100, "status = 'active' OR status = 'pending'");
+      await mcpServer.getTableData(
+        'Users',
+        null,
+        'dbo',
+        100,
+        "status = 'active' OR status = 'pending'"
+      );
 
       expect(mockRequest.query).toHaveBeenCalledWith(
         "SELECT TOP 100 * FROM [dbo].[Users] WHERE status = 'active' OR status = 'pending'"
@@ -433,7 +435,13 @@ describe('SqlServerMCP', () => {
     test('should handle IN clause filtering', async () => {
       mockRequest.query.mockResolvedValue({ recordset: [] });
 
-      await mcpServer.getTableData('Users', null, 'dbo', 100, "status IN ('active', 'pending', 'verified')");
+      await mcpServer.getTableData(
+        'Users',
+        null,
+        'dbo',
+        100,
+        "status IN ('active', 'pending', 'verified')"
+      );
 
       expect(mockRequest.query).toHaveBeenCalledWith(
         "SELECT TOP 100 * FROM [dbo].[Users] WHERE status IN ('active', 'pending', 'verified')"
@@ -491,7 +499,7 @@ describe('SqlServerMCP', () => {
       expect(mockRequest.query).toHaveBeenCalledWith('SET SHOWPLAN_ALL ON');
       expect(mockRequest.query).toHaveBeenCalledWith('SELECT * FROM Users');
       expect(mockRequest.query).toHaveBeenCalledWith('SET SHOWPLAN_ALL OFF');
-      
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData.query).toBe('SELECT * FROM Users');
       expect(responseData.execution_plan).toEqual(mockPlan);
@@ -524,7 +532,7 @@ describe('SqlServerMCP', () => {
       expect(mockRequest.query).toHaveBeenCalledWith('SET STATISTICS IO ON');
       expect(mockRequest.query).toHaveBeenCalledWith('SET STATISTICS TIME ON');
       expect(mockRequest.query).toHaveBeenCalledWith('SET SHOWPLAN_ALL ON');
-      
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData.plan_type).toBe('actual');
       expect(responseData.execution_plan).toEqual(mockPlan);
@@ -583,13 +591,11 @@ describe('SqlServerMCP', () => {
 
       const result = await mcpServer.listForeignKeys();
 
-      expect(mockRequest.query).toHaveBeenCalledWith(
-        expect.stringContaining('sys.foreign_keys')
-      );
+      expect(mockRequest.query).toHaveBeenCalledWith(expect.stringContaining('sys.foreign_keys'));
       expect(mockRequest.query).toHaveBeenCalledWith(
         expect.stringContaining("WHERE s.name = 'dbo'")
       );
-      
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData.schema).toBe('dbo');
       expect(responseData.foreign_keys).toEqual(mockForeignKeys);
@@ -632,10 +638,8 @@ describe('SqlServerMCP', () => {
 
       const result = await mcpServer.exportTableCsv('Users');
 
-      expect(mockRequest.query).toHaveBeenCalledWith(
-        'SELECT * FROM [dbo].[Users]'
-      );
-      
+      expect(mockRequest.query).toHaveBeenCalledWith('SELECT * FROM [dbo].[Users]');
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData.table).toBe('dbo.Users');
       expect(responseData.format).toBe('csv');
@@ -651,9 +655,7 @@ describe('SqlServerMCP', () => {
 
       await mcpServer.exportTableCsv('Users', null, 'dbo', 50);
 
-      expect(mockRequest.query).toHaveBeenCalledWith(
-        'SELECT TOP 50 * FROM [dbo].[Users]'
-      );
+      expect(mockRequest.query).toHaveBeenCalledWith('SELECT TOP 50 * FROM [dbo].[Users]');
     });
 
     test('should apply WHERE clause when specified', async () => {
@@ -677,7 +679,7 @@ describe('SqlServerMCP', () => {
       });
 
       const result = await mcpServer.exportTableCsv('TestTable');
-      
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData.csv_data).toContain('"Text with, comma"');
       expect(responseData.csv_data).toContain('"Text with ""quotes"""');
@@ -691,7 +693,7 @@ describe('SqlServerMCP', () => {
       });
 
       const result = await mcpServer.exportTableCsv('EmptyTable');
-      
+
       const responseData = JSON.parse(result.content[0].text);
       expect(responseData.row_count).toBe(0);
       expect(responseData.csv_data).toBe('');
@@ -707,17 +709,21 @@ describe('SqlServerMCP', () => {
 
     describe('CSV Export Filtering Tests', () => {
       test('should handle simple WHERE clause in CSV export', async () => {
-        const mockData = [
-          { id: 5, name: 'Active User', status: 'active' }
-        ];
+        const mockData = [{ id: 5, name: 'Active User', status: 'active' }];
         mockRequest.query.mockResolvedValue({ recordset: mockData });
 
-        const result = await mcpServer.exportTableCsv('Users', null, 'dbo', null, "status = 'active'");
+        const result = await mcpServer.exportTableCsv(
+          'Users',
+          null,
+          'dbo',
+          null,
+          "status = 'active'"
+        );
 
         expect(mockRequest.query).toHaveBeenCalledWith(
           "SELECT * FROM [dbo].[Users] WHERE status = 'active'"
         );
-        
+
         const responseData = JSON.parse(result.content[0].text);
         expect(responseData.row_count).toBe(1);
         expect(responseData.csv_data).toContain('5,Active User,active');
@@ -738,9 +744,7 @@ describe('SqlServerMCP', () => {
       });
 
       test('should handle LIKE patterns in CSV export WHERE clause', async () => {
-        const mockData = [
-          { id: 1, name: 'John Doe', email: 'john@example.com' }
-        ];
+        const mockData = [{ id: 1, name: 'John Doe', email: 'john@example.com' }];
         mockRequest.query.mockResolvedValue({ recordset: mockData });
 
         await mcpServer.exportTableCsv('Users', null, 'dbo', null, "email LIKE '%@example.com'");
@@ -751,9 +755,7 @@ describe('SqlServerMCP', () => {
       });
 
       test('should handle NULL checks in CSV export WHERE clause', async () => {
-        const mockData = [
-          { id: 1, name: 'Active User', deleted_at: null }
-        ];
+        const mockData = [{ id: 1, name: 'Active User', deleted_at: null }];
         mockRequest.query.mockResolvedValue({ recordset: mockData });
 
         await mcpServer.exportTableCsv('Users', null, 'dbo', null, 'deleted_at IS NULL');
@@ -764,12 +766,16 @@ describe('SqlServerMCP', () => {
       });
 
       test('should handle date range filtering in CSV export', async () => {
-        const mockData = [
-          { id: 1, name: 'Recent User', created_date: '2023-06-15' }
-        ];
+        const mockData = [{ id: 1, name: 'Recent User', created_date: '2023-06-15' }];
         mockRequest.query.mockResolvedValue({ recordset: mockData });
 
-        await mcpServer.exportTableCsv('Users', null, 'dbo', null, "created_date BETWEEN '2023-01-01' AND '2023-12-31'");
+        await mcpServer.exportTableCsv(
+          'Users',
+          null,
+          'dbo',
+          null,
+          "created_date BETWEEN '2023-01-01' AND '2023-12-31'"
+        );
 
         expect(mockRequest.query).toHaveBeenCalledWith(
           "SELECT * FROM [dbo].[Users] WHERE created_date BETWEEN '2023-01-01' AND '2023-12-31'"
@@ -783,7 +789,13 @@ describe('SqlServerMCP', () => {
         ];
         mockRequest.query.mockResolvedValue({ recordset: mockData });
 
-        await mcpServer.exportTableCsv('Users', null, 'dbo', null, "role IN ('admin', 'manager', 'supervisor')");
+        await mcpServer.exportTableCsv(
+          'Users',
+          null,
+          'dbo',
+          null,
+          "role IN ('admin', 'manager', 'supervisor')"
+        );
 
         expect(mockRequest.query).toHaveBeenCalledWith(
           "SELECT * FROM [dbo].[Users] WHERE role IN ('admin', 'manager', 'supervisor')"
@@ -802,8 +814,14 @@ describe('SqlServerMCP', () => {
         expect(mockRequest.query).toHaveBeenCalledWith(
           "SELECT TOP 50 * FROM [dbo].[Users] WHERE status = 'active'"
         );
-        
-        const result = await mcpServer.exportTableCsv('Users', null, 'dbo', 50, "status = 'active'");
+
+        const result = await mcpServer.exportTableCsv(
+          'Users',
+          null,
+          'dbo',
+          50,
+          "status = 'active'"
+        );
         const responseData = JSON.parse(result.content[0].text);
         expect(responseData.row_count).toBe(2);
       });
@@ -811,12 +829,18 @@ describe('SqlServerMCP', () => {
       test('should handle empty results from filtered CSV export', async () => {
         mockRequest.query.mockResolvedValue({ recordset: [] });
 
-        const result = await mcpServer.exportTableCsv('Users', null, 'dbo', null, "status = 'nonexistent'");
+        const result = await mcpServer.exportTableCsv(
+          'Users',
+          null,
+          'dbo',
+          null,
+          "status = 'nonexistent'"
+        );
 
         expect(mockRequest.query).toHaveBeenCalledWith(
           "SELECT * FROM [dbo].[Users] WHERE status = 'nonexistent'"
         );
-        
+
         const responseData = JSON.parse(result.content[0].text);
         expect(responseData.row_count).toBe(0);
         expect(responseData.csv_data).toBe('');

@@ -208,7 +208,7 @@ When adding new database operations:
 
 - Designed for SQL Server 2016 and later
 - Uses standard INFORMATION_SCHEMA views for maximum compatibility
-- System views (sys.*) used only where necessary for advanced features
+- System views (sys.\*) used only where necessary for advanced features
 
 ### Security Considerations
 
