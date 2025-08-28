@@ -9,6 +9,7 @@
 
 [![Performance Monitoring](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/performance.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/performance.yml)
 [![Documentation](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/docs.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/docs.yml)
+[![GitHub Pages](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/pages.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/pages.yml)
 [![Auto Label](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/auto-label.yml/badge.svg)](https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/auto-label.yml)
 
 ## Project Info
@@ -405,7 +406,7 @@ The test suite covers:
 - **Advanced features**: Query analysis, foreign keys, CSV export with filtering
 - **WHERE clause filtering**: 16 comprehensive filtering tests preventing parameter bugs
 
-### Documentation
+### Test Documentation
 
 For complete test documentation including:
 
@@ -415,6 +416,70 @@ For complete test documentation including:
 - Coverage analysis and debugging guides
 
 **👉 See [test/README.md](test/README.md)**
+
+## Documentation
+
+This project features an **enhanced auto-generated documentation system** that ensures
+documentation never goes out of sync with the actual code.
+
+### 📖 Online Documentation
+
+- **[Main Documentation Site](https://egarcia74.github.io/warp-sql-server-mcp/)** -
+  Overview, setup guides, and quick reference
+- **[Complete API Reference](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** -
+  Detailed documentation for all 8 MCP tools with parameters and examples
+- **[Test Coverage Reports](https://egarcia74.github.io/warp-sql-server-mcp/coverage/)** -
+  Live test coverage analysis
+
+### 🔄 Auto-Generated Documentation
+
+Our documentation system automatically:
+
+- **Extracts tool definitions** directly from the source code (`index.js`)
+- **Generates parameter tables** with types, descriptions, and requirements
+- **Creates usage examples** for basic and advanced scenarios
+- **Updates version numbers** and tool counts dynamically
+- **Maintains consistency** between code and documentation
+
+### 📝 Documentation Scripts
+
+The documentation generation happens through three specialized scripts:
+
+```bash
+# Extract MCP tool information from source code
+node scripts/extract-docs.js
+
+# Generate detailed API reference page
+node scripts/generate-tools-html.js
+
+# Generate landing page with dynamic content
+node scripts/generate-landing-page.js
+```
+
+### 🚀 Automatic Updates
+
+The documentation automatically rebuilds on every push to the `main` branch via GitHub Actions, ensuring:
+
+- **Always current**: Documentation reflects the latest code changes
+- **No manual maintenance**: Tool lists and parameters update automatically
+- **Professional presentation**: Clean, navigable documentation site
+- **Comprehensive coverage**: Full API reference with examples
+
+### 🛠️ For Contributors
+
+When adding new MCP tools or modifying existing ones:
+
+1. **Update the code** in `index.js` with proper tool definitions
+2. **Documentation updates automatically** - no manual changes needed!
+3. **Verify locally** by running the documentation scripts
+4. **Push changes** - GitHub Actions handles the rest
+
+The system parses your MCP tool definitions and extracts:
+
+- Tool names and descriptions
+- Parameter schemas with types
+- Required vs optional parameters
+- Auto-generated usage examples
 
 ## Troubleshooting
 

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Enhanced Auto-Generated Documentation System**: Complete overhaul of documentation generation
+  - `scripts/extract-docs.js` - Automatically parses MCP tool definitions from source code
+  - `scripts/generate-tools-html.js` - Creates comprehensive API reference with parameters and examples
+  - `scripts/generate-landing-page.js` - Generates dynamic landing page with current tool counts
+  - Documentation now auto-extracts all 8 MCP tools with full parameter details and usage examples
+  - Landing page displays dynamic version numbers and tool counts from actual code
+  - Detailed API reference page with parameter tables, required/optional indicators, and code examples
+  - Ensures documentation never goes out of sync with actual code changes
+  - Professional styling with table of contents, navigation, and responsive design
+  - Automatic rebuilds on every push via GitHub Actions integration
+
+### Enhanced Documentation
+
+- Enhanced online documentation site with auto-generated content
+- Complete API reference at `/tools.html` with detailed parameter documentation
+- Dynamic tool counting and version display throughout documentation
+- Professional documentation layout with improved navigation and styling
+- Added comprehensive documentation section to README.md explaining the auto-generation system
+
 ## [1.2.0] - 2025-08-28
 
 **Note**: This is the initial clean release. Previous versions (v1.0.0-v1.1.1) were
