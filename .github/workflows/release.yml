@@ -216,6 +216,8 @@ jobs:
       - name: Create Git tag (without committing version bump)
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
           echo "✅ Created and pushed tag v${{ steps.version.outputs.version }}"
