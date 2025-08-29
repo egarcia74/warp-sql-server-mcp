@@ -57,4 +57,4 @@ assignees: ''
 
 ---
 
-**📚 Reference**: This feature is part of our [prioritized backlog](link-to-backlog-document)
+**📚 Reference**: This feature is part of our [prioritized backlog](../../PRODUCT-BACKLOG.md)
