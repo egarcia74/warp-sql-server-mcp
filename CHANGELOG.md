@@ -297,6 +297,6 @@ removed for security reasons.
 - Complete release process guide in WARP.md
 - Updated test documentation with current coverage and test counts
 
-[1.4.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.3.0...v1.4.0
+[1.4.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.4.0
 [1.3.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.2.0
