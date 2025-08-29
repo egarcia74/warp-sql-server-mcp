@@ -933,9 +933,9 @@ class SqlServerMCP {
     // SSL/TLS Settings (safe to log - boolean configuration values)
     const encryptSetting = process.env.SQL_SERVER_ENCRYPT || 'false';
     const trustCertSetting = process.env.SQL_SERVER_TRUST_CERT || 'true';
-    // lgtm[js/clear-text-logging] - These are non-sensitive boolean config values ('true'/'false')
+    // codeql[js/clear-text-logging] These are non-sensitive boolean config values ('true'/'false')
     console.error(`  SQL_SERVER_ENCRYPT=${encryptSetting} (SSL encryption enabled)`);
-    // lgtm[js/clear-text-logging] - These are non-sensitive boolean config values ('true'/'false')
+    // codeql[js/clear-text-logging] These are non-sensitive boolean config values ('true'/'false')
     console.error(`  SQL_SERVER_TRUST_CERT=${trustCertSetting} (Trust server certificate)`);
     // Timeout & Retry Settings
     console.error('⏱️ Timeout & Retry Settings:');

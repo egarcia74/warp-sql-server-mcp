@@ -39,17 +39,17 @@ async function testAWSSecrets() {
   const awsSdkLoadConfig = process.env.AWS_SDK_LOAD_CONFIG || 'NOT SET';
 
   console.log('📋 Environment Configuration:');
-  // lgtm[js/clear-text-logging] - Logging configuration names and status only, not sensitive values
+  // codeql[js/clear-text-logging] Logging configuration names and status only, not sensitive values
   console.log(`  SECRET_MANAGER_TYPE: ${secretManagerType}`);
-  // lgtm[js/clear-text-logging] - AWS region is not sensitive information
+  // codeql[js/clear-text-logging] AWS region is not sensitive information
   console.log(`  AWS_REGION: ${awsRegion}`);
-  // lgtm[js/clear-text-logging] - Logging only '***SET***' or 'NOT SET' status, not actual key
+  // codeql[js/clear-text-logging] Logging only '***SET***' or 'NOT SET' status, not actual key
   console.log(`  AWS_ACCESS_KEY_ID: ${awsAccessKeyStatus}`);
-  // lgtm[js/clear-text-logging] - Logging only '***SET***' or 'NOT SET' status, not actual secret
+  // codeql[js/clear-text-logging] Logging only '***SET***' or 'NOT SET' status, not actual secret
   console.log(`  AWS_SECRET_ACCESS_KEY: ${awsSecretKeyStatus}`);
-  // lgtm[js/clear-text-logging] - AWS profile name is not sensitive information
+  // codeql[js/clear-text-logging] AWS profile name is not sensitive information
   console.log(`  AWS_PROFILE: ${awsProfile}`);
-  // lgtm[js/clear-text-logging] - SDK config flag is not sensitive information
+  // codeql[js/clear-text-logging] SDK config flag is not sensitive information
   console.log(`  AWS_SDK_LOAD_CONFIG: ${awsSdkLoadConfig}\n`);
 
   if (process.env.SECRET_MANAGER_TYPE !== 'aws') {

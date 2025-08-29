@@ -38,15 +38,15 @@ async function testAzureSecrets() {
   const azureTenantId = process.env.AZURE_TENANT_ID || 'NOT SET';
 
   console.log('📋 Environment Configuration:');
-  // lgtm[js/clear-text-logging] - Logging configuration names and status only, not sensitive values
+  // codeql[js/clear-text-logging] Logging configuration names and status only, not sensitive values
   console.log(`  SECRET_MANAGER_TYPE: ${secretManagerType}`);
-  // lgtm[js/clear-text-logging] - Key Vault URL is not sensitive (public endpoint)
+  // codeql[js/clear-text-logging] Key Vault URL is not sensitive (public endpoint)
   console.log(`  AZURE_KEY_VAULT_URL: ${azureVaultUrl}`);
-  // lgtm[js/clear-text-logging] - Logging only '***SET***' or 'NOT SET' status, not actual client ID
+  // codeql[js/clear-text-logging] Logging only '***SET***' or 'NOT SET' status, not actual client ID
   console.log(`  AZURE_CLIENT_ID: ${azureClientIdStatus}`);
-  // lgtm[js/clear-text-logging] - Logging only '***SET***' or 'NOT SET' status, not actual secret
+  // codeql[js/clear-text-logging] Logging only '***SET***' or 'NOT SET' status, not actual secret
   console.log(`  AZURE_CLIENT_SECRET: ${azureClientSecretStatus}`);
-  // lgtm[js/clear-text-logging] - Tenant ID is not sensitive (public directory identifier)
+  // codeql[js/clear-text-logging] Tenant ID is not sensitive (public directory identifier)
   console.log(`  AZURE_TENANT_ID: ${azureTenantId}\n`);
 
   if (process.env.SECRET_MANAGER_TYPE !== 'azure') {
