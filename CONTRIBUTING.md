@@ -1,9 +1,22 @@
-# Contributing to Warp SQL Server MCP
+# Contributing to the Enterprise-Grade Software Framework
 
-Thank you for your interest in contributing to the Warp SQL Server MCP project!
+## Welcome Contributors
 
-**🚀 New to this project?** Start with the [Quick Start Guide](QUICKSTART.md) to get
-familiar with the MCP server functionality before diving into development.
+Thank you for your interest in contributing to this project! While this appears to be an MCP server for SQL
+Server, you're actually contributing to **a comprehensive framework demonstrating enterprise-grade software
+development practices**. Your contributions help maintain and extend a reference implementation for rigorous software
+engineering.
+
+## Philosophy
+
+Before diving into code, please read our [**Software Engineering Manifesto**](MANIFESTO.md) to understand the principles that guide this project. Every contribution should uphold these standards:
+
+- **Testing as a First-Class Citizen**: No code without comprehensive tests
+- **Security by Design**: Security considerations in every change
+- **Observability by Default**: Proper logging and monitoring for all features
+- **Production Readiness**: Code that's ready for enterprise deployment
+
+**🚀 New to this project?** Review our [Architecture Guide](ARCHITECTURE.md) and [Quick Start Guide](QUICKSTART.md) to understand both the technical architecture and practical usage.
 
 ## Development Setup
 

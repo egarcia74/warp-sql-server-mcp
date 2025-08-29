@@ -5,14 +5,15 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./test/setup.js'],
+    include: ['test/unit/**/*.test.js'],
     env: {
       NODE_ENV: 'test'
     },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['index.js'],
-      exclude: ['test/**', 'node_modules/**']
+      include: ['index.js', 'lib/**/*.js'],
+      exclude: ['test/**', 'scripts/**', 'node_modules/**']
     }
   }
 });

@@ -11,6 +11,14 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "echo 'Run integration tests manually: node test/integration/test-aws-secrets.js'",
+    "test:integration:aws": "node test/integration/test-aws-secrets.js",
+    "test:integration:azure": "node test/integration/test-azure-secrets.js",
+    "docs:extract": "node scripts/docs/extract-docs.js",
+    "docs:generate-tools": "node scripts/docs/generate-tools-html.js",
+    "docs:generate-landing": "node scripts/docs/generate-landing-page.js",
+    "docs:build": "npm run docs:extract && npm run docs:generate-tools && npm run docs:generate-landing",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,mjs,cjs,json,md}\"",
@@ -38,9 +46,14 @@
   "author": "Eduardo Garcia",
   "license": "MIT",
   "dependencies": {
+    "@azure/identity": "^4.11.1",
+    "@azure/keyvault-secrets": "^4.10.0",
     "@modelcontextprotocol/sdk": "^0.7.0",
+    "aws-sdk": "^2.1692.0",
     "dotenv": "^17.2.1",
-    "mssql": "^11.0.1"
+    "mssql": "^11.0.1",
+    "node-sql-parser": "^5.3.11",
+    "winston": "file:aws-sdk@azure/keyvault-secrets@azure/identity"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

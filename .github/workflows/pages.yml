@@ -37,13 +37,13 @@ jobs:
       - name: Generate documentation
         run: |
           # Extract tool information from code
-          node scripts/extract-docs.js
+          node scripts/docs/extract-docs.js
           
           # Generate detailed tools documentation
-          node scripts/generate-tools-html.js
+          node scripts/docs/generate-tools-html.js
           
           # Generate landing page with dynamic tool information
-          node scripts/generate-landing-page.js
+          node scripts/docs/generate-landing-page.js
           
           # Copy coverage reports to docs directory
           if [ -d "coverage" ]; then

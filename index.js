@@ -28,7 +28,11 @@ class SqlServerMCP {
       }
     );
 
+    // Debug mode for enhanced logging
+    this.debugMode = process.env.SQL_SERVER_DEBUG === 'true';
+
     this.pool = null;
+    this.isConnected = false;
 
     // Configurable timeouts and retry strategy
     this.connectionTimeout = parseInt(process.env.SQL_SERVER_CONNECT_TIMEOUT_MS || '10000'); // 10s
@@ -188,6 +192,7 @@ class SqlServerMCP {
         attempt += 1;
         const config = { ...baseConfig };
         this.pool = await sql.connect(config);
+        this.isConnected = true;
         if (process.env.NODE_ENV !== 'test') {
           console.error(`Connected to SQL Server successfully (attempt ${attempt})`);
         }
@@ -878,7 +883,7 @@ class SqlServerMCP {
   }
 
   /**
-   * Prints a summary of the current configuration for debugging and auditing
+   * Prints connection status and comprehensive configuration summary
    */
   printConfigurationSummary() {
     if (process.env.NODE_ENV === 'test') {
@@ -898,38 +903,155 @@ class SqlServerMCP {
     const destructiveStatus = this.allowDestructiveOperations ? 'DML+' : 'DML-';
     const schemaStatus = this.allowSchemaChanges ? 'DDL+' : 'DDL-';
 
-    // Output connection and security info as separate calls for better MCP CLI visibility
-    console.error(`Connected to ${host}:${port}/${database} (${auth})`);
+    // Only show connection info if we're actually connected
+    if (this.isConnected) {
+      console.error(`✅ Connected to ${host}:${port}/${database} (${auth})`);
+    } else {
+      console.error(`❌ Connection failed to ${host}:${port}/${database} (${auth})`);
+      console.error('⚠️  Database operations will be attempted but may fail');
+    }
+
     console.error(
       `Security: ${securityLevel} (${readOnlyStatus}, ${destructiveStatus}, ${schemaStatus})`
     );
+    // Show comprehensive configuration summary
+    console.error('📈 Current Configuration:');
+    console.error('='.repeat(60));
+    // Connection Settings
+    console.error('🌐 Connection Settings:');
+    console.error(`  SQL_SERVER_HOST=${host} (Server hostname/IP)`);
+    console.error(`  SQL_SERVER_PORT=${port} (Database port)`);
+    console.error(`  SQL_SERVER_DATABASE=${database} (Default database)`);
+    console.error(
+      `  SQL_SERVER_USER=${process.env.SQL_SERVER_USER || '(Windows Auth)'} (Authentication user)`
+    );
 
-    // Add warning if unsafe
+    // Mask password for security - only show if it's set or not
+    const passwordStatus = process.env.SQL_SERVER_PASSWORD ? '***MASKED***' : '(not set)';
+    console.error(`  SQL_SERVER_PASSWORD=${passwordStatus} (Authentication password)`);
+
+    // SSL/TLS Settings (safe to log - boolean configuration values)
+    // Log explicit boolean values instead of raw environment variables to avoid CodeQL warnings
+    const isEncryptEnabled = process.env.SQL_SERVER_ENCRYPT === 'true';
+    const isTrustCertEnabled = process.env.SQL_SERVER_TRUST_CERT !== 'false'; // defaults to true
+    console.error(
+      `  SQL_SERVER_ENCRYPT=${isEncryptEnabled ? 'true' : 'false'} (SSL encryption enabled)`
+    );
+    console.error(
+      `  SQL_SERVER_TRUST_CERT=${isTrustCertEnabled ? 'true' : 'false'} (Trust server certificate)`
+    );
+    // Timeout & Retry Settings
+    console.error('⏱️ Timeout & Retry Settings:');
+    console.error(
+      `  SQL_SERVER_CONNECT_TIMEOUT_MS=${this.connectionTimeout} (Connection timeout in milliseconds)`
+    );
+    console.error(
+      `  SQL_SERVER_REQUEST_TIMEOUT_MS=${this.requestTimeout} (Query timeout in milliseconds)`
+    );
+    console.error(
+      `  SQL_SERVER_MAX_RETRIES=${this.maxRetries} (Maximum connection retry attempts)`
+    );
+    console.error(
+      `  SQL_SERVER_RETRY_DELAY_MS=${this.retryDelay} (Delay between retries in milliseconds)`
+    );
+    // Debug Settings
+    if (this.debugMode) {
+      console.error('🐛 Debug Settings:');
+      console.error(`  SQL_SERVER_DEBUG=${this.debugMode} (Enhanced logging enabled)`);
+    }
+    // Connection Pool Settings
+    console.error('🏊 Pool Settings:');
+    const poolMax = process.env.SQL_SERVER_POOL_MAX || '10';
+    const poolMin = process.env.SQL_SERVER_POOL_MIN || '0';
+    const poolIdle = process.env.SQL_SERVER_POOL_IDLE_TIMEOUT_MS || '30000';
+    console.error(`  SQL_SERVER_POOL_MAX=${poolMax} (Maximum concurrent connections)`);
+    console.error(`  SQL_SERVER_POOL_MIN=${poolMin} (Minimum pool connections maintained)`);
+    console.error(`  SQL_SERVER_POOL_IDLE_TIMEOUT_MS=${poolIdle} (Idle connection timeout)`);
+    // Security Settings
+    console.error('🔒 Security Settings:');
+    console.error(
+      `  SQL_SERVER_READ_ONLY=${this.readOnlyMode ? 'true' : 'false'} (${this.readOnlyMode ? '✅' : '❌'} ${this.readOnlyMode ? 'Read-only mode: SELECT only' : 'Read-write mode: All queries allowed'})`
+    );
+    console.error(
+      `  SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=${this.allowDestructiveOperations} (${this.allowDestructiveOperations ? '❌' : '✅'} DML operations: INSERT/UPDATE/DELETE ${this.allowDestructiveOperations ? 'allowed' : 'blocked'})`
+    );
+    console.error(
+      `  SQL_SERVER_ALLOW_SCHEMA_CHANGES=${this.allowSchemaChanges} (${this.allowSchemaChanges ? '❌' : '✅'} DDL operations: CREATE/DROP/ALTER ${this.allowSchemaChanges ? 'allowed' : 'blocked'})`
+    );
+    // Show overall security level more prominently
+    if (isInSafeMode) {
+      console.error('  Overall Security Level: ✅ SECURE - Only SELECT queries permitted');
+    } else {
+      const riskyFeatures = [];
+      if (!this.readOnlyMode) riskyFeatures.push('Read-write');
+      if (this.allowDestructiveOperations) riskyFeatures.push('DML');
+      if (this.allowSchemaChanges) riskyFeatures.push('DDL');
+      console.error(`  Overall Security Level: ❌ UNSAFE - ${riskyFeatures.join(' + ')} enabled`);
+    }
+    console.error('='.repeat(60));
+    // Add warnings and recommendations
     if (!isInSafeMode) {
       const warnings = [];
       if (!this.readOnlyMode) warnings.push('Read-write mode');
       if (this.allowDestructiveOperations) warnings.push('DML allowed');
       if (this.allowSchemaChanges) warnings.push('DDL allowed');
-      console.error(`WARNING: ${warnings.join(', ')} - consider stricter settings for production`);
+      console.error(
+        `⚠️  WARNING: ${warnings.join(', ')} - consider stricter settings for production`
+      );
+      console.error('💡 For production use, consider:');
+      if (!this.readOnlyMode) {
+        console.error('   Set SQL_SERVER_READ_ONLY=true for read-only access');
+      }
+      if (this.allowDestructiveOperations) {
+        console.error('   Set SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false to block DML');
+      }
+      if (this.allowSchemaChanges) {
+        console.error('   Set SQL_SERVER_ALLOW_SCHEMA_CHANGES=false to block DDL');
+      }
+    } else {
+      console.error('✅ Running in secure mode - only SELECT queries allowed');
+    }
+    // Add connection troubleshooting help if not connected
+    if (!this.isConnected) {
+      console.error('🔧 Connection troubleshooting:');
+      console.error('   1. Verify SQL Server is running and accessible');
+      console.error('   2. Check firewall settings (port 1433)');
+      console.error('   3. Verify credentials and permissions');
+      console.error('   4. For local dev, try: SQL_SERVER_ENCRYPT=false');
+      console.error('   5. Check connection timeout settings if retries are failing');
     }
   }
 
   async run() {
-    // Initialize database connection pool at startup
-    try {
-      await this.connectToDatabase();
-      console.error('Database connection pool initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize database connection pool:', error.message);
-      console.error('Server will continue but database operations may fail');
-    }
-
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
 
     console.error('Starting Warp SQL Server MCP server...');
 
-    // Print configuration summary after server is connected
+    // Show connection configuration before attempting connection
+    if (process.env.NODE_ENV !== 'test') {
+      const host = process.env.SQL_SERVER_HOST || 'localhost';
+      const port = process.env.SQL_SERVER_PORT || '1433';
+      const database = process.env.SQL_SERVER_DATABASE || 'master';
+      console.error(
+        `Attempting connection to ${host}:${port}/${database} (max ${this.maxRetries} attempts)...`
+      );
+    }
+
+    // Initialize database connection pool at startup
+    try {
+      await this.connectToDatabase();
+      if (process.env.NODE_ENV !== 'test') {
+        console.error('Database connection pool initialized successfully');
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'test') {
+        console.error('Failed to initialize database connection pool:', error.message);
+        console.error('Server will continue but database operations will likely fail');
+      }
+    }
+
+    // Print configuration summary after connection attempt
     this.printConfigurationSummary();
 
     console.error('Warp SQL Server MCP server running on stdio');
