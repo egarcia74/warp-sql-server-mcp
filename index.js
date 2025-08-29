@@ -967,6 +967,90 @@ class SqlServerMCP {
     console.error(`  SQL_SERVER_POOL_MAX=${poolMax} (Maximum concurrent connections)`);
     console.error(`  SQL_SERVER_POOL_MIN=${poolMin} (Minimum pool connections maintained)`);
     console.error(`  SQL_SERVER_POOL_IDLE_TIMEOUT_MS=${poolIdle} (Idle connection timeout)`);
+
+    // Streaming Configuration
+    const streamingEnabled = process.env.ENABLE_STREAMING === 'true';
+    if (
+      streamingEnabled ||
+      process.env.STREAMING_BATCH_SIZE ||
+      process.env.STREAMING_MAX_MEMORY_MB ||
+      process.env.STREAMING_MAX_RESPONSE_SIZE
+    ) {
+      console.error('📈 Streaming Configuration:');
+      console.error(
+        `  ENABLE_STREAMING=${process.env.ENABLE_STREAMING || 'false'} (${streamingEnabled ? '✅ Intelligent streaming for large datasets' : '❌ Streaming disabled'})`
+      );
+      if (process.env.STREAMING_BATCH_SIZE) {
+        console.error(
+          `  STREAMING_BATCH_SIZE=${process.env.STREAMING_BATCH_SIZE} (Rows per batch for memory efficiency)`
+        );
+      }
+      if (process.env.STREAMING_MAX_MEMORY_MB) {
+        console.error(
+          `  STREAMING_MAX_MEMORY_MB=${process.env.STREAMING_MAX_MEMORY_MB} (Memory limit before streaming activation)`
+        );
+      }
+      if (process.env.STREAMING_MAX_RESPONSE_SIZE) {
+        console.error(
+          `  STREAMING_MAX_RESPONSE_SIZE=${process.env.STREAMING_MAX_RESPONSE_SIZE} (Response size limit for chunking)`
+        );
+      }
+    }
+
+    // Performance Monitoring
+    const perfMonitoring = process.env.ENABLE_PERFORMANCE_MONITORING === 'true';
+    if (
+      perfMonitoring ||
+      process.env.SLOW_QUERY_THRESHOLD ||
+      process.env.PERFORMANCE_SAMPLING_RATE ||
+      process.env.MAX_METRICS_HISTORY
+    ) {
+      console.error('⚡ Performance Monitoring:');
+      console.error(
+        `  ENABLE_PERFORMANCE_MONITORING=${process.env.ENABLE_PERFORMANCE_MONITORING || 'false'} (${perfMonitoring ? '✅ Query performance tracking enabled' : '❌ Performance monitoring disabled'})`
+      );
+      if (process.env.SLOW_QUERY_THRESHOLD) {
+        console.error(
+          `  SLOW_QUERY_THRESHOLD=${process.env.SLOW_QUERY_THRESHOLD} (Milliseconds to flag slow queries)`
+        );
+      }
+      if (process.env.PERFORMANCE_SAMPLING_RATE) {
+        console.error(
+          `  PERFORMANCE_SAMPLING_RATE=${process.env.PERFORMANCE_SAMPLING_RATE} (Fraction of queries to monitor, 1.0 = 100%)`
+        );
+      }
+      if (process.env.MAX_METRICS_HISTORY) {
+        console.error(
+          `  MAX_METRICS_HISTORY=${process.env.MAX_METRICS_HISTORY} (Maximum performance records to retain)`
+        );
+      }
+    }
+
+    // Enhanced Logging & Audit
+    if (
+      process.env.SQL_SERVER_LOG_LEVEL ||
+      process.env.ENABLE_SECURITY_AUDIT ||
+      process.env.SQL_SERVER_RESPONSE_FORMAT
+    ) {
+      console.error('📝 Logging & Response Configuration:');
+      if (process.env.SQL_SERVER_LOG_LEVEL) {
+        console.error(
+          `  SQL_SERVER_LOG_LEVEL=${process.env.SQL_SERVER_LOG_LEVEL} (Logging detail level)`
+        );
+      }
+      if (process.env.ENABLE_SECURITY_AUDIT) {
+        const auditEnabled = process.env.ENABLE_SECURITY_AUDIT === 'true';
+        console.error(
+          `  ENABLE_SECURITY_AUDIT=${process.env.ENABLE_SECURITY_AUDIT} (${auditEnabled ? '✅ Security audit trail enabled' : '❌ Security auditing disabled'})`
+        );
+      }
+      if (process.env.SQL_SERVER_RESPONSE_FORMAT) {
+        console.error(
+          `  SQL_SERVER_RESPONSE_FORMAT=${process.env.SQL_SERVER_RESPONSE_FORMAT} (Output format optimization)`
+        );
+      }
+    }
+
     // Security Settings
     console.error('🔒 Security Settings:');
     console.error(
