@@ -1,11 +1,12 @@
 #!/bin/bash
 
 # Create GitHub Issues from Product Backlog
-# This script creates GitHub issues for all items in the product backlog
+# This script creates GitHub issues for remaining items in the product backlog
+# It checks for existing issues to avoid duplicates
 
 set -e
 
-echo "🚀 Creating GitHub Issues from Product Backlog..."
+echo "🚀 Creating Remaining GitHub Issues from Product Backlog..."
 
 # Check if gh CLI is available and authenticated
 if ! command -v gh &> /dev/null; then
@@ -19,6 +20,16 @@ if ! gh auth status &> /dev/null; then
     echo "Run: gh auth login"
     exit 1
 fi
+
+# Function to check if issue already exists
+check_issue_exists() {
+    local title="$1"
+    gh issue list --search "$title in:title" --limit 1 --json title --jq '.[] | .title' | grep -q "$title"
+}
+
+echo "📋 Checking existing backlog issues..."
+existing_count=$(gh issue list --label backlog --json title --jq '. | length')
+echo "Found $existing_count existing backlog issues"
 
 # Create High Priority Issues
 echo "📋 Creating HIGH PRIORITY issues..."
@@ -202,12 +213,40 @@ EOF
 )" \
   --label "enhancement,backlog,low-priority,phase-4"
 
-echo "✅ GitHub Issues created successfully!"
+# Create remaining missing features (if any)
+echo "🔄 Creating any remaining missing backlog issues..."
+
+# Check what's still missing and create those
+remaining_features=(
+    "Data Quality & Validation Framework"
+    "API Integration & Webhooks" 
+    "Advanced Caching System"
+    "Multi-Database Support"
+    "Machine Learning Integration"
+    "Collaborative Features"
+    "Mobile-Responsive Interface"
+    "Enhanced Testing Framework"
+    "Configuration Management Enhancement"
+    "Advanced Security & Audit Features"
+)
+
+for feature in "${remaining_features[@]}"; do
+    # Check if this feature already has an issue
+    existing=$(gh issue list --label backlog --json title --jq ".[] | select(.title | test(\"$feature\"; \"i\")) | .title")
+    if [[ -z "$existing" ]]; then
+        echo "⚠️  Missing feature: $feature"
+        echo "📝 Use the feature-request template to create this manually:"
+        echo "   https://github.com/egarcia74/warp-sql-server-mcp/issues/new?template=feature-request.md"
+    fi
+done
+
+echo ""
+echo "✅ Backlog Issue Creation Complete!"
 echo ""
 echo "📋 Next Steps:"
-echo "1. Set up GitHub Project Board to organize these issues"
-echo "2. Create milestones for each phase"
-echo "3. Assign issues to developers as work begins"
-echo "4. Use the feature-request.md template for future backlog items"
+echo "1. Run update-backlog-links.sh to link existing issues to backlog document"
+echo "2. Set up GitHub Project Board to organize these issues"
+echo "3. Create milestones for each phase"
+echo "4. Use the feature-request.md template for new backlog items"
 echo ""
 echo "🔗 View all issues: gh issue list --label backlog"
