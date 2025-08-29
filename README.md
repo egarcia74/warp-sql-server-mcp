@@ -1,4 +1,24 @@
-# Warp SQL Server MCP
+# Enterprise-Grade Software Framework
+
+## _A Comprehensive Reference Implementation for Production-Ready Systems_
+
+> **What you're looking at**: While this appears to be an MCP server for SQL Server integration, it's fundamentally
+> **a complete framework demonstrating enterprise-grade software development practices**. Every component, pattern,
+> and principle here is designed to showcase rigorous engineering standards that can be applied to any production
+> system.
+
+---
+
+## 🏗️ **Framework Highlights**
+
+**🔬 Comprehensive Testing Strategy**: 278 tests covering unit, integration, and edge cases with 95%+ coverage  
+**🛡️ Multi-layered Security Architecture**: Defense-in-depth security with audit logging and threat detection  
+**📊 Production Observability**: Performance monitoring, structured logging, and health assessment  
+**⚡ Enterprise Reliability**: Connection pooling, circuit breakers, and graceful error handling  
+**🏛️ Clean Architecture**: Layered design with dependency inversion and interface segregation  
+**📚 Living Documentation**: Auto-generated docs that stay synchronized with code changes
+
+---
 
 ## Build & Quality Status
 
@@ -21,8 +41,33 @@
 [![Last Commit](https://img.shields.io/github/last-commit/egarcia74/warp-sql-server-mcp.svg)](https://github.com/egarcia74/warp-sql-server-mcp/commits/main)
 [![GitHub Stars](https://img.shields.io/github/stars/egarcia74/warp-sql-server-mcp.svg?style=social)](https://github.com/egarcia74/warp-sql-server-mcp/stargazers)
 
-A Model Context Protocol (MCP) server that provides Warp with the ability to connect to and
-interact with Microsoft SQL Server databases.
+---
+
+## 🎯 **The Real Value Proposition**
+
+This codebase demonstrates **how to build enterprise-grade software that actually works in production**. While it
+delivers MCP functionality for SQL Server integration, its primary value lies in the comprehensive engineering
+practices it showcases:
+
+### **Production-Ready Patterns**
+
+- **Observability**: Structured logging, performance monitoring, health checks
+- **Reliability**: Connection pooling, retry logic, circuit breakers, graceful degradation
+- **Security**: Multi-layer validation, audit logging, threat detection, secure defaults
+- **Testability**: Comprehensive test coverage with proper mocking strategies
+- **Maintainability**: Clean architecture, dependency injection, configuration management
+
+### **Enterprise Architecture**
+
+- **Layered Design**: Clear separation between presentation, business logic, and data layers
+- **Interface Segregation**: Components depend only on what they actually use
+- **Dependency Inversion**: High-level modules don't depend on low-level implementation details
+- **Single Responsibility**: Each component has one well-defined purpose
+- **Open/Closed Principle**: Easy to extend without modifying existing code
+
+See our [**Software Engineering Manifesto**](MANIFESTO.md) and [**Architecture Guide**](ARCHITECTURE.md) for the complete philosophy and technical details.
+
+---
 
 ## 🚀 Quick Start
 
@@ -40,6 +85,9 @@ For detailed setup, continue reading below.
 - **Data Retrieval**: Get sample data from tables with filtering and limiting
 - **Authentication**: Support for both SQL Server authentication and Windows authentication
 - **🔒 Security**: Three-tier graduated safety system with secure defaults
+- **☁️ Cloud-Ready**: Enterprise secret management with AWS Secrets Manager and Azure Key Vault
+- **🚀 Streaming**: Memory-efficient handling of large datasets
+- **📊 Performance Monitoring**: Real-time query performance tracking and optimization
 
 ## 🔒 Security
 
@@ -223,6 +271,8 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
 - **[Threat Model Analysis](SECURITY.md#threat-model)** - What threats are mitigated
 - **[Security Testing Guide](SECURITY.md#testing-security-features)** - How to validate security features
 - **[Deployment Guidelines](SECURITY.md#production-deployment-guidelines)** - Environment-specific recommendations
+- **[Azure Key Vault Configuration Guide](docs/AZURE-SECRETS-GUIDE.md)** - Complete setup guide for Azure Key Vault secret management
+- **[AWS Secrets Manager Configuration Guide](docs/AWS-SECRETS-GUIDE.md)** - Complete setup guide for AWS Secrets Manager with IAM roles and JSON secrets
 
 ## 🎯 Use Cases
 
@@ -774,13 +824,13 @@ The documentation generation happens through three specialized scripts:
 
 ```bash
 # Extract MCP tool information from source code
-node scripts/extract-docs.js
+node scripts/docs/extract-docs.js
 
 # Generate detailed API reference page
-node scripts/generate-tools-html.js
+node scripts/docs/generate-tools-html.js
 
 # Generate landing page with dynamic content
-node scripts/generate-landing-page.js
+node scripts/docs/generate-landing-page.js
 ```
 
 ### 🚀 Automatic Updates

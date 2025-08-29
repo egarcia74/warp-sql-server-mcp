@@ -1,7 +1,25 @@
-# Test Suite Documentation
+# Test Directory
 
-This directory contains the comprehensive test suite for the Warp SQL Server MCP server. The tests
-ensure all functionality works correctly and provide confidence for ongoing development.
+This directory contains all test-related files organized by type and purpose.
+
+## Directory Structure
+
+```text
+test/
+├── README.md                           # This file - test documentation
+├── setup.js                            # Global test setup and mocks
+│
+├── unit/                               # Unit tests (fast, mocked dependencies)
+│   ├── sqlserver-mcp.test.js          # Main application unit tests (56 tests)
+│   └── query-validator-simple.test.js # Query validator unit tests
+│
+├── integration/                       # Integration tests (real services)
+│   ├── test-aws-secrets.js           # AWS Secrets Manager integration test
+│   └── test-azure-secrets.js         # Azure Key Vault integration test
+│
+└── utils/                             # Test utilities and helpers
+    └── (future test utilities)
+```
 
 **🚀 New to this project?** Check out the [Quick Start Guide](../QUICKSTART.md) to get the MCP server running first, then return here to understand the testing architecture.
 

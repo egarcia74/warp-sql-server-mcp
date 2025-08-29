@@ -167,9 +167,9 @@
 <body>
     <div class="header">
         <h1>🛠️ MCP Tools Documentation</h1>
-        <p>Detailed reference for all available SQL Server MCP tools</p>
+        <p>Detailed reference for all available SQL Server MCP tools with enhanced security and streaming support</p>
         <div>
-            <strong>Version 1.2.0 • 8 Tools Available</strong>
+            <strong>Version 1.4.0 • 8 Tools Available • Enhanced Security • Streaming Support • Performance Monitoring</strong>
         </div>
     </div>
 
@@ -191,6 +191,20 @@
             <li><a href="#list_foreign_keys">list_foreign_keys</a> - List all foreign key relationships in a schema</li>
             <li><a href="#export_table_csv">export_table_csv</a> - Export table data in CSV format</li>
         </ul>
+    </div>
+
+    <div class="toc" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border: 2px solid #007bff;">
+        <h3>🔒 Enhanced Security Features (v1.4.0)</h3>
+        <p style="color: #495057; margin-bottom: 1rem;">All MCP tools now benefit from these enterprise-grade security enhancements:</p>
+        <ul style="color: #495057;">
+            <li><strong>AST-Based Query Validation:</strong> Advanced SQL parsing with <code>node-sql-parser</code> to detect malicious queries and SQL injection attempts</li>
+            <li><strong>Cloud Secret Management:</strong> Integrated support for AWS Secrets Manager and Azure Key Vault for secure credential storage</li>
+            <li><strong>Structured Security Logging:</strong> Comprehensive audit trails for all database operations with Winston logging</li>
+            <li><strong>Performance Monitoring:</strong> Real-time query performance tracking and slow query detection</li>
+            <li><strong>Streaming Support:</strong> Memory-efficient handling of large result sets with configurable response formats</li>
+            <li><strong>Enhanced Error Context:</strong> Detailed error reporting while protecting sensitive information</li>
+        </ul>
+        <p style="color: #6c757d; font-size: 0.9em; margin-top: 1rem;"><em>All security features are transparent to the MCP tool interface and require no changes to your existing tool calls.</em></p>
     </div>
 
     <div class="tool" id="execute_query">

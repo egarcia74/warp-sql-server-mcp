@@ -89,13 +89,16 @@
 <body>
     <div class="header">
         <h1>🗄️ Warp SQL Server MCP</h1>
-        <p>Model Context Protocol server for SQL Server integration with Warp terminal</p>
+        <p>Enterprise-ready Model Context Protocol server for SQL Server integration with Warp terminal</p>
         <div>
-            <span class="badge">v1.2.0</span>
+            <span class="badge">v1.4.0</span>
             <span class="badge">Node.js 18+</span>
             <span class="badge">MCP</span>
             <span class="badge">SQL Server</span>
             <span class="badge">8 Tools</span>
+            <span class="badge">Enhanced Security</span>
+            <span class="badge">Streaming</span>
+            <span class="badge">Cloud Ready</span>
         </div>
     </div>
 
@@ -110,8 +113,8 @@
 
         <div class="card">
             <h3>🚀 Latest Release</h3>
-            <p>Download the latest version and view the changelog.</p>
-            <a href="https://github.com/egarcia74/warp-sql-server-mcp/releases/latest">Download v1.2.0 →</a>
+            <p>Download the latest version with enhanced security, streaming support, and performance monitoring.</p>
+            <a href="https://github.com/egarcia74/warp-sql-server-mcp/releases/latest">Download v1.4.0 →</a>
         </div>
 
         <div class="card">
@@ -122,7 +125,7 @@
 
         <div class="card">
             <h3>🛠️ MCP Tools Reference</h3>
-            <p>Comprehensive documentation for all 8 available MCP tools with parameters, examples, and usage details.</p>
+            <p>Comprehensive documentation for all 8 available MCP tools with parameters, examples, and usage details. Now with enhanced security, streaming support, and performance monitoring.</p>
             <a href="./tools.html">View Full API Documentation →</a>
         </div>
 
@@ -158,6 +161,29 @@
                 <li><span class="code">SQL_SERVER_READ_ONLY</span> - Read-only mode (default: true)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS</span> - Allow INSERT/UPDATE/DELETE (default: false)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_SCHEMA_CHANGES</span> - Allow CREATE/DROP/ALTER (default: false)</li>
+            </ul>
+            <h4>🔐 New Security & Cloud Features</h4>
+            <ul>
+                <li><span class="code">SECRET_MANAGER_TYPE</span> - Secret provider (env, aws, azure)</li>
+                <li><span class="code">LOG_LEVEL</span> - Logging level (error, warn, info, debug)</li>
+                <li><span class="code">ENABLE_STREAMING</span> - Enable streaming for large datasets (default: true)</li>
+                <li><span class="code">RESPONSE_FORMAT</span> - Response format (json, table, csv)</li>
+                <li><span class="code">ENABLE_PERFORMANCE_MONITORING</span> - Track query performance (default: true)</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>✨ What's New in v1.4.0</h3>
+            <p>Major architecture enhancements and enterprise features:</p>
+            <ul>
+                <li>🔒 <strong>Advanced SQL Security:</strong> AST-based query validation with node-sql-parser</li>
+                <li>☁️ <strong>Cloud Secret Management:</strong> AWS Secrets Manager & Azure Key Vault support</li>
+                <li>🚀 <strong>Streaming Support:</strong> Handle large datasets without memory exhaustion</li>
+                <li>📊 <strong>Performance Monitoring:</strong> Real-time query performance tracking</li>
+                <li>📝 <strong>Structured Logging:</strong> Winston-based logging with security audit trails</li>
+                <li>🧪 <strong>Enhanced Testing:</strong> Comprehensive test coverage with TDD approach</li>
+                <li>⚙️ <strong>Modular Architecture:</strong> Refactored codebase for better maintainability</li>
+                <li>📈 <strong>Response Formats:</strong> Configurable output formats (JSON, table, CSV)</li>
             </ul>
         </div>
 

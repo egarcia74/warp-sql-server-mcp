@@ -4,11 +4,12 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-This is a **secure** Model Context Protocol (MCP) server that enables Warp to interact with
+This is a **secure** and **enterprise-ready** Model Context Protocol (MCP) server that enables Warp to interact with
 Microsoft SQL Server databases safely and securely. The project provides a bridge between
 Warp's AI capabilities and SQL Server through the MCP standard, featuring a revolutionary
-**three-tier graduated safety system** for production database security, comprehensive database
-operations, schema inspection, and data retrieval.
+**three-tier graduated safety system** for production database security, **advanced query validation**,
+**streaming support for large datasets**, **comprehensive performance monitoring**, and **cloud-ready
+secret management**. Built with a modular architecture for enterprise-scale deployments.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](QUICKSTART.md) for a 5-minute setup walkthrough.
 
@@ -40,6 +41,158 @@ operations, schema inspection, and data retrieval.
 
 - **SQL Server Authentication**: Username/password based
 - **Windows Authentication**: NTLM-based (when user/password not provided)
+
+## Enhanced Architecture (v1.4.0+)
+
+### 🏗️ Modular Architecture
+
+Starting with v1.4.0, the project follows a modular architecture with specialized components:
+
+```text
+lib/
+├── config/
+│   └── secret-manager.js     # 🔐 Universal secret management
+├── security/
+│   └── query-validator.js    # 🔒 Enhanced SQL validation
+└── utils/
+    ├── logger.js             # 📝 Structured logging
+    ├── performance-monitor.js # ⚡ Performance tracking
+    ├── response-formatter.js  # 📊 Response formatting
+    └── streaming-handler.js   # 📈 Large data streaming
+```
+
+### 🔐 Enhanced Secret Management
+
+**Multi-Provider Secret Management**:
+
+- **Environment Variables** (default and fallback)
+- **AWS Secrets Manager** for AWS deployments
+- **Azure Key Vault** for Azure deployments
+- **Credential caching** with configurable TTL
+- **Health monitoring** for secret providers
+
+#### Configuration
+
+```bash
+# Use AWS Secrets Manager
+SECRET_MANAGER_TYPE=aws
+AWS_REGION=us-east-1
+
+# Use Azure Key Vault
+SECRET_MANAGER_TYPE=azure
+AZURE_KEY_VAULT_URL=https://your-vault.vault.azure.net/
+
+# Use environment variables (default)
+SECRET_MANAGER_TYPE=env
+```
+
+**📋 Detailed Cloud Secret Management**:
+
+- **Azure Key Vault**: [Azure Secrets Configuration Guide](docs/AZURE-SECRETS-GUIDE.md) - Complete setup with authentication, secret naming, and troubleshooting
+- **AWS Secrets Manager**: [AWS Secrets Configuration Guide](docs/AWS-SECRETS-GUIDE.md) - Comprehensive guide with IAM roles, JSON secrets, and multi-environment deployment
+
+### 🔒 Advanced Query Validation
+
+**AST-Based SQL Analysis**: Replaces regex-based validation with proper SQL parsing:
+
+- **SQL Parser Integration**: Uses `node-sql-parser` for comprehensive AST analysis
+- **Multi-Statement Validation**: Validates each statement in complex queries
+- **Dangerous Function Detection**: Blocks `xp_cmdshell`, `openrowset`, `sp_configure`, etc.
+- **SQL Injection Protection**: Advanced pattern detection in string literals
+- **Graceful Fallback**: Regex validation for edge cases where parsing fails
+
+#### New Security Features
+
+```javascript
+// Enhanced validation detects:
+- Dangerous system functions (xp_cmdshell, openrowset)
+- SQL injection patterns in AST nodes
+- Multi-statement queries with mixed permissions
+- Complex CTE and subquery security boundaries
+```
+
+### 📊 Enhanced Response Formatting
+
+**Configurable Output Formats**: Supports different integration patterns:
+
+```bash
+# Structured objects (recommended for programmatic use)
+SQL_SERVER_RESPONSE_FORMAT=structured
+
+# Compact JSON (minimal bandwidth)
+SQL_SERVER_RESPONSE_FORMAT=json
+
+# Pretty-printed JSON (human-readable, original behavior)
+SQL_SERVER_RESPONSE_FORMAT=pretty-json
+```
+
+**Advanced Features**:
+
+- **Automatic response size limits** with intelligent truncation
+- **Column type inference** from sample data
+- **Performance metrics** embedded in responses
+- **Metadata enrichment** with execution context
+
+### 📈 Streaming Support for Large Data
+
+**Memory-Efficient Processing**: Handles large datasets without memory exhaustion:
+
+- **Intelligent Detection**: Automatically streams based on query patterns and table size
+- **Configurable Batching**: Process data in configurable batch sizes (default: 1000 rows)
+- **Multiple Formats**: CSV and JSON streaming support
+- **Memory Monitoring**: Real-time memory usage tracking and estimation
+
+#### Streaming Configuration
+
+```bash
+# Enable/disable streaming
+ENABLE_STREAMING=true
+
+# Configure batch sizes
+STREAMING_BATCH_SIZE=1000
+STREAMING_MAX_MEMORY_MB=50
+STREAMING_MAX_RESPONSE_SIZE=1000000
+```
+
+### ⚡ Performance Monitoring
+
+**Comprehensive Performance Tracking**: Enterprise-grade monitoring and alerting:
+
+- **Query Execution Tracking**: Duration, memory usage, row counts
+- **Connection Pool Monitoring**: Health, utilization, error rates
+- **Slow Query Detection**: Configurable thresholds with alerting
+- **Performance Recommendations**: AI-powered optimization suggestions
+- **Historical Analytics**: Trend analysis and performance insights
+
+#### Performance Configuration
+
+```bash
+# Performance monitoring
+ENABLE_PERFORMANCE_MONITORING=true
+SLOW_QUERY_THRESHOLD=5000          # milliseconds
+PERFORMANCE_SAMPLING_RATE=1.0       # 0.0 to 1.0
+MAX_METRICS_HISTORY=1000
+```
+
+### 📝 Enhanced Logging & Error Handling
+
+**Structured Logging with Winston**: Professional logging system:
+
+- **Configurable Log Levels**: debug, info, warn, error
+- **Security Audit Trails**: Dedicated security event logging
+- **Context-Aware Errors**: Database name, tool arguments, execution context
+- **Structured Output**: JSON logging for production environments
+- **Performance Correlation**: Link performance metrics with log events
+
+#### Logging Configuration
+
+```bash
+# Logging configuration
+SQL_SERVER_LOG_LEVEL=info              # debug, info, warn, error
+ENABLE_SECURITY_AUDIT=true
+LOG_FILE=/var/log/sql-server-mcp.log
+SECURITY_LOG_FILE=/var/log/security-audit.log
+```
 
 ## Development Commands
 
@@ -115,7 +268,7 @@ cp .env.example .env
 # Then edit .env with your SQL Server connection details
 ```
 
-## Configuration
+## Environment Configuration
 
 ### Environment Variables (Required)
 
@@ -324,13 +477,13 @@ To update documentation locally:
 
 ```bash
 # Extract tool definitions from source code
-node scripts/extract-docs.js
+node scripts/docs/extract-docs.js
 
 # Generate comprehensive tools documentation
-node scripts/generate-tools-html.js
+node scripts/docs/generate-tools-html.js
 
 # Generate landing page with tool listing
-node scripts/generate-landing-page.js
+node scripts/docs/generate-landing-page.js
 ```
 
 Generated files:

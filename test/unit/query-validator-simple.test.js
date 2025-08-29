@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { QueryValidator } from '../lib/security/query-validator.js';
+import { QueryValidator } from '../../lib/security/query-validator.js';
 
 describe('QueryValidator - Enhanced Security Tests', () => {
   let validator;
