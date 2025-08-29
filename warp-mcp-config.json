@@ -4,20 +4,59 @@
       "command": "node",
       "args": ["/path/to/your/warp-sql-server-mcp/index.js"],
       "env": {
+        "_comment_basic": "=== Basic SQL Server Connection ===",
         "SQL_SERVER_HOST": "localhost",
         "SQL_SERVER_PORT": "1433",
         "SQL_SERVER_DATABASE": "master",
         "SQL_SERVER_USER": "your_username",
         "SQL_SERVER_PASSWORD": "your_password",
+        "SQL_SERVER_DOMAIN": "",
+
+        "_comment_security": "=== Security & Encryption ===",
         "SQL_SERVER_ENCRYPT": "false",
         "SQL_SERVER_TRUST_CERT": "true",
+
+        "_comment_safety": "=== Three-Tier Safety System (v1.3.0+) ===",
+        "SQL_SERVER_READ_ONLY": "true",
+        "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
+        "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false",
+
+        "_comment_timeouts": "=== Connection & Timeout Configuration ===",
         "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
         "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
         "SQL_SERVER_MAX_RETRIES": "3",
         "SQL_SERVER_RETRY_DELAY_MS": "1000",
+
+        "_comment_pool": "=== Connection Pool Settings ===",
         "SQL_SERVER_POOL_MAX": "10",
         "SQL_SERVER_POOL_MIN": "0",
-        "SQL_SERVER_POOL_IDLE_TIMEOUT_MS": "30000"
+        "SQL_SERVER_POOL_IDLE_TIMEOUT_MS": "30000",
+
+        "_comment_secrets": "=== Secret Management (v1.4.0+) ===",
+        "SECRET_MANAGER_TYPE": "env",
+        "AWS_REGION": "",
+        "AZURE_KEY_VAULT_URL": "",
+
+        "_comment_response": "=== Response Formatting (v1.4.0+) ===",
+        "SQL_SERVER_RESPONSE_FORMAT": "pretty-json",
+
+        "_comment_streaming": "=== Streaming Support (v1.4.0+) ===",
+        "ENABLE_STREAMING": "true",
+        "STREAMING_BATCH_SIZE": "1000",
+        "STREAMING_MAX_MEMORY_MB": "50",
+        "STREAMING_MAX_RESPONSE_SIZE": "1000000",
+
+        "_comment_performance": "=== Performance Monitoring (v1.4.0+) ===",
+        "ENABLE_PERFORMANCE_MONITORING": "true",
+        "SLOW_QUERY_THRESHOLD": "5000",
+        "PERFORMANCE_SAMPLING_RATE": "1.0",
+        "MAX_METRICS_HISTORY": "1000",
+
+        "_comment_logging": "=== Logging Configuration (v1.4.0+) ===",
+        "SQL_SERVER_LOG_LEVEL": "info",
+        "ENABLE_SECURITY_AUDIT": "true",
+        "LOG_FILE": "",
+        "SECURITY_LOG_FILE": ""
       }
     }
   }
