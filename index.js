@@ -931,12 +931,15 @@ class SqlServerMCP {
     console.error(`  SQL_SERVER_PASSWORD=${passwordStatus} (Authentication password)`);
 
     // SSL/TLS Settings (safe to log - boolean configuration values)
-    const encryptSetting = process.env.SQL_SERVER_ENCRYPT || 'false';
-    const trustCertSetting = process.env.SQL_SERVER_TRUST_CERT || 'true';
-    // codeql[js/clear-text-logging] These are non-sensitive boolean config values ('true'/'false')
-    console.error(`  SQL_SERVER_ENCRYPT=${encryptSetting} (SSL encryption enabled)`);
-    // codeql[js/clear-text-logging] These are non-sensitive boolean config values ('true'/'false')
-    console.error(`  SQL_SERVER_TRUST_CERT=${trustCertSetting} (Trust server certificate)`);
+    // Log explicit boolean values instead of raw environment variables to avoid CodeQL warnings
+    const isEncryptEnabled = process.env.SQL_SERVER_ENCRYPT === 'true';
+    const isTrustCertEnabled = process.env.SQL_SERVER_TRUST_CERT !== 'false'; // defaults to true
+    console.error(
+      `  SQL_SERVER_ENCRYPT=${isEncryptEnabled ? 'true' : 'false'} (SSL encryption enabled)`
+    );
+    console.error(
+      `  SQL_SERVER_TRUST_CERT=${isTrustCertEnabled ? 'true' : 'false'} (Trust server certificate)`
+    );
     // Timeout & Retry Settings
     console.error('⏱️ Timeout & Retry Settings:');
     console.error(
