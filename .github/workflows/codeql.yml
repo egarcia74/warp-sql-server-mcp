@@ -90,6 +90,6 @@ jobs:
         continue-on-error: true
         with:
           fail-on-severity: moderate
-          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, 0BSD
+          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, 0BSD, Unlicense
           comment-summary-in-pr: always
           warn-only: true
