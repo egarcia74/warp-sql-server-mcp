@@ -380,8 +380,11 @@ jobs:
         uses: streetsidesoftware/cspell-action@v7
         with:
           files: "**/*.md"
-          config: ".github/cspell.json"
+          config: "cspell.json"
           inline: "error"
+          incremental_files_only: false
+          strict: false
+          verbose: true
 
   accessibility-check:
     name: Documentation Accessibility Check  
