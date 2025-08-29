@@ -38,9 +38,14 @@
   "author": "Eduardo Garcia",
   "license": "MIT",
   "dependencies": {
+    "@azure/identity": "^4.11.1",
+    "@azure/keyvault-secrets": "^4.10.0",
     "@modelcontextprotocol/sdk": "^0.7.0",
+    "aws-sdk": "^2.1692.0",
     "dotenv": "^17.2.1",
-    "mssql": "^11.0.1"
+    "mssql": "^11.0.1",
+    "node-sql-parser": "^5.3.11",
+    "winston": "file:aws-sdk@azure/keyvault-secrets@azure/identity"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
