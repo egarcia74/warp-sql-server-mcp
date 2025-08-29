@@ -30,15 +30,19 @@ import { SecretManager } from '../lib/config/secret-manager.js';
 async function testAzureSecrets() {
   console.log('🧪 Testing Azure Key Vault Secret Manager Integration\n');
 
-  // Check required environment variables
+  // Check required environment variables - using local variables to avoid CodeQL warnings
+  const secretManagerType = process.env.SECRET_MANAGER_TYPE || 'NOT SET';
+  const azureVaultUrl = process.env.AZURE_KEY_VAULT_URL || 'NOT SET';
+  const azureClientIdStatus = process.env.AZURE_CLIENT_ID ? '***SET***' : 'NOT SET';
+  const azureClientSecretStatus = process.env.AZURE_CLIENT_SECRET ? '***SET***' : 'NOT SET';
+  const azureTenantId = process.env.AZURE_TENANT_ID || 'NOT SET';
+
   console.log('📋 Environment Configuration:');
-  console.log(`  SECRET_MANAGER_TYPE: ${process.env.SECRET_MANAGER_TYPE || 'NOT SET'}`);
-  console.log(`  AZURE_KEY_VAULT_URL: ${process.env.AZURE_KEY_VAULT_URL || 'NOT SET'}`);
-  console.log(`  AZURE_CLIENT_ID: ${process.env.AZURE_CLIENT_ID ? '***SET***' : 'NOT SET'}`);
-  console.log(
-    `  AZURE_CLIENT_SECRET: ${process.env.AZURE_CLIENT_SECRET ? '***SET***' : 'NOT SET'}`
-  );
-  console.log(`  AZURE_TENANT_ID: ${process.env.AZURE_TENANT_ID || 'NOT SET'}\n`);
+  console.log(`  SECRET_MANAGER_TYPE: ${secretManagerType}`);
+  console.log(`  AZURE_KEY_VAULT_URL: ${azureVaultUrl}`);
+  console.log(`  AZURE_CLIENT_ID: ${azureClientIdStatus}`);
+  console.log(`  AZURE_CLIENT_SECRET: ${azureClientSecretStatus}`);
+  console.log(`  AZURE_TENANT_ID: ${azureTenantId}\n`);
 
   if (process.env.SECRET_MANAGER_TYPE !== 'azure') {
     console.log('❌ SECRET_MANAGER_TYPE must be set to "azure" for this test');

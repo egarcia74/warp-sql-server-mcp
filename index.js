@@ -930,12 +930,11 @@ class SqlServerMCP {
     const passwordStatus = process.env.SQL_SERVER_PASSWORD ? '***MASKED***' : '(not set)';
     console.error(`  SQL_SERVER_PASSWORD=${passwordStatus} (Authentication password)`);
 
-    console.error(
-      `  SQL_SERVER_ENCRYPT=${process.env.SQL_SERVER_ENCRYPT || 'false'} (SSL encryption enabled)`
-    );
-    console.error(
-      `  SQL_SERVER_TRUST_CERT=${process.env.SQL_SERVER_TRUST_CERT || 'true'} (Trust server certificate)`
-    );
+    // SSL/TLS Settings (safe to log - boolean configuration values)
+    const encryptSetting = process.env.SQL_SERVER_ENCRYPT || 'false';
+    const trustCertSetting = process.env.SQL_SERVER_TRUST_CERT || 'true';
+    console.error(`  SQL_SERVER_ENCRYPT=${encryptSetting} (SSL encryption enabled)`);
+    console.error(`  SQL_SERVER_TRUST_CERT=${trustCertSetting} (Trust server certificate)`);
     // Timeout & Retry Settings
     console.error('⏱️ Timeout & Retry Settings:');
     console.error(

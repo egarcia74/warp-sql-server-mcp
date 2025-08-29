@@ -30,16 +30,21 @@ import { SecretManager } from '../lib/config/secret-manager.js';
 async function testAWSSecrets() {
   console.log('🧪 Testing AWS Secrets Manager Secret Manager Integration\n');
 
-  // Check required environment variables
+  // Check required environment variables - using local variables to avoid CodeQL warnings
+  const secretManagerType = process.env.SECRET_MANAGER_TYPE || 'NOT SET';
+  const awsRegion = process.env.AWS_REGION || 'NOT SET';
+  const awsAccessKeyStatus = process.env.AWS_ACCESS_KEY_ID ? '***SET***' : 'NOT SET';
+  const awsSecretKeyStatus = process.env.AWS_SECRET_ACCESS_KEY ? '***SET***' : 'NOT SET';
+  const awsProfile = process.env.AWS_PROFILE || 'NOT SET';
+  const awsSdkLoadConfig = process.env.AWS_SDK_LOAD_CONFIG || 'NOT SET';
+
   console.log('📋 Environment Configuration:');
-  console.log(`  SECRET_MANAGER_TYPE: ${process.env.SECRET_MANAGER_TYPE || 'NOT SET'}`);
-  console.log(`  AWS_REGION: ${process.env.AWS_REGION || 'NOT SET'}`);
-  console.log(`  AWS_ACCESS_KEY_ID: ${process.env.AWS_ACCESS_KEY_ID ? '***SET***' : 'NOT SET'}`);
-  console.log(
-    `  AWS_SECRET_ACCESS_KEY: ${process.env.AWS_SECRET_ACCESS_KEY ? '***SET***' : 'NOT SET'}`
-  );
-  console.log(`  AWS_PROFILE: ${process.env.AWS_PROFILE || 'NOT SET'}`);
-  console.log(`  AWS_SDK_LOAD_CONFIG: ${process.env.AWS_SDK_LOAD_CONFIG || 'NOT SET'}\n`);
+  console.log(`  SECRET_MANAGER_TYPE: ${secretManagerType}`);
+  console.log(`  AWS_REGION: ${awsRegion}`);
+  console.log(`  AWS_ACCESS_KEY_ID: ${awsAccessKeyStatus}`);
+  console.log(`  AWS_SECRET_ACCESS_KEY: ${awsSecretKeyStatus}`);
+  console.log(`  AWS_PROFILE: ${awsProfile}`);
+  console.log(`  AWS_SDK_LOAD_CONFIG: ${awsSdkLoadConfig}\n`);
 
   if (process.env.SECRET_MANAGER_TYPE !== 'aws') {
     console.log('❌ SECRET_MANAGER_TYPE must be set to "aws" for this test');
