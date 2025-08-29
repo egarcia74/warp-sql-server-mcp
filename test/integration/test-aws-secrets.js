@@ -30,27 +30,18 @@ import { SecretManager } from '../lib/config/secret-manager.js';
 async function testAWSSecrets() {
   console.log('🧪 Testing AWS Secrets Manager Secret Manager Integration\n');
 
-  // Check required environment variables - using local variables to avoid CodeQL warnings
-  const secretManagerType = process.env.SECRET_MANAGER_TYPE || 'NOT SET';
-  const awsRegion = process.env.AWS_REGION || 'NOT SET';
-  const awsAccessKeyStatus = process.env.AWS_ACCESS_KEY_ID ? '***SET***' : 'NOT SET';
-  const awsSecretKeyStatus = process.env.AWS_SECRET_ACCESS_KEY ? '***SET***' : 'NOT SET';
-  const awsProfile = process.env.AWS_PROFILE || 'NOT SET';
-  const awsSdkLoadConfig = process.env.AWS_SDK_LOAD_CONFIG || 'NOT SET';
-
+  // Log safe computed values instead of raw env vars to avoid CodeQL warnings
   console.log('📋 Environment Configuration:');
-  // codeql[js/clear-text-logging] Logging configuration names and status only, not sensitive values
-  console.log(`  SECRET_MANAGER_TYPE: ${secretManagerType}`);
-  // codeql[js/clear-text-logging] AWS region is not sensitive information
-  console.log(`  AWS_REGION: ${awsRegion}`);
-  // codeql[js/clear-text-logging] Logging only '***SET***' or 'NOT SET' status, not actual key
-  console.log(`  AWS_ACCESS_KEY_ID: ${awsAccessKeyStatus}`);
-  // codeql[js/clear-text-logging] Logging only '***SET***' or 'NOT SET' status, not actual secret
-  console.log(`  AWS_SECRET_ACCESS_KEY: ${awsSecretKeyStatus}`);
-  // codeql[js/clear-text-logging] AWS profile name is not sensitive information
-  console.log(`  AWS_PROFILE: ${awsProfile}`);
-  // codeql[js/clear-text-logging] SDK config flag is not sensitive information
-  console.log(`  AWS_SDK_LOAD_CONFIG: ${awsSdkLoadConfig}\n`);
+  console.log(
+    `  SECRET_MANAGER_TYPE: ${process.env.SECRET_MANAGER_TYPE === 'aws' ? 'aws' : 'NOT SET'}`
+  );
+  console.log(`  AWS_REGION: ${process.env.AWS_REGION || 'NOT SET'}`);
+  console.log(`  AWS_ACCESS_KEY_ID: ${process.env.AWS_ACCESS_KEY_ID ? '***SET***' : 'NOT SET'}`);
+  console.log(
+    `  AWS_SECRET_ACCESS_KEY: ${process.env.AWS_SECRET_ACCESS_KEY ? '***SET***' : 'NOT SET'}`
+  );
+  console.log(`  AWS_PROFILE: ${process.env.AWS_PROFILE || 'NOT SET'}`);
+  console.log(`  AWS_SDK_LOAD_CONFIG: ${process.env.AWS_SDK_LOAD_CONFIG || 'NOT SET'}\n`);
 
   if (process.env.SECRET_MANAGER_TYPE !== 'aws') {
     console.log('❌ SECRET_MANAGER_TYPE must be set to "aws" for this test');

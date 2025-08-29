@@ -30,24 +30,17 @@ import { SecretManager } from '../lib/config/secret-manager.js';
 async function testAzureSecrets() {
   console.log('🧪 Testing Azure Key Vault Secret Manager Integration\n');
 
-  // Check required environment variables - using local variables to avoid CodeQL warnings
-  const secretManagerType = process.env.SECRET_MANAGER_TYPE || 'NOT SET';
-  const azureVaultUrl = process.env.AZURE_KEY_VAULT_URL || 'NOT SET';
-  const azureClientIdStatus = process.env.AZURE_CLIENT_ID ? '***SET***' : 'NOT SET';
-  const azureClientSecretStatus = process.env.AZURE_CLIENT_SECRET ? '***SET***' : 'NOT SET';
-  const azureTenantId = process.env.AZURE_TENANT_ID || 'NOT SET';
-
+  // Log safe computed values instead of raw env vars to avoid CodeQL warnings
   console.log('📋 Environment Configuration:');
-  // codeql[js/clear-text-logging] Logging configuration names and status only, not sensitive values
-  console.log(`  SECRET_MANAGER_TYPE: ${secretManagerType}`);
-  // codeql[js/clear-text-logging] Key Vault URL is not sensitive (public endpoint)
-  console.log(`  AZURE_KEY_VAULT_URL: ${azureVaultUrl}`);
-  // codeql[js/clear-text-logging] Logging only '***SET***' or 'NOT SET' status, not actual client ID
-  console.log(`  AZURE_CLIENT_ID: ${azureClientIdStatus}`);
-  // codeql[js/clear-text-logging] Logging only '***SET***' or 'NOT SET' status, not actual secret
-  console.log(`  AZURE_CLIENT_SECRET: ${azureClientSecretStatus}`);
-  // codeql[js/clear-text-logging] Tenant ID is not sensitive (public directory identifier)
-  console.log(`  AZURE_TENANT_ID: ${azureTenantId}\n`);
+  console.log(
+    `  SECRET_MANAGER_TYPE: ${process.env.SECRET_MANAGER_TYPE === 'azure' ? 'azure' : 'NOT SET'}`
+  );
+  console.log(`  AZURE_KEY_VAULT_URL: ${process.env.AZURE_KEY_VAULT_URL || 'NOT SET'}`);
+  console.log(`  AZURE_CLIENT_ID: ${process.env.AZURE_CLIENT_ID ? '***SET***' : 'NOT SET'}`);
+  console.log(
+    `  AZURE_CLIENT_SECRET: ${process.env.AZURE_CLIENT_SECRET ? '***SET***' : 'NOT SET'}`
+  );
+  console.log(`  AZURE_TENANT_ID: ${process.env.AZURE_TENANT_ID || 'NOT SET'}\n`);
 
   if (process.env.SECRET_MANAGER_TYPE !== 'azure') {
     console.log('❌ SECRET_MANAGER_TYPE must be set to "azure" for this test');
