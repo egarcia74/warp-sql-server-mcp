@@ -265,7 +265,7 @@ jobs:
           tool_count=$(node -e "const data = require('./docs-data/tools.json'); console.log(data.toolsCount);")
           echo "✅ Successfully generated documentation for $tool_count MCP tools"
 
-      - name: Commit generated documentation
+      - name: Create documentation update PR
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -273,19 +273,58 @@ jobs:
           # Stage all generated documentation files
           git add docs/index.html docs/tools.html docs-data/tools.json
           
-          # Only commit if there are changes
+          # Only proceed if there are changes
           if git diff --staged --quiet; then
             echo "No documentation changes to commit"
           else
+            # Create a unique branch name
+            branch_name="docs/auto-update-$(date +%Y%m%d-%H%M%S)"
+            git checkout -b "$branch_name"
+            
+            # Get tool count for commit message
+            tool_count=$(node -e "const data = require('./docs-data/tools.json'); console.log(data.toolsCount);")
+            
             git commit -m "docs: auto-update API documentation
             
             - Generated from latest source code
             - Updated tools.html with comprehensive API reference
             - Updated index.html with current tool count
-            - Extracted $(node -e "const data = require('./docs-data/tools.json'); console.log(data.toolsCount);") MCP tools"
+            - Extracted $tool_count MCP tools"
             
-            git push
-            echo "✅ Documentation committed and pushed"
+            git push origin "$branch_name"
+            
+            # Create PR using GitHub CLI
+            gh pr create \
+              --title "📚 Auto-update API documentation" \
+              --body "## 🤖 Automated Documentation Update
+            
+            This PR contains automatically generated documentation updates.
+            
+            ### 📊 Changes
+            - **Tools documented**: $tool_count MCP tools
+            - **Generated files**: 
+              - \`docs/index.html\` - Landing page with tool overview
+              - \`docs/tools.html\` - Comprehensive API documentation
+              - \`docs-data/tools.json\` - Structured tool data
+            
+            ### 🔍 Verification
+            - ✅ All tools extracted successfully
+            - ✅ HTML documentation generated
+            - ✅ Landing page updated with current tool count
+            
+            ### 📋 Review Checklist
+            - [ ] Tool count matches expected number (currently $tool_count)
+            - [ ] HTML files are properly formatted
+            - [ ] No sensitive information exposed
+            - [ ] Documentation reflects current codebase
+            
+            **This PR can be safely merged** - it only contains auto-generated documentation." \
+              --head "$branch_name" \
+              --base "main" \
+              --label "documentation" \
+              --label "automated"
+            
+            echo "✅ Documentation PR created: $branch_name"
           fi
 
       - name: Upload documentation artifacts
