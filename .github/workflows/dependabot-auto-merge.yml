@@ -5,9 +5,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
-  pull-requests: write
-  checks: read
+  contents: read
 
 jobs:
   auto-merge:
@@ -15,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     # Only run for Dependabot PRs
     if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -35,21 +37,21 @@ jobs:
         id: analyze
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          # Get PR details
+          # Get PR details (safely)
           pr_number=${{ github.event.pull_request.number }}
-          pr_title="${{ github.event.pull_request.title }}"
           pr_labels=$(gh pr view $pr_number --json labels --jq '.labels[].name' | tr '\n' ' ')
           
           echo "PR: #$pr_number"
-          echo "Title: $pr_title"
+          echo "Title: $PR_TITLE"
           echo "Labels: $pr_labels"
           
           # Determine if this is an auto-mergeable update
           auto_merge=false
           
           # Check for security updates (always auto-merge if tests pass)
-          if echo "$pr_title" | grep -qi "security\|vulnerability\|cve"; then
+          if echo "$PR_TITLE" | grep -qi "security\|vulnerability\|cve"; then
             echo "🔒 Security update detected - eligible for auto-merge"
             auto_merge=true
           
@@ -64,7 +66,7 @@ jobs:
             auto_merge=true
           
           # Check for patch updates on allowed dependencies
-          elif echo "$pr_title" | grep -qi "patch"; then
+          elif echo "$PR_TITLE" | grep -qi "patch"; then
             echo "🩹 Patch update - eligible for auto-merge"
             auto_merge=true
           
@@ -136,16 +138,18 @@ jobs:
     name: Notify Manual Review Required
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
+    permissions:
+      pull-requests: write
     steps:
       - name: Check if manual review needed
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           pr_number=${{ github.event.pull_request.number }}
-          pr_title="${{ github.event.pull_request.title }}"
           
           # Check if this is a major version update or security-critical dependency
-          if echo "$pr_title" | grep -qi "major\|mssql\|tedious\|azure.*identity\|aws-sdk"; then
+          if echo "$PR_TITLE" | grep -qi "major\|mssql\|tedious\|azure.*identity\|aws-sdk"; then
             gh pr comment $pr_number --body "🔍 **Manual Review Required**
 
             This Dependabot update requires manual review because:

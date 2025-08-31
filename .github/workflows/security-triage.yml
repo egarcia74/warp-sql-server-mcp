@@ -14,15 +14,16 @@ on:
       - '.github/dependabot.yml'
 
 permissions:
-  security-events: read
-  issues: write
-  pull-requests: write
-  contents: write
+  contents: read
 
 jobs:
   triage-security-alerts:
     name: Triage Security Alerts
     runs-on: ubuntu-latest
+    permissions:
+      security-events: read
+      issues: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -202,6 +203,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: triage-security-alerts
     if: always()
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
