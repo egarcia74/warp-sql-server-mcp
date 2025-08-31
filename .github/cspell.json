@@ -261,6 +261,7 @@
     "fileb",
     "AKIA",
     "cmdshell",
+    "xp_cmdshell",
     "OPENROWSET",
     "AWSCURRENT",
     "appsettings",
