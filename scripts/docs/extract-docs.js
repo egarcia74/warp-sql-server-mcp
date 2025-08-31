@@ -335,10 +335,9 @@ function generateToolsDocumentation() {
     try {
       execSync('npx prettier --write docs-data/tools.json', { stdio: 'inherit' });
       console.log('Documentation data saved and formatted: docs-data/tools.json');
-    } catch (error) {
+    } catch {
       console.log('Documentation data saved to docs-data/tools.json (formatting skipped)');
     }
-    
     return docData;
   } catch (error) {
     console.error('Error extracting documentation:', error.message);
