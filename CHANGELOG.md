@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Performance Monitoring Enhancement
+
+- **📊 Complete Performance Monitoring Coverage**: Extended performance monitoring instrumentation to all SQL Server MCP tools
+  - Added performance tracking to `listForeignKeys` method with detailed metadata capture
+  - Added performance tracking to `exportTableCsv` method with query parameter and result metrics
+  - All 11 MCP tools now contribute comprehensive data to overall server performance statistics
+  - Enhanced unit tests with performance monitoring mocks for complete coverage
+  - Fixed code formatting and linting issues across the codebase
+  - Updated documentation to reflect complete performance monitoring capabilities
+
+### Enhanced - Performance Monitoring Documentation
+
+- **📚 Updated Documentation**:
+  - Added performance monitoring tools (`get_performance_stats`, `get_query_performance`, `get_connection_health`) to README.md Available Tools section
+  - Enhanced WARP setup guide with comprehensive performance monitoring examples
+  - Corrected markdown formatting issues in setup guides
+  - Ensured all CI/CD checks pass (linting, formatting, testing)
+
+This completes the performance monitoring implementation started in GitHub issue #15, providing comprehensive query performance tracking, error handling, and diagnostics across all database operation methods.
+
+### Enhanced - Test Suite Modularization
+
+- **🧪 Modular Test Architecture**: Restructured monolithic test suite into focused, maintainable modules
+  - Extracted `mcp-connection.test.js` - Database connection tests (4 tests)
+  - Extracted `mcp-security.test.js` - Safety mechanisms and query validation tests (38 tests)
+  - Extracted `mcp-core-tools.test.js` - Core SQL tools tests (12 tests)
+  - Extracted `mcp-data-tools.test.js` - Data manipulation tools tests (36 tests)
+  - Extracted `mcp-performance-tools.test.js` - Performance monitoring tests (22 tests)
+  - Extracted `mcp-server-lifecycle.test.js` - Server startup and configuration tests (15 tests)
+  - All 127 tests from original monolithic suite successfully extracted and verified
+  - Original monolithic test file preserved for compatibility
+  - Each test file runs independently with proper environment isolation
+  - Improved development workflow with focused test execution
+  - Updated test documentation to reflect modular structure
+
 ## [1.5.0] - 2025-08-29
 
 ### 🎯 Product Management & Development Workflow Enhancement

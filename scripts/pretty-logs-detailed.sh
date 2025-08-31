@@ -6,7 +6,7 @@
 #   ./scripts/pretty-logs-detailed.sh --compact # Live following with compact summaries
 #   ./scripts/pretty-logs-detailed.sh --help    # Show usage
 
-LOG_FILE="/Users/egarcia74/Library/Application Support/dev.warp.Warp-Stable/mcp/4TWzM7mOVXXOyIpZpvksyN.log"
+LOG_FILE="$HOME/Library/Application Support/dev.warp.Warp-Stable/mcp/4TWzM7mOVXXOyIpZpvksyN.log"
 
 # Parse command line arguments
 COMPACT_MODE=false

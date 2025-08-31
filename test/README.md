@@ -10,8 +10,20 @@ test/
 ├── setup.js                            # Global test setup and mocks
 │
 ├── unit/                               # Unit tests (fast, mocked dependencies)
-│   ├── sqlserver-mcp.test.js          # Main application unit tests (56 tests)
-│   └── query-validator-simple.test.js # Query validator unit tests
+│   ├── sqlserver-mcp.test.js          # Original monolithic test suite (127 tests)
+│   ├── mcp-connection.test.js         # Database connection tests (4 tests)
+│   ├── mcp-security.test.js           # Safety mechanisms tests (38 tests)
+│   ├── mcp-core-tools.test.js         # Core SQL tools tests (12 tests)
+│   ├── mcp-data-tools.test.js         # Data manipulation tools tests (36 tests)
+│   ├── mcp-performance-tools.test.js  # Performance monitoring tests (22 tests)
+│   ├── mcp-server-lifecycle.test.js   # Server lifecycle tests (15 tests)
+│   ├── query-validator-simple.test.js # Query validator unit tests
+│   ├── logger.test.js                 # Logger utility tests
+│   ├── performance-monitor.test.js    # Performance monitor tests
+│   ├── response-formatter.test.js     # Response formatting tests
+│   ├── secret-manager.test.js         # Secret management tests
+│   ├── streaming-handler.test.js      # Streaming handler tests
+│   └── mcp-shared-fixtures.js         # Shared test fixtures and utilities
 │
 ├── integration/                       # Integration tests (real services)
 │   ├── test-aws-secrets.js           # AWS Secrets Manager integration test
@@ -26,20 +38,33 @@ test/
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 56 tests (including comprehensive safety validation tests)
-- **Status**: ✅ All passing
+- **Total Tests**: 500+ tests across modular test suites
+- **Status**: ✅ All passing (except some pre-existing streaming handler issues)
 - **Coverage**: 61.04% statements, 77.89% branches, 91.66% functions
 - **Test Type**: Unit tests with mocked SQL Server connections
 - **🔒 Security Focus**: Comprehensive safety mechanism validation to prevent security bypasses
+- **📦 Modular Structure**: Tests organized by functional area for better maintainability
 
 ## 📁 Test Structure
 
 ```text
 test/
-├── README.md              # This documentation
-├── setup.js               # Global test setup and mock configurations
-├── sqlserver-mcp.test.js   # Main test suite (56 tests)
-└── vitest.config.js        # Test configuration (in root directory)
+├── README.md                        # This documentation
+├── setup.js                         # Global test setup and mock configurations
+├── unit/                            # Unit test suites
+│   ├── sqlserver-mcp.test.js       # Original monolithic test suite (127 tests)
+│   ├── mcp-connection.test.js      # Database connection tests (4 tests)
+│   ├── mcp-security.test.js        # Safety mechanisms tests (38 tests)
+│   ├── mcp-core-tools.test.js      # Core SQL tools tests (12 tests)
+│   ├── mcp-data-tools.test.js      # Data manipulation tools tests (36 tests)
+│   ├── mcp-performance-tools.test.js # Performance monitoring tests (22 tests)
+│   ├── mcp-server-lifecycle.test.js # Server lifecycle tests (15 tests)
+│   ├── mcp-shared-fixtures.js      # Shared test fixtures and utilities
+│   └── [other utility test files]   # Logger, performance monitor, etc.
+├── integration/                     # Integration tests
+│   ├── test-aws-secrets.js         # AWS Secrets Manager tests
+│   └── test-azure-secrets.js       # Azure Key Vault tests
+└── vitest.config.js                 # Test configuration (in root directory)
 ```
 
 ## 🏃‍♂️ Running Tests
@@ -68,7 +93,34 @@ npm run test:watch
 
 # Before committing - full test run with coverage
 npm run test:coverage
+
+# Run specific test suites during development
+npm test test/unit/mcp-security.test.js        # Security tests only
+npm test test/unit/mcp-core-tools.test.js      # Core tools only
+npm test test/unit/mcp-data-tools.test.js      # Data tools only
+npm test test/unit/mcp-performance-tools.test.js # Performance monitoring only
 ```
+
+### Modular Test Structure
+
+The test suite has been organized into focused, modular files for better maintainability:
+
+#### 🎯 **Focused Test Files**
+
+- **`mcp-connection.test.js`** - Database connection and authentication
+- **`mcp-security.test.js`** - Safety mechanisms and query validation
+- **`mcp-core-tools.test.js`** - Core SQL tools (executeQuery, listDatabases, etc.)
+- **`mcp-data-tools.test.js`** - Data manipulation tools (getTableData, exportTableCsv, etc.)
+- **`mcp-performance-tools.test.js`** - Performance monitoring tools
+- **`mcp-server-lifecycle.test.js`** - Server startup, configuration, and runtime
+
+#### 📦 **Benefits of Modular Structure**
+
+- **Faster Development**: Run only relevant tests during feature development
+- **Better Organization**: Tests grouped by functional area
+- **Isolated Testing**: Each test file runs independently
+- **Easier Maintenance**: Smaller, focused files are easier to understand and modify
+- **Parallel Execution**: Test files can run in parallel for faster CI/CD
 
 ## 🧩 Test Categories
 

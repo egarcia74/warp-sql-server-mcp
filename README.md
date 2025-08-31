@@ -410,6 +410,12 @@ With Warp's AI capabilities, you can:
 7. **list_foreign_keys**: Discover foreign key relationships and constraints in a schema
 8. **export_table_csv**: Export table data in CSV format with optional filtering
 
+### Performance Monitoring
+
+1. **get_performance_stats**: Get comprehensive server performance statistics and health metrics
+2. **get_query_performance**: Get detailed query performance breakdown by tool with filtering options
+3. **get_connection_health**: Monitor SQL Server connection pool health and diagnostics
+
 ## Prerequisites
 
 - **Node.js 18.0.0 or higher** (works on Windows, macOS, and Linux)

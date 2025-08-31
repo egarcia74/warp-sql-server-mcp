@@ -3,7 +3,7 @@
 # View ALL MCP logs with pretty-printing (no following)
 # Usage: ./scripts/view-full-logs.sh
 
-LOG_FILE="/Users/egarcia74/Library/Application Support/dev.warp.Warp-Stable/mcp/4TWzM7mOVXXOyIpZpvksyN.log"
+LOG_FILE="$HOME/Library/Application Support/dev.warp.Warp-Stable/mcp/4TWzM7mOVXXOyIpZpvksyN.log"
 
 if [[ ! -f "$LOG_FILE" ]]; then
     echo "❌ Log file not found: $LOG_FILE"

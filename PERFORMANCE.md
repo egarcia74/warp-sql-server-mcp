@@ -3,8 +3,10 @@
 ## Overview
 
 This framework includes a comprehensive **PerformanceMonitor** class that provides production-ready performance
-monitoring, health assessment, and metrics collection. This document describes the performance capabilities and
-provides benchmarking guidelines.
+monitoring, health assessment, and metrics collection. **All 11 SQL Server MCP tools** are instrumented with
+performance tracking, providing complete visibility into query execution, connection health, and system performance.
+
+This document describes the performance capabilities and provides benchmarking guidelines.
 
 ## Performance Architecture
 
