@@ -5,14 +5,19 @@ on:
     # Check for security alerts daily at 6 AM
     - cron: '0 6 * * *'
   workflow_dispatch:
-  repository_vulnerability_alert:
-    types: [create]
+  # Trigger on pushes that might affect dependencies
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/dependabot.yml'
 
 permissions:
   security-events: read
   issues: write
   pull-requests: write
-  contents: read
+  contents: write
 
 jobs:
   triage-security-alerts:
