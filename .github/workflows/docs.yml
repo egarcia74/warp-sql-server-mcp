@@ -38,10 +38,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -50,7 +50,7 @@ jobs:
         run: npm ci
 
       - name: Validate markdown links
-        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        uses: gaurav-nelson/github-action-markdown-link-check@499c1e7f3637c131334fa8e937c45144f79d72d2 # v1
         with:
           use-quiet-mode: 'yes'
           use-verbose-mode: 'yes'
@@ -125,7 +125,7 @@ jobs:
           cat tool-docs-report.txt >> link-report.md
 
       - name: Upload documentation report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: documentation-validation-report
           path: link-report.md
@@ -136,7 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Check if TOC needs update
         run: |
@@ -159,7 +159,7 @@ jobs:
           fi
 
       - name: Upload TOC check report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: toc-check-report
           path: toc-check-report.md
@@ -170,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 0
 
@@ -222,7 +222,7 @@ jobs:
           fi
 
       - name: Upload freshness report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: documentation-freshness-report
           path: freshness-report.md
@@ -234,10 +234,10 @@ jobs:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -336,7 +336,7 @@ jobs:
           fi
 
       - name: Upload documentation artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: generated-documentation
           path: |
@@ -350,10 +350,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Run spell check
-        uses: streetsidesoftware/cspell-action@v7
+        uses: streetsidesoftware/cspell-action@24db231b2edd831a4cfe5dbac8f4d45c4d3730f7 # v7
         with:
           files: "**/*.md"
           config: "cspell.json"
@@ -367,7 +367,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Check markdown accessibility
         run: |
@@ -403,7 +403,7 @@ jobs:
           done
 
       - name: Upload accessibility report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: accessibility-report
           path: accessibility-report.md
@@ -415,7 +415,7 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout PR
-        uses: actions/checkout@v5
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Check for documentation updates
         id: docs-check
@@ -450,7 +450,7 @@ jobs:
           fi
 
       - name: Comment on PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@5c56fde4671bc2d3592fb0f2c5b5bab9ddae03b1 # v7
         with:
           script: |
             const fs = require('fs');
