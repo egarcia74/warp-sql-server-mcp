@@ -1139,8 +1139,8 @@ Show me queries that took longer than 5 seconds to execute
 ### Support Channels
 
 - 🐛 **[GitHub Issues](https://github.com/egarcia74/warp-sql-server-mcp/issues)** - Bug reports and feature requests
-- 💬 **[Discussions](https://github.com/egarcia74/warp-sql-server-mcp/discussions)** - Community support
 - 📚 **[API Documentation](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Tool reference
+- 💬 **Community Support** - Use GitHub Issues for questions and community discussion
 
 ### Common VS Code Workflows
 
