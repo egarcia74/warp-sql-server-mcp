@@ -1,6 +1,6 @@
 {
   "version": "1.5.0",
-  "generatedAt": "2025-08-31T05:15:01.373Z",
+  "generatedAt": "2025-08-31T05:30:10.932Z",
   "toolsCount": 11,
   "tools": [
     {
@@ -16,7 +16,9 @@
           "description": "Optional: Database name to use for this query"
         }
       },
-      "required": ["query"],
+      "required": [
+        "query"
+      ],
       "examples": {
         "basic": {
           "query": "SELECT * FROM your_table"
@@ -76,7 +78,9 @@
           "description": "Schema name (optional, defaults to dbo)"
         }
       },
-      "required": ["table_name"],
+      "required": [
+        "table_name"
+      ],
       "examples": {
         "basic": {
           "table_name": "your_table_name"
@@ -113,7 +117,9 @@
           "description": "WHERE clause conditions (optional)"
         }
       },
-      "required": ["table_name"],
+      "required": [
+        "table_name"
+      ],
       "examples": {
         "basic": {
           "table_name": "your_table_name"
@@ -144,7 +150,9 @@
           "description": "Include actual execution statistics (optional, defaults to false)"
         }
       },
-      "required": ["query"],
+      "required": [
+        "query"
+      ],
       "examples": {
         "basic": {
           "query": "SELECT * FROM your_table"
@@ -203,7 +211,9 @@
           "description": "WHERE clause conditions (optional)"
         }
       },
-      "required": ["table_name"],
+      "required": [
+        "table_name"
+      ],
       "examples": {
         "basic": {
           "table_name": "your_table_name"
