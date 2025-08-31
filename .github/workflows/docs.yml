@@ -296,7 +296,7 @@ jobs:
             git push origin "$branch_name"
             
             # Create PR using GitHub CLI
-            gh pr create \
+            if gh pr create \
               --title "📚 Auto-update API documentation" \
               --body "## 🤖 Automated Documentation Update
             
@@ -324,9 +324,15 @@ jobs:
               --head "$branch_name" \
               --base "main" \
               --label "documentation" \
-              --label "automated"
-            
-            echo "✅ Documentation PR created: $branch_name"
+              --label "automated"; then
+              echo "✅ Documentation PR created: $branch_name"
+            else
+              echo "⚠️ Could not create PR automatically (likely due to permissions)"
+              echo "📋 Manual PR creation required:"
+              echo "   Branch: $branch_name"
+              echo "   Command: gh pr create --head $branch_name --base main --title '📚 Auto-update API documentation' --label documentation --label automated"
+              echo "🔗 Direct link: https://github.com/${{ github.repository }}/compare/main...$branch_name"
+            fi
           fi
 
       - name: Upload documentation artifacts
