@@ -25,7 +25,7 @@ describe('StreamingHandler', () => {
   beforeEach(() => {
     // Reset all mocks before each test
     vi.clearAllMocks();
-    
+
     // Create a fresh handler instance
     handler = new StreamingHandler();
   });
@@ -50,7 +50,7 @@ describe('StreamingHandler', () => {
         maxResponseSize: 2000000,
         enableStreaming: false
       });
-      
+
       const config = customHandler.getConfig();
       expect(config.batchSize).toBe(500);
       expect(config.maxMemoryMB).toBe(100);
@@ -84,71 +84,115 @@ describe('StreamingHandler', () => {
 
     it('should return true when forceStreaming is set', async () => {
       const context = { forceStreaming: true };
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'SELECT id FROM users', context);
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'SELECT id FROM users',
+        context
+      );
       expect(result).toBe(true);
     });
 
     it('should return true for SELECT * without WHERE clause', async () => {
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'SELECT * FROM large_table');
+      const context = {};
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'SELECT * FROM large_table',
+        context
+      );
       expect(result).toBe(true);
     });
 
     it('should return true for queries with BULK operations', async () => {
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'BULK INSERT data FROM file');
+      const context = {};
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'BULK INSERT data FROM file',
+        context
+      );
       expect(result).toBe(true);
     });
 
     it('should return true for EXPORT operations', async () => {
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'EXPORT TABLE users TO csv');
+      const context = {};
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'EXPORT TABLE users TO csv',
+        context
+      );
       expect(result).toBe(true);
     });
 
     it('should return true for BACKUP operations', async () => {
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'BACKUP DATABASE test TO disk');
+      const context = {};
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'BACKUP DATABASE test TO disk',
+        context
+      );
       expect(result).toBe(true);
     });
 
     it('should check table size and stream for large tables', async () => {
       const context = { tableName: 'large_table', schema: 'dbo' };
-      
+
       // Mock table size query result - large table
       mockSqlRequest.query.mockResolvedValue({
         recordset: [{ estimated_rows: 50000, estimated_size_mb: 25 }]
       });
 
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'SELECT * FROM large_table', context);
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'SELECT * FROM large_table',
+        context
+      );
       expect(result).toBe(true);
       expect(mockSqlRequest.query).toHaveBeenCalledWith(expect.stringContaining('sys.tables'));
     });
 
     it('should not stream for small tables', async () => {
       const context = { tableName: 'small_table', schema: 'dbo' };
-      
+
       // Mock table size query result - small table
       mockSqlRequest.query.mockResolvedValue({
         recordset: [{ estimated_rows: 100, estimated_size_mb: 1 }]
       });
 
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'SELECT * FROM small_table', context);
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'SELECT * FROM small_table',
+        context
+      );
       expect(result).toBe(false);
     });
 
     it('should handle errors in table size estimation gracefully', async () => {
       const context = { tableName: 'unknown_table', schema: 'dbo' };
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      
+
       // Mock query failure
       mockSqlRequest.query.mockRejectedValue(new Error('Table not found'));
 
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'SELECT * FROM unknown_table', context);
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'SELECT * FROM unknown_table',
+        context
+      );
       expect(result).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Could not determine table size'), expect.any(String));
-      
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Could not determine table size'),
+        expect.any(String)
+      );
+
       consoleSpy.mockRestore();
     });
 
     it('should return false for regular SELECT queries with conditions', async () => {
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'SELECT id, name FROM users WHERE active = 1');
+      const context = {};
+      const result = await handler.shouldStreamQuery(
+        mockSqlRequest,
+        'SELECT id, name FROM users WHERE active = 1',
+        context
+      );
       expect(result).toBe(false);
     });
   });
@@ -157,17 +201,25 @@ describe('StreamingHandler', () => {
     it('should execute regular query and return formatted result', async () => {
       const mockSqlRequest = {
         query: vi.fn().mockResolvedValue({
-          recordset: [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }],
-          recordsets: [[{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }]],
+          recordset: [
+            { id: 1, name: 'John' },
+            { id: 2, name: 'Jane' }
+          ],
+          recordsets: [
+            [
+              { id: 1, name: 'John' },
+              { id: 2, name: 'Jane' }
+            ]
+          ],
           rowsAffected: [2]
         })
       };
 
       const startTime = Date.now() - 100;
       const result = await handler.executeRegularQuery(
-        mockSqlRequest, 
-        'SELECT * FROM users', 
-        {}, 
+        mockSqlRequest,
+        'SELECT * FROM users',
+        {},
         startTime
       );
 
@@ -189,7 +241,7 @@ describe('StreamingHandler', () => {
       };
 
       const result = await handler.executeRegularQuery(mockSqlRequest, 'SELECT * FROM empty_table');
-      
+
       expect(result.success).toBe(true);
       expect(result.recordset).toEqual([]);
       expect(result.performance.rowCount).toBe(0);
@@ -210,7 +262,7 @@ describe('StreamingHandler', () => {
         query: vi.fn(),
         stream: false
       };
-      
+
       sql.Request.mockReturnValue(mockStreamRequest);
 
       // Mock event handlers
@@ -246,13 +298,13 @@ describe('StreamingHandler', () => {
 
     it('should process multiple batches', async () => {
       handler.updateConfig({ batchSize: 2 });
-      
+
       const mockStreamRequest = {
         on: vi.fn(),
         query: vi.fn(),
         stream: false
       };
-      
+
       sql.Request.mockReturnValue(mockStreamRequest);
 
       let rowHandler, doneHandler;
@@ -279,7 +331,7 @@ describe('StreamingHandler', () => {
       expect(result.totalRows).toBe(5);
       expect(result.chunkCount).toBe(3); // 2 full batches + 1 partial
       expect(result.chunks).toHaveLength(3);
-      expect(result.performance.avgBatchSize).toBeCloseTo(5/3, 1);
+      expect(result.performance.avgBatchSize).toBeCloseTo(5 / 3, 1);
     });
 
     it('should handle streaming errors', async () => {
@@ -288,7 +340,7 @@ describe('StreamingHandler', () => {
         query: vi.fn(),
         stream: false
       };
-      
+
       sql.Request.mockReturnValue(mockStreamRequest);
 
       let errorHandler;
@@ -314,7 +366,7 @@ describe('StreamingHandler', () => {
   describe('executeQueryWithStreaming', () => {
     it('should choose streaming for queries that should stream', async () => {
       const mockSqlRequest = { parent: {}, query: vi.fn() };
-      
+
       // Mock shouldStreamQuery to return true
       const shouldStreamSpy = vi.spyOn(handler, 'shouldStreamQuery').mockResolvedValue(true);
       const executeStreamingSpy = vi.spyOn(handler, 'executeStreamingQuery').mockResolvedValue({
@@ -330,11 +382,11 @@ describe('StreamingHandler', () => {
     });
 
     it('should choose regular execution for queries that should not stream', async () => {
-      const mockSqlRequest = { 
-        parent: {}, 
+      const mockSqlRequest = {
+        parent: {},
         query: vi.fn().mockResolvedValue({ recordset: [], rowsAffected: [0] })
       };
-      
+
       // Mock shouldStreamQuery to return false
       const shouldStreamSpy = vi.spyOn(handler, 'shouldStreamQuery').mockResolvedValue(false);
       const executeRegularSpy = vi.spyOn(handler, 'executeRegularQuery');
@@ -348,7 +400,10 @@ describe('StreamingHandler', () => {
 
   describe('processBatch', () => {
     it('should process batch in default format', () => {
-      const batch = [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }];
+      const batch = [
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' }
+      ];
       const chunks = [];
       const context = {};
 
@@ -362,7 +417,10 @@ describe('StreamingHandler', () => {
     });
 
     it('should process batch in CSV format', () => {
-      const batch = [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }];
+      const batch = [
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' }
+      ];
       const chunks = [];
       const context = { outputFormat: 'csv' };
 
@@ -422,22 +480,24 @@ describe('StreamingHandler', () => {
 
       const csvData = handler.batchToCsv(batch, context);
 
-      expect(csvData).toContain('1,,true\\n');
+      expect(csvData).toContain('1,,,true\\n');
     });
 
     it('should escape CSV special characters', () => {
-      const batch = [{ 
-        id: 1, 
-        name: 'John, Jr.', 
-        note: 'Has "quotes" and\\nnewlines',
-        simple: 'no-escaping-needed'
-      }];
+      const batch = [
+        {
+          id: 1,
+          name: 'John, Jr.',
+          note: 'Has "quotes" and\nnewlines',
+          simple: 'no-escaping-needed'
+        }
+      ];
       const context = {};
 
       const csvData = handler.batchToCsv(batch, context);
 
       expect(csvData).toContain('"John, Jr."');
-      expect(csvData).toContain('"Has ""quotes"" and\\\\nnewlines"');
+      expect(csvData).toContain('"Has ""quotes"" and\nnewlines"');
       expect(csvData).toContain('no-escaping-needed');
     });
 
@@ -449,7 +509,10 @@ describe('StreamingHandler', () => {
 
   describe('batchToJson', () => {
     it('should convert batch to compact JSON', () => {
-      const batch = [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }];
+      const batch = [
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' }
+      ];
       const context = {};
 
       const jsonData = handler.batchToJson(batch, context);
@@ -464,20 +527,21 @@ describe('StreamingHandler', () => {
 
       const jsonData = handler.batchToJson(batch, context);
 
-      expect(jsonData).toContain('\\n'); // Should have newlines
+      expect(jsonData).toContain('\n'); // Should have newlines
       expect(jsonData).toContain('  '); // Should have indentation
     });
   });
 
   describe('streamTableExport', () => {
     it('should export table with streaming', async () => {
-      const mockSqlRequest = { 
+      const mockSqlRequest = {
         query: vi.fn().mockResolvedValue({}),
         parent: {}
       };
 
       // Mock executeQueryWithStreaming
-      const executeStreamingSpy = vi.spyOn(handler, 'executeQueryWithStreaming')
+      const executeStreamingSpy = vi
+        .spyOn(handler, 'executeQueryWithStreaming')
         .mockResolvedValue({ success: true, streaming: true });
 
       const result = await handler.streamTableExport(mockSqlRequest, 'users', {
@@ -504,12 +568,13 @@ describe('StreamingHandler', () => {
     });
 
     it('should export table without database switching', async () => {
-      const mockSqlRequest = { 
+      const mockSqlRequest = {
         query: vi.fn(),
         parent: {}
       };
 
-      const executeStreamingSpy = vi.spyOn(handler, 'executeQueryWithStreaming')
+      const executeStreamingSpy = vi
+        .spyOn(handler, 'executeQueryWithStreaming')
         .mockResolvedValue({ success: true });
 
       await handler.streamTableExport(mockSqlRequest, 'products');
@@ -524,7 +589,8 @@ describe('StreamingHandler', () => {
 
     it('should handle table export without WHERE clause', async () => {
       const mockSqlRequest = { query: vi.fn(), parent: {} };
-      const executeStreamingSpy = vi.spyOn(handler, 'executeQueryWithStreaming')
+      const executeStreamingSpy = vi
+        .spyOn(handler, 'executeQueryWithStreaming')
         .mockResolvedValue({ success: true });
 
       await handler.streamTableExport(mockSqlRequest, 'orders', { schema: 'sales' });
@@ -546,7 +612,7 @@ describe('StreamingHandler', () => {
       ];
 
       const memoryMB = handler.estimateMemoryUsage(recordset);
-      
+
       expect(memoryMB).toBeGreaterThan(0);
       expect(typeof memoryMB).toBe('number');
     });
@@ -559,13 +625,13 @@ describe('StreamingHandler', () => {
 
     it('should use sampling for large recordsets', () => {
       // Create a large recordset (>100 rows)
-      const largeRecordset = Array.from({ length: 1000 }, (_, i) => ({ 
-        id: i, 
-        data: `record_${i}` 
+      const largeRecordset = Array.from({ length: 1000 }, (_, i) => ({
+        id: i,
+        data: `record_${i}`
       }));
 
       const memoryMB = handler.estimateMemoryUsage(largeRecordset);
-      
+
       expect(memoryMB).toBeGreaterThan(0);
       // Memory estimate should be reasonable for 1000 records
       expect(memoryMB).toBeLessThan(100); // Should be much less than 100MB for simple records
@@ -575,47 +641,48 @@ describe('StreamingHandler', () => {
   describe('reconstructFromChunks', () => {
     it('should reconstruct JSON data from chunks', () => {
       const chunks = [
-        { data: [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }] },
-        { data: [{ id: 3, name: 'Bob' }, { id: 4, name: 'Alice' }] }
+        {
+          data: [
+            { id: 1, name: 'John' },
+            { id: 2, name: 'Jane' }
+          ]
+        },
+        {
+          data: [
+            { id: 3, name: 'Bob' },
+            { id: 4, name: 'Alice' }
+          ]
+        }
       ];
 
       const reconstructed = handler.reconstructFromChunks(chunks, 'json');
-      
+
       expect(reconstructed).toHaveLength(4);
       expect(reconstructed[0]).toEqual({ id: 1, name: 'John' });
       expect(reconstructed[3]).toEqual({ id: 4, name: 'Alice' });
     });
 
     it('should reconstruct CSV data from chunks', () => {
-      const chunks = [
-        { data: 'id,name\\n1,John\\n2,Jane\\n' },
-        { data: '3,Bob\\n4,Alice\\n' }
-      ];
+      const chunks = [{ data: 'id,name\\n1,John\\n2,Jane\\n' }, { data: '3,Bob\\n4,Alice\\n' }];
 
       const reconstructed = handler.reconstructFromChunks(chunks, 'csv');
-      
+
       expect(reconstructed).toBe('id,name\\n1,John\\n2,Jane\\n3,Bob\\n4,Alice\\n');
     });
 
     it('should reconstruct raw data from chunks', () => {
-      const chunks = [
-        { data: [{ id: 1 }, { id: 2 }] },
-        { data: [{ id: 3 }] }
-      ];
+      const chunks = [{ data: [{ id: 1 }, { id: 2 }] }, { data: [{ id: 3 }] }];
 
       const reconstructed = handler.reconstructFromChunks(chunks, 'raw');
-      
+
       expect(reconstructed).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
     });
 
     it('should handle JSON string chunks', () => {
-      const chunks = [
-        { data: '[{"id":1}]' },
-        { data: '[{"id":2}]' }
-      ];
+      const chunks = [{ data: '[{"id":1}]' }, { data: '[{"id":2}]' }];
 
       const reconstructed = handler.reconstructFromChunks(chunks, 'json');
-      
+
       expect(reconstructed).toEqual([{ id: 1 }, { id: 2 }]);
     });
 
@@ -630,7 +697,7 @@ describe('StreamingHandler', () => {
     it('should return non-streaming stats', () => {
       const result = { streaming: false, rowCount: 100 };
       const stats = handler.getStreamingStats(result);
-      
+
       expect(stats.streaming).toBe(false);
       expect(stats.memoryEfficient).toBe(false);
       expect(stats.totalRows).toBe(100);
@@ -643,9 +710,9 @@ describe('StreamingHandler', () => {
         chunkCount: 10,
         performance: { duration: 5000 }
       };
-      
+
       const stats = handler.getStreamingStats(result);
-      
+
       expect(stats.streaming).toBe(true);
       expect(stats.memoryEfficient).toBe(true);
       expect(stats.totalRows).toBe(10000);
@@ -657,7 +724,7 @@ describe('StreamingHandler', () => {
     it('should handle streaming result without row count', () => {
       const result = { streaming: false };
       const stats = handler.getStreamingStats(result);
-      
+
       expect(stats.totalRows).toBe(0);
     });
   });
@@ -669,7 +736,7 @@ describe('StreamingHandler', () => {
         maxMemoryMB: -1,
         enableStreaming: null
       });
-      
+
       const config = edgeHandler.getConfig();
       expect(config.batchSize).toBe(0); // Should accept 0 even if not practical
       expect(config.maxMemoryMB).toBe(-1); // Should accept negative values
