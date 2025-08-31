@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ResponseFormatter } from '../../lib/utils/response-formatter.js';
 
 describe('ResponseFormatter', () => {
@@ -8,7 +8,7 @@ describe('ResponseFormatter', () => {
     // Reset environment variables before each test
     delete process.env.SQL_SERVER_RESPONSE_FORMAT;
     delete process.env.NODE_ENV;
-    
+
     // Create a fresh formatter instance
     formatter = new ResponseFormatter();
   });
@@ -35,7 +35,7 @@ describe('ResponseFormatter', () => {
         includePerformance: true,
         maxResponseSize: 500000
       });
-      
+
       const config = customFormatter.getConfig();
       expect(config.format).toBe('json');
       expect(config.includeMetadata).toBe(false);
@@ -55,7 +55,10 @@ describe('ResponseFormatter', () => {
   describe('formatQueryResult', () => {
     it('should format basic query result', () => {
       const mockResult = {
-        recordset: [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }],
+        recordset: [
+          { id: 1, name: 'John' },
+          { id: 2, name: 'Jane' }
+        ],
         rowsAffected: [2]
       };
 
@@ -67,10 +70,10 @@ describe('ResponseFormatter', () => {
       };
 
       const response = formatter.formatQueryResult(mockResult, context);
-      
+
       expect(response.content).toHaveLength(1);
       expect(response.content[0].type).toBe('text');
-      
+
       const data = JSON.parse(response.content[0].text);
       expect(data.success).toBe(true);
       expect(data.recordset).toEqual(mockResult.recordset);
@@ -82,7 +85,7 @@ describe('ResponseFormatter', () => {
 
     it('should include performance metrics when enabled', () => {
       formatter.updateConfig({ includePerformance: true });
-      
+
       const mockResult = {
         recordset: [{ id: 1, name: 'test' }]
       };
@@ -93,7 +96,7 @@ describe('ResponseFormatter', () => {
 
       const response = formatter.formatQueryResult(mockResult, context);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.performance).toBeDefined();
       expect(data.performance.duration).toBeGreaterThanOrEqual(0);
       expect(data.performance.recordCount).toBe(1);
@@ -111,7 +114,7 @@ describe('ResponseFormatter', () => {
 
       const response = formatter.formatQueryResult(mockResult, context);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.security).toBeDefined();
       expect(data.security.readOnlyMode).toBe(true);
       expect(data.security.destructiveOperationsAllowed).toBe(false);
@@ -122,7 +125,7 @@ describe('ResponseFormatter', () => {
       const mockResult = {};
       const response = formatter.formatQueryResult(mockResult);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.success).toBe(true);
       expect(data.recordset).toEqual([]);
       expect(data.rowsAffected).toEqual([]);
@@ -148,7 +151,7 @@ describe('ResponseFormatter', () => {
 
       const response = formatter.formatTableData(mockResult, context);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.success).toBe(true);
       expect(data.table).toBe('public.users');
       expect(data.rowCount).toBe(2);
@@ -167,7 +170,7 @@ describe('ResponseFormatter', () => {
 
       const response = formatter.formatTableData(mockResult, context);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.table).toBe('dbo.test_table');
       expect(data.metadata.schema).toBe('dbo');
     });
@@ -186,7 +189,7 @@ describe('ResponseFormatter', () => {
 
       const response = formatter.formatCsvExport(csvData, context);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.success).toBe(true);
       expect(data.table).toBe('dbo.users');
       expect(data.format).toBe('csv');
@@ -211,7 +214,7 @@ describe('ResponseFormatter', () => {
 
       const response = formatter.formatListResult(items, context);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.success).toBe(true);
       expect(data.items).toEqual(items);
       expect(data.count).toBe(2);
@@ -222,7 +225,7 @@ describe('ResponseFormatter', () => {
     it('should handle empty list', () => {
       const response = formatter.formatListResult([]);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.success).toBe(true);
       expect(data.items).toEqual([]);
       expect(data.count).toBe(0);
@@ -231,7 +234,7 @@ describe('ResponseFormatter', () => {
     it('should handle null items', () => {
       const response = formatter.formatListResult(null);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.success).toBe(true);
       expect(data.items).toEqual([]);
       expect(data.count).toBe(0);
@@ -242,7 +245,7 @@ describe('ResponseFormatter', () => {
     it('should format error response', () => {
       const error = new Error('Test error message');
       error.code = 'TEST_ERROR';
-      
+
       const context = {
         toolName: 'test_tool',
         query: 'SELECT * FROM invalid_table',
@@ -251,7 +254,7 @@ describe('ResponseFormatter', () => {
 
       const response = formatter.formatError(error, context);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.success).toBe(false);
       expect(data.error.name).toBe('Error');
       expect(data.error.message).toBe('Test error message');
@@ -263,26 +266,26 @@ describe('ResponseFormatter', () => {
 
     it('should include stack trace in non-production environment', () => {
       process.env.NODE_ENV = 'development';
-      
+
       const error = new Error('Test error');
       error.stack = 'Error: Test error\\n    at test.js:10:5';
 
       const response = formatter.formatError(error);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.error.stack).toBeDefined();
       expect(data.error.stack).toContain('Error: Test error');
     });
 
     it('should exclude stack trace in production environment', () => {
       process.env.NODE_ENV = 'production';
-      
+
       const error = new Error('Test error');
       error.stack = 'Error: Test error\\n    at test.js:10:5';
 
       const response = formatter.formatError(error);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.error.stack).toBeUndefined();
     });
 
@@ -291,7 +294,7 @@ describe('ResponseFormatter', () => {
 
       const response = formatter.formatError(error);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.error.code).toBe('UNKNOWN_ERROR');
     });
   });
@@ -300,9 +303,9 @@ describe('ResponseFormatter', () => {
     it('should format as structured JSON', () => {
       formatter.updateConfig({ format: 'structured' });
       const mockResult = { recordset: [{ id: 1 }] };
-      
+
       const response = formatter.formatQueryResult(mockResult);
-      
+
       expect(response.content[0].type).toBe('text');
       expect(() => JSON.parse(response.content[0].text)).not.toThrow();
     });
@@ -310,10 +313,10 @@ describe('ResponseFormatter', () => {
     it('should format as compact JSON', () => {
       formatter.updateConfig({ format: 'json' });
       const mockResult = { recordset: [{ id: 1 }] };
-      
+
       const response = formatter.formatQueryResult(mockResult);
       const text = response.content[0].text;
-      
+
       expect(text).not.toContain('\\n  '); // No indentation for compact JSON
       expect(() => JSON.parse(text)).not.toThrow();
     });
@@ -321,10 +324,10 @@ describe('ResponseFormatter', () => {
     it('should format as pretty JSON', () => {
       formatter.updateConfig({ format: 'pretty-json' });
       const mockResult = { recordset: [{ id: 1 }] };
-      
+
       const response = formatter.formatQueryResult(mockResult);
       const text = response.content[0].text;
-      
+
       expect(text).toContain('\n'); // Should have newlines for pretty printing (single backslash)
       expect(() => JSON.parse(text)).not.toThrow();
     });
@@ -332,9 +335,9 @@ describe('ResponseFormatter', () => {
     it('should default to structured for unknown formats', () => {
       formatter.updateConfig({ format: 'invalid-format' });
       const mockResult = { recordset: [{ id: 1 }] };
-      
+
       const response = formatter.formatQueryResult(mockResult);
-      
+
       expect(() => JSON.parse(response.content[0].text)).not.toThrow();
     });
   });
@@ -345,7 +348,7 @@ describe('ResponseFormatter', () => {
         {
           id: 123,
           name: 'John Doe',
-          salary: 75000.50,
+          salary: 75000.5,
           isActive: true,
           birthDate: new Date('1990-01-15'),
           createdAt: '2023-01-15T10:30:00Z',
@@ -355,7 +358,7 @@ describe('ResponseFormatter', () => {
       ];
 
       const columns = formatter.extractColumnInfo(recordset);
-      
+
       expect(columns).toEqual([
         { name: 'id', type: 'integer' },
         { name: 'name', type: 'string' },
@@ -384,7 +387,7 @@ describe('ResponseFormatter', () => {
   describe('Response Truncation', () => {
     it('should truncate large responses', () => {
       formatter.updateConfig({ maxResponseSize: 1000 });
-      
+
       // Create a large dataset
       const largeRecordset = Array.from({ length: 100 }, (_, i) => ({
         id: i,
@@ -395,7 +398,7 @@ describe('ResponseFormatter', () => {
       const mockResult = { recordset: largeRecordset };
       const response = formatter.formatQueryResult(mockResult);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.truncated).toBe(true);
       expect(data.originalSize).toBeGreaterThan(1000);
       expect(data.maxSize).toBe(1000);
@@ -405,19 +408,21 @@ describe('ResponseFormatter', () => {
 
     it('should truncate CSV data when it exceeds size limits', () => {
       // Test that the truncation mechanism works by directly calling the truncation method
-      const largeCsvData = 'id,name\\n' + Array.from({ length: 100 }, (_, i) => 
-        `${i},${'very_long_name'.repeat(10)}_${i}`
-      ).join('\\n');
-      
+      const largeCsvData =
+        'id,name\\n' +
+        Array.from({ length: 100 }, (_, i) => `${i},${'very_long_name'.repeat(10)}_${i}`).join(
+          '\\n'
+        );
+
       const mockData = {
         csvData: largeCsvData,
         success: true,
         table: 'test'
       };
-      
+
       formatter.updateConfig({ maxResponseSize: 1000 });
       const currentSize = JSON.stringify(mockData).length;
-      
+
       // Only test if the CSV is actually large enough to trigger truncation
       if (currentSize > 1000) {
         const truncated = formatter.truncateResponse(mockData, currentSize);
@@ -433,11 +438,11 @@ describe('ResponseFormatter', () => {
 
     it('should not truncate small responses', () => {
       formatter.updateConfig({ maxResponseSize: 10000 });
-      
+
       const smallResult = { recordset: [{ id: 1, name: 'test' }] };
       const response = formatter.formatQueryResult(smallResult);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.truncated).toBeUndefined();
     });
   });
@@ -446,7 +451,7 @@ describe('ResponseFormatter', () => {
     it('should truncate long queries for metadata', () => {
       const longQuery = 'SELECT * FROM users WHERE ' + 'condition AND '.repeat(50) + 'id = 1';
       const truncated = formatter.truncateQuery(longQuery, 100);
-      
+
       expect(truncated).toHaveLength(103); // 100 + '...'
       expect(truncated.endsWith('...')).toBe(true);
     });
@@ -454,7 +459,7 @@ describe('ResponseFormatter', () => {
     it('should not truncate short queries', () => {
       const shortQuery = 'SELECT * FROM users';
       const truncated = formatter.truncateQuery(shortQuery, 100);
-      
+
       expect(truncated).toBe(shortQuery);
     });
 
@@ -469,7 +474,7 @@ describe('ResponseFormatter', () => {
     it('should calculate result size', () => {
       const data = { test: 'value', number: 123 };
       const size = formatter.calculateResultSize(data);
-      
+
       expect(size).toBe(JSON.stringify(data).length);
     });
 
@@ -482,23 +487,23 @@ describe('ResponseFormatter', () => {
   describe('Metadata Control', () => {
     it('should exclude metadata when disabled', () => {
       formatter.updateConfig({ includeMetadata: false });
-      
+
       const mockResult = { recordset: [{ id: 1 }] };
       const context = { query: 'SELECT * FROM test', toolName: 'test' };
-      
+
       const response = formatter.formatQueryResult(mockResult, context);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.metadata).toBeUndefined();
     });
 
     it('should exclude performance when disabled', () => {
       formatter.updateConfig({ includePerformance: false });
-      
+
       const mockResult = { recordset: [{ id: 1 }] };
       const response = formatter.formatQueryResult(mockResult);
       const data = JSON.parse(response.content[0].text);
-      
+
       expect(data.performance).toBeUndefined();
     });
   });
