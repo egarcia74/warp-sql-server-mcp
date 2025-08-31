@@ -1,0 +1,239 @@
+name: Security Alert Triage
+
+on:
+  schedule:
+    # Check for security alerts daily at 6 AM
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+  repository_vulnerability_alert:
+    types: [create]
+
+permissions:
+  security-events: read
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  triage-security-alerts:
+    name: Triage Security Alerts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Get security alerts
+        id: get-alerts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get open security alerts
+          alerts=$(gh api repos/${{ github.repository }}/dependabot/alerts --paginate --jq '
+            map(select(.state == "open")) | 
+            sort_by(.security_advisory.severity) | 
+            reverse |
+            map({
+              number: .number,
+              severity: .security_advisory.severity,
+              package: .dependency.package.name,
+              ecosystem: .dependency.package.ecosystem,
+              vulnerable_version: .dependency.manifest_path,
+              summary: .security_advisory.summary,
+              cve_id: .security_advisory.cve_id,
+              published_at: .security_advisory.published_at
+            })
+          ')
+          
+          echo "Found security alerts:"
+          echo "$alerts" | jq -r '.[] | "- Alert #\(.number): \(.severity) - \(.package) (\(.cve_id // "No CVE"))"'
+          
+          # Save alerts for processing
+          echo "$alerts" > security-alerts.json
+          
+          # Set output for conditional steps
+          alert_count=$(echo "$alerts" | jq 'length')
+          echo "alert_count=$alert_count" >> $GITHUB_OUTPUT
+          
+          if [ "$alert_count" -gt 0 ]; then
+            echo "has_alerts=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_alerts=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Process high-severity alerts
+        if: steps.get-alerts.outputs.has_alerts == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Process each alert
+          jq -c '.[]' security-alerts.json | while read -r alert; do
+            number=$(echo "$alert" | jq -r '.number')
+            severity=$(echo "$alert" | jq -r '.severity')
+            package=$(echo "$alert" | jq -r '.package')
+            cve_id=$(echo "$alert" | jq -r '.cve_id // "Unknown"')
+            summary=$(echo "$alert" | jq -r '.summary')
+            
+            echo "Processing Alert #$number ($severity): $package"
+            
+            # Create or update issue for tracking
+            issue_title="🚨 Security Alert #$number: $severity vulnerability in $package"
+            issue_body="## 🔒 Security Vulnerability Alert
+            
+            **Alert ID**: #$number  
+            **Severity**: $severity  
+            **Package**: \`$package\`  
+            **CVE ID**: $cve_id  
+            
+            ### 📋 Summary
+            $summary
+            
+            ### 🔍 Impact Assessment
+            $(if [ "$severity" = "critical" ] || [ "$severity" = "high" ]; then
+              echo "⚠️ **HIGH PRIORITY** - Immediate attention required"
+              echo "- Review and test fix within 24-48 hours"
+              echo "- Consider emergency patch release if production affected"
+            else
+              echo "📊 **STANDARD PRIORITY** - Include in next regular update cycle"
+              echo "- Review and test fix within 1 week"
+              echo "- Include in next minor/patch release"
+            fi)
+            
+            ### 🛠️ Recommended Actions
+            - [ ] Review security advisory details
+            - [ ] Test dependency update locally
+            - [ ] Verify MCP server functionality
+            - [ ] Run full test suite
+            - [ ] Deploy security fix
+            
+            ### 🔗 Links
+            - [Security Alert #$number](https://github.com/${{ github.repository }}/security/dependabot/$number)
+            - [CVE Details](https://cve.mitre.org/cgi-bin/cvename.cgi?name=$cve_id)
+            
+            ---
+            *This issue was automatically created by the Security Triage workflow*"
+            
+            # Check if issue already exists
+            existing_issue=$(gh issue list --label "security-alert-$number" --state all --limit 1 --json number --jq '.[0].number // empty')
+            
+            if [ -z "$existing_issue" ]; then
+              # Create new issue
+              labels="security,automated,vulnerability,$severity-severity"
+              if [ "$severity" = "critical" ] || [ "$severity" = "high" ]; then
+                labels="$labels,high-priority"
+              fi
+              
+              gh issue create \
+                --title "$issue_title" \
+                --body "$issue_body" \
+                --label "$labels" \
+                --label "security-alert-$number"
+              
+              echo "✅ Created issue for Alert #$number"
+            else
+              echo "ℹ️ Issue already exists for Alert #$number"
+            fi
+          done
+
+      - name: Create security summary
+        if: steps.get-alerts.outputs.has_alerts == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          alert_count=${{ steps.get-alerts.outputs.alert_count }}
+          
+          # Count by severity
+          critical_count=$(jq '[.[] | select(.severity == "critical")] | length' security-alerts.json)
+          high_count=$(jq '[.[] | select(.severity == "high")] | length' security-alerts.json)
+          medium_count=$(jq '[.[] | select(.severity == "medium")] | length' security-alerts.json)
+          low_count=$(jq '[.[] | select(.severity == "low")] | length' security-alerts.json)
+          
+          # Create summary report
+          echo "## 🔒 Security Alert Summary - $(date -u)" > security-summary.md
+          echo "" >> security-summary.md
+          echo "**Total Open Alerts**: $alert_count" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "### 📊 Severity Breakdown" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "| Severity | Count | Action Required |" >> security-summary.md
+          echo "|----------|-------|----------------|" >> security-summary.md
+          echo "| 🚨 Critical | $critical_count | Immediate (24h) |" >> security-summary.md
+          echo "| ⚠️ High | $high_count | Urgent (48h) |" >> security-summary.md
+          echo "| 📊 Medium | $medium_count | Standard (1 week) |" >> security-summary.md
+          echo "| ℹ️ Low | $low_count | Regular cycle |" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          if [ $critical_count -gt 0 ] || [ $high_count -gt 0 ]; then
+            echo "🚨 **Priority Action Required**" >> security-summary.md
+            echo "" >> security-summary.md
+            echo "High-priority security alerts detected. Review and address immediately." >> security-summary.md
+          else
+            echo "✅ **No Critical Issues**" >> security-summary.md
+            echo "" >> security-summary.md
+            echo "All security alerts are medium/low priority. Regular update cycle recommended." >> security-summary.md
+          fi
+
+      - name: Upload security summary
+        if: steps.get-alerts.outputs.has_alerts == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: security-triage-summary
+          path: |
+            security-summary.md
+            security-alerts.json
+          retention-days: 30
+
+      - name: No alerts found
+        if: steps.get-alerts.outputs.has_alerts == 'false'
+        run: |
+          echo "✅ No open security alerts found"
+          echo "## 🔒 Security Status: All Clear" > security-summary.md
+          echo "" >> security-summary.md
+          echo "**Last Checked**: $(date -u)" >> security-summary.md
+          echo "**Status**: ✅ No open security vulnerabilities" >> security-summary.md
+          echo "**Next Check**: Tomorrow at 6 AM UTC" >> security-summary.md
+
+  update-security-metrics:
+    name: Update Security Metrics
+    runs-on: ubuntu-latest
+    needs: triage-security-alerts
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Update security badge data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get current security status
+          alert_count=$(gh api repos/${{ github.repository }}/dependabot/alerts --jq 'map(select(.state == "open")) | length')
+          
+          # Create security metrics file
+          cat > .github/security-metrics.json << EOF
+          {
+            "last_updated": "$(date -u -Iseconds)",
+            "open_alerts": $alert_count,
+            "status": "$(if [ $alert_count -eq 0 ]; then echo "secure"; else echo "monitoring"; fi)",
+            "next_scan": "$(date -u -d '+1 day' -Iseconds)"
+          }
+          EOF
+          
+          echo "📊 Security metrics updated:"
+          cat .github/security-metrics.json
+
+      - name: Commit security metrics
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Security Triage Bot"
+          
+          if git diff --quiet .github/security-metrics.json; then
+            echo "No changes to security metrics"
+          else
+            git add .github/security-metrics.json
+            git commit -m "security: update security metrics
+            
+            - Updated vulnerability alert count
+            - Security status: $(jq -r '.status' .github/security-metrics.json)
+            - Last scan: $(date -u)"
+            git push
+          fi

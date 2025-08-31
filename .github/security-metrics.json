@@ -1,0 +1,9 @@
+{
+  "last_updated": "2025-08-31T06:29:32.000Z",
+  "open_alerts": 0,
+  "status": "secure",
+  "next_scan": "2025-09-01T06:00:00.000Z",
+  "dependabot_config_version": "2.0",
+  "auto_merge_enabled": true,
+  "last_config_update": "2025-08-31T06:29:32.000Z"
+}

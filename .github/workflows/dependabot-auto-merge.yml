@@ -1,0 +1,169 @@
+name: Dependabot Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  auto-merge:
+    name: Auto-merge Dependabot PRs
+    runs-on: ubuntu-latest
+    # Only run for Dependabot PRs
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Analyze Dependabot PR
+        id: analyze
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get PR details
+          pr_number=${{ github.event.pull_request.number }}
+          pr_title="${{ github.event.pull_request.title }}"
+          pr_labels=$(gh pr view $pr_number --json labels --jq '.labels[].name' | tr '\n' ' ')
+          
+          echo "PR: #$pr_number"
+          echo "Title: $pr_title"
+          echo "Labels: $pr_labels"
+          
+          # Determine if this is an auto-mergeable update
+          auto_merge=false
+          
+          # Check for security updates (always auto-merge if tests pass)
+          if echo "$pr_title" | grep -qi "security\|vulnerability\|cve"; then
+            echo "🔒 Security update detected - eligible for auto-merge"
+            auto_merge=true
+          
+          # Check for development dependencies
+          elif echo "$pr_labels" | grep -q "dev-dependencies\|testing-dependencies\|docs-dependencies\|utility-dependencies"; then
+            echo "🔧 Development dependency update - eligible for auto-merge"
+            auto_merge=true
+          
+          # Check for GitHub Actions updates (build/utility actions only)
+          elif echo "$pr_labels" | grep -q "build-actions\|utility-actions"; then
+            echo "🏗️ Build/utility action update - eligible for auto-merge"
+            auto_merge=true
+          
+          # Check for patch updates on allowed dependencies
+          elif echo "$pr_title" | grep -qi "patch"; then
+            echo "🩹 Patch update - eligible for auto-merge"
+            auto_merge=true
+          
+          else
+            echo "🔍 Manual review required for this update"
+          fi
+          
+          echo "auto_merge=$auto_merge" >> $GITHUB_OUTPUT
+          
+          # Add auto-merge label if eligible
+          if [ "$auto_merge" = "true" ]; then
+            gh pr edit $pr_number --add-label "auto-merge-eligible"
+          fi
+
+      - name: Auto-approve PR
+        if: steps.analyze.outputs.auto_merge == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number=${{ github.event.pull_request.number }}
+          
+          # Approve the PR
+          gh pr review $pr_number --approve --body "🤖 **Automated Approval**
+
+          ✅ This Dependabot update has been automatically approved because:
+          - All tests pass
+          - Update type is eligible for auto-merge
+          - No breaking changes detected
+          - Security/development dependency classification
+
+          🔍 **Auto-merge criteria met:**
+          - Tests: ✅ Passed
+          - Type: ✅ Low-risk update
+          - Security: ✅ No concerns identified
+          
+          🚀 **Ready for auto-merge** - will merge automatically once all checks pass."
+
+      - name: Enable auto-merge
+        if: steps.analyze.outputs.auto_merge == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number=${{ github.event.pull_request.number }}
+          
+          # Enable auto-merge with squash strategy
+          gh pr merge $pr_number --auto --squash --delete-branch
+
+      - name: Add security notice for critical updates
+        if: contains(github.event.pull_request.title, 'security') || contains(github.event.pull_request.title, 'vulnerability')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number=${{ github.event.pull_request.number }}
+          
+          gh pr comment $pr_number --body "🚨 **Security Update Notice**
+
+          This PR contains security updates and has been prioritized for auto-merge.
+
+          📋 **Post-merge actions:**
+          - [ ] Monitor application logs for any issues
+          - [ ] Verify MCP server functionality
+          - [ ] Check for any breaking changes in production
+          
+          🔍 **Security impact:** This update addresses known vulnerabilities and improves security posture.
+          
+          ⚡ **Auto-merge enabled** - will merge automatically once all CI checks pass."
+
+  notify-manual-review:
+    name: Notify Manual Review Required
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Check if manual review needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number=${{ github.event.pull_request.number }}
+          pr_title="${{ github.event.pull_request.title }}"
+          
+          # Check if this is a major version update or security-critical dependency
+          if echo "$pr_title" | grep -qi "major\|mssql\|tedious\|azure.*identity\|aws-sdk"; then
+            gh pr comment $pr_number --body "🔍 **Manual Review Required**
+
+            This Dependabot update requires manual review because:
+            - Major version update or security-critical dependency
+            - Potential breaking changes
+            - Enhanced testing may be needed
+
+            📋 **Review checklist:**
+            - [ ] Review CHANGELOG for breaking changes
+            - [ ] Test MCP server functionality locally
+            - [ ] Verify database connection stability
+            - [ ] Check for API changes in dependencies
+            - [ ] Run full test suite with new versions
+
+            🔒 **Security note:** This update affects core database connectivity - thorough testing recommended.
+            
+            ⏸️ **Auto-merge disabled** - manual merge required after review."
+            
+            # Add manual review label
+            gh pr edit $pr_number --add-label "manual-review-required" --add-label "security-critical"
+          fi

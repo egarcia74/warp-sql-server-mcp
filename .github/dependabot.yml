@@ -1,14 +1,13 @@
 version: 2
 updates:
-  # Enable version updates for npm
+  # Enable version updates for npm with enhanced security settings
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
       time: "06:00"
       timezone: "America/New_York"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 15
     reviewers:
       - "egarcia74"
     assignees:
@@ -20,14 +19,41 @@ updates:
     labels:
       - "dependencies"
       - "automated"
+    # Enhanced security: prioritize security updates
     allow:
       - dependency-type: "direct"
       - dependency-type: "indirect"
+    # Security-focused ignore rules
     ignore:
-      - dependency-name: "*"
+      # Ignore major version updates for production dependencies (require manual review)
+      - dependency-name: "mssql"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "tedious"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@azure/identity"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@azure/keyvault-secrets"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "aws-sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@aws-sdk/*"
+        update-types: ["version-update:semver-major"]
+    # Enhanced dependency grouping for better auto-triage
     groups:
-      # Group development dependencies
+      # 🔒 Security-critical production dependencies (manual review required)
+      security-critical:
+        patterns:
+          - "mssql"
+          - "tedious"
+          - "@azure/identity"
+          - "@azure/keyvault-secrets"
+          - "aws-sdk"
+          - "@aws-sdk/*"
+          - "node-sql-parser"
+        update-types:
+          - "minor"
+          - "patch"
+      # 🔧 Development and tooling dependencies (auto-merge eligible)
       dev-dependencies:
         patterns:
           - "@types/*"
@@ -36,31 +62,53 @@ updates:
           - "*lint*"
           - "vitest*"
           - "@vitest/*"
+          - "husky"
+          - "lint-staged"
         update-types:
           - "minor"
           - "patch"
-      # Group testing dependencies
+      # 🧪 Testing dependencies (auto-merge eligible)
       testing-dependencies:
         patterns:
           - "vitest*"
           - "@vitest/*"
           - "test*"
           - "*test*"
-      # Group Azure/Microsoft dependencies
-      azure-dependencies:
+          - "c8"
+          - "@vitest/coverage-v8"
+        update-types:
+          - "minor"
+          - "patch"
+      # 📚 Documentation dependencies (auto-merge eligible)
+      docs-dependencies:
         patterns:
-          - "@azure/*"
-          - "mssql"
-          - "tedious"
+          - "markdownlint*"
+          - "markdown*"
+          - "*docs*"
+        update-types:
+          - "minor"
+          - "patch"
+      # 🛠️ Build and utility dependencies (auto-merge eligible)
+      utility-dependencies:
+        patterns:
+          - "winston*"
+          - "js-yaml"
+          - "lodash*"
+          - "chalk"
+          - "yargs"
+        update-types:
+          - "minor"
+          - "patch"
 
-  # Enable version updates for GitHub Actions
+  # Enhanced GitHub Actions updates with security focus
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "06:00"
+      time: "06:30"
       timezone: "America/New_York"
+    open-pull-requests-limit: 10
     reviewers:
       - "egarcia74"
     assignees:
@@ -71,10 +119,35 @@ updates:
     labels:
       - "github-actions"
       - "automated"
+      - "security"
+    # Enhanced GitHub Actions grouping
     groups:
-      github-actions:
+      # 🔒 Security-focused actions (require manual review)
+      security-actions:
         patterns:
-          - "*"
+          - "github/codeql-action"
+          - "ossf/scorecard-action"
+          - "step-security/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # 🏗️ Standard build actions (auto-merge eligible)
+      build-actions:
+        patterns:
+          - "actions/checkout"
+          - "actions/setup-node"
+          - "actions/cache"
+          - "actions/upload-artifact"
+          - "actions/download-artifact"
+        update-types:
+          - "minor"
+          - "patch"
+      # 🔧 Utility and tool actions (auto-merge eligible)
+      utility-actions:
+        patterns:
+          - "actions/github-script"
+          - "streetsidesoftware/cspell-action"
+          - "gaurav-nelson/github-action-markdown-link-check"
         update-types:
           - "minor"
           - "patch"
