@@ -2,6 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 /**
  * Extracts MCP tool documentation from the main index.js file
@@ -330,7 +331,14 @@ function generateToolsDocumentation() {
 
     fs.writeFileSync(path.join(outputDir, 'tools.json'), JSON.stringify(docData, null, 2));
 
-    console.log('Documentation data saved to docs-data/tools.json');
+    // Format the generated JSON with Prettier to ensure consistency
+    try {
+      execSync('npx prettier --write docs-data/tools.json', { stdio: 'inherit' });
+      console.log('Documentation data saved and formatted: docs-data/tools.json');
+    } catch (error) {
+      console.log('Documentation data saved to docs-data/tools.json (formatting skipped)');
+    }
+    
     return docData;
   } catch (error) {
     console.error('Error extracting documentation:', error.message);
