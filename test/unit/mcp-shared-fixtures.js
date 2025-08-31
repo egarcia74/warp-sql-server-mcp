@@ -149,10 +149,11 @@ export const testData = {
 
 // Common test utilities
 export const createMockMcpServer = async (customConfig = {}) => {
+  // Import SqlServerMCP first
+  const { SqlServerMCP } = await import('../../index.js');
+
   // Mock the setupToolHandlers to prevent actual MCP server initialization
   vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-
-  const { SqlServerMCP } = await import('../../index.js');
   const server = new SqlServerMCP();
   server.pool = null; // Reset pool
 
