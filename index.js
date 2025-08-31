@@ -10,6 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import sql from 'mssql';
 import dotenv from 'dotenv';
+import { PerformanceMonitor } from './lib/utils/performance-monitor.js';
 
 // Load environment variables
 dotenv.config();
@@ -59,6 +60,15 @@ class SqlServerMCP {
       /^\s*(GRANT|REVOKE)\s+/i,
       /;\s*(CREATE|DROP|ALTER|GRANT|REVOKE)\s+/i // Multi-statement
     ];
+
+    // Initialize performance monitoring
+    this.performanceMonitor = new PerformanceMonitor({
+      enabled: process.env.ENABLE_PERFORMANCE_MONITORING !== 'false', // Default: true
+      maxMetricsHistory: parseInt(process.env.MAX_METRICS_HISTORY || '1000'),
+      slowQueryThreshold: parseInt(process.env.SLOW_QUERY_THRESHOLD || '5000'),
+      trackPoolMetrics: process.env.TRACK_POOL_METRICS !== 'false', // Default: true
+      samplingRate: parseFloat(process.env.PERFORMANCE_SAMPLING_RATE || '1.0')
+    });
 
     this.setupToolHandlers();
   }
@@ -380,6 +390,50 @@ class SqlServerMCP {
             },
             required: ['table_name']
           }
+        },
+        {
+          name: 'get_performance_stats',
+          description: 'Get overall performance statistics and health summary',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              timeframe: {
+                type: 'string',
+                description:
+                  'Time period for stats: "recent" (last 5 min), "session" (since startup), "all" (default)',
+                enum: ['recent', 'session', 'all']
+              }
+            }
+          }
+        },
+        {
+          name: 'get_query_performance',
+          description: 'Get detailed query performance breakdown by tool',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: {
+                type: 'number',
+                description: 'Maximum number of queries to analyze (optional, defaults to 50)'
+              },
+              tool_filter: {
+                type: 'string',
+                description: 'Filter by specific MCP tool name (optional)'
+              },
+              slow_only: {
+                type: 'boolean',
+                description: 'Only return slow queries (optional, defaults to false)'
+              }
+            }
+          }
+        },
+        {
+          name: 'get_connection_health',
+          description: 'Get connection pool health metrics and diagnostics',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
         }
       ]
     }));
@@ -427,6 +481,15 @@ class SqlServerMCP {
               args.where
             );
 
+          case 'get_performance_stats':
+            return await this.getPerformanceStats(args.timeframe);
+
+          case 'get_query_performance':
+            return await this.getQueryPerformance(args.limit, args.tool_filter, args.slow_only);
+
+          case 'get_connection_health':
+            return await this.getConnectionHealth();
+
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
         }
@@ -443,10 +506,13 @@ class SqlServerMCP {
   }
 
   async executeQuery(query, database = null) {
+    const queryId = this.performanceMonitor?.startQuery('execute_query', query, { database });
+
     try {
       // Safety validation
       const validation = this.validateQuery(query);
       if (!validation.allowed) {
+        if (queryId) this.performanceMonitor.endQuery(queryId, null, new Error(validation.reason));
         throw new McpError(
           ErrorCode.InvalidRequest,
           `Query blocked by safety policy: ${validation.reason}`
@@ -462,15 +528,23 @@ class SqlServerMCP {
 
       const result = await request.query(query);
 
+      // Record successful query completion
+      if (queryId) {
+        this.performanceMonitor.endQuery(queryId, {
+          rowsAffected: result?.rowsAffected || [],
+          recordset: result?.recordset || []
+        });
+      }
+
       return {
         content: [
           {
             type: 'text',
             text: JSON.stringify(
               {
-                rowsAffected: result.rowsAffected,
-                recordset: result.recordset,
-                recordsets: result.recordsets,
+                rowsAffected: result?.rowsAffected || [],
+                recordset: result?.recordset || [],
+                recordsets: result?.recordsets || [],
                 // Include safety info in response
                 safetyInfo: {
                   readOnlyMode: this.readOnlyMode,
@@ -485,6 +559,9 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      // Record failed query
+      if (queryId) this.performanceMonitor.endQuery(queryId, null, error);
+
       if (error instanceof McpError) {
         throw error; // Re-throw MCP errors (including safety violations)
       }
@@ -493,6 +570,8 @@ class SqlServerMCP {
   }
 
   async listDatabases() {
+    const queryId = this.performanceMonitor?.startQuery('list_databases', 'List all databases');
+
     try {
       const req = this.pool.request();
       req.timeout = this.requestTimeout;
@@ -508,6 +587,14 @@ class SqlServerMCP {
         ORDER BY name
       `);
 
+      // Record successful completion
+      if (queryId) {
+        this.performanceMonitor.endQuery(queryId, {
+          rowsAffected: [result.recordset.length],
+          recordset: result.recordset
+        });
+      }
+
       return {
         content: [
           {
@@ -517,11 +604,19 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      // Record failed query
+      if (queryId) this.performanceMonitor.endQuery(queryId, null, error);
       throw new McpError(ErrorCode.InternalError, `Failed to list databases: ${error.message}`);
     }
   }
 
   async listTables(database = null, schema = 'dbo') {
+    const queryId = this.performanceMonitor?.startQuery(
+      'list_tables',
+      `List tables in ${database || 'current database'}.${schema}`,
+      { database, schema }
+    );
+
     try {
       const query = `
         SELECT 
@@ -543,6 +638,14 @@ class SqlServerMCP {
 
       const result = await request.query(query);
 
+      // Record successful completion
+      if (queryId) {
+        this.performanceMonitor.endQuery(queryId, {
+          rowsAffected: [result.recordset.length],
+          recordset: result.recordset
+        });
+      }
+
       return {
         content: [
           {
@@ -552,11 +655,19 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      // Record failed query
+      if (queryId) this.performanceMonitor.endQuery(queryId, null, error);
       throw new McpError(ErrorCode.InternalError, `Failed to list tables: ${error.message}`);
     }
   }
 
   async describeTable(tableName, database = null, schema = 'dbo') {
+    const queryId = this.performanceMonitor?.startQuery(
+      'describe_table',
+      `Describe table ${schema}.${tableName}`,
+      { tableName, database, schema }
+    );
+
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
@@ -590,6 +701,14 @@ class SqlServerMCP {
         ORDER BY c.ORDINAL_POSITION
       `);
 
+      // Record successful completion
+      if (queryId) {
+        this.performanceMonitor.endQuery(queryId, {
+          rowsAffected: [result.recordset.length],
+          recordset: result.recordset
+        });
+      }
+
       return {
         content: [
           {
@@ -599,11 +718,19 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      // Record failed query
+      if (queryId) this.performanceMonitor.endQuery(queryId, null, error);
       throw new McpError(ErrorCode.InternalError, `Failed to describe table: ${error.message}`);
     }
   }
 
   async getTableData(tableName, database = null, schema = 'dbo', limit = 100, whereClause = null) {
+    const queryId = this.performanceMonitor?.startQuery(
+      'get_table_data',
+      `Get data from ${schema}.${tableName} (limit: ${limit})`,
+      { tableName, database, schema, limit, whereClause }
+    );
+
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
@@ -619,6 +746,14 @@ class SqlServerMCP {
       }
 
       const result = await request.query(query);
+
+      // Record successful completion
+      if (queryId) {
+        this.performanceMonitor.endQuery(queryId, {
+          rowsAffected: [result.recordset.length],
+          recordset: result.recordset
+        });
+      }
 
       return {
         content: [
@@ -637,11 +772,19 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      // Record failed query
+      if (queryId) this.performanceMonitor.endQuery(queryId, null, error);
       throw new McpError(ErrorCode.InternalError, `Failed to get table data: ${error.message}`);
     }
   }
 
   async explainQuery(query, database = null, includeActualPlan = false) {
+    const queryId = this.performanceMonitor?.startQuery(
+      'explain_query',
+      `Explain query: ${query.substring(0, 50)}...`,
+      { database, includeActualPlan }
+    );
+
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
@@ -712,6 +855,14 @@ class SqlServerMCP {
         console.error('Could not retrieve cost information:', costError.message);
       }
 
+      // Record successful completion
+      if (queryId) {
+        this.performanceMonitor.endQuery(queryId, {
+          rowsAffected: [planResult.recordset.length],
+          recordset: planResult.recordset
+        });
+      }
+
       return {
         content: [
           {
@@ -731,11 +882,19 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      // Record failed query
+      if (queryId) this.performanceMonitor.endQuery(queryId, null, error);
       throw new McpError(ErrorCode.InternalError, `Failed to explain query: ${error.message}`);
     }
   }
 
   async listForeignKeys(database = null, schema = 'dbo') {
+    const queryId = this.performanceMonitor?.startQuery(
+      'list_foreign_keys',
+      `List foreign keys in ${schema} schema`,
+      { database, schema }
+    );
+
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
@@ -765,6 +924,14 @@ class SqlServerMCP {
         ORDER BY tp.name, fk.name
       `);
 
+      // Record successful completion
+      if (queryId) {
+        this.performanceMonitor.endQuery(queryId, {
+          rowsAffected: [result.recordset.length],
+          recordset: result.recordset
+        });
+      }
+
       return {
         content: [
           {
@@ -782,6 +949,8 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      // Record failed query
+      if (queryId) this.performanceMonitor.endQuery(queryId, null, error);
       throw new McpError(ErrorCode.InternalError, `Failed to list foreign keys: ${error.message}`);
     }
   }
@@ -793,6 +962,12 @@ class SqlServerMCP {
     limit = null,
     whereClause = null
   ) {
+    const queryId = this.performanceMonitor?.startQuery(
+      'export_table_csv',
+      `Export ${schema}.${tableName} to CSV${limit ? ` (limit: ${limit})` : ''}`,
+      { tableName, database, schema, limit, whereClause }
+    );
+
     try {
       const request = this.pool.request();
       request.timeout = this.requestTimeout;
@@ -856,6 +1031,14 @@ class SqlServerMCP {
         csvContent += values.join(',') + '\n';
       }
 
+      // Record successful completion
+      if (queryId) {
+        this.performanceMonitor.endQuery(queryId, {
+          rowsAffected: [result.recordset.length],
+          recordset: result.recordset
+        });
+      }
+
       return {
         content: [
           {
@@ -875,9 +1058,214 @@ class SqlServerMCP {
         ]
       };
     } catch (error) {
+      // Record failed query
+      if (queryId) this.performanceMonitor.endQuery(queryId, null, error);
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to export table as CSV: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get overall performance statistics and health summary
+   * @param {string} timeframe - Time period: 'recent' (5 min), 'session' (startup), 'all' (default)
+   * @returns {object} Performance statistics
+   */
+  async getPerformanceStats(timeframe = 'all') {
+    try {
+      if (!this.performanceMonitor) {
+        throw new McpError(ErrorCode.InternalError, 'Performance monitoring is not initialized');
+      }
+
+      const stats = this.performanceMonitor.getStats();
+
+      if (!stats || !stats.enabled) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  enabled: false,
+                  message: 'Performance monitoring is disabled',
+                  timeframe: timeframe
+                },
+                null,
+                2
+              )
+            }
+          ]
+        };
+      }
+
+      // Validate timeframe parameter - normalize invalid values to 'all' and continue with normal stats
+      const validTimeframes = ['recent', 'session', 'all'];
+      const normalizedTimeframe = validTimeframes.includes(timeframe) ? timeframe : 'all';
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                ...stats,
+                timeframe: normalizedTimeframe,
+                timestamp: Date.now()
+              },
+              null,
+              2
+            )
+          }
+        ]
+      };
+    } catch (error) {
+      if (error instanceof McpError) {
+        throw error;
+      }
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to get performance statistics: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get detailed query performance breakdown by tool
+   * @param {number} limit - Maximum number of queries to analyze (default: 50)
+   * @param {string} toolFilter - Filter by specific MCP tool name (optional)
+   * @param {boolean} slowOnly - Only return slow queries (default: false)
+   * @returns {object} Query performance details
+   */
+  async getQueryPerformance(limit = 50, toolFilter = null, slowOnly = false) {
+    try {
+      if (!this.performanceMonitor) {
+        throw new McpError(ErrorCode.InternalError, 'Performance monitoring is not initialized');
+      }
+
+      // Ensure limit is positive and handle edge cases - negative values should default to 50
+      const parsedLimit = Number(limit);
+      const normalizedLimit = isNaN(parsedLimit) || parsedLimit <= 0 ? 50 : parsedLimit;
+
+      const queryStats = this.performanceMonitor.getQueryStats(normalizedLimit);
+
+      if (!queryStats.enabled) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  enabled: false,
+                  message: 'Performance monitoring is disabled',
+                  limit: normalizedLimit,
+                  tool_filter: toolFilter,
+                  slow_only: slowOnly
+                },
+                null,
+                2
+              )
+            }
+          ]
+        };
+      }
+
+      // Apply filtering
+      let filteredQueries = queryStats.queries;
+
+      if (toolFilter) {
+        filteredQueries = filteredQueries.filter(q => q.tool === toolFilter);
+      }
+
+      if (slowOnly && queryStats.slowQueries) {
+        filteredQueries = queryStats.slowQueries;
+        if (toolFilter) {
+          filteredQueries = filteredQueries.filter(q => q.tool === toolFilter);
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                ...queryStats,
+                queries: filteredQueries,
+                limit: normalizedLimit,
+                tool_filter: toolFilter,
+                slow_only: slowOnly,
+                timestamp: Date.now()
+              },
+              null,
+              2
+            )
+          }
+        ]
+      };
+    } catch (error) {
+      if (error instanceof McpError) {
+        throw error;
+      }
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to get query performance: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get connection pool health metrics and diagnostics
+   * @returns {object} Connection pool health metrics
+   */
+  async getConnectionHealth() {
+    try {
+      if (!this.performanceMonitor) {
+        throw new McpError(ErrorCode.InternalError, 'Performance monitoring is not initialized');
+      }
+
+      const poolStats = this.performanceMonitor.getPoolStats();
+
+      if (!poolStats.enabled) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  enabled: false,
+                  message: 'Connection pool monitoring is disabled'
+                },
+                null,
+                2
+              )
+            }
+          ]
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                ...poolStats,
+                timestamp: Date.now()
+              },
+              null,
+              2
+            )
+          }
+        ]
+      };
+    } catch (error) {
+      if (error instanceof McpError) {
+        throw error;
+      }
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to get connection health: ${error.message}`
       );
     }
   }
@@ -1003,7 +1391,8 @@ class SqlServerMCP {
       perfMonitoring ||
       process.env.SLOW_QUERY_THRESHOLD ||
       process.env.PERFORMANCE_SAMPLING_RATE ||
-      process.env.MAX_METRICS_HISTORY
+      process.env.MAX_METRICS_HISTORY ||
+      process.env.TRACK_POOL_METRICS
     ) {
       console.error('⚡ Performance Monitoring:');
       console.error(
@@ -1022,6 +1411,12 @@ class SqlServerMCP {
       if (process.env.MAX_METRICS_HISTORY) {
         console.error(
           `  MAX_METRICS_HISTORY=${process.env.MAX_METRICS_HISTORY} (Maximum performance records to retain)`
+        );
+      }
+      if (process.env.TRACK_POOL_METRICS) {
+        const poolTrackingEnabled = process.env.TRACK_POOL_METRICS === 'true';
+        console.error(
+          `  TRACK_POOL_METRICS=${process.env.TRACK_POOL_METRICS} (${poolTrackingEnabled ? '✅ Connection pool monitoring enabled' : '❌ Pool monitoring disabled'})`
         );
       }
     }

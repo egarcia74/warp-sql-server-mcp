@@ -180,6 +180,11 @@ ${toolListHTML}
                 <li><span class="code">SQL_SERVER_READ_ONLY</span> - Read-only mode (default: true)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS</span> - Allow INSERT/UPDATE/DELETE (default: false)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_SCHEMA_CHANGES</span> - Allow CREATE/DROP/ALTER (default: false)</li>
+                <li><span class="code">ENABLE_PERFORMANCE_MONITORING</span> - Enable query performance tracking (default: true)</li>
+                <li><span class="code">MAX_METRICS_HISTORY</span> - Maximum performance records to retain (default: 1000)</li>
+                <li><span class="code">SLOW_QUERY_THRESHOLD</span> - Milliseconds to flag slow queries (default: 5000)</li>
+                <li><span class="code">TRACK_POOL_METRICS</span> - Enable connection pool monitoring (default: true)</li>
+                <li><span class="code">PERFORMANCE_SAMPLING_RATE</span> - Fraction of queries to monitor (default: 1.0)</li>
             </ul>
         </div>
 

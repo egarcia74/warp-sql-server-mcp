@@ -2,7 +2,7 @@
   "mcpServers": {
     "sql-server": {
       "command": "node",
-      "args": ["/path/to/your/warp-sql-server-mcp/index.js"],
+      "args": ["/Users/egarcia74/Source/Repos/GitHub/warp-sql-server-mcp/index.js"],
       "env": {
         "_comment_basic": "=== Basic SQL Server Connection ===",
         "SQL_SERVER_HOST": "localhost",
@@ -17,9 +17,9 @@
         "SQL_SERVER_TRUST_CERT": "true",
 
         "_comment_safety": "=== Three-Tier Safety System (v1.3.0+) ===",
-        "SQL_SERVER_READ_ONLY": "true",
-        "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
-        "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false",
+        "SQL_SERVER_READ_ONLY": "false",
+        "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true",
+        "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "true",
 
         "_comment_timeouts": "=== Connection & Timeout Configuration ===",
         "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
@@ -38,7 +38,7 @@
         "AZURE_KEY_VAULT_URL": "",
 
         "_comment_response": "=== Response Formatting (v1.4.0+) ===",
-        "SQL_SERVER_RESPONSE_FORMAT": "pretty-json",
+        "SQL_SERVER_RESPONSE_FORMAT": "structured",
 
         "_comment_streaming": "=== Streaming Support (v1.4.0+) ===",
         "ENABLE_STREAMING": "true",
@@ -46,18 +46,24 @@
         "STREAMING_MAX_MEMORY_MB": "50",
         "STREAMING_MAX_RESPONSE_SIZE": "1000000",
 
-        "_comment_performance": "=== Performance Monitoring (v1.4.0+) ===",
+        "_comment_performance": "=== 🚀 NEW! Performance Monitoring (v1.5.0+) - GitHub Issue #15 ===",
         "ENABLE_PERFORMANCE_MONITORING": "true",
         "SLOW_QUERY_THRESHOLD": "5000",
         "PERFORMANCE_SAMPLING_RATE": "1.0",
         "MAX_METRICS_HISTORY": "1000",
+        "TRACK_POOL_METRICS": "true",
 
-        "_comment_logging": "=== Logging Configuration (v1.4.0+) ===",
+        "_comment_logging": "=== Logging & Debugging (v1.4.0+) ===",
         "SQL_SERVER_LOG_LEVEL": "info",
+        "SQL_SERVER_DEBUG": "true",
         "ENABLE_SECURITY_AUDIT": "true",
         "LOG_FILE": "",
-        "SECURITY_LOG_FILE": ""
-      }
+        "SECURITY_LOG_FILE": "",
+
+        "_comment_optional": "=== Optional Working Directory (customize as needed) ===",
+        "_note_working_dir": "You can also add 'working_directory' at the same level as 'command' if needed"
+      },
+      "working_directory": "/Users/your_username/Downloads"
     }
   }
 }

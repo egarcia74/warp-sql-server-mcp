@@ -89,16 +89,13 @@
 <body>
     <div class="header">
         <h1>🗄️ Warp SQL Server MCP</h1>
-        <p>Enterprise-ready Model Context Protocol server for SQL Server integration with Warp terminal</p>
+        <p>Model Context Protocol server for SQL Server integration with Warp terminal</p>
         <div>
-            <span class="badge">v1.4.0</span>
+            <span class="badge">v1.5.0</span>
             <span class="badge">Node.js 18+</span>
             <span class="badge">MCP</span>
             <span class="badge">SQL Server</span>
-            <span class="badge">8 Tools</span>
-            <span class="badge">Enhanced Security</span>
-            <span class="badge">Streaming</span>
-            <span class="badge">Cloud Ready</span>
+            <span class="badge">11 Tools</span>
         </div>
     </div>
 
@@ -113,8 +110,8 @@
 
         <div class="card">
             <h3>🚀 Latest Release</h3>
-            <p>Download the latest version with enhanced security, streaming support, and performance monitoring.</p>
-            <a href="https://github.com/egarcia74/warp-sql-server-mcp/releases/latest">Download v1.4.0 →</a>
+            <p>Download the latest version and view the changelog.</p>
+            <a href="https://github.com/egarcia74/warp-sql-server-mcp/releases/latest">Download v1.5.0 →</a>
         </div>
 
         <div class="card">
@@ -125,7 +122,7 @@
 
         <div class="card">
             <h3>🛠️ MCP Tools Reference</h3>
-            <p>Comprehensive documentation for all 8 available MCP tools with parameters, examples, and usage details. Now with enhanced security, streaming support, and performance monitoring.</p>
+            <p>Comprehensive documentation for all 11 available MCP tools with parameters, examples, and usage details.</p>
             <a href="./tools.html">View Full API Documentation →</a>
         </div>
 
@@ -142,6 +139,9 @@
                           <li><span class="code">explainQuery</span> - Get the execution plan for a SQL query to analyze performance</li>
                           <li><span class="code">listForeignKeys</span> - List all foreign key relationships in a schema</li>
                           <li><span class="code">exportTableCsv</span> - Export table data in CSV format</li>
+                          <li><span class="code">getPerformanceStats</span> - Get overall performance statistics and health summary</li>
+                          <li><span class="code">getQueryPerformance</span> - Get detailed query performance breakdown by tool</li>
+                          <li><span class="code">getConnectionHealth</span> - Get connection pool health metrics and diagnostics</li>
                 </ul>
             </div>
             <a href="./tools.html">View detailed documentation →</a>
@@ -149,87 +149,23 @@
 
         <div class="card">
             <h3>⚙️ Configuration</h3>
-            <p>Complete list of supported environment variables:</p>
-            
-            <h4>📡 Core Connection Settings</h4>
+            <p>Environment variables and configuration options:</p>
             <ul>
-                <li><span class="code">SQL_SERVER_HOST</span> - SQL Server hostname (default: localhost)</li>
+                <li><span class="code">SQL_SERVER_HOST</span> - SQL Server hostname</li>
                 <li><span class="code">SQL_SERVER_PORT</span> - SQL Server port (default: 1433)</li>
                 <li><span class="code">SQL_SERVER_DATABASE</span> - Initial database (default: master)</li>
-                <li><span class="code">SQL_SERVER_USER</span> - SQL Server username (optional for Windows auth)</li>
-                <li><span class="code">SQL_SERVER_PASSWORD</span> - SQL Server password (optional for Windows auth)</li>
-                <li><span class="code">SQL_SERVER_DOMAIN</span> - Windows domain (optional for Windows auth)</li>
-                <li><span class="code">SQL_SERVER_ENCRYPT</span> - Enable SSL encryption (default: false)</li>
+                <li><span class="code">SQL_SERVER_USER</span> - SQL Server username (optional)</li>
+                <li><span class="code">SQL_SERVER_PASSWORD</span> - SQL Server password (optional)</li>
+                <li><span class="code">SQL_SERVER_ENCRYPT</span> - Enable encryption (default: false)</li>
                 <li><span class="code">SQL_SERVER_TRUST_CERT</span> - Trust server certificate (default: true)</li>
-            </ul>
-            
-            <h4>⏱️ Timeout & Retry Settings</h4>
-            <ul>
-                <li><span class="code">SQL_SERVER_CONNECT_TIMEOUT_MS</span> - Connection timeout (default: 10000)</li>
-                <li><span class="code">SQL_SERVER_REQUEST_TIMEOUT_MS</span> - Query timeout (default: 30000)</li>
-                <li><span class="code">SQL_SERVER_MAX_RETRIES</span> - Max retry attempts (default: 3)</li>
-                <li><span class="code">SQL_SERVER_RETRY_DELAY_MS</span> - Retry delay (default: 1000)</li>
-            </ul>
-            
-            <h4>🏊‍♂️ Connection Pool Settings</h4>
-            <ul>
-                <li><span class="code">SQL_SERVER_POOL_MAX</span> - Max pool connections (default: 10)</li>
-                <li><span class="code">SQL_SERVER_POOL_MIN</span> - Min pool connections (default: 0)</li>
-                <li><span class="code">SQL_SERVER_POOL_IDLE_TIMEOUT_MS</span> - Pool idle timeout (default: 30000)</li>
-            </ul>
-            
-            <h4>🔒 Three-Tier Security System</h4>
-            <ul>
                 <li><span class="code">SQL_SERVER_READ_ONLY</span> - Read-only mode (default: true)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS</span> - Allow INSERT/UPDATE/DELETE (default: false)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_SCHEMA_CHANGES</span> - Allow CREATE/DROP/ALTER (default: false)</li>
-            </ul>
-            
-            <h4>☁️ Cloud Secret Management</h4>
-            <ul>
-                <li><span class="code">SECRET_MANAGER_TYPE</span> - Secret provider: env, aws, azure (default: env)</li>
-                <li><span class="code">AWS_REGION</span> - AWS region for Secrets Manager</li>
-                <li><span class="code">AZURE_KEY_VAULT_URL</span> - Azure Key Vault URL</li>
-            </ul>
-            
-            <h4>📊 Response & Formatting</h4>
-            <ul>
-                <li><span class="code">SQL_SERVER_RESPONSE_FORMAT</span> - Output format: structured, json, pretty-json (default: pretty-json)</li>
-            </ul>
-            
-            <h4>🚀 Streaming & Performance</h4>
-            <ul>
-                <li><span class="code">ENABLE_STREAMING</span> - Enable streaming for large datasets (default: true)</li>
-                <li><span class="code">STREAMING_BATCH_SIZE</span> - Batch size for streaming (default: 1000)</li>
-                <li><span class="code">STREAMING_MAX_MEMORY_MB</span> - Max memory for streaming (default: 50)</li>
-                <li><span class="code">STREAMING_MAX_RESPONSE_SIZE</span> - Max response size (default: 1000000)</li>
-                <li><span class="code">ENABLE_PERFORMANCE_MONITORING</span> - Track query performance (default: true)</li>
-                <li><span class="code">SLOW_QUERY_THRESHOLD</span> - Slow query threshold in ms (default: 5000)</li>
-                <li><span class="code">PERFORMANCE_SAMPLING_RATE</span> - Sampling rate 0.0-1.0 (default: 1.0)</li>
-                <li><span class="code">MAX_METRICS_HISTORY</span> - Max metrics history (default: 1000)</li>
-            </ul>
-            
-            <h4>📝 Logging & Auditing</h4>
-            <ul>
-                <li><span class="code">SQL_SERVER_LOG_LEVEL</span> - Log level: debug, info, warn, error (default: info)</li>
-                <li><span class="code">ENABLE_SECURITY_AUDIT</span> - Enable security audit logging (default: true)</li>
-                <li><span class="code">LOG_FILE</span> - Log file path (optional)</li>
-                <li><span class="code">SECURITY_LOG_FILE</span> - Security log file path (optional)</li>
-            </ul>
-        </div>
-
-        <div class="card">
-            <h3>✨ What's New in v1.4.0</h3>
-            <p>Major architecture enhancements and enterprise features:</p>
-            <ul>
-                <li>🔒 <strong>Advanced SQL Security:</strong> AST-based query validation with node-sql-parser</li>
-                <li>☁️ <strong>Cloud Secret Management:</strong> AWS Secrets Manager & Azure Key Vault support</li>
-                <li>🚀 <strong>Streaming Support:</strong> Handle large datasets without memory exhaustion</li>
-                <li>📊 <strong>Performance Monitoring:</strong> Real-time query performance tracking</li>
-                <li>📝 <strong>Structured Logging:</strong> Winston-based logging with security audit trails</li>
-                <li>🧪 <strong>Enhanced Testing:</strong> Comprehensive test coverage with TDD approach</li>
-                <li>⚙️ <strong>Modular Architecture:</strong> Refactored codebase for better maintainability</li>
-                <li>📈 <strong>Response Formats:</strong> Configurable output formats (JSON, table, CSV)</li>
+                <li><span class="code">ENABLE_PERFORMANCE_MONITORING</span> - Enable query performance tracking (default: true)</li>
+                <li><span class="code">MAX_METRICS_HISTORY</span> - Maximum performance records to retain (default: 1000)</li>
+                <li><span class="code">SLOW_QUERY_THRESHOLD</span> - Milliseconds to flag slow queries (default: 5000)</li>
+                <li><span class="code">TRACK_POOL_METRICS</span> - Enable connection pool monitoring (default: true)</li>
+                <li><span class="code">PERFORMANCE_SAMPLING_RATE</span> - Fraction of queries to monitor (default: 1.0)</li>
             </ul>
         </div>
 

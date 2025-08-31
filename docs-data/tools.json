@@ -1,7 +1,7 @@
 {
-  "version": "1.2.0",
-  "generatedAt": "2025-08-28T18:40:50.771Z",
-  "toolsCount": 8,
+  "version": "1.5.0",
+  "generatedAt": "2025-08-30T04:23:19.285Z",
+  "toolsCount": 11,
   "tools": [
     {
       "name": "execute_query",
@@ -215,6 +215,60 @@
           "limit": 50,
           "where": "id > 100"
         }
+      }
+    },
+    {
+      "name": "get_performance_stats",
+      "description": "Get overall performance statistics and health summary",
+      "parameters": {
+        "timeframe": {
+          "type": "string",
+          "description": "Time period for stats: "
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "timeframe": "optional_value"
+        }
+      }
+    },
+    {
+      "name": "get_query_performance",
+      "description": "Get detailed query performance breakdown by tool",
+      "parameters": {
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of queries to analyze (optional, defaults to 50)"
+        },
+        "tool_filter": {
+          "type": "string",
+          "description": "Filter by specific MCP tool name (optional)"
+        },
+        "slow_only": {
+          "type": "boolean",
+          "description": "Only return slow queries (optional, defaults to false)"
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "limit": 50,
+          "tool_filter": "optional_value",
+          "slow_only": true
+        }
+      }
+    },
+    {
+      "name": "get_connection_health",
+      "description": "Get connection pool health metrics and diagnostics",
+      "parameters": {},
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {}
       }
     }
   ]
