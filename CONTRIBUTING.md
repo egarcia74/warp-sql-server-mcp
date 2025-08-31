@@ -398,7 +398,8 @@ feat: add new database connection tool
 
 ## Getting Help
 
-- Check existing issues and discussions
+- Check existing issues: [GitHub Issues](https://github.com/egarcia74/warp-sql-server-mcp/issues)
+- Ask questions: [Question Template](https://github.com/egarcia74/warp-sql-server-mcp/issues/new?template=question.yml)
 - Read the documentation in `README.md` and `WARP.md`
 - Look at the test files for usage examples
 

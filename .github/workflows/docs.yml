@@ -9,6 +9,7 @@ on:
       - 'README.md'
       - 'index.js'
       - 'package.json'
+      - 'scripts/docs/**'
   pull_request:
     branches: [ main ]
     paths:
@@ -17,6 +18,7 @@ on:
       - 'README.md'
       - 'index.js'
       - 'package.json'
+      - 'scripts/docs/**'
   schedule:
     # Weekly documentation health check
     - cron: '0 4 * * 1'
@@ -243,130 +245,57 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate MCP Tools API Documentation
+      - name: Extract MCP Tools Documentation
         run: |
-          echo "# MCP Tools API Reference" > API.md
-          echo "" >> API.md
-          echo "This document is auto-generated from the source code." >> API.md
-          echo "" >> API.md
-          echo "_Last updated: $(date -u)_" >> API.md
-          echo "" >> API.md
-          
-          # Extract MCP tools documentation from source
-          node -e "
-            const fs = require('fs');
-            const content = fs.readFileSync('index.js', 'utf8');
-            
-            // More sophisticated tool extraction
-            const tools = [];
-            
-            // Find the tools array section
-            const toolsMatch = content.match(/tools:\s*\[([\s\S]*?)\]/m);
-            if (toolsMatch) {
-              const toolsSection = toolsMatch[1];
-              
-              // Split by tool objects (looking for patterns that start with name:)
-              const toolBlocks = toolsSection.split(/(?=\s*{\s*name:)/);
-              
-              for (const block of toolBlocks) {
-                if (!block.trim()) continue;
-                
-                // Extract tool properties
-                const nameMatch = block.match(/name:\s*['\"]([^'\"]+)['\"]/);
-                const descMatch = block.match(/description:\s*['\"]([^'\"]*)['\"]/);
-                const schemaMatch = block.match(/inputSchema:\s*({[\s\S]*?})/);
-                
-                if (nameMatch) {
-                  const tool = {
-                    name: nameMatch[1],
-                    description: descMatch ? descMatch[1] : 'No description available',
-                    hasInputSchema: !!schemaMatch,
-                    inputSchema: schemaMatch ? schemaMatch[1] : null
-                  };
-                  tools.push(tool);
-                }
-              }
-            }
-            
-            // Generate comprehensive documentation
-            let apiDoc = '';
-            
-            if (tools.length > 0) {
-              apiDoc += '## Overview\n\n';
-              apiDoc += 'This MCP server provides **' + tools.length + ' tools** for SQL Server database operations.\n\n';
-              apiDoc += '### Available Tools\n\n';
-              
-              // Generate table of contents
-              for (const tool of tools) {
-                apiDoc += '- [\`' + tool.name + '\`](#' + tool.name.toLowerCase().replace(/_/g, '-') + ')\n';
-              }
-              apiDoc += '\n---\n\n';
-              
-              // Generate detailed documentation for each tool
-              for (const tool of tools) {
-                apiDoc += '## \`' + tool.name + '\`\n\n';
-                apiDoc += '**Description:** ' + tool.description + '\n\n';
-                
-                if (tool.hasInputSchema) {
-                  apiDoc += '**Input Schema:** ✅ Available\n\n';
-                  
-                  // Try to extract required parameters
-                  if (tool.inputSchema) {
-                    try {
-                      if (tool.inputSchema.includes('required')) {
-                        const requiredMatch = tool.inputSchema.match(/required:\s*\[(.*?)\]/);
-                        if (requiredMatch) {
-                          const required = requiredMatch[1].split(',').map(p => p.trim().replace(/['\"]/g, ''));
-                          apiDoc += '**Required Parameters:** ' + required.join(', ') + '\n\n';
-                        }
-                      }
-                      
-                      if (tool.inputSchema.includes('properties')) {
-                        apiDoc += '**Parameters:** See input schema for detailed parameter definitions\n\n';
-                      }
-                    } catch (e) {
-                      apiDoc += '**Parameters:** Complex schema available\n\n';
-                    }
-                  }
-                } else {
-                  apiDoc += '**Input Schema:** ❌ No input parameters\n\n';
-                }
-                
-                // Add usage example
-                apiDoc += '**Example Usage:**\n';
-                apiDoc += '\`\`\`json\n';
-                apiDoc += '{\n';
-                apiDoc += '  \"tool\": \"' + tool.name + '\",\n';
-                apiDoc += '  \"arguments\": {\n';
-                apiDoc += '    // Add appropriate parameters here\n';
-                apiDoc += '  }\n';
-                apiDoc += '}\n';
-                apiDoc += '\`\`\`\n\n';
-                
-                apiDoc += '---\n\n';
-              }
-              
-              // Add footer
-              apiDoc += '## Notes\n\n';
-              apiDoc += '- All tools require a valid SQL Server connection\n';
-              apiDoc += '- Connection parameters are configured via environment variables\n';
-              apiDoc += '- For the most up-to-date tool definitions, see \`index.js\`\n';
-              
-              fs.writeFileSync('api-content.md', apiDoc);
-              console.log('Generated API documentation for ' + tools.length + ' tools');
-            } else {
-              fs.writeFileSync('api-content.md', 'No MCP tools found in source code.\n');
-              console.log('No tools found in index.js');
-            }
-          "
-          
-          cat api-content.md >> API.md
+          echo "🔍 Extracting MCP tools from source code..."
+          node scripts/docs/extract-docs.js
 
-      - name: Upload API docs artifact
+      - name: Generate HTML Documentation
+        run: |
+          echo "🏗️ Generating comprehensive HTML documentation..."
+          node scripts/docs/generate-tools-html.js
+          node scripts/docs/generate-landing-page.js
+          
+          echo "📊 Documentation generation complete:"
+          echo "- Landing page: docs/index.html"
+          echo "- Tools documentation: docs/tools.html"
+          echo "- Tools data: docs-data/tools.json"
+          
+          # Show tool count for verification
+          tool_count=$(node -e "const data = require('./docs-data/tools.json'); console.log(data.toolsCount);")
+          echo "✅ Successfully generated documentation for $tool_count MCP tools"
+
+      - name: Commit generated documentation
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Stage all generated documentation files
+          git add docs/index.html docs/tools.html docs-data/tools.json
+          
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No documentation changes to commit"
+          else
+            git commit -m "docs: auto-update API documentation
+            
+            - Generated from latest source code
+            - Updated tools.html with comprehensive API reference
+            - Updated index.html with current tool count
+            - Extracted $(node -e "const data = require('./docs-data/tools.json'); console.log(data.toolsCount);") MCP tools"
+            
+            git push
+            echo "✅ Documentation committed and pushed"
+          fi
+
+      - name: Upload documentation artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: api-docs
-          path: API.md
+          name: generated-documentation
+          path: |
+            docs/index.html
+            docs/tools.html
+            docs-data/tools.json
           retention-days: 30
 
   spell-check:
@@ -495,7 +424,7 @@ jobs:
   summary:
     name: Documentation Summary
     runs-on: ubuntu-latest
-    needs: [validate-docs, check-outdated-docs, spell-check, accessibility-check]
+    needs: [validate-docs, check-outdated-docs, spell-check, accessibility-check, generate-api-docs]
     if: always()
     steps:
       - name: Create summary
@@ -506,6 +435,7 @@ jobs:
           echo "**Freshness Check**: ${{ needs.check-outdated-docs.result }}" >> $GITHUB_STEP_SUMMARY  
           echo "**Spell Check**: ${{ needs.spell-check.result }}" >> $GITHUB_STEP_SUMMARY
           echo "**Accessibility**: ${{ needs.accessibility-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**API Documentation**: ${{ needs.generate-api-docs.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 **All reports uploaded as artifacts**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

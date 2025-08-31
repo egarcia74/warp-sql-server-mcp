@@ -12,7 +12,7 @@ body:
         
         Before asking:
         - Check the README.md for setup instructions
-        - Look through existing issues and discussions
+        - Look through existing issues
         - Make sure you've followed the troubleshooting guide
 
   - type: dropdown
