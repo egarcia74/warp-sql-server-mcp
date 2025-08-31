@@ -55,19 +55,19 @@ jobs:
             echo "🔒 Security update detected - eligible for auto-merge"
             auto_merge=true
           
-          # Check for development dependencies
-          elif echo "$pr_labels" | grep -q "dev-dependencies\|testing-dependencies\|docs-dependencies\|utility-dependencies"; then
-            echo "🔧 Development dependency update - eligible for auto-merge"
-            auto_merge=true
-          
-          # Check for GitHub Actions updates (build/utility actions only)
-          elif echo "$pr_labels" | grep -q "build-actions\|utility-actions"; then
+          # Check for auto-mergeable GitHub Actions by analyzing title
+          elif echo "$PR_TITLE" | grep -qi "actions/checkout\|actions/setup-node\|actions/upload-artifact\|actions/cache\|streetsidesoftware/cspell-action\|gaurav-nelson.*markdown-link-check"; then
             echo "🏗️ Build/utility action update - eligible for auto-merge"
             auto_merge=true
           
-          # Check for patch updates on allowed dependencies
-          elif echo "$PR_TITLE" | grep -qi "patch"; then
-            echo "🩹 Patch update - eligible for auto-merge"
+          # Check if it's a security-critical action (require manual review)
+          elif echo "$PR_TITLE" | grep -qi "ossf/scorecard-action\|github/codeql-action\|step-security"; then
+            echo "🔒 Security-critical action - manual review required"
+            auto_merge=false
+          
+          # Check for patch/minor updates on allowed dependencies
+          elif echo "$PR_TITLE" | grep -qi "patch\|minor"; then
+            echo "🩹 Patch/minor update - eligible for auto-merge"
             auto_merge=true
           
           else
@@ -78,7 +78,9 @@ jobs:
           
           # Add auto-merge label if eligible
           if [ "$auto_merge" = "true" ]; then
-            gh pr edit $pr_number --add-label "auto-merge-eligible"
+            gh pr edit $pr_number --add-label "auto-merge-eligible" || echo "Warning: Could not add label (may not exist yet)"
+          else
+            gh pr edit $pr_number --add-label "manual-review-required" || echo "Warning: Could not add label (may not exist yet)"
           fi
 
       - name: Auto-approve PR
