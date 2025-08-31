@@ -353,7 +353,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Run spell check
-        uses: streetsidesoftware/cspell-action@24db231b2edd831a4cfe5dbac8f4d45c4d3730f7 # v7
+        uses: streetsidesoftware/cspell-action@dcd03dc3e8a59ec2e360d0c62db517baa0b4bb6d # v7
         with:
           files: "**/*.md"
           config: "cspell.json"
