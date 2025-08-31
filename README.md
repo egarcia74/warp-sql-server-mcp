@@ -73,9 +73,17 @@ See our [**Software Engineering Manifesto**](MANIFESTO.md) and [**Architecture G
 
 **New to this project?** Get up and running in under 5 minutes!
 
-**👉 [Quick Start Guide →](QUICKSTART.md)**
+### Choose Your Development Environment
 
-For detailed setup, continue reading below.
+**🖥️ [Warp Terminal Quick Start →](QUICKSTART.md)** - Original 5-minute setup for Warp Terminal
+
+**💻 [VS Code Quick Start →](QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration setup
+
+### Advanced Setup Guides
+
+**🔧 [Complete VS Code Integration Guide →](docs/VSCODE-INTEGRATION-GUIDE.md)** - Comprehensive development workflow
+
+For detailed configuration options, continue reading below.
 
 ## Features
 

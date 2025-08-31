@@ -6,7 +6,12 @@ Warp SQL Server MCP implements a **three-tier graduated security system** design
 accidental or malicious database operations. This system provides granular control over what
 SQL operations are permitted, with secure defaults that prioritize safety over functionality.
 
-**🚀 First time setup?** Start with the [Quick Start Guide](QUICKSTART.md) to get the server running with secure defaults, then return here for detailed security configuration.
+**🚀 First time setup?** Choose your preferred environment:
+
+- **[Warp Terminal Quick Start Guide](QUICKSTART.md)** - Original 5-minute setup
+- **[VS Code Quick Start Guide](QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
+
+Both guides get the server running with secure defaults, then return here for detailed security configuration.
 
 ## 🛡️ Security Architecture
 
