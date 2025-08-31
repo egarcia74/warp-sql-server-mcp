@@ -1,7 +1,7 @@
 # Product Backlog & Roadmap
 
-> **Last Updated**: August 29, 2025  
-> **Version**: 1.0  
+> **Last Updated**: August 31, 2025  
+> **Version**: 1.1  
 > **Current Release**: v1.4.0
 
 ## 🎯 Overview
@@ -13,7 +13,8 @@ This document maintains our prioritized feature backlog, organized by business v
 - **Total Features**: 17
 - **High Priority**: 4 features
 - **Medium Priority**: 7 features
-- **Low Priority**: 4 features
+- **Low Priority**: 3 features
+- **Completed Features**: 1 feature ✅
 - **Technical Debt**: 2 features
 
 ## 🚀 HIGH PRIORITY Features
@@ -28,7 +29,7 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ### 2. Query Builder & Template System
 
-- **Issue**: [#18](https://github.com/egarcia74/warp-sql-server-mcp/issues/18)
+- **Issue**: [#17](https://github.com/egarcia74/warp-sql-server-mcp/issues/17)
 - **Business Value**: ⭐⭐⭐⭐⭐ | **Complexity**: 🔧🔧🔧
 - **Phase**: 1 (0-3 months)
 - **Status**: 📋 Planned
@@ -36,7 +37,7 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ### 3. Advanced Data Export Options
 
-- **Issue**: [#18](https://github.com/egarcia74/warp-sql-server-mcp/issues/18)
+- **Issue**: [#16](https://github.com/egarcia74/warp-sql-server-mcp/issues/16)
 - **Business Value**: ⭐⭐⭐⭐ | **Complexity**: 🔧🔧
 - **Phase**: 1 (0-3 months)
 - **Status**: 📋 Planned
@@ -44,7 +45,7 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ### 4. Real-time Data Monitoring
 
-- **Issue**: [#18](https://github.com/egarcia74/warp-sql-server-mcp/issues/18)
+- **Issue**: [#19](https://github.com/egarcia74/warp-sql-server-mcp/issues/19)
 - **Business Value**: ⭐⭐⭐⭐ | **Complexity**: 🔧🔧🔧🔧
 - **Phase**: 3 (6-12 months)
 - **Status**: 📋 Planned
@@ -54,7 +55,7 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ### 5. Database Comparison & Synchronization
 
-- **Issue**: [#18](https://github.com/egarcia74/warp-sql-server-mcp/issues/18)
+- **Issue**: [#20](https://github.com/egarcia74/warp-sql-server-mcp/issues/20)
 - **Business Value**: ⭐⭐⭐⭐ | **Complexity**: 🔧🔧🔧🔧
 - **Phase**: 3 (6-12 months)
 - **Status**: 📋 Planned
@@ -68,7 +69,7 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ### 7. Query Optimization & Performance Tools
 
-- **Issue**: [#18](https://github.com/egarcia74/warp-sql-server-mcp/issues/18)
+- **Issue**: [#21](https://github.com/egarcia74/warp-sql-server-mcp/issues/21)
 - **Business Value**: ⭐⭐⭐⭐ | **Complexity**: 🔧🔧🔧
 - **Phase**: 2 (3-6 months)
 - **Status**: 📋 Planned
@@ -105,7 +106,7 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ### 12. Natural Language Query Interface
 
-- **Issue**: [#18](https://github.com/egarcia74/warp-sql-server-mcp/issues/18)
+- **Issue**: [#22](https://github.com/egarcia74/warp-sql-server-mcp/issues/22)
 - **Business Value**: ⭐⭐⭐ | **Complexity**: 🔧🔧🔧🔧🔧
 - **Phase**: 4 (12+ months)
 - **Status**: 🤔 Research
@@ -124,12 +125,13 @@ This document maintains our prioritized feature backlog, organized by business v
 - **Phase**: 4 (12+ months)
 - **Status**: 📋 Planned
 
-### 15. Mobile-Responsive Interface
+### 15. Performance Monitoring MCP Tools ✅
 
-- **Issue**: [#18](https://github.com/egarcia74/warp-sql-server-mcp/issues/18)
-- **Business Value**: ⭐⭐ | **Complexity**: 🔧🔧🔧🔧
-- **Phase**: 4 (12+ months)
-- **Status**: 📋 Planned
+- **Issue**: [#15](https://github.com/egarcia74/warp-sql-server-mcp/issues/15) (CLOSED)
+- **Business Value**: ⭐⭐⭐⭐⭐ | **Complexity**: 🔧🔧
+- **Phase**: Completed (v1.4.0+)
+- **Status**: ✅ Complete
+- **Description**: Access performance metrics and connection health through dedicated MCP tools (get_performance_stats, get_query_performance, get_connection_health)
 
 ## 🔧 TECHNICAL DEBT & INFRASTRUCTURE
 
