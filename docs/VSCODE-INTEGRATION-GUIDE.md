@@ -58,11 +58,13 @@ code .
 ### Step 3: Configure Environment
 
 1. **Copy environment template**:
+
    ```bash
    cp .env.example .env
    ```
 
 2. **Edit `.env` file** in VS Code with your SQL Server details:
+
    ```bash
    # Basic connection settings
    SQL_SERVER_HOST=localhost
@@ -70,12 +72,12 @@ code .
    SQL_SERVER_DATABASE=master
    SQL_SERVER_USER=your_username
    SQL_SERVER_PASSWORD=your_password
-   
+
    # Security settings (recommended for development)
    SQL_SERVER_READ_ONLY=false
    SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true
    SQL_SERVER_ALLOW_SCHEMA_CHANGES=false
-   
+
    # SSL settings (for local development)
    SQL_SERVER_ENCRYPT=false
    SQL_SERVER_TRUST_CERT=true
@@ -89,6 +91,7 @@ npm run dev
 ```
 
 You should see:
+
 ```bash
 ✅ SQL Server MCP Server started
 🔗 Connected to SQL Server
@@ -102,41 +105,48 @@ You should see:
 Install these extensions for the best development experience:
 
 #### 1. **SQL Server (mssql)** - Microsoft
+
 - **Extension ID**: `ms-mssql.mssql`
 - **Purpose**: Direct SQL Server integration, query execution, IntelliSense
-- **Features**: 
+- **Features**:
   - Database connections
   - SQL syntax highlighting
   - Query execution
   - Results visualization
 
 #### 2. **SQLTools** - Matheus Teixeira
+
 - **Extension ID**: `mtxr.sqltools`
 - **Purpose**: Multi-database management interface
 - **Add-on**: `mtxr.sqltools-driver-mssql` for SQL Server support
 
 #### 3. **REST Client** - Huachao Mao
+
 - **Extension ID**: `humao.rest-client`
 - **Purpose**: Test MCP endpoints and API interactions
 
 #### 4. **Thunder Client** - RangaVadhineni
+
 - **Extension ID**: `rangav.vscode-thunder-client`
 - **Purpose**: Alternative API testing tool
 
 ### Recommended Extensions
 
 #### Development Quality
+
 - **ESLint** (`dbaeumer.vscode-eslint`) - Linting integration
 - **Prettier** (`esbenp.prettier-vscode`) - Code formatting
 - **GitLens** (`eamodio.gitlens`) - Enhanced Git integration
 - **Error Lens** (`usernamehw.errorlens`) - Inline error highlighting
 
 #### Testing & Debugging
+
 - **Vitest** (`ZixuanChen.vitest-explorer`) - Test explorer
 - **Jest Runner** (`firsttris.vscode-jest-runner`) - Test execution
 - **Node.js Extension Pack** (`ms-vscode.vscode-node-extension-pack`) - Node.js development
 
 #### Documentation
+
 - **Markdown All in One** (`yzhang.markdown-all-in-one`) - Markdown editing
 - **markdownlint** (`davidanson.vscode-markdownlint`) - Markdown linting
 
@@ -171,7 +181,7 @@ Install these extensions for the best development experience:
 }
 ```
 
-2. **Open Warp in VS Code**:
+1. **Open Warp in VS Code**:
    - Use integrated terminal: `View → Terminal`
    - Set Warp as default shell
    - Test MCP connection:
@@ -406,9 +416,10 @@ Export the top 100 orders to CSV format
 #### Example Workflow: Query Development
 
 1. **Write SQL in `.sql` file**:
+
    ```sql
    -- queries/user-analysis.sql
-   SELECT 
+   SELECT
        u.UserId,
        u.UserName,
        COUNT(o.OrderId) as OrderCount
@@ -419,11 +430,13 @@ Export the top 100 orders to CSV format
    ```
 
 2. **Test query via MCP**:
+
    ```text
    Execute this query and show me the execution plan: [paste query]
    ```
 
 3. **Optimize using MCP feedback**:
+
    ```text
    Analyze the performance of this query and suggest optimizations
    ```
@@ -442,6 +455,7 @@ Export the entire Orders table to CSV with batching for memory efficiency
 ```
 
 The server automatically:
+
 - Detects large result sets
 - Enables streaming mode
 - Processes data in configurable batches (default: 1000 rows)
@@ -502,7 +516,7 @@ cp .env .env.example
 # Edit .env.example to remove actual credentials
 ```
 
-## Development Workflow
+## Database Development Workflow
 
 ### Test-Driven Development (TDD)
 
@@ -525,7 +539,9 @@ Write minimal code to make tests pass:
 ```javascript
 // Example: Adding new MCP tool
 test('should handle new_tool operation', async () => {
-  const result = await mcpServer.handleTool('new_tool', { /* params */ });
+  const result = await mcpServer.handleTool('new_tool', {
+    /* params */
+  });
   expect(result).toBeDefined();
   expect(result.content).toContain('expected_output');
 });
@@ -558,6 +574,7 @@ The project includes automatic git hooks that run before commits:
 3. **Push**: Additional quality checks run
 
 If hooks fail:
+
 ```bash
 # Fix issues automatically
 npm run lint:fix
@@ -599,13 +616,14 @@ ENABLE_SECURITY_AUDIT=true
 ```
 
 View logs in VS Code terminal:
+
 ```bash
 # Tail log files
 tail -f /var/log/sql-server-mcp.log
 tail -f /var/log/security-audit.log
 ```
 
-## Database Development
+## Database Schema Development
 
 ### Schema Development Workflow
 
@@ -632,9 +650,10 @@ Show me all foreign key relationships in the dbo schema
 #### 2. **Query Development**
 
 1. **Create SQL files** in VS Code:
+
    ```sql
    -- queries/product-analysis.sql
-   SELECT 
+   SELECT
        p.ProductID,
        p.Name,
        p.ListPrice,
@@ -647,11 +666,13 @@ Show me all foreign key relationships in the dbo schema
    ```
 
 2. **Test via MCP**:
+
    ```text
    Execute this query and show me the first 10 results: [paste query]
    ```
 
 3. **Performance Analysis**:
+
    ```text
    Explain the execution plan for this query: [paste query]
    ```
@@ -664,11 +685,13 @@ Show me all foreign key relationships in the dbo schema
 #### 3. **Data Analysis Workflow**
 
 1. **Sample Data Exploration**:
+
    ```text
    Show me sample data from the Orders table with CustomerID > 1000
    ```
 
 2. **Data Quality Checks**:
+
    ```text
    Execute query: SELECT COUNT(*) as TotalRows, COUNT(DISTINCT CustomerID) as UniqueCustomers FROM Orders
    ```
@@ -701,12 +724,14 @@ Execute this query on the Analytics database: SELECT COUNT(*) FROM Reports
 #### AWS Secrets Manager Integration
 
 1. **Configure AWS credentials** in VS Code:
+
    ```bash
    # Install AWS CLI extension or configure locally
    aws configure
    ```
 
 2. **Update environment**:
+
    ```bash
    SECRET_MANAGER_TYPE=aws
    AWS_REGION=us-east-1
@@ -721,11 +746,13 @@ Execute this query on the Analytics database: SELECT COUNT(*) FROM Reports
 #### Azure Key Vault Integration
 
 1. **Configure Azure CLI**:
+
    ```bash
    az login
    ```
 
 2. **Update environment**:
+
    ```bash
    SECRET_MANAGER_TYPE=azure
    AZURE_KEY_VAULT_URL=https://your-vault.vault.azure.net/
@@ -751,11 +778,13 @@ MAX_METRICS_HISTORY=1000
 #### Monitor Performance in VS Code
 
 1. **View Performance Stats**:
+
    ```text
    Get overall performance statistics for recent queries
    ```
 
 2. **Analyze Slow Queries**:
+
    ```text
    Show me slow queries from the last session
    ```
@@ -784,7 +813,8 @@ STREAMING_MAX_RESPONSE_SIZE=1000000   # Response size limit
 #### 1. **Extension Conflicts**
 
 **Problem**: SQL extensions conflict with MCP functionality
-**Solution**: 
+**Solution**:
+
 - Disable conflicting extensions
 - Use workspace-specific extension settings
 - Configure extension priorities in settings
@@ -793,6 +823,7 @@ STREAMING_MAX_RESPONSE_SIZE=1000000   # Response size limit
 
 **Problem**: Warp terminal not working in VS Code
 **Solution**:
+
 ```bash
 # Set Warp as default terminal
 # In VS Code settings.json:
@@ -823,12 +854,14 @@ npm run dev 2>&1 | tee server.log
 #### 2. **Authentication Failures**
 
 **SQL Server Authentication**:
+
 ```bash
 # Test connection manually
 sqlcmd -S localhost,1433 -U your_username -P your_password -Q "SELECT @@VERSION"
 ```
 
 **Windows Authentication**:
+
 ```bash
 # Test Windows auth
 sqlcmd -S localhost,1433 -E -Q "SELECT @@VERSION"
@@ -840,7 +873,7 @@ Check database user permissions:
 
 ```sql
 -- Check current user permissions
-SELECT 
+SELECT
     p.state_desc,
     p.permission_name,
     s.name AS principal_name
@@ -891,7 +924,10 @@ Create custom VS Code commands for common MCP operations:
   "macros": {
     "testMCPConnection": [
       "workbench.action.terminal.new",
-      { "command": "workbench.action.terminal.sendSequence", "args": { "text": "Get connection health status\n" } }
+      {
+        "command": "workbench.action.terminal.sendSequence",
+        "args": { "text": "Get connection health status\n" }
+      }
     ]
   }
 }
@@ -909,10 +945,7 @@ Create SQL snippets for common MCP queries in VS Code:
 {
   "MCP List Databases": {
     "prefix": "mcp-list-db",
-    "body": [
-      "-- Query via MCP: List all databases",
-      "-- Usage: List all databases on the server"
-    ],
+    "body": ["-- Query via MCP: List all databases", "-- Usage: List all databases on the server"],
     "description": "MCP command to list databases"
   },
   "MCP Describe Table": {
@@ -970,6 +1003,7 @@ your-project/
 Create environment-specific MCP configurations:
 
 **Development** (`mcp-configs/development.json`):
+
 ```json
 {
   "SQL_SERVER_HOST": "localhost",
@@ -985,12 +1019,13 @@ Create environment-specific MCP configurations:
 ```
 
 **Production Monitoring** (`mcp-configs/production.json`):
+
 ```json
 {
   "SECRET_MANAGER_TYPE": "azure",
   "AZURE_KEY_VAULT_URL": "https://prod-vault.vault.azure.net/",
   "SQL_SERVER_HOST": "prod-sql-server.company.com",
-  "SQL_SERVER_PORT": "1433", 
+  "SQL_SERVER_PORT": "1433",
   "SQL_SERVER_DATABASE": "ProductionDB",
   "SQL_SERVER_READ_ONLY": "true",
   "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
@@ -1061,11 +1096,13 @@ Show me queries that took longer than 5 seconds to execute
 ### Performance Guidelines
 
 1. **Monitor query performance**:
+
    ```text
    Get query performance breakdown for slow queries only
    ```
 
 2. **Use appropriate limits** for data exploration:
+
    ```text
    Get sample data from large_table with limit 100
    ```
@@ -1118,17 +1155,20 @@ Show me queries that took longer than 5 seconds to execute
 #### Code Review Preparation
 
 1. **Run full CI pipeline**:
+
    ```bash
    npm run ci
    ```
 
 2. **Check test coverage**:
+
    ```bash
    npm run test:coverage
    open coverage/index.html
    ```
 
 3. **Validate documentation**:
+
    ```bash
    npm run markdown:lint
    ```
@@ -1139,13 +1179,16 @@ Show me queries that took longer than 5 seconds to execute
 
 ## 🎯 **Ready to Build Enterprise-Grade Database Solutions!**
 
-This VS Code integration guide provides everything you need to develop, test, and deploy secure SQL Server MCP solutions. The combination of VS Code's powerful development environment and Warp's MCP capabilities creates an unparalleled database development experience.
+This VS Code integration guide provides everything you need to develop, test, and deploy secure
+SQL Server MCP solutions. The combination of VS Code's powerful development environment and
+Warp's MCP capabilities creates an unparalleled database development experience.
 
 **Next Steps:**
+
 - 🚀 **[Try the Quick Start Guide](../QUICKSTART.md)** for immediate setup
 - 🔒 **[Review Security Best Practices](../SECURITY.md)** for production deployment
 - 🏗️ **[Explore the Architecture](../ARCHITECTURE.md)** to understand the enterprise patterns
 
 ---
 
-*This guide is part of the comprehensive documentation for the [warp-sql-server-mcp](https://github.com/egarcia74/warp-sql-server-mcp) project - an enterprise-grade reference implementation showcasing production-ready software development practices.*
+_This guide is part of the comprehensive documentation for the [warp-sql-server-mcp](https://github.com/egarcia74/warp-sql-server-mcp) project - an enterprise-grade reference implementation showcasing production-ready software development practices._
