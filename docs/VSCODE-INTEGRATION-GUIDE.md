@@ -165,7 +165,7 @@ Install these extensions for the best development experience:
 {
   "name": "sql-server",
   "command": "node",
-  "args": ["/Users/egarcia74/Source/Repos/GitHub/warp-sql-server-mcp/index.js"],
+  "args": ["/path/to/warp-sql-server-mcp/index.js"],
   "env": {
     "SQL_SERVER_HOST": "localhost",
     "SQL_SERVER_PORT": "1433",

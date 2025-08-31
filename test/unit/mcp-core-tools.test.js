@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import {
   setupMssqlMock,
   setupStdioMock,
@@ -7,8 +7,7 @@ import {
   createTestMcpServer,
   mockPool,
   mockRequest,
-  testData,
-  SqlServerMCP
+  testData
 } from './mcp-shared-fixtures.js';
 
 // Setup module mocks

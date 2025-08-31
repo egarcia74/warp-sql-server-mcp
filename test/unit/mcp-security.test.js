@@ -71,15 +71,15 @@ describe('Safety Mechanisms', () => {
         SQL_SERVER_USER: 'testuser',
         SQL_SERVER_PASSWORD: 'testpass'
       };
-      
+
       // Explicitly delete safety environment variables to ensure defaults
       delete process.env.SQL_SERVER_READ_ONLY;
       delete process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS;
       delete process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES;
-      
+
       vi.clearAllMocks();
       vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-      
+
       // Test with default safe configuration
       mcpServer = new SqlServerMCP();
     });
@@ -196,10 +196,10 @@ describe('Safety Mechanisms', () => {
         SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'false',
         SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'false'
       };
-      
+
       vi.clearAllMocks();
       vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-      
+
       mcpServer = new SqlServerMCP();
     });
 
@@ -266,10 +266,10 @@ describe('Safety Mechanisms', () => {
         SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'true',
         SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'false'
       };
-      
+
       vi.clearAllMocks();
       vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-      
+
       mcpServer = new SqlServerMCP();
     });
 
@@ -314,9 +314,7 @@ describe('Safety Mechanisms', () => {
     });
 
     test('should detect multi-statement schema changes', () => {
-      const validation = mcpServer.validateQuery(
-        'SELECT 1; CREATE INDEX idx_name ON users(name)'
-      );
+      const validation = mcpServer.validateQuery('SELECT 1; CREATE INDEX idx_name ON users(name)');
       expect(validation.allowed).toBe(false);
       expect(validation.queryType).toBe('schema');
     });
@@ -336,10 +334,10 @@ describe('Safety Mechanisms', () => {
         SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'true',
         SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'true'
       };
-      
+
       vi.clearAllMocks();
       vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-      
+
       mcpServer = new SqlServerMCP();
     });
 

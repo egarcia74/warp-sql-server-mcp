@@ -2,7 +2,7 @@
   "mcpServers": {
     "sql-server": {
       "command": "node",
-      "args": ["/Users/egarcia74/Source/Repos/GitHub/warp-sql-server-mcp/index.js"],
+      "args": ["/path/to/warp-sql-server-mcp/index.js"],
       "env": {
         "_comment_basic": "=== Basic SQL Server Connection ===",
         "SQL_SERVER_HOST": "localhost",
@@ -63,7 +63,7 @@
         "_comment_optional": "=== Optional Working Directory (customize as needed) ===",
         "_note_working_dir": "You can also add 'working_directory' at the same level as 'command' if needed"
       },
-      "working_directory": "/Users/your_username/Downloads"
+      "working_directory": "$HOME/Downloads"
     }
   }
 }

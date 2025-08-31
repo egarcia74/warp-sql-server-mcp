@@ -18,10 +18,6 @@ vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
 }));
 
 import { SqlServerMCP } from '../../index.js';
-import sql from 'mssql';
-
-// Mock transport and server for startup tests
-const mockStdioTransport = { connect: vi.fn() };
 
 describe('SQL Server MCP Lifecycle', () => {
   let mcpServer;
@@ -57,7 +53,7 @@ describe('SQL Server MCP Lifecycle', () => {
     // Create an actual SqlServerMCP instance for testing
     // Mock the server setup to prevent actual MCP server initialization
     vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-    
+
     mcpServer = new SqlServerMCP();
     mcpServer.pool = null; // Reset pool
   });

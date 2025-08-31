@@ -148,17 +148,17 @@ export const testData = {
 };
 
 // Common test utilities
-export const createMockMcpServer = (customConfig = {}) => {
+export const createMockMcpServer = async (customConfig = {}) => {
   // Mock the setupToolHandlers to prevent actual MCP server initialization
   vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-  
-  const { SqlServerMCP } = require('../../index.js');
+
+  const { SqlServerMCP } = await import('../../index.js');
   const server = new SqlServerMCP();
   server.pool = null; // Reset pool
-  
+
   // Apply any custom configuration
   Object.assign(server, customConfig);
-  
+
   return server;
 };
 
@@ -234,7 +234,8 @@ export const performanceTestData = {
 
 // CSV test data
 export const csvTestData = {
-  sampleCsvOutput: 'id,name,email\n1,"John Doe","john@example.com"\n2,"Jane Smith","jane@example.com"',
+  sampleCsvOutput:
+    'id,name,email\n1,"John Doe","john@example.com"\n2,"Jane Smith","jane@example.com"',
   expectedCsvHeaders: ['id', 'name', 'email'],
   largeDataset: Array.from({ length: 1000 }, (_, i) => ({
     id: i + 1,
@@ -265,7 +266,7 @@ export const queryTestCases = {
   },
   dangerousQueries: {
     exec: 'EXEC sp_configure',
-    multiStatement: "SELECT * FROM Users; DELETE FROM Users WHERE id = 1",
+    multiStatement: 'SELECT * FROM Users; DELETE FROM Users WHERE id = 1',
     sqlInjection: "'; DROP TABLE Users; --"
   }
 };
@@ -273,61 +274,67 @@ export const queryTestCases = {
 // Tool result helpers
 export const createToolResult = (success = true, data = {}, errorMessage = null) => {
   const baseResult = {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        success,
-        ...data,
-        ...(errorMessage && !success ? { error: { message: errorMessage } } : {})
-      })
-    }]
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          success,
+          ...data,
+          ...(errorMessage && !success ? { error: { message: errorMessage } } : {})
+        })
+      }
+    ]
   };
-  
+
   return baseResult;
 };
 
 export const expectToolSuccess = (result, expectedData = {}) => {
+  // Note: These functions require expect to be available in the calling test context
+  const expect = globalThis.expect;
   expect(result.content).toHaveLength(1);
   expect(result.content[0].type).toBe('text');
-  
+
   const data = JSON.parse(result.content[0].text);
   expect(data.success).toBe(true);
-  
+
   if (Object.keys(expectedData).length > 0) {
     expect(data).toMatchObject(expectedData);
   }
-  
+
   return data;
 };
 
 export const expectToolError = (result, expectedErrorMessage = null) => {
+  // Note: These functions require expect to be available in the calling test context
+  const expect = globalThis.expect;
   expect(result.content).toHaveLength(1);
   expect(result.content[0].type).toBe('text');
-  
+
   const data = JSON.parse(result.content[0].text);
   expect(data.success).toBe(false);
   expect(data.error).toBeDefined();
-  
+
   if (expectedErrorMessage) {
     expect(data.error.message).toContain(expectedErrorMessage);
   }
-  
+
   return data;
 };
 
 // Mock server instance factory
 export const createTestMcpServer = async (envOverrides = {}) => {
   setupTestEnvironment(envOverrides);
-  
+
   // Import here to ensure mocks are in place
   const { SqlServerMCP } = await import('../../index.js');
-  
+
   // Mock the setupToolHandlers to prevent actual MCP server initialization
   vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-  
+
   const server = new SqlServerMCP();
   server.pool = null; // Reset pool
-  
+
   return server;
 };
 
@@ -340,7 +347,7 @@ export const setupMcpTest = (envOverrides = {}) => {
 
 // Performance monitoring mock setup
 export const setupPerformanceMonitoringMocks = () => {
-  mockRequest.query.mockImplementation((query) => {
+  mockRequest.query.mockImplementation(query => {
     if (query.includes('performance statistics')) {
       return Promise.resolve({
         recordset: [performanceTestData.samplePerformanceStats.summary]

@@ -13,7 +13,7 @@ Add the following configuration to your Warp MCP settings (in Warp's settings me
   "mcpServers": {
     "sql-server": {
       "command": "node",
-      "args": ["/Users/egarcia74/Source/Repos/GitHub/warp-sql-server-mcp/index.js"],
+      "args": ["/path/to/warp-sql-server-mcp/index.js"],
       "env": {
         "SQL_SERVER_HOST": "your_sql_server_host",
         "SQL_SERVER_PORT": "1433",
