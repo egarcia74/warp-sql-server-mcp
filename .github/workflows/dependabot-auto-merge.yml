@@ -83,17 +83,17 @@ jobs:
             gh pr edit $pr_number --add-label "manual-review-required" || echo "Warning: Could not add label (may not exist yet)"
           fi
 
-      - name: Auto-approve PR
+      - name: Add auto-merge comment and enable auto-merge
         if: steps.analyze.outputs.auto_merge == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           pr_number=${{ github.event.pull_request.number }}
           
-          # Approve the PR
-          gh pr review $pr_number --approve --body "🤖 **Automated Approval**
+          # Add explanatory comment
+          gh pr comment $pr_number --body "🤖 **Auto-merge Enabled**
 
-          ✅ This Dependabot update has been automatically approved because:
+          ✅ This Dependabot update has been queued for auto-merge because:
           - All tests pass
           - Update type is eligible for auto-merge
           - No breaking changes detected
@@ -104,14 +104,7 @@ jobs:
           - Type: ✅ Low-risk update
           - Security: ✅ No concerns identified
           
-          🚀 **Ready for auto-merge** - will merge automatically once all checks pass."
-
-      - name: Enable auto-merge
-        if: steps.analyze.outputs.auto_merge == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          pr_number=${{ github.event.pull_request.number }}
+          🚀 **Auto-merge enabled** - will merge automatically once all required checks pass."
           
           # Enable auto-merge with squash strategy
           gh pr merge $pr_number --auto --squash --delete-branch
