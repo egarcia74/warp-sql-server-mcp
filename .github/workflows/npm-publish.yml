@@ -10,9 +10,9 @@ on:
         required: true
         type: string
       dry_run:
-        description: 'Dry run (no actual publish)'
+        description: 'Dry run (no actual publish) - NOTE: Real publishing requires 2FA locally'
         required: false
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -66,12 +66,17 @@ jobs:
 
       - name: Publish to NPM
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "🚀 Publishing to npm..."
-          npm publish --access public
-          echo "✅ Published successfully!"
+          echo "❌ Automated publishing is disabled."
+          echo "NPM requires 2FA for publishing, which cannot be automated."
+          echo ""
+          echo "To publish manually:"
+          echo "1. Run locally: npm publish --access public"
+          echo "2. Enter your 2FA code when prompted"
+          echo "3. Package will be published to: https://www.npmjs.com/package/warp-sql-server-mcp"
+          echo ""
+          echo "This ensures maximum security with 2FA protection."
+          exit 1
 
       - name: Create publish summary
         run: |
