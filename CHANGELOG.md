@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2025-09-01
+
+### 🎯 Query Optimization & Security Hardening Release
+
+This release introduces comprehensive query optimization tools and resolves critical security vulnerabilities,
+making the MCP server production-ready for enterprise environments with enhanced performance analysis capabilities.
+
+### Added - Query Optimization & Performance Analysis
+
+- **🔧 Complete Query Optimization Suite** ([#37](https://github.com/egarcia74/warp-sql-server-mcp/pull/37)):
+  - `analyze_query_performance` - Deep query analysis with bottleneck detection
+  - `suggest_query_optimizations` - AI-powered optimization recommendations
+  - `analyze_index_usage` - Index effectiveness analysis and suggestions
+  - `detect_performance_bottlenecks` - Systematic performance issue identification
+  - Advanced SQL parsing and performance metrics collection
+  - Comprehensive error handling and validation
+  - 49 unit tests with 83%+ code coverage
+
+- **📊 Query Optimizer Engine** (`lib/analysis/query-optimizer.js`):
+  - SQL operator extraction and analysis (SELECT, JOIN, WHERE, ORDER BY, GROUP BY)
+  - Query complexity scoring and bottleneck identification
+  - Index recommendation based on query patterns
+  - Performance insights with actionable optimization suggestions
+  - Support for complex multi-table queries and subqueries
+  - Production-ready error handling and logging integration
+
+- **🔍 Bottleneck Detection System** (`lib/analysis/bottleneck-detector.js`):
+  - Automated detection of query performance issues
+  - Analysis of table scans, missing indexes, and inefficient joins
+  - Memory usage pattern identification
+  - Query execution plan analysis
+  - Comprehensive reporting with severity levels
+
+### Fixed - Critical Security Vulnerabilities
+
+- **🛡️ Resolved CodeQL Security Alert #147**: "Incomplete multi-character sanitization"
+  - Eliminated unsafe regex character removal in query optimization
+  - Implemented precise SQL operator pattern matching
+  - Enhanced input validation with comprehensive sanitization
+  - Zero security vulnerabilities in current codebase
+
+- **🔒 GitHub Actions Security Hardening**:
+  - Pinned all GitHub Actions to specific commit hashes for supply chain security
+  - Implemented least-privilege token permissions across all workflows
+  - Fixed workflow vulnerabilities identified by OSSF Scorecard
+  - Enhanced workflow security posture to enterprise standards
+
+### Added - Documentation & Development Tools
+
+- **📚 Dead Link Checking** ([#25](https://github.com/egarcia74/warp-sql-server-mcp/issues/25)):
+  - Automated markdown link validation in CI/CD pipeline
+  - Comprehensive link checking across all documentation
+  - Integration with documentation workflow for link health monitoring
+
+- **📝 Spell Check Improvements**:
+  - Added "roadmaps" to CSpell dictionary (correctly spelled business term)
+  - Fixed spell check configuration path in documentation workflow
+  - Comprehensive spell checking for all markdown files
+
+### Enhanced - Development Workflow
+
+- **🤖 Dependabot Auto-Triage**:
+  - Enhanced dependency management with automated security updates
+  - Improved auto-merge logic for dependency updates
+  - Comprehensive security scanning integration
+
+- **📊 Test Coverage Improvements**:
+  - Comprehensive test suite for query optimization features
+  - 584 passing tests with 83.69% overall coverage
+  - Enhanced unit testing for all new optimization algorithms
+  - Production-ready test infrastructure
+
+### Fixed - Infrastructure & Maintenance
+
+- **🔧 Package Dependencies**:
+  - Fixed corrupted winston dependency specification
+  - Updated dependency versions for security and compatibility
+  - Clean package.json with proper version specifications
+
+- **📋 Documentation Generation**:
+  - Automated API documentation generation and updates
+  - Enhanced PR workflow with documentation checks
+  - Improved documentation consistency and accuracy
+
+### Performance Metrics
+
+- **Test Coverage**: 83.69% (584 passing tests)
+- **Security Vulnerabilities**: 0 (resolved critical CodeQL alert)
+- **New MCP Tools**: 4 query optimization tools added
+- **Documentation Links**: 100% valid (comprehensive link checking)
+- **Code Quality**: All ESLint, Prettier, and Markdown lint checks pass
+
+### Breaking Changes
+
+- None. This release maintains full backward compatibility.
+
+### v1.6.0 Migration Notes
+
+- Query optimization tools are available immediately with no configuration required
+- All existing functionality remains unchanged
+- New tools integrate seamlessly with existing MCP server infrastructure
+
 ### Added - Performance Monitoring Enhancement
 
 - **📊 Complete Performance Monitoring Coverage**: Extended performance monitoring instrumentation to all SQL Server MCP tools

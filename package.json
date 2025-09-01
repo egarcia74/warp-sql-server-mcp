@@ -1,6 +1,6 @@
 {
   "name": "warp-sql-server-mcp",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Secure MCP server for connecting Warp to SQL Server with graduated safety levels and comprehensive database operations",
   "main": "index.js",
   "type": "module",
@@ -55,7 +55,7 @@
     "dotenv": "^17.2.1",
     "mssql": "^11.0.1",
     "node-sql-parser": "^5.3.11",
-    "winston": "file:aws-sdk@azure/keyvault-secrets@azure/identity"
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
