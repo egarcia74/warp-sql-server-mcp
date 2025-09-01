@@ -1,19 +1,20 @@
-# VS Code + SQL Server MCP Guide
+# VS Code Copilot + SQL Server MCP Guide
 
-Use **VS Code database tools** alongside **Warp's AI** for the ultimate database experience! 🚀
+Connect **GitHub Copilot** in VS Code directly to your **SQL Server** using MCP! 🤖
 
 ## What You Get
 
-- ✅ **VS Code SQL Extensions** - Write and execute queries directly
-- ✅ **Warp AI Integration** - Ask questions about your database
-- ✅ **Best of Both Worlds** - Traditional tools + AI assistance
+- ✅ **GitHub Copilot** can query your SQL Server databases
+- ✅ **Context-aware suggestions** based on your actual schema
+- ✅ **Natural language** to SQL query generation
+- ✅ **Real-time database insights** while coding
 
 ## Prerequisites
 
 - ✅ **Node.js 18+** installed
 - ✅ **SQL Server** running (localhost:1433)
-- ✅ **VS Code** installed
-- ✅ **Warp Terminal** installed
+- ✅ **VS Code** with **GitHub Copilot** extension
+- ✅ **GitHub Copilot subscription** (required for MCP support)
 
 ## Step 1: Install MCP Server
 
@@ -21,103 +22,159 @@ Use **VS Code database tools** alongside **Warp's AI** for the ultimate database
 # Install the MCP server globally
 npm install -g @egarcia74/warp-sql-server-mcp
 
-# Configure it
+# Initialize configuration
 warp-sql-server-mcp init
-# Edit ~/.warp-sql-server-mcp.json with your database credentials
+
+# Edit the config file with your SQL Server credentials
+# File: ~/.warp-sql-server-mcp.json
 ```
 
-## Step 2: Install VS Code SQL Extensions
+## Step 2: Configure VS Code MCP Settings
 
-**Open VS Code Command Palette** (`Cmd+Shift+P`) and run:
+1. **Open VS Code Settings**: `Cmd+,` (or `Ctrl+,` on Windows)
+
+2. **Search for**: `copilot.chat.experimental.mcp`
+
+3. **Enable MCP**: Check the box for "Enable MCP support"
+
+4. **Add MCP Server Configuration**:
+   - Click "Edit in settings.json"
+   - Add the MCP server configuration:
+
+```json
+{
+  "github.copilot.chat.experimental.mcp.servers": {
+    "sql-server": {
+      "command": "warp-sql-server-mcp",
+      "args": ["start"]
+    }
+  }
+}
+```
+
+## Step 3: Restart VS Code
+
+**Important**: Restart VS Code completely to load the MCP server.
+
+## Step 4: Test Copilot Integration
+
+1. **Open GitHub Copilot Chat**: `Cmd+Shift+I` (or click the chat icon)
+
+2. **Test database connectivity**:
 
 ```text
-ext install ms-mssql.mssql
+@sql-server List all databases
 ```
 
-Optionally, also install:
+1. **Try schema exploration**:
 
 ```text
-ext install mtxr.sqltools
-ext install mtxr.sqltools-driver-mssql
+@sql-server Show me tables in the AdventureWorks database
 ```
 
-## Step 3: Connect Warp to Your Database
-
-1. **Open Warp Settings**: `Cmd+,` → **MCP** tab
-2. **Add New Server**:
-   - **Name**: `sql-server`
-   - **Command**: `warp-sql-server-mcp`
-   - **Args**: `["start"]`
-
-## Step 4: Test Both Tools
-
-### Test Warp AI Integration
-
-**In Warp, try these commands:**
+1. **Ask for query help**:
 
 ```text
-List all databases
+@sql-server Generate a query to find the top 10 customers by sales
 ```
-
-```text
-Show me tables in the master database
-```
-
-### Test VS Code SQL Extension
-
-1. **Connect to database**:
-   - `Cmd+Shift+P` → "MS SQL: Connect"
-   - Enter your connection details (same as MCP config)
-
-2. **Create a test query**:
-   - New file: `test-query.sql`
-   - Add: `SELECT @@VERSION;`
-   - Execute: `Cmd+Shift+E`
 
 ## 🎉 You're All Set
 
-Now you have:
+Now GitHub Copilot can:
 
-- ✅ **Warp AI** for natural language database queries
-- ✅ **VS Code** for traditional SQL development
-- ✅ **Best of both worlds** for database work!
+- ✅ **Query your databases** directly through chat
+- ✅ **Generate SQL** based on your actual schema
+- ✅ **Provide insights** about your data
+- ✅ **Help optimize** existing queries
 
 ## Typical Workflow
 
-### Database Exploration
+### Schema Discovery
 
-**Use Warp AI:**
-
-```text
-What tables are in my AdventureWorks database?
-```
-
-### Query Development
-
-**Use VS Code:**
-
-1. Write SQL in `.sql` files
-2. Test with `Cmd+Shift+E`
-3. Save for reuse
-
-### Query Analysis
-
-**Use Warp AI:**
+**Ask Copilot:**
 
 ```text
-Explain this query performance: SELECT * FROM Orders WHERE OrderDate > '2023-01-01'
+@sql-server What's the structure of the Users table?
 ```
 
-## Need Help?
+### Query Generation
+
+**Ask Copilot:**
+
+```text
+@sql-server Create a query to find users who registered in the last 30 days
+```
+
+### Performance Analysis
+
+**Ask Copilot:**
+
+```text
+@sql-server Analyze the performance of this query: SELECT * FROM Orders WHERE OrderDate > '2023-01-01'
+```
+
+### Data Export
+
+**Ask Copilot:**
+
+```text
+@sql-server Export the top 100 products to CSV format
+```
+
+## Available MCP Commands
+
+You can use these commands with `@sql-server`:
+
+- `List databases` - Show all available databases
+- `List tables in [database]` - Show tables in a specific database
+- `Describe [table]` - Get schema information for a table
+- `Get sample data from [table]` - Retrieve sample rows
+- `Export [table] to CSV` - Export table data
+- `Explain query: [SQL]` - Get execution plan analysis
+- `Get performance stats` - Server performance metrics
+- `Get foreign key relationships` - Database relationships
+
+## Security Configuration
+
+The MCP server runs in **secure mode** by default:
+
+- 🔒 **Read-only**: Only SELECT queries allowed
+- 🔒 **No destructive operations**: No INSERT/UPDATE/DELETE
+- 🔒 **No schema changes**: No CREATE/DROP/ALTER
+
+To modify security settings, edit your config file:
+
+```json
+{
+  "SQL_SERVER_READ_ONLY": "false",
+  "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true",
+  "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false"
+}
+```
+
+## Troubleshooting
+
+**Copilot not finding the MCP server?**
+
+1. Verify the server is installed: `warp-sql-server-mcp config`
+2. Check VS Code settings have the correct MCP configuration
+3. Restart VS Code completely
+4. Check VS Code Developer Console (`Help` → `Toggle Developer Tools`)
 
 **Connection issues?**
 
 - Verify SQL Server is running: `telnet localhost 1433`
-- Check your MCP config file credentials
-- Ensure VS Code and Warp use the same connection details
+- Check your config file credentials: `warp-sql-server-mcp config`
+- Test the MCP server directly: `warp-sql-server-mcp start`
+
+**Permission errors?**
+
+- Ensure your SQL Server user has appropriate permissions
+- Check the security settings in your config file
+- Review the MCP server logs in VS Code Developer Console
 
 **Want more features?** See the [complete documentation](README.md)
 
 ---
 
-**🚀 Enjoy the best of both worlds: traditional SQL tools + AI assistance!**
+**🤖 Enjoy AI-powered database development with GitHub Copilot!**
