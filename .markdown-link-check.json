@@ -6,9 +6,15 @@
   "aliveStatusCodes": [200, 206],
   "httpHeaders": [
     {
-      "urls": ["https://github.com", "https://api.github.com"],
+      "urls": ["https://api.github.com"],
       "headers": {
         "Accept": "application/vnd.github+json",
+        "User-Agent": "warp-sql-server-mcp-link-checker"
+      }
+    },
+    {
+      "urls": ["https://github.com"],
+      "headers": {
         "User-Agent": "warp-sql-server-mcp-link-checker"
       }
     }
