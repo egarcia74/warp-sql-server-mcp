@@ -1,0 +1,86 @@
+name: Publish to NPM
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g., v1.6.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run (no actual publish)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: '18'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full test suite
+        run: npm run ci
+
+      - name: Verify package version matches tag
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION=${{ github.event.inputs.tag || github.event.release.tag_name }}
+          TAG_VERSION=${TAG_VERSION#v}
+          
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Tag version: $TAG_VERSION"
+          
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Version mismatch: package.json ($PACKAGE_VERSION) != tag ($TAG_VERSION)"
+            exit 1
+          fi
+          
+          echo "✅ Version verification passed"
+
+      - name: Dry run publish
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "🧪 DRY RUN: Would publish to npm"
+          npm pack --dry-run
+
+      - name: Publish to NPM
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "🚀 Publishing to npm..."
+          npm publish --access public
+          echo "✅ Published successfully!"
+
+      - name: Create publish summary
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          echo "## 📦 NPM Publish Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: warp-sql-server-mcp@$PACKAGE_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry**: https://www.npmjs.com/package/warp-sql-server-mcp" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "🧪 **Status**: Dry run completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Status**: Published successfully" >> $GITHUB_STEP_SUMMARY
+          fi
