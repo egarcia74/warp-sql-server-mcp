@@ -59,6 +59,15 @@ if command -v npx >/dev/null 2>&1; then
       exit 1
     fi
     echo "[pre-push] Markdown lint passed."
+    
+    # Check for dead links in markdown files
+    echo "[pre-push] Checking for dead links in markdown files..."
+    if ! npm run links:check:ci; then
+      echo "[pre-push] Dead links found in markdown files. Push aborted."
+      echo "[pre-push] Run 'npm run links:check' to see details."
+      exit 1
+    fi
+    echo "[pre-push] Link checking passed."
   fi
 fi
 

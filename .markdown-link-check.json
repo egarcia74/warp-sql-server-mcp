@@ -1,0 +1,39 @@
+{
+  "timeout": "10s",
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackRetryDelay": "2s",
+  "aliveStatusCodes": [200, 206],
+  "httpHeaders": [
+    {
+      "urls": ["https://github.com", "https://api.github.com"],
+      "headers": {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "warp-sql-server-mcp-link-checker"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    {
+      "pattern": "^http://localhost"
+    },
+    {
+      "pattern": "^https://localhost"
+    },
+    {
+      "pattern": "^file://"
+    },
+    {
+      "pattern": "^mailto:"
+    },
+    {
+      "pattern": "^#.*"
+    }
+  ],
+  "replacementPatterns": [
+    {
+      "pattern": "^/docs/",
+      "replacement": "{{BASEURL}}/docs/"
+    }
+  ]
+}

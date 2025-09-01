@@ -25,11 +25,13 @@
     "format:check": "prettier --check \"**/*.{js,mjs,cjs,json,md}\"",
     "markdown:lint": "markdownlint-cli2 \"**/*.md\"",
     "markdown:fix": "markdownlint-cli2 --fix \"**/*.md\"",
+    "links:check": "find . -name \"*.md\" -not -path \"./node_modules/*\" -exec markdown-link-check {} \\;",
+    "links:check:ci": "find . -name \"*.md\" -not -path \"./node_modules/*\" -exec markdown-link-check --config .markdown-link-check.json {} \\;",
     "hooks:install": "./install-git-hooks.sh",
     "hooks:uninstall": "rm -f .git/hooks/*",
     "precommit": "npm run lint && npm run format:check && npm run markdown:lint && npm test",
     "prepush": "npm run precommit",
-    "ci": "npm run lint && npm run format:check && npm run markdown:lint && npm run test:coverage",
+    "ci": "npm run lint && npm run format:check && npm run markdown:lint && npm run links:check:ci && npm run test:coverage",
     "audit:fix": "npm audit fix",
     "clean": "rm -rf node_modules coverage .vitest"
   },
@@ -61,6 +63,7 @@
     "@vitest/ui": "^3.2.4",
     "eslint": "^9.15.0",
     "eslint-config-prettier": "^9.1.0",
+    "markdown-link-check": "^3.13.7",
     "markdownlint-cli2": "^0.18.1",
     "prettier": "^3.3.3",
     "vitest": "^3.2.4"
