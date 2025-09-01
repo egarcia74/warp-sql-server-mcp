@@ -245,6 +245,12 @@ npm run markdown:lint
 
 # Fix markdown formatting issues
 npm run markdown:fix
+
+# Check for dead links in markdown files
+npm run links:check
+
+# Check links with full CI configuration
+npm run links:check:ci
 ```
 
 ### Git Hooks and CI
@@ -623,6 +629,7 @@ This project maintains high code quality through automated tooling:
 - **Prettier**: Authoritative code formatter handling all style concerns
   including indentation
 - **Markdownlint**: Documentation formatting and consistency
+- **Link Checking**: Automated dead link detection for documentation integrity
 - **Vitest**: Fast, modern testing framework with coverage reporting
 - **Git Hooks**: Automated pre-commit and pre-push quality checks
 

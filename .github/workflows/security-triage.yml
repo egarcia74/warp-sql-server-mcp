@@ -204,7 +204,8 @@ jobs:
     needs: triage-security-alerts
     if: always()
     permissions:
-      contents: write
+      contents: read
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v5
@@ -229,19 +230,9 @@ jobs:
           echo "📊 Security metrics updated:"
           cat .github/security-metrics.json
 
-      - name: Commit security metrics
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "Security Triage Bot"
-          
-          if git diff --quiet .github/security-metrics.json; then
-            echo "No changes to security metrics"
-          else
-            git add .github/security-metrics.json
-            git commit -m "security: update security metrics
-            
-            - Updated vulnerability alert count
-            - Security status: $(jq -r '.status' .github/security-metrics.json)
-            - Last scan: $(date -u)"
-            git push
-          fi
+      - name: Upload security metrics as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: security-metrics
+          path: .github/security-metrics.json
+          retention-days: 30
