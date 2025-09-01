@@ -1,7 +1,7 @@
 {
   "version": "1.5.0",
-  "generatedAt": "2025-08-31T06:01:24.363Z",
-  "toolsCount": 11,
+  "generatedAt": "2025-09-01T04:15:17.755Z",
+  "toolsCount": 15,
   "tools": [
     {
       "name": "execute_query",
@@ -269,6 +269,111 @@
       "examples": {
         "basic": {},
         "advanced": {}
+      }
+    },
+    {
+      "name": "get_index_recommendations",
+      "description": "Get index recommendations for database optimization",
+      "parameters": {
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name (optional, defaults to dbo)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of recommendations to return (optional, defaults to 10)"
+        },
+        "impact_threshold": {
+          "type": "number",
+          "description": "Minimum impact score threshold (0-100, optional)"
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "database": "MyDatabase",
+          "schema": "dbo",
+          "limit": 50,
+          "impact_threshold": 1
+        }
+      }
+    },
+    {
+      "name": "analyze_query_performance",
+      "description": "Analyze query performance and provide optimization suggestions",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "SQL query to analyze for performance optimization"
+        },
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        }
+      },
+      "required": ["query"],
+      "examples": {
+        "basic": {
+          "query": "SELECT * FROM your_table"
+        },
+        "advanced": {
+          "query": "SELECT * FROM your_table",
+          "database": "MyDatabase"
+        }
+      }
+    },
+    {
+      "name": "detect_query_bottlenecks",
+      "description": "Detect and analyze query bottlenecks in the database",
+      "parameters": {
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum number of bottlenecks to return (optional, defaults to 10)"
+        },
+        "severity_filter": {
+          "type": "string",
+          "description": "Filter by severity level: LOW, MEDIUM, HIGH, CRITICAL (optional)"
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "database": "MyDatabase",
+          "limit": 50,
+          "severity_filter": "optional_value"
+        }
+      }
+    },
+    {
+      "name": "get_optimization_insights",
+      "description": "Get comprehensive database optimization insights and health analysis",
+      "parameters": {
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        },
+        "analysis_period": {
+          "type": "string",
+          "description": "Analysis time period: 24_HOURS, 7_DAYS, 30_DAYS (optional, defaults to 7_DAYS)"
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "database": "MyDatabase",
+          "analysis_period": "optional_value"
+        }
       }
     }
   ]
