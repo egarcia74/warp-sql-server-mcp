@@ -382,11 +382,47 @@ WARNING: Read-write mode, DML allowed, DDL allowed - consider stricter settings 
 
 ## Warp Integration
 
-**⚠️ CRITICAL**: MCP servers run in isolated environments and do NOT
+### ⭐ **Method 1: CLI Tool Configuration (Recommended)**
+
+The easiest way to configure the MCP server with secure, managed credentials:
+
+#### **Installation & Setup**
+
+```bash
+# Install globally via npm
+npm install -g @egarcia74/warp-sql-server-mcp
+
+# Initialize configuration file
+warp-sql-server-mcp init
+
+# Edit the config file with your SQL Server details
+# File location: ~/.warp-sql-server-mcp.json
+```
+
+#### **Configure Warp MCP Settings**
+
+1. **Open Warp Settings**: `Cmd+,` → **MCP** tab
+2. **Add New Server**:
+   - **Name**: `sql-server`
+   - **Command**: `warp-sql-server-mcp`
+   - **Args**: `["start"]`
+3. **Environment Variables**: **Not needed!** ✨
+
+**Benefits:**
+
+- ✅ **Secure credential storage** with file permissions (600)
+- ✅ **No complex environment variables** in Warp settings
+- ✅ **Easy configuration updates** without touching Warp
+- ✅ **Password masking** and validation
+- ✅ **One-time setup** that works across all environments
+
+### **Method 2: Manual Environment Variables (Advanced)**
+
+**⚠️ NOTE**: MCP servers run in isolated environments and do NOT
 automatically load `.env` files. All configuration must be explicitly provided
 through Warp's MCP configuration.
 
-### Required MCP Configuration
+#### **Required MCP Configuration**
 
 In Warp's MCP settings, you must provide ALL environment variables:
 

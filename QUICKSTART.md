@@ -1,54 +1,47 @@
 # Quick Start Guide
 
-Get your **Secure SQL Server MCP** running in Warp in under 5 minutes! 🚀
+Get your **SQL Server MCP** running in Warp in under 3 minutes! 🚀
 
-## Prerequisites (30 seconds)
+## Prerequisites
 
 - ✅ **Node.js 18+** installed
 - ✅ **SQL Server** running (localhost:1433)
 - ✅ **Warp Terminal** installed
 
-## Step 1: Install (1 minute)
+## Step 1: Install
 
 ```bash
-# Clone and install
-git clone https://github.com/egarcia74/warp-sql-server-mcp.git
-cd warp-sql-server-mcp
-npm install
+# Install globally via npm
+npm install -g @egarcia74/warp-sql-server-mcp
 ```
 
-## Step 2: Configure for Warp (2 minutes)
+## Step 2: Configure
 
-### Option A: SQL Server Authentication (Most Common)
+1. **Initialize configuration**:
 
-1. **Open Warp Settings**: `Cmd+,` → **MCP** tab
-2. **Add New Server**:
+   ```bash
+   warp-sql-server-mcp init
+   ```
+
+2. **Edit the config file** with your SQL Server details:
+
+   ```bash
+   # Opens ~/.warp-sql-server-mcp.json
+   # Update these values:
+   #   "SQL_SERVER_USER": "your_username"
+   #   "SQL_SERVER_PASSWORD": "your_password"
+   ```
+
+3. **Add to Warp**:
+   - Open Warp Settings: `Cmd+,` → **MCP** tab
+   - Click "Add New Server"
    - **Name**: `sql-server`
-   - **Command**: `node`
-   - **Args**: `["/full/path/to/warp-sql-server-mcp/index.js"]`
+   - **Command**: `warp-sql-server-mcp`
+   - **Args**: `["start"]`
 
-3. **Add Environment Variables**:
+## Step 3: Test It
 
-```json
-{
-  "SQL_SERVER_HOST": "localhost",
-  "SQL_SERVER_PORT": "1433",
-  "SQL_SERVER_DATABASE": "master",
-  "SQL_SERVER_USER": "your_username",
-  "SQL_SERVER_PASSWORD": "your_password",
-  "SQL_SERVER_ENCRYPT": "false",
-  "SQL_SERVER_TRUST_CERT": "true"
-}
-```
-
-### Option B: Windows Authentication
-
-Same as above, but **omit** `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`.
-
-## Step 3: Test It! (1 minute)
-
-1. **Restart** Warp or reload MCP settings
-2. **Try these commands** in Warp:
+**Try these commands in Warp:**
 
 ```text
 List all databases
@@ -58,85 +51,28 @@ List all databases
 Show me tables in the master database
 ```
 
-```text
-What's the structure of the sys.databases table?
-```
+## 🎉 You're Done
 
-## 🎉 Success
+Your SQL Server is now connected to Warp's AI! 🤖
 
-If you see database results, you're all set!
+## What You Can Do
 
-## 🔒 Security Notice
+**Ask Warp about your database:**
 
-**By default, your MCP runs in MAXIMUM SECURITY mode:**
+- `Show me all foreign key relationships`
+- `Export the top 100 customers to CSV`
+- `Explain this query: SELECT * FROM Orders`
+- `What tables are in my database?`
 
-- ✅ **Read-only**: Only SELECT queries allowed
-- ❌ **No data changes**: INSERT/UPDATE/DELETE blocked
-- ❌ **No schema changes**: CREATE/DROP/ALTER blocked
+## Need Help?
 
-You'll see this in your logs:
+**Not connecting?**
 
-```bash
-Security: 🔒 SECURE (RO, DML-, DDL-)
-```
+- Check that SQL Server is running: `telnet localhost 1433`
+- Verify your username/password in the config file
 
-## Need Write Access?
-
-Add these to your environment variables:
-
-```json
-{
-  "SQL_SERVER_READ_ONLY": "false",
-  "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true"
-}
-```
-
-⚠️ **Production Warning**: Only disable security for development environments!
-
-## What's Next?
-
-### 📖 **Learn More**
-
-- **[Complete Setup Guide](README.md#configuration)** - Detailed configuration options
-- **[Security Documentation](SECURITY.md)** - Understanding the safety system
-- **[All Available Tools](README.md#available-tools)** - 8 powerful database operations
-
-### 🛠️ **Advanced Usage**
-
-- **Query Analysis**: `Explain why this query is slow: SELECT * FROM big_table`
-- **Schema Discovery**: `Show me all foreign key relationships`
-- **Data Export**: `Export the top 100 orders to CSV format`
-- **Performance Tuning**: `Analyze the execution plan for my query`
-
-### 🔧 **Customize Security**
-
-- **[Production Deployment](SECURITY.md#production-deployment-guidelines)** - Enterprise security settings
-- **[Security Configurations](README.md#security-configurations)** - Different security levels
-- **[Migration Guide](README.md#migration-from-previous-versions)** - Upgrading existing setups
-
-## Troubleshooting
-
-**Connection Issues?**
-
-- Verify SQL Server is running: `telnet localhost 1433`
-- Check credentials in environment variables
-- Review [troubleshooting guide](README.md#troubleshooting-configuration)
-
-**Permission Errors?**
-
-- Ensure database user has appropriate permissions
-- Check authentication method (SQL vs Windows)
-
-**Security Blocks?**
-
-- Review security settings in environment variables
-- See [security documentation](SECURITY.md) for configuration options
-
-## Get Help
-
-- 📋 **[Issues](https://github.com/egarcia74/warp-sql-server-mcp/issues)** - Report bugs or request features
-- 📖 **[Full Documentation](README.md)** - Complete setup and usage guide
+**Want more features?** See the [complete documentation](README.md)
 
 ---
 
-**🚀 Ready to supercharge your database work with AI-powered SQL operations!**
+**🚀 Enjoy AI-powered database queries!**

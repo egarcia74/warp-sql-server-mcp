@@ -431,6 +431,38 @@ With Warp's AI capabilities, you can:
 3. **detect_query_bottlenecks**: Identify and categorize performance bottlenecks across queries
 4. **get_optimization_insights**: Comprehensive database health analysis and optimization roadmap
 
+## Installation
+
+### ⭐ **Recommended: Global npm Installation**
+
+```bash
+# Install globally via npm (easiest method)
+npm install -g @egarcia74/warp-sql-server-mcp
+
+# Initialize configuration
+warp-sql-server-mcp init
+
+# Edit config file with your SQL Server details
+# Config file location: ~/.warp-sql-server-mcp.json
+```
+
+**Advantages:**
+
+- ✅ No manual path configuration
+- ✅ Automatic dependency management
+- ✅ Easy configuration with secure credential storage
+- ✅ Simple Warp integration
+- ✅ Updates available via `npm update -g`
+
+### Alternative: Manual Installation
+
+```bash
+# Clone and install manually
+git clone https://github.com/egarcia74/warp-sql-server-mcp.git
+cd warp-sql-server-mcp
+npm install
+```
+
 ## Prerequisites
 
 - **Node.js 18.0.0 or higher** (works on Windows, macOS, and Linux)
@@ -532,26 +564,18 @@ SQL_SERVER_TRUST_CERT=true
 
 ## Configuration for Warp and MCP Clients
 
-> **⚠️ CRITICAL:** MCP servers run in isolated environments and **do not automatically load
-> `.env` files**. You must explicitly provide all configuration through environment variables in
-> your MCP client configuration.
+### Method 1: CLI Configuration (⭐ Recommended)
 
-### Method 1: Warp MCP Settings (Recommended)
+This is the easiest way to configure the MCP server with secure credential storage:
 
-1. **Open Warp Settings**:
-   - Open Warp Terminal
-   - Press `Cmd+,` or go to `Warp → Settings`
-   - Navigate to the **MCP** section
+1. **Install globally and initialize**:
 
-2. **Add New MCP Server**:
-   - Click "Add MCP Server"
-   - **Name**: `sql-server`
-   - **Command**: `node`
-   - **Args** (choose based on your platform):
-     - **Windows**: `["C:\\Users\\YourName\\path\\to\\warp-sql-server-mcp\\index.js"]`
-     - **macOS/Linux**: `["/Users/YourName/path/to/warp-sql-server-mcp/index.js"]`
+   ```bash
+   npm install -g @egarcia74/warp-sql-server-mcp
+   warp-sql-server-mcp init
+   ```
 
-3. **Environment Variables** (Click "Add Environment Variable" for each):
+2. **Edit configuration file** (opens at `~/.warp-sql-server-mcp.json`):
 
    ```json
    {
@@ -562,10 +586,59 @@ SQL_SERVER_TRUST_CERT=true
      "SQL_SERVER_PASSWORD": "your_password",
      "SQL_SERVER_ENCRYPT": "false",
      "SQL_SERVER_TRUST_CERT": "true",
-     "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
-     "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
-     "SQL_SERVER_MAX_RETRIES": "3",
-     "SQL_SERVER_RETRY_DELAY_MS": "1000"
+     "SQL_SERVER_READ_ONLY": "true",
+     "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
+     "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false"
+   }
+   ```
+
+3. **Configure Warp MCP Settings**:
+   - Open Warp Settings: `Cmd+,` → **MCP** tab
+   - Click "Add MCP Server"
+   - **Name**: `sql-server`
+   - **Command**: `warp-sql-server-mcp`
+   - **Args**: `["start"]`
+   - **No environment variables needed!** ✨
+
+**Benefits:**
+
+- ✅ Secure credential storage with restrictive file permissions (600)
+- ✅ No complex Warp environment variable configuration
+- ✅ Easy to update configuration without touching Warp settings
+- ✅ Configuration validation and helpful error messages
+- ✅ Masked passwords when viewing config with `warp-sql-server-mcp config`
+
+### Method 2: Manual Warp Configuration (Advanced)
+
+> **⚠️ NOTE:** MCP servers run in isolated environments and **do not automatically load
+> `.env` files**. You must explicitly provide all configuration through environment variables.
+
+1. **Open Warp Settings**:
+   - Press `Cmd+,` or go to `Warp → Settings`
+   - Navigate to the **MCP** section
+
+2. **Add New MCP Server**:
+   - Click "Add MCP Server"
+   - **Name**: `sql-server`
+   - **Command**: `node`
+   - **Args** (choose based on your installation):
+     - **Global npm install**: `["warp-sql-server-mcp", "start"]`
+     - **Manual install**: `["/full/path/to/warp-sql-server-mcp/index.js"]`
+
+3. **Environment Variables** (required for manual configuration):
+
+   ```json
+   {
+     "SQL_SERVER_HOST": "localhost",
+     "SQL_SERVER_PORT": "1433",
+     "SQL_SERVER_DATABASE": "master",
+     "SQL_SERVER_USER": "your_username",
+     "SQL_SERVER_PASSWORD": "your_password",
+     "SQL_SERVER_ENCRYPT": "false",
+     "SQL_SERVER_TRUST_CERT": "true",
+     "SQL_SERVER_READ_ONLY": "true",
+     "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
+     "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false"
    }
    ```
 

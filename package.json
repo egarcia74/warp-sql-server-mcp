@@ -4,6 +4,9 @@
   "description": "Secure MCP server for connecting Warp to SQL Server with graduated safety levels and comprehensive database operations",
   "main": "index.js",
   "type": "module",
+  "bin": {
+    "warp-sql-server-mcp": "./cli.js"
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
