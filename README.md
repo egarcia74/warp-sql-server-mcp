@@ -11,7 +11,7 @@
 
 ## 🏗️ **Framework Highlights**
 
-**🔬 Comprehensive Testing Strategy**: 278 tests covering unit, integration, and edge cases with 95%+ coverage  
+**🔬 Comprehensive Testing Strategy**: 535 tests covering unit, integration, and edge cases with 95%+ coverage
 **🛡️ Multi-layered Security Architecture**: Defense-in-depth security with audit logging and threat detection  
 **📊 Production Observability**: Performance monitoring, structured logging, and health assessment  
 **⚡ Enterprise Reliability**: Connection pooling, circuit breakers, and graceful error handling  
@@ -424,6 +424,13 @@ With Warp's AI capabilities, you can:
 2. **get_query_performance**: Get detailed query performance breakdown by tool with filtering options
 3. **get_connection_health**: Monitor SQL Server connection pool health and diagnostics
 
+### Query Optimization (NEW)
+
+1. **get_index_recommendations**: Analyze database usage patterns and recommend missing indexes
+2. **analyze_query_performance**: Deep analysis of specific queries with optimization suggestions
+3. **detect_query_bottlenecks**: Identify and categorize performance bottlenecks across queries
+4. **get_optimization_insights**: Comprehensive database health analysis and optimization roadmap
+
 ## Prerequisites
 
 - **Node.js 18.0.0 or higher** (works on Windows, macOS, and Linux)
@@ -782,7 +789,7 @@ npm run test:ui
 
 ### Test Overview
 
-- **Total Tests**: 56 tests covering all MCP tools and functionality
+- **Total Tests**: 535 tests covering all MCP tools and functionality
 - **Test Framework**: Vitest with comprehensive mocking
 - **Coverage**: 60.25% statements, 78.04% branches, 83.33% functions
 - **Architecture**: Unit tests with mocked SQL Server connections for reliability and speed
@@ -791,7 +798,7 @@ npm run test:ui
 
 The test suite covers:
 
-- **Core functionality**: All 8 MCP tools (execute_query, list_databases, etc.)
+- **Core functionality**: All 15 MCP tools (execute_query, list_databases, optimization tools, etc.)
 - **Connection handling**: Database connection logic and authentication methods
 - **Error scenarios**: Comprehensive error handling and edge cases
 - **Advanced features**: Query analysis, foreign keys, CSV export with filtering
@@ -818,7 +825,7 @@ documentation never goes out of sync with the actual code.
 - **[Main Documentation Site](https://egarcia74.github.io/warp-sql-server-mcp/)** -
   Overview, setup guides, and quick reference
 - **[Complete API Reference](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** -
-  Detailed documentation for all 8 MCP tools with parameters and examples
+  Detailed documentation for all 15 MCP tools with parameters and examples
 - **[Test Coverage Reports](https://egarcia74.github.io/warp-sql-server-mcp/coverage/)** -
   Live test coverage analysis
 

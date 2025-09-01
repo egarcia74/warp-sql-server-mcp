@@ -21,12 +21,14 @@ secret management**. Built with a modular architecture for enterprise-scale depl
   database connections, security validation, and tool execution
 - **🔒 Three-Tier Safety System**: Revolutionary security architecture with graduated safety levels
 - **Query Validation Engine**: Intelligent SQL parsing and security policy enforcement
-- **MCP Tools**: 8 different database operation tools exposed through the MCP interface
+- **MCP Tools**: 15 different database operation tools exposed through the MCP interface
 - **Connection Management**: Handles both SQL Server authentication and Windows authentication
 - **Security Monitoring**: Runtime security status reporting and startup security summaries
 - **Error Handling**: Comprehensive error handling with structured MCP error responses
 
 ### MCP Tools Available
+
+#### Database Operations
 
 1. **execute_query**: Execute arbitrary SQL queries
 2. **list_databases**: List all user databases (excludes system databases)
@@ -36,6 +38,19 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 6. **explain_query**: Analyze query performance with execution plans
 7. **list_foreign_keys**: Discover foreign key relationships
 8. **export_table_csv**: Export table data in CSV format
+
+#### Performance Monitoring
+
+1. **get_performance_stats**: Get comprehensive server performance statistics and health metrics
+2. **get_query_performance**: Get detailed query performance breakdown by tool with filtering options
+3. **get_connection_health**: Monitor SQL Server connection pool health and diagnostics
+
+#### Query Optimization (NEW)
+
+1. **get_index_recommendations**: Analyze database usage patterns and recommend missing indexes
+2. **analyze_query_performance**: Deep analysis of specific queries with optimization suggestions
+3. **detect_query_bottlenecks**: Identify and categorize performance bottlenecks across queries
+4. **get_optimization_insights**: Comprehensive database health analysis and optimization roadmap
 
 ### Authentication Methods
 
@@ -50,6 +65,9 @@ Starting with v1.4.0, the project follows a modular architecture with specialize
 
 ```text
 lib/
+├── analysis/                 # 🔬 Query optimization & performance analysis
+│   ├── bottleneck-detector.js # 🚨 Query bottleneck detection & categorization
+│   └── query-optimizer.js     # ⚡ Query analysis & optimization recommendations
 ├── config/
 │   └── secret-manager.js     # 🔐 Universal secret management
 ├── security/
@@ -504,30 +522,45 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 56 tests cover all MCP tools, connection handling, and error scenarios
+- **Comprehensive Coverage**: 535 tests cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 
 ### Test Structure
 
 ```text
 test/
-├── README.md              # 📖 Comprehensive test documentation
-├── setup.js               # Global mocks and test data definitions
-├── sqlserver-mcp.test.js   # Main test suite (56 tests)
-└── ../vitest.config.js     # Test configuration
+├── README.md                            # 📖 Comprehensive test documentation
+├── unit/                                # Unit test suites
+│   ├── mcp-shared-fixtures.js          # Shared test fixtures and mocks
+│   ├── sqlserver-mcp.test.js           # Core MCP server tests
+│   ├── mcp-core-tools.test.js          # Core database operation tests
+│   ├── mcp-data-tools.test.js          # Data retrieval and export tests
+│   ├── mcp-performance-tools.test.js   # Performance monitoring tests
+│   ├── mcp-query-optimization-tools.test.js # Query optimization tests
+│   ├── mcp-security.test.js            # Security and validation tests
+│   ├── mcp-connection.test.js          # Connection management tests
+│   ├── mcp-server-lifecycle.test.js   # Server lifecycle tests
+│   ├── performance-monitor.test.js     # Performance monitor unit tests
+│   ├── secret-manager.test.js          # Secret management tests
+│   ├── query-validator-simple.test.js  # Query validation tests
+│   ├── streaming-handler.test.js       # Streaming functionality tests
+│   ├── response-formatter.test.js      # Response formatting tests
+│   ├── logger.test.js                  # Logging system tests
+│   └── link-checker.test.js           # Link validation tests
+└── ../vitest.config.js                  # Test configuration
 ```
 
-### Test Categories (56 total tests)
+### Test Categories (535 total tests)
 
-- **Database Connection Tests** (4): Connection handling, authentication, error scenarios
-- **Query Execution Tests** (3): SQL query execution and database switching
-- **Database/Table Operations** (6): Listing databases, tables, and schema information
-- **Data Retrieval with Filtering** (10): Comprehensive WHERE clause testing
-- **Query Analysis Tests** (4): Execution plans and performance analysis
-- **Foreign Key Tests** (3): Relationship discovery and schema filtering
-- **CSV Export Tests** (14): CSV generation with advanced filtering capabilities
-- **Server Startup and Runtime** (7): Connection pool initialization, error handling scenarios
-- **Error Handling and Edge Cases** (10): Comprehensive error condition testing
+- **Core MCP Server Tests** (127): Main server implementation, tool execution, error handling
+- **Database Operations Tests** (36): Data retrieval, table operations, CSV export
+- **Performance Monitoring Tests** (80): Query tracking, connection health, metrics collection
+- **Query Optimization Tests** (21): Index recommendations, bottleneck detection, performance analysis
+- **Security & Validation Tests** (38): Three-tier safety system, query validation, audit logging
+- **Connection Management Tests** (4): Pool management, authentication, connection lifecycle
+- **Server Lifecycle Tests** (15): Startup, shutdown, configuration management
+- **Infrastructure Component Tests** (214): Performance monitor, secret manager, streaming handler, response formatter, logger, link checker
+  query-validator-simple: 16 tests
 
 ## Key Implementation Details
 
@@ -595,7 +628,11 @@ The project uses a comprehensive multi-layered tracking system for managing feat
 #### **Phase 2 (3-6 months)**: Analytics & Performance
 
 - Enhanced Data Visualization Support
-- Query Optimization & Performance Tools
+- ✅ **Query Optimization & Performance Tools** (COMPLETED v1.5.0)
+  - Index recommendations based on query patterns
+  - Query bottleneck detection and analysis
+  - Performance insights and optimization roadmaps
+  - Deep query analysis with optimization suggestions
 - Data Quality & Validation Framework
 
 #### **Phase 3 (6-12 months)**: Enterprise Features

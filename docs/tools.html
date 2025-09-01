@@ -169,7 +169,7 @@
         <h1>🛠️ MCP Tools Documentation</h1>
         <p>Detailed reference for all available SQL Server MCP tools</p>
         <div>
-            <strong>Version 1.5.0 • 11 Tools Available</strong>
+            <strong>Version 1.5.0 • 15 Tools Available</strong>
         </div>
     </div>
 
@@ -193,6 +193,10 @@
             <li><a href="#get_performance_stats">get_performance_stats</a> - Get overall performance statistics and health summary</li>
             <li><a href="#get_query_performance">get_query_performance</a> - Get detailed query performance breakdown by tool</li>
             <li><a href="#get_connection_health">get_connection_health</a> - Get connection pool health metrics and diagnostics</li>
+            <li><a href="#get_index_recommendations">get_index_recommendations</a> - Get index recommendations for database optimization</li>
+            <li><a href="#analyze_query_performance">analyze_query_performance</a> - Analyze query performance and provide optimization suggestions</li>
+            <li><a href="#detect_query_bottlenecks">detect_query_bottlenecks</a> - Detect and analyze query bottlenecks in the database</li>
+            <li><a href="#get_optimization_insights">get_optimization_insights</a> - Get comprehensive database optimization insights and health analysis</li>
         </ul>
     </div>
 
@@ -757,8 +761,225 @@
         </div>
     </div>
 
+    <div class="tool" id="get_index_recommendations">
+        <h2><span class="tool-name">get_index_recommendations</span></h2>
+        <div class="description">Get index recommendations for database optimization</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">schema</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Schema name (optional, defaults to dbo)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">limit</span></td>
+                    <td><span class="param-type">number</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Maximum number of recommendations to return (optional, defaults to 10)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">impact_threshold</span></td>
+                    <td><span class="param-type">number</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Minimum impact score threshold (0-100, optional)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "get_index_recommendations",
+  "arguments": {
+    "database": "MyDatabase",
+    "schema": "dbo",
+    "limit": 50,
+    "impact_threshold": 1
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="analyze_query_performance">
+        <h2><span class="tool-name">analyze_query_performance</span></h2>
+        <div class="description">Analyze query performance and provide optimization suggestions</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">query</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="required">REQUIRED</span></td>
+                    <td>SQL query to analyze for performance optimization</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔹 Basic Usage</h4>
+                <div class="example-code">{
+  "tool": "analyze_query_performance",
+  "arguments": {
+    "query": "SELECT * FROM your_table"
+  }
+}</div>
+            </div>            <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "analyze_query_performance",
+  "arguments": {
+    "query": "SELECT * FROM your_table",
+    "database": "MyDatabase"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="detect_query_bottlenecks">
+        <h2><span class="tool-name">detect_query_bottlenecks</span></h2>
+        <div class="description">Detect and analyze query bottlenecks in the database</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">limit</span></td>
+                    <td><span class="param-type">number</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Maximum number of bottlenecks to return (optional, defaults to 10)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">severity_filter</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Filter by severity level: LOW, MEDIUM, HIGH, CRITICAL (optional)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "detect_query_bottlenecks",
+  "arguments": {
+    "database": "MyDatabase",
+    "limit": 50,
+    "severity_filter": "optional_value"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool" id="get_optimization_insights">
+        <h2><span class="tool-name">get_optimization_insights</span></h2>
+        <div class="description">Get comprehensive database optimization insights and health analysis</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">database</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Database name (optional)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">analysis_period</span></td>
+                    <td><span class="param-type">string</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Analysis time period: 24_HOURS, 7_DAYS, 30_DAYS (optional, defaults to 7_DAYS)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "get_optimization_insights",
+  "arguments": {
+    "database": "MyDatabase",
+    "analysis_period": "optional_value"
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
     <footer style="margin-top: 3rem; text-align: center; color: #6c757d; border-top: 1px solid #e9ecef; padding-top: 1rem;">
-        <p>Generated automatically from code • Last updated: 8/31/2025</p>
+        <p>Generated automatically from code • Last updated: 01/09/2025</p>
     </footer>
 </body>
 </html>
