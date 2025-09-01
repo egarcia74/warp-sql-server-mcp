@@ -15,6 +15,9 @@ on:
         required: false
         default: 'javascript'
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     name: CodeQL Security Analysis
