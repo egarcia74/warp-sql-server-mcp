@@ -7,6 +7,25 @@ testament to the enduring value of principled, rigorous software engineering. Wh
 Protocol) server for SQL Server integration, this codebase represents something far more significant: **a comprehensive
 framework for building production-ready, enterprise-grade software with uncompromising quality standards**.
 
+## Framework Highlights
+
+- **Comprehensive Testing Strategy**: 500+ automated tests across unit, integration and protocol layers
+- **Multi-layered Security Architecture**: Three-tier safety system with query validation and audit logging
+- **Production Observability**: Structured logging, performance metrics and health monitoring
+- **Enterprise Reliability**: Connection pooling, retry logic and graceful error handling
+- **Clean Modular Architecture**: Layered design with dependency inversion and interface segregation
+- **Living Documentation**: Auto-generated docs synchronized with code changes
+
+## Production-Ready Patterns and Architecture
+
+- **Observability**: Structured logging, performance monitoring, health checks
+- **Reliability**: Connection pooling, retry logic, circuit breakers, graceful degradation
+- **Security**: Multi-layer validation, audit logging, secure defaults
+- **Testability**: Comprehensive test coverage with proper mocking strategies
+- **Maintainability**: Clean architecture, dependency injection, configuration management
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical diagrams and explanations.
+
 ## Core Principles
 
 ### 1. **Testing as a First-Class Citizen**

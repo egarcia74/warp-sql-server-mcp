@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-
-- Placeholder for future changes
+- Streamlined README and clarified WARP.md indexing role; moved marketing and architecture details to MANIFESTO. [#40](https://github.com/egarcia74/warp-sql-server-mcp/issues/40)
 
 ## [1.7.1] - 2025-01-02
 
