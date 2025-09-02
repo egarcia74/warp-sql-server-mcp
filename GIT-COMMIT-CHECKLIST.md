@@ -171,4 +171,4 @@ git merge [branch]          # Merge feature branch
 
 ---
 
-**🏆 Ready to commit when all checkboxes are ✅**
+## 🏆 Ready to commit when all checkboxes are ✅

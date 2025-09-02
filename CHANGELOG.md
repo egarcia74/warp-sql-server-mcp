@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎨 Enhanced Configuration Display & Secure Defaults Release
 
-This release introduces a comprehensive visual configuration display system with emoji-enhanced sections, secure-by-default configuration, and fixes SSL certificate validation logic for improved security and user experience.
+This release introduces a comprehensive visual configuration display system with emoji-enhanced sections,
+secure-by-default configuration, and fixes SSL certificate validation logic for improved security and user experience.
 
 ### 🏗️ Major Architectural Refactoring
 

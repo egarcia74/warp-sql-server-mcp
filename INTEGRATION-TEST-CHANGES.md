@@ -6,7 +6,7 @@ We have successfully reorganized the integration test files to ensure they are *
 
 ## 📁 **New File Structure**
 
-```
+```text
 test/
 ├── unit/                              # Automated unit tests (535+ tests)
 ├── integration/

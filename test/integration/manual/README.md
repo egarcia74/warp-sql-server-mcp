@@ -2,7 +2,9 @@
 
 ## Overview
 
-This directory contains **manual integration tests** that validate the MCP server's three-phase security system against a **live SQL Server database**. These tests are **excluded from automated CI/CD pipelines** and must be run manually for production validation.
+This directory contains **manual integration tests** that validate the MCP server's three-phase security system
+against a **live SQL Server database**. These tests are **excluded from automated CI/CD pipelines**
+and must be run manually for production validation.
 
 ## 🚨 **Important: Manual Testing Only**
 
@@ -31,7 +33,7 @@ These tests are **intentionally excluded** from:
 | `phase2-dml-operations.test.js`    | ⚠️ **Phase 2** | DML Operations (INSERT/UPDATE/DELETE) | 10 tests |
 | `phase3-ddl-operations.test.js`    | 🛠️ **Phase 3** | DDL Operations (CREATE/ALTER/DROP)    | 10 tests |
 
-**Total: 40 comprehensive integration tests**
+#### Total: 40 comprehensive integration tests
 
 ### 🔒 **Security Phase Validation**
 
@@ -291,6 +293,8 @@ Current test coverage:
 
 ## 🎯 **Summary**
 
-These manual integration tests provide **comprehensive validation** of the MCP server's security system and production readiness. The **40-test suite** ensures that all three security phases work correctly and that the system is ready for enterprise deployment.
+These manual integration tests provide **comprehensive validation** of the MCP server's security system
+and production readiness. The **40-test suite** ensures that all three security phases work correctly
+and that the system is ready for enterprise deployment.
 
 **Run these tests before any production deployment** to validate security boundaries and system functionality.

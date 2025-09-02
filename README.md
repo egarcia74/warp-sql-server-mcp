@@ -283,7 +283,7 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
 - **✅ Phase 2 (DML Operations)**: 10/10 tests passed - Selective permissions validated
 - **✅ Phase 3 (DDL Operations)**: 10/10 tests passed - Full development mode validated
 
-**Total: 40/40 integration tests passed (100% success rate)**
+#### Total: 40/40 integration tests passed (100% success rate)
 
 Each security phase has been thoroughly tested for:
 
@@ -975,7 +975,7 @@ For manual verification and production readiness assessment, see our comprehensi
 - **Phase 2 (DML Operations)**: Selective permissions - 10/10 tests ✅
 - **Phase 3 (DDL Operations)**: Full development mode - 10/10 tests ✅
 
-**🔧 Manual Integration Testing**
+### 🔧 Manual Integration Testing
 
 The comprehensive integration tests are located in `test/integration/manual/` and must be run manually for production validation:
 

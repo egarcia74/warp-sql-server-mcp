@@ -2,7 +2,8 @@
 
 ## Overview
 
-This directory contains **MCP protocol-level tests** that validate the server through actual MCP client-server communication. These tests simulate exactly what a real MCP client (like Warp) would experience when interacting with the server.
+This directory contains **MCP protocol-level tests** that validate the server through actual MCP client-server communication.
+These tests simulate exactly what a real MCP client (like Warp) would experience when interacting with the server.
 
 ## 🔄 **Protocol Testing vs Integration Testing**
 
@@ -228,6 +229,7 @@ The protocol test depends on:
 
 ## 🎯 **Summary**
 
-The **MCP Protocol Smoke Test** provides essential validation of the MCP communication layer, ensuring that the server correctly implements the MCP protocol and can communicate with real MCP clients like Warp.
+The **MCP Protocol Smoke Test** provides essential validation of the MCP communication layer,
+ensuring that the server correctly implements the MCP protocol and can communicate with real MCP clients like Warp.
 
 **This test complements our comprehensive testing suite** by validating a different layer of the system - the MCP protocol interface that actual clients will use.
