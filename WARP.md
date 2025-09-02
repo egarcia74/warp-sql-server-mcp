@@ -11,8 +11,8 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, **comprehensive performance monitoring**, and **cloud-ready
 secret management**. Built with a modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 610+ comprehensive tests
-(384 unit + 40 manual integration + 20 protocol tests) covering all security phases with **100% success rates**.
+**✅ Production Status**: This MCP server has been **fully validated** through 618+ comprehensive tests
+(392 unit + 40 manual integration + 20 protocol tests) covering all security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](QUICKSTART.md) for a 5-minute setup walkthrough.
 
@@ -43,7 +43,7 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 5. **get_table_data**: Retrieve sample data with filtering/limiting
 6. **explain_query**: Analyze query performance with execution plans
 7. **list_foreign_keys**: Discover foreign key relationships
-8. **export_table_csv**: Export table data in CSV format
+8. **export_table_csv**: Export table data in CSV format with automatic streaming for large datasets
 
 #### Performance Monitoring
 
@@ -223,6 +223,42 @@ STREAMING_BATCH_SIZE=1000
 STREAMING_MAX_MEMORY_MB=50
 STREAMING_MAX_RESPONSE_SIZE=1000000
 ```
+
+#### **Enhanced CSV Export with Streaming (v1.7.0+)**
+
+**Automatic Detection and Streaming**: The `export_table_csv` tool now intelligently detects large datasets and automatically switches to streaming mode:
+
+- **Table Size Analysis**: Queries table statistics to determine if streaming is needed (>10k rows or >10MB)
+- **Memory-Efficient Processing**: Processes data in configurable batches (default: 1000 rows)
+- **Chunk-Based Output**: Large exports are returned as chunks for memory efficiency
+- **Performance Monitoring**: Integrated performance tracking for all streaming operations
+- **Automatic CSV Formatting**: Proper CSV escaping and header handling across chunks
+
+**Configuration Options**:
+
+- Uses existing `ENABLE_STREAMING`, `STREAMING_BATCH_SIZE`, and `STREAMING_MAX_MEMORY_MB` settings
+- Automatic streaming detection based on table size analysis
+- Fallback to regular export for smaller datasets
+
+**Example Usage in Warp**:
+
+```json
+// Small table - returns immediately with full CSV
+{"name": "export_table_csv", "input": {"table_name": "Categories"}}
+
+// Large table - automatically streams with memory efficiency
+{"name": "export_table_csv", "input": {"table_name": "Orders", "database": "Northwind"}}
+
+// With limits - respects streaming settings
+{"name": "export_table_csv", "input": {"table_name": "Products", "limit": 5000}}
+```
+
+**Performance Benefits**:
+
+- **Memory Efficiency**: Constant memory usage regardless of dataset size
+- **Responsive Export**: Large exports don't block other operations
+- **Progress Tracking**: Performance metrics track streaming statistics
+- **Error Resilience**: Proper error handling for large dataset operations
 
 ### ⚡ Performance Monitoring
 
@@ -632,7 +668,7 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 384 unit tests + 40 integration tests + 20 protocol tests cover all MCP tools, connection handling, and error scenarios
+- **Comprehensive Coverage**: 392 unit tests + 40 integration tests + 20 protocol tests cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
 
@@ -641,7 +677,7 @@ Generated files:
 ```text
 test/
 ├── README.md                            # 📖 Comprehensive test documentation
-├── unit/                                # Unit test suites (384 tests)
+├── unit/                                # Unit test suites (392 tests)
 │   ├── mcp-shared-fixtures.js          # Shared test fixtures and mocks
 │   ├── sqlserver-mcp.test.js           # Core MCP server tests
 │   ├── mcp-core-tools.test.js          # Core database operation tests
@@ -672,7 +708,7 @@ test/
 
 ### Test Categories
 
-#### **Unit Tests (384 tests)**
+#### **Unit Tests (392 tests)**
 
 - **Core MCP Server Tests** (127): Main server implementation, tool execution, error handling
 - **Database Operations Tests** (36): Data retrieval, table operations, CSV export
