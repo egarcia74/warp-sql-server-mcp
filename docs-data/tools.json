@@ -1,6 +1,6 @@
 {
-  "version": "1.5.0",
-  "generatedAt": "2025-09-01T04:15:17.755Z",
+  "version": "1.7.0",
+  "generatedAt": "2025-09-02T10:44:43.985Z",
   "toolsCount": 15,
   "tools": [
     {
@@ -89,6 +89,28 @@
       }
     },
     {
+      "name": "list_foreign_keys",
+      "description": "List all foreign key relationships in a schema",
+      "parameters": {
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name (optional, defaults to dbo)"
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "database": "MyDatabase",
+          "schema": "dbo"
+        }
+      }
+    },
+    {
       "name": "get_table_data",
       "description": "Get sample data from a table with optional filtering and limiting",
       "parameters": {
@@ -124,57 +146,6 @@
           "schema": "dbo",
           "limit": 50,
           "where": "id > 100"
-        }
-      }
-    },
-    {
-      "name": "explain_query",
-      "description": "Get the execution plan for a SQL query to analyze performance",
-      "parameters": {
-        "query": {
-          "type": "string",
-          "description": "The SQL query to analyze"
-        },
-        "database": {
-          "type": "string",
-          "description": "Optional: Database name to use for this query"
-        },
-        "include_actual_plan": {
-          "type": "boolean",
-          "description": "Include actual execution statistics (optional, defaults to false)"
-        }
-      },
-      "required": ["query"],
-      "examples": {
-        "basic": {
-          "query": "SELECT * FROM your_table"
-        },
-        "advanced": {
-          "query": "SELECT * FROM your_table",
-          "database": "MyDatabase",
-          "include_actual_plan": true
-        }
-      }
-    },
-    {
-      "name": "list_foreign_keys",
-      "description": "List all foreign key relationships in a schema",
-      "parameters": {
-        "database": {
-          "type": "string",
-          "description": "Database name (optional)"
-        },
-        "schema": {
-          "type": "string",
-          "description": "Schema name (optional, defaults to dbo)"
-        }
-      },
-      "required": [],
-      "examples": {
-        "basic": {},
-        "advanced": {
-          "database": "MyDatabase",
-          "schema": "dbo"
         }
       }
     },
@@ -272,6 +243,59 @@
       }
     },
     {
+      "name": "explain_query",
+      "description": "Get the execution plan for a SQL query to analyze performance",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "The SQL query to analyze"
+        },
+        "database": {
+          "type": "string",
+          "description": "Optional: Database name to use for this query"
+        },
+        "include_actual_plan": {
+          "type": "boolean",
+          "description": "Include actual execution statistics (optional, defaults to false)"
+        }
+      },
+      "required": ["query"],
+      "examples": {
+        "basic": {
+          "query": "SELECT * FROM your_table"
+        },
+        "advanced": {
+          "query": "SELECT * FROM your_table",
+          "database": "MyDatabase",
+          "include_actual_plan": true
+        }
+      }
+    },
+    {
+      "name": "analyze_query_performance",
+      "description": "Analyze query performance and provide optimization suggestions",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "SQL query to analyze for performance optimization"
+        },
+        "database": {
+          "type": "string",
+          "description": "Database name (optional)"
+        }
+      },
+      "required": ["query"],
+      "examples": {
+        "basic": {
+          "query": "SELECT * FROM your_table"
+        },
+        "advanced": {
+          "query": "SELECT * FROM your_table",
+          "database": "MyDatabase"
+        }
+      }
+    },
+    {
       "name": "get_index_recommendations",
       "description": "Get index recommendations for database optimization",
       "parameters": {
@@ -300,30 +324,6 @@
           "schema": "dbo",
           "limit": 50,
           "impact_threshold": 1
-        }
-      }
-    },
-    {
-      "name": "analyze_query_performance",
-      "description": "Analyze query performance and provide optimization suggestions",
-      "parameters": {
-        "query": {
-          "type": "string",
-          "description": "SQL query to analyze for performance optimization"
-        },
-        "database": {
-          "type": "string",
-          "description": "Database name (optional)"
-        }
-      },
-      "required": ["query"],
-      "examples": {
-        "basic": {
-          "query": "SELECT * FROM your_table"
-        },
-        "advanced": {
-          "query": "SELECT * FROM your_table",
-          "database": "MyDatabase"
         }
       }
     },
