@@ -11,7 +11,8 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, **comprehensive performance monitoring**, and **cloud-ready
 secret management**. Built with a modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 40 comprehensive integration tests covering all three security phases with **100% success rates**.
+**✅ Production Status**: This MCP server has been **fully validated** through 610+ comprehensive tests
+(384 unit + 40 manual integration + 20 protocol tests) covering all security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](QUICKSTART.md) for a 5-minute setup walkthrough.
 
@@ -19,12 +20,15 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 
 ### Core Components
 
-- **SqlServerMCP Class** (`index.js`): Main MCP server implementation that handles
-  database connections, security validation, and tool execution
+- **SqlServerMCP Class** (`index.js`): Main MCP server implementation that orchestrates all components
 - **🔒 Three-Tier Safety System**: Revolutionary security architecture with graduated safety levels
 - **Query Validation Engine**: Intelligent SQL parsing and security policy enforcement
 - **MCP Tools**: 15 different database operation tools exposed through the MCP interface
-- **Connection Management**: Handles both SQL Server authentication and Windows authentication
+- **🏗️ Modular Architecture**: Extracted specialized components for better maintainability:
+  - **ServerConfig** (`lib/config/server-config.js`): Centralized configuration management
+  - **ConnectionManager** (`lib/database/connection-manager.js`): Database connection handling
+  - **DatabaseToolsHandler** (`lib/tools/handlers/database-tools.js`): Database operation implementations
+  - **ToolRegistry** (`lib/tools/tool-registry.js`): MCP tool definitions and registration
 - **Security Monitoring**: Runtime security status reporting and startup security summaries
 - **Error Handling**: Comprehensive error handling with structured MCP error responses
 
@@ -63,7 +67,7 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 
 ### 🏗️ Modular Architecture
 
-Starting with v1.4.0, the project follows a modular architecture with specialized components:
+Starting with v1.4.0, the project follows a modular architecture with specialized components. This was **significantly enhanced in v1.7.0+** with comprehensive refactoring:
 
 ```text
 lib/
@@ -71,15 +75,61 @@ lib/
 │   ├── bottleneck-detector.js # 🚨 Query bottleneck detection & categorization
 │   └── query-optimizer.js     # ⚡ Query analysis & optimization recommendations
 ├── config/
-│   └── secret-manager.js     # 🔐 Universal secret management
+│   ├── secret-manager.js     # 🔐 Universal secret management
+│   └── server-config.js      # ⚙️ Centralized configuration management
+├── database/
+│   └── connection-manager.js # 🗄️ Database connection pooling & management
 ├── security/
 │   └── query-validator.js    # 🔒 Enhanced SQL validation
+├── tools/
+│   ├── tool-registry.js      # 📋 MCP tool definitions & registration
+│   └── handlers/
+│       ├── base-handler.js   # 🧩 Base class for tool handlers
+│       └── database-tools.js # 🔧 Database operation implementations
 └── utils/
     ├── logger.js             # 📝 Structured logging
     ├── performance-monitor.js # ⚡ Performance tracking
     ├── response-formatter.js  # 📊 Response formatting
     └── streaming-handler.js   # 📈 Large data streaming
 ```
+
+#### **Key Architecture Components (v1.7.0+)**
+
+**🏗️ Modular Refactoring**: The main `index.js` (previously 2,307 lines) has been refactored into specialized modules:
+
+##### **Configuration Management**
+
+- **`lib/config/server-config.js`**: Centralized configuration with environment variable management
+  - Secure defaults for production deployment
+  - Configuration validation and security warnings
+  - Environment variable reloading for testing
+  - Redacted logging for sensitive data
+  - Configuration summary and health validation
+
+##### **Database Layer**
+
+- **`lib/database/connection-manager.js`**: Extracted database connection handling
+  - Connection pooling with retry logic and exponential backoff
+  - Windows Authentication and SQL Server Authentication support
+  - Connection health monitoring and SSL certificate information
+  - Proper connection lifecycle management
+
+##### **Tool System**
+
+- **`lib/tools/tool-registry.js`**: MCP tool definitions and registration
+- **`lib/tools/handlers/base-handler.js`**: Base class for all tool handlers
+- **`lib/tools/handlers/database-tools.js`**: Database operation implementations
+  - Extracted from main class: `listDatabases`, `listTables`, `describeTable`
+  - Proper separation of concerns for database operations
+  - Consistent error handling and response formatting
+
+##### **Benefits of Modular Architecture**
+
+- **🧪 Improved Testability**: Each component can be tested in isolation
+- **📈 Better Maintainability**: Single responsibility principle throughout
+- **🚀 Enhanced Development**: Faster IDE performance and better code navigation
+- **👥 Team Collaboration**: Multiple developers can work on different modules
+- **🔧 Easier Debugging**: Clear separation makes issue identification easier
 
 ### 🔐 Enhanced Secret Management
 
@@ -249,6 +299,9 @@ npm run test:manual          # All 3 phases (40 tests)
 npm run test:manual:phase1    # Phase 1: Read-only security (20 tests)
 npm run test:manual:phase2    # Phase 2: DML operations (10 tests)
 npm run test:manual:phase3    # Phase 3: DDL operations (10 tests)
+
+# Run MCP protocol tests (requires live database)
+npm run test:protocol        # MCP client-server communication (20 tests)
 ```
 
 ### Code Quality and Formatting
@@ -579,7 +632,7 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 535+ unit tests + 40 integration tests cover all MCP tools, connection handling, and error scenarios
+- **Comprehensive Coverage**: 384 unit tests + 40 integration tests + 20 protocol tests cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
 
@@ -588,7 +641,7 @@ Generated files:
 ```text
 test/
 ├── README.md                            # 📖 Comprehensive test documentation
-├── unit/                                # Unit test suites (535+ tests)
+├── unit/                                # Unit test suites (384 tests)
 │   ├── mcp-shared-fixtures.js          # Shared test fixtures and mocks
 │   ├── sqlserver-mcp.test.js           # Core MCP server tests
 │   ├── mcp-core-tools.test.js          # Core database operation tests
@@ -612,12 +665,14 @@ test/
 │       ├── phase1-readonly-security.test.js   # 20 tests - Maximum security
 │       ├── phase2-dml-operations.test.js      # 10 tests - DML operations
 │       └── phase3-ddl-operations.test.js      # 10 tests - DDL operations
+├── protocol/                            # MCP protocol tests (20 tests)
+│   └── mcp-client-smoke-test.js        # Client-server communication tests
 └── ../vitest.config.js                  # Test configuration
 ```
 
 ### Test Categories
 
-#### **Unit Tests (535+ tests)**
+#### **Unit Tests (384 tests)**
 
 - **Core MCP Server Tests** (127): Main server implementation, tool execution, error handling
 - **Database Operations Tests** (36): Data retrieval, table operations, CSV export
@@ -638,9 +693,20 @@ test/
   - **Security Boundary Enforcement**: All three phases validated with **100% success rates**
   - **Production Readiness**: SSL/TLS, configuration management, error handling
 
+#### **Protocol Tests (20 tests)**
+
+- **MCP Client-Server Communication Tests** (20): **End-to-end MCP protocol validation**
+  - MCP server startup and initialization
+  - Tool discovery and registration
+  - Request/response message formatting
+  - Error handling and edge cases
+  - Connection lifecycle management
+  - Protocol compliance verification
+  - **Located in**: `test/protocol/` - [Protocol Testing Guide →](test/protocol/README.md)
+
 **📋 Manual Integration Testing**: Located in `test/integration/manual/` - [Complete Guide →](test/integration/manual/README.md)
 
-**⚠️ Important**: Manual integration tests are **excluded from CI/CD** and require live SQL Server database for validation.
+**⚠️ Important**: Manual integration tests and protocol tests are **excluded from CI/CD** and require live SQL Server database for validation.
 
 ## Key Implementation Details
 
@@ -737,9 +803,48 @@ The project uses a comprehensive multi-layered tracking system for managing feat
 
 ## Development Workflow
 
+### 🏗️ **Architecture-First Development Process**
+
+**With the new modular architecture (v1.7.0+), development follows a structured approach:**
+
+#### **1. Component-Based Development**
+
+- **Identify the component**: Determine which lib module handles your change
+  - `lib/config/` - Configuration and environment management
+  - `lib/database/` - Connection handling and database operations
+  - `lib/tools/` - MCP tool definitions and handlers
+  - `lib/security/` - Query validation and security
+  - `lib/utils/` - Shared utilities and helpers
+
+#### **2. Modular Testing Strategy**
+
+```bash
+# Test individual components in isolation
+npm run test:watch                    # Watch mode for active development
+npm run test:coverage                 # Component test coverage
+
+# Manual validation for database components
+npm run test:manual:phase1            # Security validation
+npm run test:manual:phase2            # DML operation validation
+npm run test:manual:phase3            # DDL operation validation
+
+# End-to-end protocol validation
+npm run test:protocol                 # MCP client-server communication
+```
+
+#### **3. Development Best Practices**
+
+- **Single Responsibility**: Each module should have one clear purpose
+- **Dependency Injection**: Use constructor injection for testability
+- **Error Boundaries**: Handle errors at appropriate component boundaries
+- **Configuration Isolation**: Keep configuration logic in ServerConfig
+- **Database Abstraction**: Use ConnectionManager for all database access
+
 ### Code Quality Standards
 
-This project maintains high code quality through automated tooling:
+This project maintains high code quality through automated tooling and architectural principles:
+
+#### **Automated Quality Tools**
 
 - **ESLint**: Modern flat config setup for JavaScript linting with focus on code
   quality (formatting handled by Prettier)
@@ -749,6 +854,14 @@ This project maintains high code quality through automated tooling:
 - **Link Checking**: Automated dead link detection for documentation integrity
 - **Vitest**: Fast, modern testing framework with coverage reporting
 - **Git Hooks**: Automated pre-commit and pre-push quality checks
+
+#### **Architecture Quality Standards**
+
+- **Modular Design**: Clear separation of concerns across lib/ modules
+- **Interface Contracts**: Consistent APIs between components
+- **Error Handling**: Structured error responses throughout
+- **Security By Design**: Security validation at appropriate layers
+- **Performance Awareness**: Monitoring and optimization built-in
 
 ### Git Workflow Integration
 
