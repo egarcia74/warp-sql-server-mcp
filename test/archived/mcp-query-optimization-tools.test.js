@@ -5,7 +5,7 @@ import {
   // setupMcpTest,
   resetEnvironment,
   setupTestEnvironment,
-  createTestMcpServer,
+  createTestMcpServerV4,
   mockPool,
   mockRequest
   // testData
@@ -225,7 +225,7 @@ describe('Query Optimization MCP Tools (TDD Tests)', () => {
   beforeEach(async () => {
     // Set up test environment manually without overriding mock responses
     setupTestEnvironment();
-    mcpServer = await createTestMcpServer();
+    mcpServer = await createTestMcpServerV4();
     mcpServer.pool = mockPool;
 
     // Clear previous mock calls but don't set default empty responses

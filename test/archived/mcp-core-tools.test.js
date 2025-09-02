@@ -4,7 +4,7 @@ import {
   setupStdioMock,
   setupMcpTest,
   resetEnvironment,
-  createTestMcpServer,
+  createTestMcpServerV4,
   mockPool,
   mockRequest,
   testData
@@ -19,7 +19,7 @@ describe('Core SQL Tools', () => {
 
   beforeEach(async () => {
     setupMcpTest();
-    mcpServer = await createTestMcpServer();
+    mcpServer = await createTestMcpServerV4();
     mcpServer.pool = mockPool;
   });
 
@@ -68,7 +68,7 @@ describe('Core SQL Tools', () => {
 
     test('should include safety info in successful query responses', async () => {
       // Configure for full access mode
-      const fullAccessServer = await createTestMcpServer({
+      const fullAccessServer = await createTestMcpServerV4({
         SQL_SERVER_READ_ONLY: 'false',
         SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'true',
         SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'true'
@@ -93,7 +93,7 @@ describe('Core SQL Tools', () => {
 
     test('should block unsafe queries with safety validation', async () => {
       // Test with default safe configuration
-      const safeServer = await createTestMcpServer();
+      const safeServer = await createTestMcpServerV4();
       safeServer.pool = mockPool;
 
       await expect(safeServer.executeQuery('DELETE FROM users')).rejects.toThrow(
@@ -106,7 +106,7 @@ describe('Core SQL Tools', () => {
 
     test('should allow safe queries in read-only mode', async () => {
       // Test with default safe configuration
-      const safeServer = await createTestMcpServer();
+      const safeServer = await createTestMcpServerV4();
       safeServer.pool = mockPool;
 
       const mockResult = {

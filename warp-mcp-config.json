@@ -13,13 +13,13 @@
         "SQL_SERVER_DOMAIN": "",
 
         "_comment_security": "=== Security & Encryption ===",
-        "SQL_SERVER_ENCRYPT": "false",
-        "SQL_SERVER_TRUST_CERT": "true",
+        "SQL_SERVER_ENCRYPT": "true",
+        "SQL_SERVER_TRUST_CERT": "false",
 
         "_comment_safety": "=== Three-Tier Safety System (v1.3.0+) ===",
-        "SQL_SERVER_READ_ONLY": "false",
-        "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true",
-        "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "true",
+        "SQL_SERVER_READ_ONLY": "true",
+        "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
+        "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false",
 
         "_comment_timeouts": "=== Connection & Timeout Configuration ===",
         "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
@@ -55,15 +55,15 @@
 
         "_comment_logging": "=== Logging & Debugging (v1.4.0+) ===",
         "SQL_SERVER_LOG_LEVEL": "info",
-        "SQL_SERVER_DEBUG": "true",
-        "ENABLE_SECURITY_AUDIT": "true",
+        "SQL_SERVER_DEBUG": "false",
+        "ENABLE_SECURITY_AUDIT": "false",
         "LOG_FILE": "",
         "SECURITY_LOG_FILE": "",
 
         "_comment_optional": "=== Optional Working Directory (customize as needed) ===",
         "_note_working_dir": "You can also add 'working_directory' at the same level as 'command' if needed"
       },
-      "working_directory": "$HOME/Downloads"
+      "working_directory": "/path/to/your/working/directory"
     }
   }
 }

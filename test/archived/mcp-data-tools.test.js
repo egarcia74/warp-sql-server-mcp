@@ -4,7 +4,7 @@ import {
   setupStdioMock,
   setupMcpTest,
   resetEnvironment,
-  createTestMcpServer,
+  createTestMcpServerV4,
   mockPool,
   mockRequest,
   testData
@@ -19,7 +19,7 @@ describe('Data Tools', () => {
 
   beforeEach(async () => {
     setupMcpTest();
-    mcpServer = await createTestMcpServer();
+    mcpServer = await createTestMcpServerV4();
     mcpServer.pool = mockPool;
   });
 

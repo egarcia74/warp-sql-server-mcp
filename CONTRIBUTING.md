@@ -117,8 +117,11 @@ When you run `npm run hooks:install`, two git hooks are installed:
 
 2. **pre-push**: Runs before each push
    - Full test suite
-   - Comprehensive linting
-   - Code coverage check
+   - Test coverage check
+   - Security audit (`npm audit --audit-level=high`)
+   - Comprehensive linting (ESLint, Prettier)
+   - Markdown formatting validation
+   - Dead link checking
 
 ### Testing
 
