@@ -1,6 +1,15 @@
 # WARP.md
 
-This file provides guidance to WARP (warp.dev) when working with code in this repository.
+> **📋 Note for Human Readers**: This file is primarily designed for machine consumption by the
+> Warp terminal (warp.dev) for AI context and code indexing. For user-facing documentation,
+> please see:
+>
+> - **[README.md](README.md)** - Main project overview and quick links
+> - **[QUICKSTART-VSCODE.md](QUICKSTART-VSCODE.md)** - VS Code + GitHub Copilot setup
+> - **[QUICKSTART.md](QUICKSTART.md)** - Warp Terminal setup
+> - **[Complete Documentation Site](https://egarcia74.github.io/warp-sql-server-mcp/)**
+
+This file provides comprehensive technical guidance to WARP (warp.dev) when working with code in this repository.
 
 ## Project Overview
 
