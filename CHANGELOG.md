@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Placeholder for future changes
+
+## [1.7.1] - 2025-01-02
+
+### 🛠️ Infrastructure & Documentation Fixes Release
+
+This patch release resolves critical infrastructure issues and enhances system reliability.
+
 ### 🛡️ Security
 
 - **Fixed CodeQL Security Alerts**: Resolved 5 critical security vulnerabilities identified by CodeQL analysis
@@ -18,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Added comprehensive comments explaining security rationale and CVE prevention
     - Implemented proper error handling for concurrent file creation scenarios
     - Set secure file permissions (0o600) atomically during file creation
+
+### 🔧 Fixed
+
+- **Documentation Generation Pipeline**: Resolved CI/CD documentation extraction failures
+  - Fixed `scripts/docs/extract-docs.js` to work with new modular tool registry architecture
+  - Updated extraction logic to parse tools from `lib/tools/tool-registry.js` instead of legacy `index.js`
+  - Correctly extracts all 15 MCP tools from modular arrays (`DATABASE_TOOLS`, `DATA_TOOLS`, etc.)
+  - Resolved "Could not find tools array in index.js" error in GitHub Actions workflow
+- **Tool Registry Compatibility**: Enhanced documentation pipeline to support architectural refactoring
+  - Added support for extracting tools from multiple tool arrays
+  - Maintained backward compatibility with existing documentation format
+  - Ensured all tool metadata and examples are properly generated
 
 ### 🧪 Testing
 
