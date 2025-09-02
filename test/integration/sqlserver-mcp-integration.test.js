@@ -270,10 +270,10 @@ describe('SqlServerMCP Integration Tests', () => {
       await server.databaseTools.listDatabases();
 
       const stats = server.getPerformanceStats();
-      expect(stats.content[0].text).toContain('totalQueries');
+      expect(stats[0].text).toContain('totalQueries');
 
       const health = server.getConnectionHealth();
-      expect(health.content[0].text).toContain('connection');
+      expect(health[0].text).toContain('connection');
     });
   });
 });
