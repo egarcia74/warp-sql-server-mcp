@@ -73,14 +73,14 @@ code .
    SQL_SERVER_USER=your_username
    SQL_SERVER_PASSWORD=your_password
 
-   # Security settings (recommended for development)
-   SQL_SERVER_READ_ONLY=false
-   SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true
+   # Security settings (secure by default - adjust for development needs)
+   SQL_SERVER_READ_ONLY=true
+   SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false
    SQL_SERVER_ALLOW_SCHEMA_CHANGES=false
 
-   # SSL settings (for local development)
-   SQL_SERVER_ENCRYPT=false
-   SQL_SERVER_TRUST_CERT=true
+   # SSL settings (secure by default)
+   SQL_SERVER_ENCRYPT=true
+   SQL_SERVER_TRUST_CERT=false
    ```
 
 ### Step 4: Test the Server
@@ -93,9 +93,22 @@ npm run dev
 You should see:
 
 ```bash
-✅ SQL Server MCP Server started
-🔗 Connected to SQL Server
-⚠️ Security: UNSAFE (RW, DML+, DDL-)
+=== SQL Server MCP Configuration ===
+🌐 Connection Settings:
+    Server: localhost:1433
+    Database: master
+    Auth Type: SQL Server Authentication
+    User: your_username
+    Password: ***********
+    ...
+
+🔒 Security & Operation Settings:
+    Read-Only Mode: 🔒 true
+    Allow Destructive Operations: ✅ false
+    Allow Schema Changes: ✅ false
+    ...
+====================================
+SQL Server MCP server running on stdio
 ```
 
 ## VS Code Extensions
@@ -172,10 +185,10 @@ Install these extensions for the best development experience:
     "SQL_SERVER_DATABASE": "master",
     "SQL_SERVER_USER": "your_username",
     "SQL_SERVER_PASSWORD": "your_password",
-    "SQL_SERVER_ENCRYPT": "false",
-    "SQL_SERVER_TRUST_CERT": "true",
-    "SQL_SERVER_READ_ONLY": "false",
-    "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true",
+    "SQL_SERVER_ENCRYPT": "true",
+    "SQL_SERVER_TRUST_CERT": "false",
+    "SQL_SERVER_READ_ONLY": "true",
+    "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
     "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false"
   }
 }
@@ -281,10 +294,10 @@ Create `.vscode/launch.json` for debugging:
         "SQL_SERVER_DATABASE": "master",
         "SQL_SERVER_USER": "your_username",
         "SQL_SERVER_PASSWORD": "your_password",
-        "SQL_SERVER_ENCRYPT": "false",
-        "SQL_SERVER_TRUST_CERT": "true",
-        "SQL_SERVER_READ_ONLY": "false",
-        "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true",
+        "SQL_SERVER_ENCRYPT": "true",
+        "SQL_SERVER_TRUST_CERT": "false",
+        "SQL_SERVER_READ_ONLY": "true",
+        "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
         "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false",
         "SQL_SERVER_LOG_LEVEL": "debug"
       },
@@ -474,7 +487,16 @@ SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true   # Allow data modifications
 SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # Block schema changes
 ```
 
-**Security Status**: `⚠️ UNSAFE (RW, DML+, DDL-)`
+**Configuration displays:**
+
+```text
+🔒 Security & Operation Settings:
+    Read-Only Mode: 🔓 false
+    Allow Destructive Operations: ⚠️ true
+    Allow Schema Changes: ✅ false
+⚠️  Configuration Warnings:
+  ⚠️  Destructive operations are enabled - use caution in production
+```
 
 #### 🛡️ **Maximum Security Setup** (Production Monitoring)
 
@@ -485,7 +507,16 @@ SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false  # No data modifications
 SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 ```
 
-**Security Status**: `🔒 SECURE (RO, DML-, DDL-)`
+**Configuration displays:**
+
+```text
+🔒 Security & Operation Settings:
+    Read-Only Mode: 🔒 true
+    Allow Destructive Operations: ✅ false
+    Allow Schema Changes: ✅ false
+```
+
+(No warnings = secure configuration)
 
 ### Database User Permissions
 

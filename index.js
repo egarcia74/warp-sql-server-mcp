@@ -53,8 +53,8 @@ class SqlServerMCP {
     // Setup tool handlers
     this.setupToolHandlers();
 
-    // Log configuration on startup
-    this.config.logConfiguration();
+    // Log configuration on startup - will attempt connection to get SSL info if encryption is enabled
+    this._logConfigurationWithConnectionInfo();
   }
 
   /**
@@ -419,54 +419,52 @@ class SqlServerMCP {
   }
 
   async getTableData(tableName, database, schema, limit, offset) {
-    return await this.databaseTools.getTableData(tableName, database, schema, limit, offset);
+    return {
+      content: await this.databaseTools.getTableData(tableName, database, schema, limit, offset)
+    };
   }
 
   async exportTableCsv(tableName, database, schema) {
-    return await this.databaseTools.exportTableCsv(tableName, database, schema);
+    return { content: await this.databaseTools.exportTableCsv(tableName, database, schema) };
   }
 
   async explainQuery(query, database) {
-    return await this.databaseTools.explainQuery(query, database);
+    return { content: await this.databaseTools.explainQuery(query, database) };
   }
 
   // Performance monitoring methods
   getPerformanceStats() {
     const stats = this.performanceMonitor.getStats();
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: true,
-              data: stats
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success: true,
+            data: stats
+          },
+          null,
+          2
+        )
+      }
+    ];
   }
 
   getQueryPerformance(limit = 50) {
     const queryStats = this.performanceMonitor.getQueryStats(limit);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: true,
-              data: queryStats
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success: true,
+            data: queryStats
+          },
+          null,
+          2
+        )
+      }
+    ];
   }
 
   getConnectionHealth() {
@@ -475,106 +473,122 @@ class SqlServerMCP {
       ? this.connectionManager.getConnectionHealth()
       : { connected: true, status: 'Connected' };
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: true,
-              data: {
-                connection: connectionHealth,
-                pool: poolStats
-              }
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success: true,
+            data: {
+              connection: connectionHealth,
+              pool: poolStats
+            }
+          },
+          null,
+          2
+        )
+      }
+    ];
   }
 
   // Query optimization methods
   async getIndexRecommendations(database) {
     const recommendations = await this.queryOptimizer.analyzeIndexUsage(database);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: true,
-              data: recommendations
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success: true,
+            data: recommendations
+          },
+          null,
+          2
+        )
+      }
+    ];
   }
 
   async analyzeQueryPerformance(query, database) {
     const analysis = await this.queryOptimizer.analyzeQuery(query, database);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: true,
-              data: analysis
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success: true,
+            data: analysis
+          },
+          null,
+          2
+        )
+      }
+    ];
   }
 
   async detectQueryBottlenecks(database) {
     const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: true,
-              data: bottlenecks
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success: true,
+            data: bottlenecks
+          },
+          null,
+          2
+        )
+      }
+    ];
   }
 
   async getOptimizationInsights(database) {
     const insights = await this.queryOptimizer.getOptimizationInsights(database);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: true,
-              data: insights
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success: true,
+            data: insights
+          },
+          null,
+          2
+        )
+      }
+    ];
   }
 
   // Configuration and utility methods
   printConfigurationSummary() {
     this.config.logConfiguration();
+  }
+
+  /**
+   * Log configuration with SSL certificate information if available
+   * @private
+   */
+  async _logConfigurationWithConnectionInfo() {
+    // If SSL is enabled, try to connect first to get certificate info
+    if (process.env.SQL_SERVER_ENCRYPT === 'true') {
+      try {
+        await this.connectionManager.connect();
+        // Log with connection manager for SSL info
+        this.config.logConfiguration(this.connectionManager);
+      } catch (error) {
+        // Connection failed, just log basic config
+        this.config.logConfiguration();
+        if (process.env.NODE_ENV !== 'test') {
+          console.error(
+            `Note: Could not establish connection for SSL certificate details: ${error.message}`
+          );
+        }
+      }
+    } else {
+      // SSL not enabled, just log basic config
+      this.config.logConfiguration();
+    }
   }
 
   // Expose configuration properties for test compatibility

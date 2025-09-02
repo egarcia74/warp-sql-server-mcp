@@ -7,6 +7,63 @@ import {
   createTestMcpServer
 } from './mcp-shared-fixtures.js';
 
+/**
+ * Security Validation Tests - Performance and Architecture Notes
+ *
+ * ⚠️ PERFORMANCE WARNING: This test suite is intentionally slower (~533ms for 38 tests)
+ *
+ * WHY THIS TEST IS SLOWER:
+ * - Each test group calls createTestMcpServer() with different environment configurations
+ * - createTestMcpServer() performs expensive operations for configuration isolation:
+ *   1. setupTestEnvironment() - Modifies global process.env
+ *   2. vi.resetModules() - Clears entire module cache (EXPENSIVE!)
+ *   3. Dynamic re-imports of config and main modules (EXPENSIVE!)
+ *   4. serverConfig.reload() - Forces config to re-read environment
+ *   5. new SqlServerMCP() - Creates fresh server instance
+ *
+ * WHY WE CAN'T OPTIMIZE BY REUSING SERVER INSTANCES:
+ *
+ * The SqlServerMCP class reads configuration through a SINGLETON pattern:
+ * - serverConfig is a singleton instance created on first import
+ * - Configuration is cached in instance properties (readOnlyMode, etc.)
+ * - Server property getters (lines 581-590 in index.js) read from this singleton
+ *
+ * CONFIGURATION CORRUPTION SCENARIO:
+ * ```javascript
+ * // Test 1: Creates server with default env (READ_ONLY=true)
+ * const server1 = await createTestMcpServer();
+ * expect(server1.readOnlyMode).toBe(true); // ✅ Works
+ *
+ * // Test 2: Changes environment but reuses server1
+ * setupTestEnvironment({ SQL_SERVER_READ_ONLY: 'false' });
+ * expect(server1.readOnlyMode).toBe(false); // ❌ FAILS - still returns true!
+ * // server1.readOnlyMode reads from stale singleton config
+ * ```
+ *
+ * THE MODULE RESET IS ESSENTIAL:
+ * - Without vi.resetModules(), the serverConfig singleton retains old values
+ * - Tests would have corrupted/stale configuration leading to false positives
+ * - Environment changes wouldn't be reflected in server behavior
+ * - Test isolation would be completely broken
+ *
+ * PERFORMANCE IS ACCEPTABLE:
+ * - 533ms for 38 comprehensive security tests = ~14ms per test
+ * - This covers critical security validation that must be bulletproof
+ * - The cost is justified to prevent configuration corruption bugs
+ *
+ * 🚫 DO NOT OPTIMIZE BY:
+ * - Reusing server instances across tests with different configs
+ * - Skipping vi.resetModules() calls
+ * - Caching servers between test groups
+ * - Mocking the configuration reload process
+ *
+ * ✅ SAFE OPTIMIZATIONS (if needed):
+ * - Group tests with identical configurations together
+ * - Reduce redundant createTestMcpServer() calls within same config
+ * - Use describe.sequential() for tests that must run in sequence
+ * - Mock expensive parts that don't affect security validation
+ */
+
 const _originalEnv = process.env;
 describe('Safety Mechanisms', () => {
   let mcpServer;

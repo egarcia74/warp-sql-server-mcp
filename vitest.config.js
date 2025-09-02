@@ -6,7 +6,11 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./test/setup.js'],
     include: ['test/**/*.test.js'],
-    exclude: ['test/archived/**'],
+    exclude: [
+      'test/archived/**',
+      'test/integration/manual/**', // Exclude manual integration tests from automated runs
+      'test/protocol/**' // Exclude protocol tests from automated runs (require live DB)
+    ],
     env: {
       NODE_ENV: 'test'
     },

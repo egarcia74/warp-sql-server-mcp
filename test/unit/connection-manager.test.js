@@ -401,8 +401,8 @@ describe('ConnectionManager', () => {
           port: 1433,
           database: 'master',
           options: expect.objectContaining({
-            encrypt: false,
-            trustServerCertificate: true,
+            encrypt: true,
+            trustServerCertificate: false,
             enableArithAbort: true
           })
         })
@@ -436,12 +436,130 @@ describe('ConnectionManager', () => {
         expect.objectContaining({
           options: expect.objectContaining({
             encrypt: true,
-            // Note: Due to implementation bug, trustServerCertificate will always be true
-            // because of: process.env.SQL_SERVER_TRUST_CERT === 'true' || true
-            trustServerCertificate: true
+            // Now correctly respects SQL_SERVER_TRUST_CERT='false' setting
+            trustServerCertificate: false
           })
         })
       );
+    });
+  });
+
+  describe('SSL configuration and display', () => {
+    test('should extract SSL info correctly when encryption is enabled', async () => {
+      setupEnvironment({
+        SQL_SERVER_HOST: 'localhost',
+        SQL_SERVER_PORT: '1433',
+        SQL_SERVER_DATABASE: 'testdb',
+        SQL_SERVER_USER: 'testuser',
+        SQL_SERVER_PASSWORD: 'testpass',
+        SQL_SERVER_ENCRYPT: 'true',
+        SQL_SERVER_TRUST_CERT: 'false'
+      });
+
+      const sslManager = new ConnectionManager();
+      await sslManager.connect();
+
+      const health = sslManager.getConnectionHealth();
+
+      expect(health.ssl).toEqual({
+        enabled: true,
+        encrypt: true,
+        trust_server_certificate: false,
+        connection_status: 'Encrypted connection established',
+        server: 'localhost:1433',
+        protocol: 'TLS/SSL',
+        note: 'Certificate details not available through mssql library abstraction'
+      });
+    });
+
+    test('should extract SSL info with trust certificate enabled', async () => {
+      setupEnvironment({
+        SQL_SERVER_HOST: 'localhost',
+        SQL_SERVER_PORT: '1433',
+        SQL_SERVER_DATABASE: 'testdb',
+        SQL_SERVER_USER: 'testuser',
+        SQL_SERVER_PASSWORD: 'testpass',
+        SQL_SERVER_ENCRYPT: 'true',
+        SQL_SERVER_TRUST_CERT: 'true'
+      });
+
+      const sslManager = new ConnectionManager();
+      await sslManager.connect();
+
+      const health = sslManager.getConnectionHealth();
+
+      expect(health.ssl).toEqual({
+        enabled: true,
+        encrypt: true,
+        trust_server_certificate: true,
+        connection_status: 'Encrypted connection established',
+        server: 'localhost:1433',
+        protocol: 'TLS/SSL',
+        note: 'Certificate details not available through mssql library abstraction'
+      });
+    });
+
+    test('should not include SSL info when encryption is disabled', async () => {
+      setupEnvironment({
+        SQL_SERVER_HOST: 'localhost',
+        SQL_SERVER_PORT: '1433',
+        SQL_SERVER_DATABASE: 'testdb',
+        SQL_SERVER_USER: 'testuser',
+        SQL_SERVER_PASSWORD: 'testpass',
+        SQL_SERVER_ENCRYPT: 'false',
+        SQL_SERVER_TRUST_CERT: 'true'
+      });
+
+      const noSslManager = new ConnectionManager();
+      await noSslManager.connect();
+
+      const health = noSslManager.getConnectionHealth();
+
+      expect(health.ssl).toBeUndefined();
+    });
+
+    test('should handle SSL info extraction when not connected', () => {
+      const health = connectionManager.getConnectionHealth();
+      expect(health.ssl).toBeUndefined();
+    });
+
+    test('should verify SSL configuration consistency between settings and health', async () => {
+      // Test scenario 1: Secure production config (encrypt=true, trust=false)
+      setupEnvironment({
+        SQL_SERVER_ENCRYPT: 'true',
+        SQL_SERVER_TRUST_CERT: 'false'
+      });
+
+      const secureManager = new ConnectionManager();
+      await secureManager.connect();
+
+      const connectionConfig = secureManager._buildConnectionConfig();
+      const health = secureManager.getConnectionHealth();
+
+      // Verify consistency between connection config and SSL health info
+      expect(connectionConfig.options.encrypt).toBe(health.ssl.encrypt);
+      expect(connectionConfig.options.trustServerCertificate).toBe(
+        health.ssl.trust_server_certificate
+      );
+      expect(connectionConfig.options.encrypt).toBe(true);
+      expect(connectionConfig.options.trustServerCertificate).toBe(false);
+
+      // Test scenario 2: Development config (encrypt=false, trust=true)
+      setupEnvironment({
+        SQL_SERVER_ENCRYPT: 'false',
+        SQL_SERVER_TRUST_CERT: 'true'
+      });
+
+      const devManager = new ConnectionManager();
+      await devManager.connect();
+
+      const devConfig = devManager._buildConnectionConfig();
+      const devHealth = devManager.getConnectionHealth();
+
+      expect(devConfig.options.encrypt).toBe(false);
+      expect(devConfig.options.trustServerCertificate).toBe(true);
+      // SSL info should not be present when encryption is disabled
+      expect(devHealth.ssl).toBeUndefined();
     });
   });
 

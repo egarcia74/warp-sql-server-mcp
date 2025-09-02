@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2025-09-02
+
+### 🎨 Enhanced Configuration Display & Secure Defaults Release
+
+This release introduces a comprehensive visual configuration display system with emoji-enhanced sections, secure-by-default configuration, and fixes SSL certificate validation logic for improved security and user experience.
+
+### 🏗️ Major Architectural Refactoring
+
+- **Modular Architecture Implementation**: Complete restructuring of the monolithic `index.js` (from 2,307 lines) into focused, maintainable modules
+  - `lib/config/server-config.js` - Configuration management and environment variable handling
+  - `lib/database/connection-manager.js` - Database connection logic with retry mechanisms
+  - `lib/tools/handlers/base-handler.js` - Base handler for tool implementations
+  - `lib/tools/handlers/database-tools.js` - Database operation tool handlers
+  - `lib/tools/tool-registry.js` - Centralized tool registration and management
+  - Improved separation of concerns and single responsibility principle
+  - Enhanced testability with isolated, mockable components
+  - Better maintainability and team collaboration capabilities
+
+### 🔒 Enhanced Security Features
+
+- **Pre-push Security Auditing**: Added comprehensive security audit checks to git hooks
+  - `npm run security:audit` - New script for standalone security auditing using `npm audit --audit-level=high`
+  - Updated pre-push hook to include security vulnerability scanning
+  - Updated CI pipeline (`npm run ci`) to include security auditing
+  - Updated `npm run prepush` to include security audit checks
+  - Automatic vulnerability detection before code is pushed to repository
+  - Clear error messages and fix guidance when vulnerabilities are detected
+
+### 🧪 Enhanced Testing Infrastructure
+
+- **Modular Test Architecture**: Restructured test suite to align with new modular architecture
+  - Enhanced `mcp-security.test.js` with comprehensive safety mechanism testing
+  - Updated `mcp-shared-fixtures.js` with improved test data and mock configurations
+  - Integration tests for new architectural components
+  - Comprehensive unit tests for individual modules
+  - Better test isolation and focused testing capabilities
+
+### 🎨 Enhanced Configuration Display & User Experience
+
+- **Visual Configuration Enhancements**:
+  - **Emoji-Enhanced Configuration Display**: Added visual section headers with intuitive emojis (🌐, 🔒, ⚡, 📊, 📝)
+  - **Enhanced Security Indicators**: Visual security status with lock/unlock emojis (🔒/🔓) and warning/success indicators (⚠️/✅)
+  - **Improved Configuration Warnings**: Prominent warning display with ⚠️ emojis for immediate visibility
+  - **Consistent 4-Space Indenting**: Professional formatting across all configuration sections
+  - **SSL Connection Information**: Displays SSL/TLS connection status and encryption details when enabled
+  - **Enhanced Password Security**: Full password masking (`***********`) with username visibility for configuration verification
+
+- **Configuration Display Sections**:
+  - 🌐 **Connection Settings**: Server, database, authentication, and SSL details
+  - 🔐 **SSL Connection Information**: Protocol, encryption status, and certificate trust settings (when SSL enabled)
+  - 🔒 **Security & Operation Settings**: Visual security status with clear indicators
+  - ⚡ **Performance Monitoring**: Tracking and optimization configuration
+  - 📊 **Streaming Configuration**: Large dataset handling settings
+  - 📝 **Logging & Output**: Log levels and output formatting options
+
+### 📚 Documentation Updates
+
+- **Updated Configuration Examples**: Revised sample log outputs throughout documentation
+  - Updated `docs/DEBUG-LOGGING.md` with new emoji-enhanced configuration sections
+  - Updated `docs/VSCODE-INTEGRATION-GUIDE.md` with current startup log examples and security status displays
+  - Replaced outdated `⚠️ Security: UNSAFE (RW, DML+, DDL-)` format with detailed configuration display
+  - Updated password masking documentation to reflect new fixed-length masking approach
+  - Added comprehensive examples of SSL connection information display
+
+### 🛠️ Development Workflow Improvements
+
+- **Enhanced Developer Experience**:
+  - New npm scripts for security auditing and comprehensive CI checks
+  - Improved git hooks with security validation
+  - Better separation of development concerns
+  - Enhanced IDE performance with smaller, focused files
+  - Streamlined debugging and development workflows
+
+### ⚠️ Breaking Changes
+
+- **🔒 Secure-by-Default Configuration Changes**:
+  - **`SQL_SERVER_ENCRYPT`**: Default changed from `false` to `true` (SSL encryption now enabled by default)
+  - **`ENABLE_STREAMING`**: Default changed from `false` to `true` (streaming now enabled by default for better performance)
+  - **SSL Certificate Validation**: Fixed `trustServerCertificate` logic to properly respect `SQL_SERVER_TRUST_CERT=false`
+  - **Impact**: Existing deployments without explicit environment variables will now use secure defaults
+  - **Migration**: Set `SQL_SERVER_ENCRYPT=false` and `ENABLE_STREAMING=false` in your `.env` to maintain previous behavior
+  - **Recommendation**: Review and update your SSL configuration for enhanced security
+
 ## [1.6.0] - 2025-09-01
 
 ### 🎯 Query Optimization & Security Hardening Release

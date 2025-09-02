@@ -34,6 +34,19 @@ if grep -q '"test:coverage"' package.json; then
   echo "[pre-push] ✅ Coverage check passed."
 fi
 
+# Run security audit check
+if command -v npm >/dev/null 2>&1; then
+  echo "[pre-push] Running security audit..."
+  if ! npm audit --audit-level=high; then
+    echo "[pre-push] ❌ Security audit failed. Push aborted."
+    echo "[pre-push] 🔒 To fix: Run 'npm audit fix' to fix vulnerabilities automatically"
+    echo "[pre-push]     Or run 'npm audit' to see detailed vulnerability information"
+    echo "[pre-push]     For manual fixes, review and update vulnerable dependencies"
+    exit 1
+  fi
+  echo "[pre-push] ✅ Security audit passed."
+fi
+
 # Run lint check to ensure code quality
 if command -v npx >/dev/null 2>&1; then
   echo "[pre-push] Running comprehensive lint check..."

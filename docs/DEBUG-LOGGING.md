@@ -4,20 +4,21 @@ This document describes the logging features and debugging tools available in th
 
 ## Configuration Summary
 
-The MCP server provides a comprehensive configuration summary at startup showing:
+The MCP server provides a comprehensive configuration summary at startup with emoji indicators:
 
-- **Connection Settings**: Host, port, database, authentication type
-- **Security Settings**: Password masking, security levels, permissions
-- **Timeout & Retry Settings**: Connection/query timeouts, retry configuration
-- **Pool Settings**: Connection pool configuration
-- **Debug Mode**: Enhanced logging when enabled
+- 🌐 **Connection Settings**: Host, port, database, authentication type
+- 🔒 **Security & Operation Settings**: Password masking, security levels, permissions
+- ⚡ **Performance Monitoring**: Query tracking and optimization features
+- 📊 **Streaming Configuration**: Large dataset handling settings
+- 📝 **Logging & Output**: Log levels and output formatting
 
 ### Password Security
 
-For security, the `SQL_SERVER_PASSWORD` is masked in logs:
+For security, the `SQL_SERVER_PASSWORD` is fully masked in logs:
 
-- Shows `***MASKED***` when a password is configured
-- Shows `(not set)` when using Windows Authentication or no password
+- Shows `***********` (fixed-length masking) when a password is configured
+- Shows `<not set>` when using Windows Authentication or no password
+- Usernames are shown in cleartext for configuration verification
 
 ## Debug Mode
 

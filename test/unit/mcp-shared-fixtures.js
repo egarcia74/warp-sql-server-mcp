@@ -376,16 +376,36 @@ export const expectToolError = (result, expectedErrorMessage = null) => {
   return data;
 };
 
-// Mock server instance factory
+/**
+ * Mock server instance factory - EXPENSIVE BUT NECESSARY
+ *
+ * ⚠️ PERFORMANCE NOTE: This function is intentionally expensive (~50-100ms per call)
+ * to ensure proper test isolation and prevent configuration corruption.
+ *
+ * WHY IT'S EXPENSIVE:
+ * - vi.resetModules() clears the entire module cache (most expensive operation)
+ * - Dynamic imports force fresh module loading and evaluation
+ * - Environment variable manipulation requires full config reload
+ *
+ * WHY IT'S NECESSARY:
+ * - serverConfig is a singleton that caches configuration on first import
+ * - Without module reset, environment changes won't be reflected in server behavior
+ * - Reusing servers between tests with different configs causes corruption
+ *
+ * DO NOT OPTIMIZE THIS FUNCTION - it's designed to be called sparingly
+ * for tests that require different environment configurations.
+ */
 export const createTestMcpServer = async (envOverrides = {}) => {
+  // Modify global environment for this test configuration
   setupTestEnvironment(envOverrides);
 
   // Clear module cache to force fresh imports with new environment variables
+  // ⚠️ EXPENSIVE: This clears ALL modules from cache but is essential for config isolation
   vi.resetModules();
 
   // Import serverConfig first and reload it to pick up environment changes BEFORE importing the main module
   const { serverConfig } = await import('../../lib/config/server-config.js');
-  serverConfig.reload();
+  serverConfig.reload(); // Force re-reading of process.env
 
   // Now import the main module - it will get the updated config
   const { SqlServerMCP } = await import('../../index.js');
