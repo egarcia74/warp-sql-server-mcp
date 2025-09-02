@@ -29,6 +29,18 @@ describe('DatabaseToolsHandler', () => {
     // Import and create handler
     const { DatabaseToolsHandler } = await import('../../lib/tools/handlers/database-tools.js');
     handler = new DatabaseToolsHandler(mockConnectionManager, mockPerformanceMonitor);
+
+    // Mock the StreamingHandler methods for testing
+    if (handler.streamingHandler) {
+      handler.streamingHandler.streamTableExport = vi.fn();
+      handler.streamingHandler.reconstructFromChunks = vi.fn();
+      // Ensure getStreamingStats always returns a valid object with required properties
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 0
+      });
+    }
   });
 
   afterEach(() => {
@@ -370,6 +382,304 @@ describe('DatabaseToolsHandler', () => {
           success: false,
           error: 'Query failed',
           executionTime: expect.any(Number)
+        })
+      );
+    });
+  });
+
+  describe('exportTableCsv', () => {
+    test('should export small table data as CSV without streaming', async () => {
+      const mockData = [
+        { id: 1, name: 'John Doe', email: 'john@example.com' },
+        { id: 2, name: 'Jane Smith', email: 'jane@example.com' }
+      ];
+
+      // Mock the streaming handler to return non-streaming result
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        recordset: mockData,
+        totalRows: 2,
+        performance: {
+          duration: 50,
+          rowCount: 2,
+          memoryEfficient: false
+        }
+      });
+
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 2
+      });
+
+      const result = await handler.exportTableCsv('Users');
+
+      // Verify streamTableExport was called with correct parameters
+      expect(handler.streamingHandler.streamTableExport).toHaveBeenCalledWith(
+        expect.any(Object),
+        'Users',
+        {
+          schema: 'dbo',
+          database: null,
+          limit: null,
+          outputFormat: 'csv'
+        }
+      );
+
+      // Verify CSV output format
+      expect(result).toEqual([
+        {
+          type: 'text',
+          text: expect.stringContaining('id,name,email')
+        }
+      ]);
+      expect(result[0].text).toContain('1,John Doe,john@example.com');
+      expect(result[0].text).toContain('2,Jane Smith,jane@example.com');
+    });
+
+    test('should export large table data with streaming', async () => {
+      // Mock streaming response with chunks
+      const mockChunks = [
+        {
+          chunkNumber: 1,
+          data: 'id,name,email\\n1,John Doe,john@example.com\\n2,Jane Smith,jane@example.com\\n',
+          rowCount: 2,
+          size: 65
+        },
+        {
+          chunkNumber: 2,
+          data: '3,Bob Wilson,bob@example.com\\n4,Alice Brown,alice@example.com\\n',
+          rowCount: 2,
+          size: 60
+        }
+      ];
+
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: true,
+        chunks: mockChunks,
+        chunkCount: 2,
+        totalRows: 4,
+        performance: {
+          duration: 120,
+          rowCount: 4,
+          avgBatchSize: 2,
+          memoryEfficient: true
+        }
+      });
+
+      // Mock getStreamingStats specifically for this test
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: true,
+        memoryEfficient: true,
+        totalRows: 4,
+        chunkCount: 2,
+        avgChunkSize: 2
+      });
+
+      // Mock reconstructFromChunks
+      handler.streamingHandler.reconstructFromChunks = vi
+        .fn()
+        .mockReturnValue(
+          'id,name,email\\n1,John Doe,john@example.com\\n2,Jane Smith,jane@example.com\\n3,Bob Wilson,bob@example.com\\n4,Alice Brown,alice@example.com\\n'
+        );
+
+      const result = await handler.exportTableCsv('LargeTable', 'TestDB');
+
+      // Verify streaming was used
+      expect(handler.streamingHandler.streamTableExport).toHaveBeenCalledWith(
+        expect.any(Object),
+        'LargeTable',
+        {
+          schema: 'dbo',
+          database: 'TestDB',
+          limit: null,
+          outputFormat: 'csv'
+        }
+      );
+
+      expect(handler.streamingHandler.reconstructFromChunks).toHaveBeenCalledWith(
+        mockChunks,
+        'csv'
+      );
+
+      // Verify result structure
+      expect(result).toEqual([
+        {
+          type: 'text',
+          text: expect.stringContaining('id,name,email')
+        }
+      ]);
+    });
+
+    test('should handle empty table results', async () => {
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        totalRows: 0,
+        performance: {
+          duration: 10,
+          rowCount: 0,
+          memoryEfficient: false
+        }
+      });
+
+      // Mock getStreamingStats specifically for this test
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 0
+      });
+
+      const result = await handler.exportTableCsv('EmptyTable');
+
+      expect(result).toEqual([
+        {
+          type: 'text',
+          text: 'No data found in table'
+        }
+      ]);
+    });
+
+    test('should handle CSV escaping correctly', async () => {
+      const mockData = [
+        { id: 1, description: 'Text with, comma', notes: 'Text with "quotes"' },
+        { id: 2, description: 'Text with\nnewline', notes: null }
+      ];
+
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        recordset: mockData,
+        totalRows: 2,
+        performance: { duration: 30, rowCount: 2, memoryEfficient: false }
+      });
+
+      // Mock getStreamingStats specifically for this test
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 2
+      });
+
+      const result = await handler.exportTableCsv('TestTable');
+
+      const csvText = result[0].text;
+      expect(csvText).toContain('"Text with, comma"');
+      expect(csvText).toContain('"Text with ""quotes"""');
+      expect(csvText).toContain('"Text with\nnewline"');
+      expect(csvText).toContain('2,"Text with\nnewline",'); // null becomes empty
+    });
+
+    test('should handle database switching', async () => {
+      mockRequest.query.mockResolvedValue({ recordset: [] });
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        totalRows: 0,
+        performance: { duration: 10, rowCount: 0, memoryEfficient: false }
+      });
+
+      // Mock getStreamingStats specifically for this test
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 0
+      });
+
+      await handler.exportTableCsv('Users', 'TestDB', 'custom');
+
+      // Verify database switch was attempted
+      expect(mockRequest.query).toHaveBeenCalledWith('USE [TestDB]');
+
+      // Verify streaming handler was called with correct parameters
+      expect(handler.streamingHandler.streamTableExport).toHaveBeenCalledWith(
+        expect.any(Object),
+        'Users',
+        {
+          schema: 'custom',
+          database: 'TestDB',
+          limit: null,
+          outputFormat: 'csv'
+        }
+      );
+    });
+
+    test('should apply limit when specified', async () => {
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        totalRows: 0,
+        performance: { duration: 10, rowCount: 0, memoryEfficient: false }
+      });
+
+      // Mock getStreamingStats specifically for this test
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 0
+      });
+
+      await handler.exportTableCsv('Users', null, 'dbo', 100);
+
+      expect(handler.streamingHandler.streamTableExport).toHaveBeenCalledWith(
+        expect.any(Object),
+        'Users',
+        {
+          schema: 'dbo',
+          database: null,
+          limit: 100,
+          outputFormat: 'csv'
+        }
+      );
+    });
+
+    test('should record performance metrics for successful export', async () => {
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: true,
+        totalRows: 1000,
+        performance: {
+          duration: 250,
+          rowCount: 1000,
+          avgBatchSize: 100,
+          memoryEfficient: true
+        }
+      });
+
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: true,
+        memoryEfficient: true,
+        totalRows: 1000
+      });
+
+      await handler.exportTableCsv('LargeTable');
+
+      expect(mockPerformanceMonitor.recordQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'export_table_csv',
+          success: true,
+          streaming: true,
+          totalRows: 1000,
+          memoryEfficient: true,
+          executionTime: 250
+        })
+      );
+    });
+
+    test('should handle streaming export errors', async () => {
+      const error = new Error('Streaming failed');
+      handler.streamingHandler.streamTableExport = vi.fn().mockRejectedValue(error);
+
+      await expect(handler.exportTableCsv('Users')).rejects.toThrow('Streaming failed');
+
+      expect(mockPerformanceMonitor.recordQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'export_table_csv',
+          success: false,
+          error: 'Streaming failed',
+          executionTime: 0
         })
       );
     });
