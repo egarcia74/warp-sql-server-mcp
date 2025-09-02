@@ -55,28 +55,31 @@ Configuration:
 }
 
 function initConfig() {
-  if (fs.existsSync(CONFIG_FILE)) {
-    console.log(`Configuration file already exists at: ${CONFIG_FILE}`);
-    console.log('To reconfigure, delete the file and run init again, or edit it directly.');
-    return;
-  }
+  // Security: Use O_CREAT | O_EXCL flags to atomically create file and fail if it exists
+  // This prevents TOCTOU (Time-of-Check Time-of-Use) race conditions where another
+  // process could create the file between our existence check and write operation
+  const flags = fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY;
 
   try {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(EXAMPLE_CONFIG, null, 2));
+    // Atomic file creation with restrictive permissions (0o600 = owner read/write only)
+    const fd = fs.openSync(CONFIG_FILE, flags, 0o600);
+    fs.writeSync(fd, JSON.stringify(EXAMPLE_CONFIG, null, 2));
+    fs.closeSync(fd);
+
     console.log(`✅ Configuration file created at: ${CONFIG_FILE}`);
     console.log('\n📝 Next steps:');
     console.log('1. Edit the configuration file with your SQL Server details');
     console.log('2. Run: warp-sql-server-mcp start');
     console.log('\n⚠️  Security Note: The config file contains your database credentials.');
-    console.log('   Make sure it has appropriate file permissions.');
-    // Set restrictive permissions on Unix-like systems
-    try {
-      fs.chmodSync(CONFIG_FILE, 0o600);
-      console.log('   File permissions set to 600 (owner read/write only).');
-    } catch {
-      console.log('   Please ensure file permissions are restrictive.');
-    }
+    console.log('   File permissions set to 600 (owner read/write only).');
   } catch (error) {
+    if (error.code === 'EEXIST') {
+      // File already exists - this is expected behavior, not an error
+      console.log(`Configuration file already exists at: ${CONFIG_FILE}`);
+      console.log('To reconfigure, delete the file and run init again, or edit it directly.');
+      return;
+    }
+    // Other errors (permissions, disk space, etc.) are actual failures
     console.error(`❌ Failed to create configuration file: ${error.message}`);
     process.exit(1);
   }

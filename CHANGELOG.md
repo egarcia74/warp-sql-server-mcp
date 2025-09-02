@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🛡️ Security
+
+- **Fixed CodeQL Security Alerts**: Resolved 5 critical security vulnerabilities identified by CodeQL analysis
+  - **GitHub Actions Token Permissions**: Added explicit least-privilege token permissions to all workflow jobs
+    - `release.yml`: Added `contents: read` to `check-changes` job, corrected `release` job permissions
+    - Enhanced security posture with minimal required permissions for each operation
+  - **CLI File System Race Condition (TOCTOU)**: Eliminated Time-of-Check Time-of-Use vulnerability in config file creation
+    - Replaced `fs.existsSync()` + `fs.writeFileSync()` pattern with atomic `O_CREAT | O_EXCL` flags
+    - Added comprehensive comments explaining security rationale and CVE prevention
+    - Implemented proper error handling for concurrent file creation scenarios
+    - Set secure file permissions (0o600) atomically during file creation
+
+### 🧪 Testing
+
+- **Enhanced Security Testing**: Added comprehensive CLI security test suite
+  - Race condition testing with concurrent process spawning to verify atomic file operations
+  - File permission validation ensuring restrictive access (owner read/write only)
+  - Graceful handling verification for existing configuration files
+  - CLI help system functionality testing
+
+### 🔒 Security Hardening
+
+- **Workflow Security Enhancements**: All GitHub Actions workflows now follow security best practices
+  - Explicit token permissions defined for each job based on principle of least privilege
+  - Reduced attack surface by limiting unnecessary permissions
+  - Enhanced supply chain security through proper permission scoping
+- **CLI Security Improvements**: Configuration file handling now immune to race condition attacks
+  - Atomic file operations prevent security vulnerabilities in multi-process environments
+  - Secure-by-default file permissions prevent unauthorized access to database credentials
+
 ## [1.7.0] - 2025-09-02
 
 ### 🎨 Enhanced Configuration Display & Secure Defaults Release

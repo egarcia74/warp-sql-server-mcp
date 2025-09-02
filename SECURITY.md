@@ -167,6 +167,52 @@ The MCP server includes a comprehensive query validation engine that:
 4. **Encryption**: Does not enforce connection encryption (configurable separately)
 5. **Audit Logging**: Provides basic logging but not comprehensive audit trails
 
+## 🔐 GitHub Actions & CI/CD Security
+
+### Token Permissions Policy
+
+All GitHub Actions workflows implement **least-privilege token permissions** to minimize attack surface:
+
+```yaml
+permissions:
+  contents: read # Read repository code only
+  pull-requests: write # Create/update PRs (if needed)
+  packages: write # Publish packages (if needed)
+```
+
+**Security Benefits:**
+
+- Prevents unauthorized repository modifications
+- Limits scope of potential token compromise
+- Follows GitHub's security best practices
+- Reduces supply chain attack vectors
+
+### CLI Security Hardening
+
+**Atomic File Operations**: The CLI tool uses atomic file creation to prevent race conditions:
+
+```javascript
+// Secure: Atomic file creation with O_CREAT | O_EXCL
+const fd = fs.openSync(configFile, flags, 0o600);
+```
+
+**Security Features:**
+
+- **TOCTOU Prevention**: Eliminates Time-of-Check Time-of-Use vulnerabilities
+- **Atomic Operations**: File creation and permission setting in single operation
+- **Race Condition Safe**: Multiple concurrent processes handled safely
+- **Secure Permissions**: Files created with 0o600 (owner read/write only)
+
+**Vulnerability Mitigated:**
+
+```javascript
+// Insecure: Race condition vulnerable
+if (!fs.existsSync(file)) {
+  // ⚠️ TOCTOU vulnerability
+  fs.writeFileSync(file, data); // Another process could create file here
+}
+```
+
 ## 🏥 Production Deployment Guidelines
 
 ### Environment-Specific Recommendations
