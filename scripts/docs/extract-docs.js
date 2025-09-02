@@ -10,33 +10,59 @@ import { execSync } from 'child_process';
  */
 
 function extractToolsFromCode() {
-  const indexPath = path.resolve('index.js');
-  const content = fs.readFileSync(indexPath, 'utf8');
+  // Tools are now defined in the tool registry, not in index.js
+  const registryPath = path.resolve('lib/tools/tool-registry.js');
 
-  // Find the tools array in setupToolHandlers method
-  const toolsRegex = /tools:\s*\[\s*([\s\S]*?)\s*\]\s*\}\)\);/;
-  const match = content.match(toolsRegex);
-
-  if (!match) {
-    throw new Error('Could not find tools array in index.js');
+  if (!fs.existsSync(registryPath)) {
+    throw new Error('Could not find tool registry at lib/tools/tool-registry.js');
   }
 
-  const toolsArrayContent = match[1];
+  const content = fs.readFileSync(registryPath, 'utf8');
 
-  // Split by tool object boundaries - look for },\n and parse each individually
-  const toolObjects = [];
+  // Extract all tool arrays (DATABASE_TOOLS, DATA_TOOLS, etc.)
+  const toolArrays = extractToolArrays(content);
+  const allTools = [];
 
-  // First, let's use a more sophisticated approach to split tool objects
-  const toolParts = splitToolObjects(toolsArrayContent);
+  toolArrays.forEach(toolArray => {
+    const tools = parseToolArray(toolArray);
+    allTools.push(...tools);
+  });
+
+  return allTools;
+}
+
+// Extract tool arrays from the registry content
+function extractToolArrays(content) {
+  const toolArrays = [];
+
+  // Look for const TOOL_NAME = [ ... ]; patterns
+  const arrayRegex = /const\s+(\w*TOOLS?)\s*=\s*\[(.*?)\];/gs;
+  let match;
+
+  while ((match = arrayRegex.exec(content)) !== null) {
+    const arrayName = match[1];
+    const arrayContent = match[2];
+
+    console.log(`Found tool array: ${arrayName}`);
+    toolArrays.push(arrayContent);
+  }
+
+  return toolArrays;
+}
+
+// Parse individual tool array content
+function parseToolArray(arrayContent) {
+  const tools = [];
+  const toolParts = splitToolObjects(arrayContent);
 
   toolParts.forEach(toolPart => {
     const tool = parseIndividualTool(toolPart);
     if (tool) {
-      toolObjects.push(tool);
+      tools.push(tool);
     }
   });
 
-  return toolObjects;
+  return tools;
 }
 
 function splitToolObjects(content) {
