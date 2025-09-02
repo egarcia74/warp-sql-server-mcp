@@ -55,6 +55,8 @@ Show me tables in the master database
 
 Your SQL Server is now connected to Warp's AI! 🤖
 
+> **💻 Using VS Code?** Check out our [VS Code + GitHub Copilot Guide](QUICKSTART-VSCODE.md) for AI-powered database development directly in your IDE!
+
 ## What You Can Do
 
 **Ask Warp about your database:**

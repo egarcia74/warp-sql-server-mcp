@@ -173,6 +173,8 @@ To modify security settings, edit your config file:
 - Check the security settings in your config file
 - Review the MCP server logs in VS Code Developer Console
 
+> **💬 Terminal user?** Try our [Warp Terminal Guide](QUICKSTART.md) for command-line workflows and AI-powered database operations!
+
 **Want more features?** See the [complete documentation](README.md)
 
 ---
