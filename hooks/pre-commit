@@ -10,7 +10,7 @@ if [ ! -f "package.json" ]; then
   exit 0
 fi
 
-# Run ESLint on staged JavaScript files
+# Run ESLint with --fix on staged JavaScript files
 js_files=""
 while IFS= read -r file; do
   [ -z "$file" ] && continue
@@ -19,19 +19,23 @@ done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|mjs|cj
 
 if [ -n "$js_files" ]; then
   if command -v npx >/dev/null 2>&1; then
-    echo "[pre-commit] Running ESLint on staged JavaScript files..."
+    echo "[pre-commit] Running ESLint --fix on staged JavaScript files..."
     # shellcheck disable=SC2086
-    if ! eval npx eslint $js_files; then
-      echo "[pre-commit] ESLint failed. Please fix the issues above."
+    if ! eval npx eslint --fix $js_files; then
+      echo "[pre-commit] ESLint --fix failed. Please review and fix the remaining issues above."
       exit 1
     fi
-    echo "[pre-commit] ESLint passed."
+    echo "[pre-commit] ESLint --fix completed successfully."
+    
+    # Re-add files that may have been fixed by ESLint
+    # shellcheck disable=SC2086
+    eval git add $js_files
   else
     echo "[pre-commit] npx not found, skipping ESLint."
   fi
 fi
 
-# Run Prettier check on staged files
+# Run Prettier --write on staged files
 staged_files=""
 while IFS= read -r file; do
   [ -z "$file" ] && continue
@@ -40,19 +44,23 @@ done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|mjs|cj
 
 if [ -n "$staged_files" ]; then
   if command -v npx >/dev/null 2>&1; then
-    echo "[pre-commit] Running Prettier check on staged files..."
+    echo "[pre-commit] Running Prettier --write on staged files..."
     # shellcheck disable=SC2086
-    if ! eval npx prettier --check $staged_files; then
-      echo "[pre-commit] Prettier check failed. Run 'npm run format' to fix formatting issues."
+    if ! eval npx prettier --write $staged_files; then
+      echo "[pre-commit] Prettier --write failed. Please review the errors above."
       exit 1
     fi
-    echo "[pre-commit] Prettier check passed."
+    echo "[pre-commit] Prettier formatting completed successfully."
+    
+    # Re-add files that may have been formatted by Prettier
+    # shellcheck disable=SC2086
+    eval git add $staged_files
   else
-    echo "[pre-commit] npx not found, skipping Prettier check."
+    echo "[pre-commit] npx not found, skipping Prettier."
   fi
 fi
 
-# Lint markdown files with markdownlint-cli2
+# Lint and fix markdown files with markdownlint-cli2
 md_files=""
 while IFS= read -r file; do
   [ -z "$file" ] && continue
@@ -61,13 +69,17 @@ done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.md$' || tr
 
 if [ -n "$md_files" ]; then
   if command -v npx >/dev/null 2>&1; then
-    echo "[pre-commit] Running markdownlint on staged markdown files..."
+    echo "[pre-commit] Running markdownlint --fix on staged markdown files..."
     # shellcheck disable=SC2086
-    if ! eval npx markdownlint-cli2 $md_files; then
-      echo "[pre-commit] markdownlint failed."
+    if ! eval npx markdownlint-cli2 --fix $md_files; then
+      echo "[pre-commit] markdownlint --fix failed. Please review and fix the remaining issues above."
       exit 1
     fi
-    echo "[pre-commit] Markdown lint passed."
+    echo "[pre-commit] Markdown lint and fix completed successfully."
+    
+    # Re-add files that may have been fixed by markdownlint
+    # shellcheck disable=SC2086
+    eval git add $md_files
   else
     echo "[pre-commit] npx not found, skipping markdown lint."
   fi

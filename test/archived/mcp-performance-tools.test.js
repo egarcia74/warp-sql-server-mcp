@@ -1,73 +1,39 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Mock the mssql module to avoid any real DB interactions
-vi.mock('mssql', () => ({
-  default: {
-    connect: vi.fn(),
-    ConnectionPool: vi.fn()
-  },
-  connect: vi.fn(),
-  ConnectionPool: vi.fn()
-}));
+import {
+  setupMssqlMock,
+  setupStdioMock,
+  setupMcpTest,
+  resetEnvironment,
+  createTestMcpServerV4V2,
+  _mockPool,
+  mockPerformanceMonitor
+} from './mcp-shared-fixtures.js';
 
-// Mock StdioServerTransport to avoid importing actual MCP SDK transport
-vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: vi.fn(() => ({
-    connect: vi.fn()
-  }))
-}));
-
-import { SqlServerMCP } from '../../index.js';
+// Setup module mocks
+setupMssqlMock();
+setupStdioMock();
 
 describe('Performance Monitoring MCP Tools', () => {
   let mcpServer;
-  let mockPool;
-  let mockPerformanceMonitor;
   let originalConsoleError;
 
   beforeEach(async () => {
-    // Reset environment variables for clean defaults
-    delete process.env.SQL_SERVER_READ_ONLY;
-    delete process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS;
-    delete process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES;
-
+    setupMcpTest();
     // Mock console.error to prevent performance monitoring output during tests
     originalConsoleError = console.error;
     console.error = vi.fn();
 
-    // Create server instance
-    mcpServer = new SqlServerMCP();
+    // Create server instance using the test infrastructure
+    mcpServer = await createTestMcpServerV4V2();
 
-    // Mock SQL pool
-    mockPool = {
-      request: vi.fn().mockReturnValue({
-        query: vi.fn()
-      }),
-      close: vi.fn()
-    };
-
-    mcpServer.pool = mockPool;
-
-    // Mock performance monitor instance and methods
-    mockPerformanceMonitor = {
-      getStats: vi.fn(),
-      getQueryStats: vi.fn(),
-      getPoolStats: vi.fn(),
-      startQuery: vi.fn(() => 'query_id_123'),
-      endQuery: vi.fn(),
-      recordPoolMetrics: vi.fn()
-    };
-
-    // Assign mock performance monitor to the server instance
-    mcpServer.performanceMonitor = mockPerformanceMonitor;
+    // The pool will be set automatically by the test infrastructure
+    // The performanceMonitor will be set automatically by createTestMcpServerV4V2
   });
 
   afterEach(() => {
     console.error = originalConsoleError;
-    // Clean up environment variables
-    delete process.env.SQL_SERVER_READ_ONLY;
-    delete process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS;
-    delete process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES;
+    resetEnvironment();
   });
 
   describe('getPerformanceStats', () => {
