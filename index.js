@@ -66,12 +66,23 @@ class SqlServerMCP {
       return { allowed: true, reason: 'Empty query' };
     }
 
-    const securityConfig = this.config.getSecurityConfig();
-
     // Use direct property access for tests that override properties
     const readOnlyMode = this.readOnlyMode;
     const allowDestructiveOperations = this.allowDestructiveOperations;
     const allowSchemaChanges = this.allowSchemaChanges;
+
+    // 🚀 OPTIMIZATION: Skip all parsing when in "full destruction mode"
+    // When all safety restrictions are disabled, bypass expensive parsing
+    if (!readOnlyMode && allowDestructiveOperations && allowSchemaChanges) {
+      return {
+        allowed: true,
+        reason: 'Full destruction mode - all restrictions disabled, query validation bypassed',
+        queryType: 'unrestricted',
+        optimized: true
+      };
+    }
+
+    const securityConfig = this.config.getSecurityConfig();
 
     // First, determine the query type
     const queryType = this._getQueryType(trimmedQuery, securityConfig);

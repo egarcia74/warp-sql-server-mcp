@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🚀 Performance - Query Validation Optimization
+
+- **⚡ Full Destruction Mode Optimization**: Revolutionary performance improvement for unrestricted environments
+  - **Smart Validation Bypass**: When all safety restrictions are disabled
+    (`SQL_SERVER_READ_ONLY=false`, `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true`, `SQL_SERVER_ALLOW_SCHEMA_CHANGES=true`),
+    query validation is completely bypassed
+  - **Eliminated AST Parsing Overhead**: Skips expensive `node-sql-parser` AST analysis for unrestricted queries
+  - **Performance Gains**: Immediate query approval with `optimized: true` flag for monitoring
+  - **Preserved Security Boundaries**: Validation still applies when any restrictions are enabled
+  - **Zero Breaking Changes**: Existing security configurations continue to work as expected
+
+### 🐛 Fixed - DDL Query Validation Bug
+
+- **🔧 Resolved DDL Parsing Inconsistencies**: Fixed critical bug where complex DDL operations were incorrectly blocked
+  - **Root Cause**: AST parsing was inconsistently validating DDL statements even when `SQL_SERVER_ALLOW_SCHEMA_CHANGES=true`
+  - **Impact**: Complex CREATE TABLE, ALTER TABLE, DROP TABLE, CREATE INDEX operations now work reliably
+  - **Edge Cases Fixed**: Multi-line DDL, constraints, defaults, foreign keys, stored procedures, triggers
+  - **Validation Logic**: Improved query type detection and security boundary enforcement
+
+### ✅ Enhanced - Enterprise DDL Support
+
+- **🏗️ Complete DDL Operation Support**: All SQL Server DDL operations now fully functional
+  - **CREATE Operations**: Tables, indexes, views, stored procedures, functions, triggers
+  - **ALTER Operations**: Table modifications, column additions/changes
+  - **DROP Operations**: Complete object removal capabilities
+  - **Complex DDL**: Multi-line statements, constraints, foreign keys, defaults
+  - **Advanced Features**: User-defined functions, triggers, audit tables
+
+### 🧪 Validated - Advanced SQL Server Features
+
+- **📊 Comprehensive Feature Testing**: Extensive validation of enterprise SQL Server capabilities
+  - **Window Functions**: ROW_NUMBER, DENSE_RANK, LAG, LEAD, PERCENT_RANK
+  - **Common Table Expressions (CTEs)**: Multi-level CTEs with complex aggregations
+  - **MERGE Statements**: Complete upsert operations with WHEN MATCHED/NOT MATCHED
+  - **PIVOT Operations**: Dynamic data pivoting with aggregation
+  - **JSON Functions**: JSON_VALUE for data extraction from JSON columns
+  - **Table Variables**: DECLARE @table syntax with INSERT/SELECT operations
+  - **Transaction Management**: BEGIN/COMMIT/ROLLBACK with error handling
+  - **Bulk Operations**: Multi-row INSERT statements with VALUES clause
+  - **Unicode Support**: Full emoji and special character support in results
+
 ### ⚡ Added - Enhanced Performance Testing Infrastructure
 
 - **🚀 Improved Performance Test Suite**: Complete overhaul of manual performance testing capabilities

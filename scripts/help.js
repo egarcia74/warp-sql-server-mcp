@@ -36,7 +36,8 @@ ${'─'.repeat(80)}
   npm run test:manual:warp-performance    Test with Warp MCP integration (~10s)
 
 📡 Protocol & Integration Tests
-  npm run test:protocol            MCP protocol smoke test
+  npm run test:manual:protocol     MCP protocol smoke test
+  npm run test:protocol            (alias for test:manual:protocol)
   npm run test:integration:aws     AWS Secrets Manager integration
   npm run test:integration:azure   Azure Key Vault integration
 

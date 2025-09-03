@@ -25,7 +25,7 @@ npm run test:manual                # Run ALL manual tests (~45s)
 3. `npm run test:manual:phase1` - Read-only security (~10s)
 4. `npm run test:manual:phase2` - DML operations security (~10s)
 5. `npm run test:manual:phase3` - DDL operations security (~10s)
-6. `npm run test:protocol` - MCP protocol validation (~3s)
+6. `npm run test:manual:protocol` - MCP protocol validation (~3s)
 
 ### Manual Tests - Individual Categories
 
@@ -55,7 +55,7 @@ npm run test:manual:phase3         # DDL operations tests
 #### 📡 Protocol Tests
 
 ```bash
-npm run test:protocol              # MCP protocol smoke test
+npm run test:manual:protocol       # MCP protocol smoke test
 ```
 
 ## 📁 Test File Organization
