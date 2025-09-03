@@ -29,11 +29,9 @@ index.js.backup
 
 # Development documentation
 MANIFESTO.md
-PERFORMANCE.md
 PRODUCT-BACKLOG.md
 WARP.md
 GIT-COMMIT-CHECKLIST.md
-REFACTORING_PLAN.md
 
 # Documentation moved to docs/ directory (excluded by default)
 # docs/ directory contains non-essential documentation for npm package
@@ -43,10 +41,6 @@ REFACTORING_PLAN.md
 .prettierrc
 eslint.config.js
 cspell.json
-
-# Demo and debug files
-demo-performance-features.js
-debug-connection.js
 
 # Config files for specific setups
 mcp-server-config.json
