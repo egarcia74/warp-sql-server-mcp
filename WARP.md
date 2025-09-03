@@ -345,6 +345,10 @@ npm run test:manual:phase1    # Phase 1: Read-only security (20 tests)
 npm run test:manual:phase2    # Phase 2: DML operations (10 tests)
 npm run test:manual:phase3    # Phase 3: DDL operations (10 tests)
 
+# Run performance tests
+npm run test:manual:performance      # ⭐ Fast performance test (~2s, 100% success)
+npm run test:manual:warp-performance # Warp MCP integration test (~10s)
+
 # Run MCP protocol tests (requires live database)
 npm run test:protocol        # MCP client-server communication (20 tests)
 ```
