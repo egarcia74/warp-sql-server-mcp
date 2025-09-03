@@ -1161,10 +1161,10 @@ Show me queries that took longer than 5 seconds to execute
 ### Documentation Resources
 
 - 📖 **[Complete Documentation](../README.md)** - Full project documentation
-- 💻 **[VS Code Quick Start Guide](../QUICKSTART-VSCODE.md)** - 5-minute VS Code + Warp setup
-- 🚀 **[Warp Quick Start Guide](../QUICKSTART.md)** - Original Warp-focused setup
-- 🔒 **[Security Guide](../SECURITY.md)** - Comprehensive security documentation
-- 🏗️ **[Architecture Guide](../ARCHITECTURE.md)** - Technical architecture details
+- 💻 **[VS Code Quick Start Guide](QUICKSTART-VSCODE.md)** - 5-minute VS Code + Warp setup
+- 🚀 **[Warp Quick Start Guide](QUICKSTART.md)** - Original Warp-focused setup
+- 🔒 **[Security Guide](SECURITY.md)** - Comprehensive security documentation
+- 🏗️ **[Architecture Guide](ARCHITECTURE.md)** - Technical architecture details
 - ☁️ **[AWS Secrets Guide](AWS-SECRETS-GUIDE.md)** - AWS Secrets Manager integration
 - 🔑 **[Azure Secrets Guide](AZURE-SECRETS-GUIDE.md)** - Azure Key Vault integration
 
@@ -1217,10 +1217,10 @@ Warp's MCP capabilities creates an unparalleled database development experience.
 
 **Next Steps:**
 
-- 💻 **[Try the VS Code Quick Start Guide](../QUICKSTART-VSCODE.md)** for immediate VS Code setup
-- 🚀 **[Try the Warp Quick Start Guide](../QUICKSTART.md)** for Warp-only setup
-- 🔒 **[Review Security Best Practices](../SECURITY.md)** for production deployment
-- 🏗️ **[Explore the Architecture](../ARCHITECTURE.md)** to understand the enterprise patterns
+- 💻 **[Try the VS Code Quick Start Guide](QUICKSTART-VSCODE.md)** for immediate VS Code setup
+- 🚀 **[Try the Warp Quick Start Guide](QUICKSTART.md)** for Warp-only setup
+- 🔒 **[Review Security Best Practices](SECURITY.md)** for production deployment
+- 🏗️ **[Explore the Architecture](ARCHITECTURE.md)** to understand the enterprise patterns
 
 ---
 

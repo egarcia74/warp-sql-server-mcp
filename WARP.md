@@ -5,8 +5,8 @@
 > please see:
 >
 > - **[README.md](README.md)** - Main project overview and quick links
-> - **[QUICKSTART-VSCODE.md](QUICKSTART-VSCODE.md)** - VS Code + GitHub Copilot setup
-> - **[QUICKSTART.md](QUICKSTART.md)** - Warp Terminal setup
+> - **[QUICKSTART-VSCODE.md](docs/QUICKSTART-VSCODE.md)** - VS Code + GitHub Copilot setup
+> - **[QUICKSTART.md](docs/QUICKSTART.md)** - Warp Terminal setup
 > - **[Complete Documentation Site](https://egarcia74.github.io/warp-sql-server-mcp/)**
 
 This file provides comprehensive technical guidance to WARP (warp.dev) when working with code in this repository.
@@ -23,7 +23,7 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 **✅ Production Status**: This MCP server has been **fully validated** through 618+ comprehensive tests
 (392 unit + 40 manual integration + 20 protocol tests) covering all security phases with **100% success rates**.
 
-**🚀 Quick Start**: New users should begin with the [Quick Start Guide](QUICKSTART.md) for a 5-minute setup walkthrough.
+**🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute setup walkthrough.
 
 ## Architecture
 

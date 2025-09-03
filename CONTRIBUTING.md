@@ -16,10 +16,10 @@ Before diving into code, please read our [**Software Engineering Manifesto**](MA
 - **Observability by Default**: Proper logging and monitoring for all features
 - **Production Readiness**: Code that's ready for enterprise deployment
 
-**🚀 New to this project?** Review our [Architecture Guide](ARCHITECTURE.md) and choose your preferred setup:
+**🚀 New to this project?** Review our [Architecture Guide](docs/ARCHITECTURE.md) and choose your preferred setup:
 
-- **[Warp Terminal Quick Start Guide](QUICKSTART.md)** - Original 5-minute setup
-- **[VS Code Quick Start Guide](QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
+- **[Warp Terminal Quick Start Guide](docs/QUICKSTART.md)** - Original 5-minute setup
+- **[VS Code Quick Start Guide](docs/QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
 
 These guides will help you understand both the technical architecture and practical usage.
 

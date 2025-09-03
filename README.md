@@ -20,7 +20,7 @@ Connect AI assistants to your SQL Server databases with enterprise-grade securit
 
 Perfect for developers who want AI-powered SQL assistance directly in their IDE.
 
-**[→ 5-Minute VS Code Setup Guide](QUICKSTART-VSCODE.md)**
+**[→ 5-Minute VS Code Setup Guide](docs/QUICKSTART-VSCODE.md)**
 
 - ✅ **GitHub Copilot** can query your databases directly
 - ✅ **Context-aware suggestions** based on your actual schema
@@ -31,7 +31,7 @@ Perfect for developers who want AI-powered SQL assistance directly in their IDE.
 
 Ideal for terminal-based workflows and command-line database interactions.
 
-**[→ 5-Minute Warp Setup Guide](QUICKSTART.md)**
+**[→ 5-Minute Warp Setup Guide](docs/QUICKSTART.md)**
 
 - ✅ **AI-powered terminal** with SQL Server integration
 - ✅ **Natural language** database queries
@@ -154,10 +154,12 @@ npm install
 
 ## 📚 Complete Documentation
 
+**[📋 Complete Documentation Index](docs/README.md)** - Navigate all documentation in one place
+
 ### **User Guides**
 
-- **[Security Guide](SECURITY.md)** - Comprehensive security configuration and threat model
-- **[Architecture Guide](ARCHITECTURE.md)** - Technical deep-dive and system design
+- **[Security Guide](docs/SECURITY.md)** - Comprehensive security configuration and threat model
+- **[Architecture Guide](docs/ARCHITECTURE.md)** - Technical deep-dive and system design
 - **[All MCP Tools](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Complete API reference (15 tools)
 
 ### **Setup Guides**
