@@ -24,20 +24,35 @@ fi
 # Function to check if issue already exists
 check_issue_exists() {
     local title="$1"
-    gh issue list --search "$title in:title" --limit 1 --json title --jq '.[] | .title' | grep -q "$title"
+    # Remove square brackets and get base title
+    local base_title=$(echo "$title" | sed 's/\[Feature\]: //')
+    # Search for either the full title or just the base title
+    gh issue list --search "in:title $base_title" --json title --jq '.[] | .title' | grep -q "$base_title"
 }
 
 echo "📋 Checking existing backlog issues..."
 existing_count=$(gh issue list --label backlog --json title --jq '. | length')
 echo "Found $existing_count existing backlog issues"
 
+# Function to create issue if it doesn't exist
+create_issue_if_new() {
+    local title="$1"
+    local body="$2"
+    local labels="$3"
+
+if ! check_issue_exists "$title"; then
+        echo "Creating issue: $title"
+        echo "$body" | gh issue create --title "$title" --body-file - --label "$labels"
+    else
+        echo "✓ Issue already exists: $title"
+    fi
+}
+
 # Create High Priority Issues
 echo "📋 Creating HIGH PRIORITY issues..."
 
 # Feature #1: Enhanced Data Visualization Support
-gh issue create \
-  --title "[Feature]: Enhanced Data Visualization Support - Charts and Graphs" \
-  --body "$(cat <<-EOF
+create_issue_if_new "[Feature]: Enhanced Data Visualization Support - Charts and Graphs" "$(cat <<-EOF
 ## 📋 Feature Overview
 
 **Backlog Priority**: HIGH
@@ -45,7 +60,7 @@ gh issue create \
 **Implementation Complexity**: 🔧🔧 (2/5 wrenches)
 **Phase**: Phase 2 (3-6 months)
 
-## 🎯 Description
+## 🎨 Description
 
 Add tools for generating charts, graphs, and data visualizations directly from query results:
 - Bar, line, and pie charts
@@ -53,7 +68,7 @@ Add tools for generating charts, graphs, and data visualizations directly from q
 - Export to common formats (PNG, SVG, PDF)
 - Interactive visualizations
 
-## 📝 Acceptance Criteria
+## 📏 Acceptance Criteria
 
 - [ ] Add generate_chart MCP tool (bar, line, pie)
 - [ ] Add create_dashboard MCP tool for multi-chart views
@@ -62,19 +77,16 @@ Add tools for generating charts, graphs, and data visualizations directly from q
 - [ ] Maintain security model and read-only compliance
 - [ ] Handle large datasets efficiently
 
-## 🛠️ Technical Considerations
+## 🔧 Technical Considerations
 
 Use established charting libraries, integrate with streaming data handler, maintain security boundaries.
 
 **Reference**: Product Backlog item #1
 EOF
-)" \
-  --label "enhancement,backlog,high-priority,phase-2"
+)" "enhancement,backlog,high-priority,phase-2"
 
 # Feature #4: Real-time Data Monitoring
-gh issue create \
-  --title "[Feature]: Real-time Data Monitoring and Alerting System" \
-  --body "$(cat <<-EOF
+create_issue_if_new "[Feature]: Real-time Data Monitoring and Alerting System" "$(cat <<-EOF
 ## 📋 Feature Overview
 
 **Backlog Priority**: HIGH
@@ -82,7 +94,7 @@ gh issue create \
 **Implementation Complexity**: 🔧🔧🔧🔧 (4/5 wrenches)
 **Phase**: Phase 3 (6-12 months)
 
-## 🎯 Description
+## 🎨 Description
 
 Live data monitoring and alerting capabilities:
 - Monitor table changes with triggers
@@ -90,7 +102,7 @@ Live data monitoring and alerting capabilities:
 - Real-time dashboards for key metrics
 - Notification system integration
 
-## 📝 Acceptance Criteria
+## 📏 Acceptance Criteria
 
 - [ ] Add monitor_table_changes MCP tool
 - [ ] Add create_alert tool for threshold monitoring
@@ -99,21 +111,18 @@ Live data monitoring and alerting capabilities:
 - [ ] Performance monitoring for large datasets
 - [ ] Configurable alert thresholds
 
-## 🛠️ Technical Considerations
+## 🔧 Technical Considerations
 
 Complex feature requiring database triggers, real-time processing, notification systems.
 
 **Reference**: Product Backlog item #4
 EOF
-)" \
-  --label "enhancement,backlog,high-priority,phase-3"
+)" "enhancement,backlog,high-priority,phase-3"
 
 echo "📊 Creating MEDIUM PRIORITY issues..."
 
 # Feature #5: Database Comparison & Synchronization
-gh issue create \
-  --title "[Feature]: Database Comparison & Schema Synchronization" \
-  --body "$(cat <<-EOF
+create_issue_if_new "[Feature]: Database Comparison & Schema Synchronization" "$(cat <<-EOF
 ## 📋 Feature Overview
 
 **Backlog Priority**: MEDIUM
@@ -121,7 +130,7 @@ gh issue create \
 **Implementation Complexity**: 🔧🔧🔧🔧 (4/5 wrenches)
 **Phase**: Phase 3 (6-12 months)
 
-## 🎯 Description
+## 🎨 Description
 
 Compare schemas and data between environments:
 - Schema comparison tools
@@ -129,7 +138,7 @@ Compare schemas and data between environments:
 - Migration script generation
 - Environment diff reports
 
-## 📝 Acceptance Criteria
+## 📏 Acceptance Criteria
 
 - [ ] Add compare_schemas MCP tool
 - [ ] Add sync_data tool for environment synchronization
@@ -139,21 +148,18 @@ Compare schemas and data between environments:
 
 **Reference**: Product Backlog item #5
 EOF
-)" \
-  --label "enhancement,backlog,medium-priority,phase-3"
+)" "enhancement,backlog,medium-priority,phase-3"
 
-# Feature #7: Query Optimization & Performance Tools  
-gh issue create \
-  --title "[Feature]: Query Optimization & Performance Analysis Tools" \
-  --body "$(cat <<-EOF
+# Feature #7: Query Optimization & Performance Tools
+create_issue_if_new "[Feature]: Query Optimization & Performance Analysis Tools" "$(cat <<-EOF
 ## 📋 Feature Overview
 
-**Backlog Priority**: MEDIUM  
+**Backlog Priority**: MEDIUM
 **Business Value**: ⭐⭐⭐⭐ (4/5 stars)
 **Implementation Complexity**: 🔧🔧🔧 (3/5 wrenches)
 **Phase**: Phase 2 (3-6 months)
 
-## 🎯 Description
+## 🎨 Description
 
 Advanced performance analysis and optimization:
 - Index suggestions based on query patterns
@@ -161,7 +167,7 @@ Advanced performance analysis and optimization:
 - Automatic query optimization
 - Query cost estimation
 
-## 📝 Acceptance Criteria
+## 📏 Acceptance Criteria
 
 - [ ] Add suggest_indexes MCP tool
 - [ ] Add analyze_performance_trends tool
@@ -171,15 +177,12 @@ Advanced performance analysis and optimization:
 
 **Reference**: Product Backlog item #7
 EOF
-)" \
-  --label "enhancement,backlog,medium-priority,phase-2"
+)" "enhancement,backlog,medium-priority,phase-2"
 
 echo "💡 Creating LOW PRIORITY issues..."
 
 # Feature #12: Natural Language Query Interface
-gh issue create \
-  --title "[Feature]: Natural Language Query Interface - AI-Powered SQL Generation" \
-  --body "$(cat <<-EOF
+create_issue_if_new "[Feature]: Natural Language Query Interface - AI-Powered SQL Generation" "$(cat <<-EOF
 ## 📋 Feature Overview
 
 **Backlog Priority**: LOW
@@ -188,7 +191,7 @@ gh issue create \
 **Phase**: Phase 4 (12+ months)
 **Status**: 🤔 Research Required
 
-## 🎯 Description
+## 🎨 Description
 
 Convert natural language to SQL queries:
 - Natural language to SQL conversion
@@ -196,7 +199,7 @@ Convert natural language to SQL queries:
 - Smart suggestions based on schema
 - Interactive query refinement
 
-## 📝 Acceptance Criteria
+## 📏 Acceptance Criteria
 
 - [ ] Add ask_question MCP tool for natural language input
 - [ ] SQL query generation from English descriptions
@@ -204,14 +207,13 @@ Convert natural language to SQL queries:
 - [ ] Schema-aware intelligent suggestions
 - [ ] Query validation and correction
 
-## 🛠️ Technical Considerations
+## 🔧 Technical Considerations
 
 Requires AI/ML integration, complex natural language processing, extensive training data.
 
 **Reference**: Product Backlog item #12
 EOF
-)" \
-  --label "enhancement,backlog,low-priority,phase-4"
+)" "enhancement,backlog,low-priority,phase-4"
 
 # Create remaining missing features (if any)
 echo "🔄 Creating any remaining missing backlog issues..."
@@ -235,7 +237,7 @@ for feature in "${remaining_features[@]}"; do
     existing=$(gh issue list --label backlog --json title --jq ".[] | select(.title | test(\"$feature\"; \"i\")) | .title")
     if [[ -z "$existing" ]]; then
         echo "⚠️  Missing feature: $feature"
-        echo "📝 Use the feature-request template to create this manually:"
+        echo "📏 Use the feature-request template to create this manually:"
         echo "   https://github.com/egarcia74/warp-sql-server-mcp/issues/new?template=feature-request.md"
     fi
 done
