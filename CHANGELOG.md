@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2025-01-03
+
+### 🐛 Fixed - Configuration Logging
+
+- **🔧 Resolved Configuration Display Corruption**: Fixed critical bug where configuration logging was fragmented and repeated
+  - **Root Cause**: Multiple line-by-line `console.error` calls during startup causing interleaved output
+  - **Impact**: Clean, professional configuration display with proper formatting and visual sections
+  - **Solution**: Consolidated configuration logging into single batched output call
+  - **Result**: One cohesive configuration block with proper emoji sections and no repeated lines
+  - **Production Ready**: Configuration output now appears professional and production-ready
+  - **MCP Protocol**: Eliminates log interference with MCP protocol communication during handshake
+
 ### 🚀 Performance - Query Validation Optimization
 
 - **⚡ Full Destruction Mode Optimization**: Revolutionary performance improvement for unrestricted environments
