@@ -35,8 +35,8 @@ test/
 
 **🚀 New to this project?** Choose your preferred setup:
 
-- **[Warp Terminal Quick Start Guide](../QUICKSTART.md)** - Original 5-minute setup
-- **[VS Code Quick Start Guide](../QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
+- **[Warp Terminal Quick Start Guide](../docs/QUICKSTART.md)** - Original 5-minute setup
+- **[VS Code Quick Start Guide](../docs/QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
 
 Get the MCP server running first, then return here to understand the testing architecture.
 

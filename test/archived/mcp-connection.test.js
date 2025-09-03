@@ -4,21 +4,23 @@ import {
   setupStdioMock,
   setupMcpTest,
   resetEnvironment,
-  createTestMcpServer,
+  createTestMcpServerV4V2,
   mockPool,
-  sql
+  sql,
+  setupModularMocks
 } from './mcp-shared-fixtures.js';
 
 // Setup module mocks
 setupMssqlMock();
 setupStdioMock();
+setupModularMocks();
 
 describe('Database Connection', () => {
   let mcpServer;
 
   beforeEach(async () => {
     setupMcpTest();
-    mcpServer = await createTestMcpServer();
+    mcpServer = await createTestMcpServerV4V2();
   });
 
   afterEach(() => {
@@ -49,7 +51,7 @@ describe('Database Connection', () => {
   });
 
   test('should handle Windows authentication when no user/password provided', async () => {
-    const mcpServerWithWindowsAuth = await createTestMcpServer({
+    const mcpServerWithWindowsAuth = await createTestMcpServerV4V2({
       SQL_SERVER_USER: '',
       SQL_SERVER_PASSWORD: '',
       SQL_SERVER_DOMAIN: 'TESTDOMAIN'

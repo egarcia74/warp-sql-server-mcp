@@ -1,0 +1,55 @@
+# Development and testing files
+test/
+coverage/
+coverage-report.json
+docs-data/
+.vitest/
+.nyc_output/
+vitest.config.js
+
+# Development scripts and tools
+scripts/
+hooks/
+install-git-hooks.sh
+
+# GitHub workflows and config files
+.github/
+.audit-ci.json
+.markdown-link-check.json
+.markdownlint-cli2.yaml
+.markdownlint.json
+.markdownlintignore
+
+# Environment and backup files
+.env
+.env.backup
+.env.example
+index.js.backup
+*.backup
+
+# Development documentation
+MANIFESTO.md
+PRODUCT-BACKLOG.md
+WARP.md
+GIT-COMMIT-CHECKLIST.md
+
+# Documentation moved to docs/ directory (excluded by default)
+# docs/ directory contains non-essential documentation for npm package
+
+# Development tools config
+.prettierignore
+.prettierrc
+eslint.config.js
+cspell.json
+
+# Config files for specific setups
+mcp-server-config.json
+warp-mcp-config.json
+
+# Keep only essential documentation
+# README.md (included by default)
+# CHANGELOG.md (included by default) 
+# LICENSE (included by default)
+# CONTRIBUTING.md (included by default)
+# docs/ directory is excluded - contains comprehensive documentation
+#   but not needed for npm package installation
