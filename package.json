@@ -19,7 +19,7 @@
     "test:integration:aws": "node test/integration/test-aws-secrets.js",
     "test:integration:azure": "node test/integration/test-azure-secrets.js",
     "test:manual": "npm run test:manual:all",
-    "test:manual:all": "echo '🧪 Running all manual integration tests...' && npm run test:manual:phase1 && npm run test:manual:phase2 && npm run test:manual:phase3",
+    "test:manual:all": "echo '🧪 Running all manual tests...' && npm run test:manual:performance && npm run test:manual:warp-performance && npm run test:manual:phase1 && npm run test:manual:phase2 && npm run test:manual:phase3 && npm run test:protocol",
     "test:manual:phase1": "echo '\n🔒 Phase 1: Read-Only Security Testing...' && node test/integration/manual/phase1-readonly-security.test.js",
     "test:manual:phase2": "echo '\n⚠️  Phase 2: DML Operations Testing...' && node test/integration/manual/phase2-dml-operations.test.js",
     "test:manual:phase3": "echo '\n🛠️  Phase 3: DDL Operations Testing...' && node test/integration/manual/phase3-ddl-operations.test.js",

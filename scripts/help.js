@@ -26,7 +26,7 @@ ${'─'.repeat(80)}
   npm run test:ui                  Run tests with visual UI interface
 
 📋 Manual Integration Tests
-  npm run test:manual              Run all manual security tests (~30s)
+  npm run test:manual              Run ALL manual tests (performance + security) (~45s)
   npm run test:manual:phase1       Phase 1: Read-only security tests
   npm run test:manual:phase2       Phase 2: DML operations tests
   npm run test:manual:phase3       Phase 3: DDL operations tests
@@ -86,7 +86,7 @@ ${'─'.repeat(80)}
 
 🧪 Testing & Validation:
   npm run test:coverage            # Full test suite with coverage
-  npm run test:manual              # Complete manual test suite
+  npm run test:manual              # ALL manual tests (performance + security)
   npm run ci                       # Full CI validation
 
 🔧 Maintenance & Quality:

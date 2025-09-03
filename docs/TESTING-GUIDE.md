@@ -15,7 +15,7 @@ npm run test:coverage # Run with coverage report
 ### Manual Integration Tests
 
 ```bash
-npm run test:manual                # Run all manual security tests
+npm run test:manual                # Run ALL manual tests (performance + security)
 npm run test:manual:phase1         # Read-only security tests
 npm run test:manual:phase2         # DML operations tests
 npm run test:manual:phase3         # DDL operations tests
@@ -71,12 +71,13 @@ test/
 
 ## 🎯 When to Use Each Test
 
-| Test Type            | When to Use                                | Duration | Success Rate |
-| -------------------- | ------------------------------------------ | -------- | ------------ |
-| **Unit Tests**       | Development, CI/CD                         | ~10s     | ~100%        |
-| **Performance Test** | Performance validation, regression testing | ~2s      | 100%         |
-| **Security Tests**   | Security validation, compliance            | ~30s     | Varies       |
-| **Warp Integration** | End-to-end validation with Warp            | ~10s     | ~100%        |
+| Test Type            | When to Use                                  | Duration | Success Rate |
+| -------------------- | -------------------------------------------- | -------- | ------------ |
+| **Unit Tests**       | Development, CI/CD                           | ~10s     | ~100%        |
+| **Performance Test** | Performance validation, regression testing   | ~2s      | 100%         |
+| **Security Tests**   | Security validation, compliance              | ~30s     | Varies       |
+| **Warp Integration** | End-to-end validation with Warp              | ~10s     | ~100%        |
+| **All Manual Tests** | Complete test suite (performance + security) | ~45s     | Varies       |
 
 ## 🚀 Quick Start
 
@@ -89,7 +90,7 @@ npm test
 # Run performance validation
 npm run test:manual:performance
 
-# Run security tests if needed
+# Run all manual tests (performance + security) if needed
 npm run test:manual
 ```
 
