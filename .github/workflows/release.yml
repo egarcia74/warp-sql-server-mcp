@@ -116,7 +116,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.should_release == 'true'
     permissions:
-      contents: read  # Minimal permissions - using PAT for tag/release operations
+      contents: write  # Required for fallback GITHUB_TOKEN to push tags and create releases
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
