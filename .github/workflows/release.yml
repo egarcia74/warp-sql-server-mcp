@@ -116,7 +116,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.should_release == 'true'
     permissions:
-      contents: write  # Required to create tags and releases
+      contents: read  # Minimal permissions - using PAT for tag/release operations
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
@@ -221,11 +221,14 @@ jobs:
 
       - name: Create Git tag (without committing version bump)
         if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          # Use authenticated git push with token
+          git push https://$GITHUB_TOKEN@github.com/${{ github.repository }} "v${{ steps.version.outputs.version }}"
           echo "✅ Created and pushed tag v${{ steps.version.outputs.version }}"
           echo "ℹ️  Note: Version bump not committed to main due to branch protection"
 
@@ -233,7 +236,7 @@ jobs:
         if: ${{ github.event.inputs.dry_run != 'true' }}
         uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.version.outputs.version }}
           release_name: Release v${{ steps.version.outputs.version }}
