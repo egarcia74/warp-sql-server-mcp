@@ -1,6 +1,6 @@
 {
   "name": "warp-sql-server-mcp",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "description": "Secure MCP server for connecting Warp to SQL Server with graduated safety levels and comprehensive database operations",
   "main": "index.js",
   "type": "module",

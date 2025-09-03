@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3] - 2025-01-03
+
 ### Added - New MCP Tool: Server Information and Diagnostics
 
 - **🔍 get_server_info Tool**: Added comprehensive server diagnostics and configuration visibility
