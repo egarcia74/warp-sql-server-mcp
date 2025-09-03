@@ -54,3 +54,4 @@ jspm_packages/
 
 # JetBrains IDEs
 .idea/
+test/temp/

@@ -93,14 +93,22 @@ tail -n 1000 -f "$LOG_FILE" | while IFS= read -r line; do
         
         # Pretty print the JSON if not in compact mode
         if [[ "$COMPACT_MODE" == false && -n "$json_part" ]]; then
+            # Handle escaped JSON (unescape quotes)
+            unescaped_json=$(echo "$json_part" | sed 's/\\"/"/g')
+            
             if command -v jq &> /dev/null; then
-                if ! echo "$json_part" | jq . 2>/dev/null; then
-                    echo "   ❌ JSON formatting failed: $json_part"
+                if ! echo "$unescaped_json" | jq . 2>/dev/null; then
+                    # If unescaping didn't work, try original
+                    if ! echo "$json_part" | jq . 2>/dev/null; then
+                        echo "   ⚠️ JSON formatting skipped (escaped): notifications message"
+                    fi
                 fi
             else
                 # Fallback: basic formatting without jq
-                if ! echo "$json_part" | python3 -m json.tool 2>/dev/null; then
-                    echo "   ❌ JSON formatting failed: $json_part"
+                if ! echo "$unescaped_json" | python3 -m json.tool 2>/dev/null; then
+                    if ! echo "$json_part" | python3 -m json.tool 2>/dev/null; then
+                        echo "   ⚠️ JSON formatting skipped (escaped): notifications message"
+                    fi
                 fi
             fi
             echo ""  # Add spacing after JSON

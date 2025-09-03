@@ -1,59 +1,106 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
-// Mock the mssql module first
-vi.mock('mssql', () => ({
-  default: {
-    connect: vi.fn(),
-    ConnectionPool: vi.fn()
-  },
-  connect: vi.fn(),
-  ConnectionPool: vi.fn()
-}));
+import {
+  setupMcpTest,
+  _addSecurityPropertyOverrides,
+  resetEnvironment,
+  createTestMcpServer
+} from './mcp-shared-fixtures.js';
 
-// Mock StdioServerTransport
-vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: vi.fn(() => ({
-    connect: vi.fn()
-  }))
-}));
+/**
+ * Security Validation Tests - Performance and Architecture Notes
+ *
+ * ⚠️ PERFORMANCE WARNING: This test suite is intentionally slower (~533ms for 38 tests)
+ *
+ * WHY THIS TEST IS SLOWER:
+ * - Each test group calls createTestMcpServer() with different environment configurations
+ * - createTestMcpServer() performs expensive operations for configuration isolation:
+ *   1. setupTestEnvironment() - Modifies global process.env
+ *   2. vi.resetModules() - Clears entire module cache (EXPENSIVE!)
+ *   3. Dynamic re-imports of config and main modules (EXPENSIVE!)
+ *   4. serverConfig.reload() - Forces config to re-read environment
+ *   5. new SqlServerMCP() - Creates fresh server instance
+ *
+ * WHY WE CAN'T OPTIMIZE BY REUSING SERVER INSTANCES:
+ *
+ * The SqlServerMCP class reads configuration through a SINGLETON pattern:
+ * - serverConfig is a singleton instance created on first import
+ * - Configuration is cached in instance properties (readOnlyMode, etc.)
+ * - Server property getters (lines 581-590 in index.js) read from this singleton
+ *
+ * CONFIGURATION CORRUPTION SCENARIO:
+ * ```javascript
+ * // Test 1: Creates server with default env (READ_ONLY=true)
+ * const server1 = await createTestMcpServer();
+ * expect(server1.readOnlyMode).toBe(true); // ✅ Works
+ *
+ * // Test 2: Changes environment but reuses server1
+ * setupTestEnvironment({ SQL_SERVER_READ_ONLY: 'false' });
+ * expect(server1.readOnlyMode).toBe(false); // ❌ FAILS - still returns true!
+ * // server1.readOnlyMode reads from stale singleton config
+ * ```
+ *
+ * THE MODULE RESET IS ESSENTIAL:
+ * - Without vi.resetModules(), the serverConfig singleton retains old values
+ * - Tests would have corrupted/stale configuration leading to false positives
+ * - Environment changes wouldn't be reflected in server behavior
+ * - Test isolation would be completely broken
+ *
+ * PERFORMANCE IS ACCEPTABLE:
+ * - 533ms for 38 comprehensive security tests = ~14ms per test
+ * - This covers critical security validation that must be bulletproof
+ * - The cost is justified to prevent configuration corruption bugs
+ *
+ * 🚫 DO NOT OPTIMIZE BY:
+ * - Reusing server instances across tests with different configs
+ * - Skipping vi.resetModules() calls
+ * - Caching servers between test groups
+ * - Mocking the configuration reload process
+ *
+ * ✅ SAFE OPTIMIZATIONS (if needed):
+ * - Group tests with identical configurations together
+ * - Reduce redundant createTestMcpServer() calls within same config
+ * - Use describe.sequential() for tests that must run in sequence
+ * - Mock expensive parts that don't affect security validation
+ */
 
-import { SqlServerMCP } from '../../index.js';
-
-const originalEnv = process.env;
-
+const _originalEnv = process.env;
 describe('Safety Mechanisms', () => {
   let mcpServer;
 
   describe('Constructor Safety Configuration', () => {
-    afterEach(() => {
-      // Clean up environment variables after each test in this suite
-      process.env = originalEnv;
+    beforeEach(() => {
+      setupMcpTest();
     });
 
-    test('should enable read-only mode by default', () => {
-      const safeMcpServer = new SqlServerMCP();
+    afterEach(() => {
+      resetEnvironment();
+    });
+
+    test('should enable read-only mode by default', async () => {
+      const safeMcpServer = await createTestMcpServer();
       expect(safeMcpServer.readOnlyMode).toBe(true);
       expect(safeMcpServer.allowDestructiveOperations).toBe(false);
       expect(safeMcpServer.allowSchemaChanges).toBe(false);
     });
 
-    test('should allow overriding safety settings via environment variables', () => {
-      process.env.SQL_SERVER_READ_ONLY = 'false';
-      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
-      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
-
-      const unsafeMcpServer = new SqlServerMCP();
+    test('should allow overriding safety settings via environment variables', async () => {
+      const unsafeMcpServer = await createTestMcpServer({
+        SQL_SERVER_READ_ONLY: 'false',
+        SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'true',
+        SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'true'
+      });
       expect(unsafeMcpServer.readOnlyMode).toBe(false);
       expect(unsafeMcpServer.allowDestructiveOperations).toBe(true);
       expect(unsafeMcpServer.allowSchemaChanges).toBe(true);
     });
 
-    test('should handle mixed safety configurations', () => {
-      process.env.SQL_SERVER_READ_ONLY = 'false';
-      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
-      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
-
-      const mixedMcpServer = new SqlServerMCP();
+    test('should handle mixed safety configurations', async () => {
+      const mixedMcpServer = await createTestMcpServer({
+        SQL_SERVER_READ_ONLY: 'false',
+        SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'true',
+        SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'false'
+      });
       expect(mixedMcpServer.readOnlyMode).toBe(false);
       expect(mixedMcpServer.allowDestructiveOperations).toBe(true);
       expect(mixedMcpServer.allowSchemaChanges).toBe(false);
@@ -61,31 +108,14 @@ describe('Safety Mechanisms', () => {
   });
 
   describe('Query Validation', () => {
-    beforeEach(() => {
-      // Reset environment to remove any safety overrides
-      process.env = {
-        ...originalEnv,
-        SQL_SERVER_HOST: 'localhost',
-        SQL_SERVER_PORT: '1433',
-        SQL_SERVER_DATABASE: 'master',
-        SQL_SERVER_USER: 'testuser',
-        SQL_SERVER_PASSWORD: 'testpass'
-      };
-
-      // Explicitly delete safety environment variables to ensure defaults
-      delete process.env.SQL_SERVER_READ_ONLY;
-      delete process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS;
-      delete process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES;
-
-      vi.clearAllMocks();
-      vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-
-      // Test with default safe configuration
-      mcpServer = new SqlServerMCP();
+    beforeEach(async () => {
+      setupMcpTest();
+      // Test with default safe configuration (read-only mode enabled)
+      mcpServer = await createTestMcpServer();
     });
 
     afterEach(() => {
-      process.env = originalEnv;
+      resetEnvironment();
     });
 
     test('should allow SELECT queries in read-only mode', () => {
@@ -183,28 +213,18 @@ describe('Safety Mechanisms', () => {
   });
 
   describe('Destructive Operations Control', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+      setupMcpTest();
       // Test with read-only disabled but destructive operations disabled
-      process.env = {
-        ...originalEnv,
-        SQL_SERVER_HOST: 'localhost',
-        SQL_SERVER_PORT: '1433',
-        SQL_SERVER_DATABASE: 'master',
-        SQL_SERVER_USER: 'testuser',
-        SQL_SERVER_PASSWORD: 'testpass',
+      mcpServer = await createTestMcpServer({
         SQL_SERVER_READ_ONLY: 'false',
         SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'false',
         SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'false'
-      };
-
-      vi.clearAllMocks();
-      vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-
-      mcpServer = new SqlServerMCP();
+      });
     });
 
     afterEach(() => {
-      process.env = originalEnv;
+      resetEnvironment();
     });
 
     test('should allow SELECT queries when read-only is disabled', () => {
@@ -253,28 +273,18 @@ describe('Safety Mechanisms', () => {
   });
 
   describe('Schema Changes Control', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+      setupMcpTest();
       // Test with destructive operations enabled but schema changes disabled
-      process.env = {
-        ...originalEnv,
-        SQL_SERVER_HOST: 'localhost',
-        SQL_SERVER_PORT: '1433',
-        SQL_SERVER_DATABASE: 'master',
-        SQL_SERVER_USER: 'testuser',
-        SQL_SERVER_PASSWORD: 'testpass',
+      mcpServer = await createTestMcpServer({
         SQL_SERVER_READ_ONLY: 'false',
         SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'true',
         SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'false'
-      };
-
-      vi.clearAllMocks();
-      vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-
-      mcpServer = new SqlServerMCP();
+      });
     });
 
     afterEach(() => {
-      process.env = originalEnv;
+      resetEnvironment();
     });
 
     test('should allow data operations when schema changes disabled', () => {
@@ -321,28 +331,18 @@ describe('Safety Mechanisms', () => {
   });
 
   describe('Full Access Mode', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+      setupMcpTest();
       // Test with all safety features disabled
-      process.env = {
-        ...originalEnv,
-        SQL_SERVER_HOST: 'localhost',
-        SQL_SERVER_PORT: '1433',
-        SQL_SERVER_DATABASE: 'master',
-        SQL_SERVER_USER: 'testuser',
-        SQL_SERVER_PASSWORD: 'testpass',
+      mcpServer = await createTestMcpServer({
         SQL_SERVER_READ_ONLY: 'false',
         SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'true',
         SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'true'
-      };
-
-      vi.clearAllMocks();
-      vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
-
-      mcpServer = new SqlServerMCP();
+      });
     });
 
     afterEach(() => {
-      process.env = originalEnv;
+      resetEnvironment();
     });
 
     test('should allow SELECT queries in full access mode', () => {

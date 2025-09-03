@@ -211,6 +211,6 @@ This backlog is reviewed and updated:
 
 **📚 References**:
 
-- [Architecture Guide](ARCHITECTURE.md)
+- [Architecture Guide](docs/ARCHITECTURE.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
 - [Development Workflow](WARP.md#development-workflow)
