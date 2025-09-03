@@ -7,9 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+### ⚡ Added - Enhanced Performance Testing Infrastructure
 
-- Placeholder for future changes
+- **🚀 Improved Performance Test Suite**: Complete overhaul of manual performance testing capabilities
+  - `test/manual/improved-performance-test.js` - New primary performance test with persistent MCP process
+  - **Persistent MCP Server**: Single long-running process eliminates connection delays and startup overhead
+  - **Concurrent Query Testing**: Built-in support for concurrent queries with proper listener management
+  - **Comprehensive Metrics**: Response time analysis with min/avg/median/95th/99th percentile reporting
+  - **Error Handling**: Robust error handling with detailed failure analysis and recovery
+  - **Performance Benchmarks**: Reliable performance validation with 100% success rate
+  - **ESLint Compliant**: All code passes linting with proper variable handling
+
+- **📊 Enhanced Performance Test Documentation**:
+  - `docs/MANUAL-PERFORMANCE-TESTING.md` - Complete guide to performance testing methodology
+  - `docs/TESTING-GUIDE.md` - Comprehensive overview of all test categories and usage
+  - **Performance Benchmarks**: Expected response times (50-500ms) and success rates (100%)
+  - **Test Comparison**: Clear guidance on when to use each performance test
+  - **Troubleshooting Guide**: Debug commands and common issue resolution
+
+- **🔗 Warp Integration Performance Test**: Specialized test for Warp MCP server validation
+  - `test/manual/warp-mcp-performance-test.js` - Tests against running Warp MCP instances
+  - **Real Integration Testing**: Validates production Warp setup and performance
+  - **95% Threshold Validation**: Specific testing for connection pool threshold fixes
+  - **Comprehensive Reporting**: Detailed performance analysis with success rate assessment
+
+- **📝 Updated Documentation & Commands**:
+  - Updated `WARP.md` with new performance test commands (`npm run test:manual:performance`)
+  - Enhanced `README.md` references to improved performance testing capabilities
+  - **Help System**: New help script with comprehensive command documentation
+  - **npm Scripts**: Dedicated commands for different performance test scenarios
+
+### 🔧 Fixed - Code Quality
+
+- **ESLint Compliance**: Resolved all unused variable errors across performance test files
+- **Markdown Linting**: Fixed code block language specification issues
+- **Code Quality**: All performance tests now pass pre-commit hooks and validation
 
 ## [1.7.1] - 2025-01-02
 
