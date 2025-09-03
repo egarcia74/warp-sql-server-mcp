@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.7.2] - 2025-01-03
+## [1.7.2] - 2025-09-03
+
+### ⚡ Performance - Query Validation Enhancement
+
+- **🚀 Full Destruction Mode Optimization**: Added intelligent query validation bypass
+  - **Zero-Overhead Mode**: Complete validation bypass when all safety restrictions are disabled
+  - **Smart Detection**: Automatically activates in unrestricted environments
+  - **Performance Impact**: Eliminates AST parsing overhead for maximum throughput
+  - **Safety Preserved**: Full validation remains active when any restrictions enabled
+  - **Compatibility**: 100% backward compatible with existing configurations
+  - **Production Ready**: Validated through comprehensive performance test suite
 
 ### 🐛 Fixed - Configuration Logging
 
