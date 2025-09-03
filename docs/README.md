@@ -32,6 +32,7 @@ Enterprise deployment and integration:
 
 For developers and system administrators:
 
+- **[Performance Guide](PERFORMANCE.md)** - Performance monitoring, benchmarks, and optimization
 - **[Debug Logging Guide](DEBUG-LOGGING.md)** - Troubleshooting and debugging
 - **[Smoke Test Guide](SMOKE-TEST-GUIDE.md)** - Validation and testing procedures
 - **[Release Token Setup](RELEASE-TOKEN-SETUP.md)** - CI/CD and release configuration

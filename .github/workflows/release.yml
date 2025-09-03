@@ -116,6 +116,13 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.should_release == 'true'
     permissions:
+      # CodeQL Token-Permissions: Write permissions required for release operations
+      # This job needs contents:write for both RELEASE_TOKEN and GITHUB_TOKEN fallback scenarios:
+      # - git push tags (line 231): requires repository write access
+      # - actions/create-release (line 237): requires contents write to create GitHub releases
+      # Without write permissions, repositories lacking RELEASE_TOKEN configuration would fail
+      # during tag creation and release publishing, breaking automated release workflows.
+      # This is an intentional security trade-off for release pipeline functionality.
       contents: write  # Required for fallback GITHUB_TOKEN to push tags and create releases
     steps:
       - name: Checkout
