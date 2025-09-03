@@ -12,42 +12,50 @@ npm run test:watch    # Run tests in watch mode
 npm run test:coverage # Run with coverage report
 ```
 
-### Manual Integration Tests
+### Manual Tests - Complete Suite
 
 ```bash
-npm run test:manual                # Run ALL manual tests (performance + security)
+npm run test:manual                # Run ALL manual tests (~45s)
+```
+
+**Execution Order** (when running `npm run test:manual`):
+
+1. `npm run test:manual:performance` - Performance validation (~2s)
+2. `npm run test:manual:warp-performance` - Warp integration (~10s)
+3. `npm run test:manual:phase1` - Read-only security (~10s)
+4. `npm run test:manual:phase2` - DML operations security (~10s)
+5. `npm run test:manual:phase3` - DDL operations security (~10s)
+6. `npm run test:protocol` - MCP protocol validation (~3s)
+
+### Manual Tests - Individual Categories
+
+#### ⚡ Performance Tests
+
+```bash
+npm run test:manual:performance     # ⭐ RECOMMENDED: Fast performance test (~2s)
+npm run test:manual:warp-performance # Warp MCP integration test (~10s)
+```
+
+- **Primary Performance Test**: Single persistent MCP process, concurrent testing, 100% success rate
+- **Warp Integration Test**: Tests against running Warp instance, validates production setup
+- **Prerequisites for Warp test**: Warp must be running with MCP server configured
+
+#### 🔒 Security Tests (Phase-based)
+
+```bash
 npm run test:manual:phase1         # Read-only security tests
 npm run test:manual:phase2         # DML operations tests
 npm run test:manual:phase3         # DDL operations tests
 ```
 
-### Performance Tests
+- **Phase 1**: Validates read-only mode and basic security
+- **Phase 2**: Tests data manipulation (INSERT/UPDATE/DELETE) security
+- **Phase 3**: Tests schema modification (CREATE/DROP/ALTER) security
 
-#### ⚡ Recommended: Improved Performance Test
-
-```bash
-npm run test:manual:performance
-```
-
-- **Use this for**: Regular performance validation
-- **Features**: Single persistent MCP process, fast execution, reliable results
-- **Response times**: 1-500ms typical
-- **Success rate**: 100% (no timeouts)
-
-#### 🔗 Warp MCP Performance Test
+#### 📡 Protocol Tests
 
 ```bash
-npm run test:manual:warp-performance
-```
-
-- **Use this for**: Testing against running Warp MCP instance
-- **Features**: Tests real Warp integration, validates production setup
-- **Prerequisites**: Warp must be running with MCP server configured
-
-### Protocol Tests
-
-```bash
-npm run test:protocol             # MCP protocol smoke test
+npm run test:protocol              # MCP protocol smoke test
 ```
 
 ## 📁 Test File Organization
