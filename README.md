@@ -160,7 +160,7 @@ npm install
 
 - **[Security Guide](docs/SECURITY.md)** - Comprehensive security configuration and threat model
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - Technical deep-dive and system design
-- **[All MCP Tools](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Complete API reference (15 tools)
+- **[All MCP Tools](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Complete API reference (16 tools)
 
 ### **Setup Guides**
 

@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - New MCP Tool: Server Information and Diagnostics
+
+- **🔍 get_server_info Tool**: Added comprehensive server diagnostics and configuration visibility
+  - **Server Status**: Real-time server information (name, version, uptime, platform, Node.js version)
+  - **Configuration Overview**: Complete configuration summary including connection, security, performance, and logging settings
+  - **Security Level Display**: Human-readable security level descriptions ("MAXIMUM (Read-Only)", "MEDIUM (DML Allowed)", "MINIMAL (Full Access)")
+  - **Runtime Statistics**: Performance metrics, connection health, memory usage, and process information
+  - **MCP-Compatible**: Accessible through Warp MCP interface with structured JSON responses
+  - **Optional Log Context**: Include recent logging information when requested
+  - **Troubleshooting Ready**: Perfect for diagnosing configuration issues and server health
+
+### Enhanced - Comprehensive Logging System Overhaul
+
+- **📝 File-Based Logging**: Complete logging system with structured file output
+  - **Main Application Logs**: Configurable via `LOG_FILE` environment variable
+  - **Security Audit Logs**: Dedicated security event logging via `SECURITY_LOG_FILE`
+  - **Winston Integration**: Professional logging with timestamps, metadata, and log levels
+  - **Development & Production**: Works in all environments when file paths are specified
+  - **Structured JSON**: Machine-readable logs with complete query context and performance data
+
+- **🛡️ Enhanced Security Audit Logging**: Comprehensive security event tracking
+  - **Query Blocking Events**: Detailed logs when queries are blocked by security policies
+  - **Policy Violation Details**: Full query text, violation reason, and security classification
+  - **Severity Assessment**: Automatic severity level assignment (LOW, MEDIUM, HIGH, CRITICAL)
+  - **Forensic Ready**: Complete audit trail with precise timestamps and context
+  - **Compliance Support**: SOX, GDPR, HIPAA-ready logging for regulatory requirements
+
+- **⚡ Performance and Query Logging**: Advanced query execution tracking
+  - **Execution Metrics**: Query duration, row counts, database context, and tool attribution
+  - **Security Context**: Security level classification for each query execution
+  - **Error Logging**: Complete error details with stack traces for debugging
+  - **Tool Attribution**: Track which MCP tool executed each query for usage analytics
+
+### Fixed - Configuration Loading and Logging
+
+- **🔧 Configuration Reload System**: Fixed configuration caching issues
+  - **Dynamic Reloading**: ServerConfig now properly reloads environment variables
+  - **Singleton Refresh**: Added reload mechanism to ensure latest configuration values
+  - **Environment Priority**: Proper handling of environment variable precedence
+  - **Development Experience**: Configuration changes take effect without full restarts
+
+- **📊 MCP Log Visibility**: Resolved logging visibility issues in MCP environments
+  - **File Path Configuration**: Logger now properly uses LOG_FILE and SECURITY_LOG_FILE environment variables
+  - **Console Fallback**: Graceful fallback to console logging when file paths not specified
+  - **MCP Compatibility**: Logs visible in both file-based systems and MCP protocol streams
+  - **Debug Enhancement**: Added debug-level logging for troubleshooting configuration issues
+
+### Added - Development Automation Enhancement
+
+- **🔧 Enhanced Backlog Management Scripts**: Fixed issue creation and link management
+  - **Duplicate Prevention**: Improved issue existence checking in `create-backlog-issues.sh`
+  - **Safer Issue Creation**: Added robust title pattern matching for better duplicate detection
+  - **Cleaner Code**: Removed duplicate code blocks and simplified script logic
+  - **User Feedback**: Enhanced status messages with emoji indicators
+  - **Script Reliability**: Fixed error handling and process management
+  - **Development Experience**: Better debugging output and error messages
+
+### Added - New Feature: Environment Configuration Detection
+
+- **⚡ New Backlog Feature**: Added automatic environment configuration detection system
+  - **Pool Size Optimization**: Intelligent connection pool size recommendations
+  - **Security Level Analysis**: Automatic security setting suggestions
+  - **SSL/TLS Configuration**: Detection and validation of encryption settings
+  - **Timeout Optimization**: Performance-based timeout adjustments
+  - **Added to Phase 2**: Scheduled for Q1 2026 implementation
+  - **Created Issue**: [#57](https://github.com/egarcia74/warp-sql-server-mcp/issues/57)
+
 ## [1.7.2] - 2025-09-03
 
 ### ⚡ Performance - Query Validation Enhancement

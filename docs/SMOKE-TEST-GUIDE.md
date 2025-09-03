@@ -363,25 +363,26 @@ With Warp MCP integration, you can validate functionality by:
 
 ### ✅ **Complete Production Validation Results**
 
-#### **All 15 MCP Tools (100% Validated)**
+#### **All 16 MCP Tools (100% Validated)**
 
-| Category         | Tool                        | Status       | Validation         |
-| ---------------- | --------------------------- | ------------ | ------------------ |
-| **Database**     | `list_databases`            | ✅ Validated | All test phases    |
-| **Database**     | `list_tables`               | ✅ Validated | All test phases    |
-| **Schema**       | `describe_table`            | ✅ Validated | All test phases    |
-| **Schema**       | `list_foreign_keys`         | ✅ Validated | All test phases    |
-| **Data**         | `get_table_data`            | ✅ Validated | All test phases    |
-| **Data**         | `export_table_csv`          | ✅ Validated | All test phases    |
-| **Query**        | `execute_query`             | ✅ Validated | All security modes |
-| **Query**        | `explain_query`             | ✅ Validated | All test phases    |
-| **Performance**  | `get_performance_stats`     | ✅ Validated | All test phases    |
-| **Performance**  | `get_query_performance`     | ✅ Validated | All test phases    |
-| **Performance**  | `get_connection_health`     | ✅ Validated | All test phases    |
-| **Optimization** | `get_index_recommendations` | ✅ Validated | All test phases    |
-| **Optimization** | `analyze_query_performance` | ✅ Validated | All test phases    |
-| **Optimization** | `detect_query_bottlenecks`  | ✅ Validated | All test phases    |
-| **Optimization** | `get_optimization_insights` | ✅ Validated | All test phases    |
+| Category         | Tool                        | Status                      | Validation         |
+| ---------------- | --------------------------- | --------------------------- | ------------------ | --------------- |
+| **Database**     | `list_databases`            | ✅ Validated                | All test phases    |
+| **Database**     | `list_tables`               | ✅ Validated                | All test phases    |
+| **Schema**       | `describe_table`            | ✅ Validated                | All test phases    |
+| **Schema**       | `list_foreign_keys`         | ✅ Validated                | All test phases    |
+| **Data**         | `get_table_data`            | ✅ Validated                | All test phases    |
+| **Data**         | `export_table_csv`          | ✅ Validated                | All test phases    |
+| **Query**        | `execute_query`             | ✅ Validated                | All security modes |
+| **Query**        | `explain_query`             | ✅ Validated                | All test phases    |
+| **Performance**  | `get_performance_stats`     | ✅ Validated                | All test phases    |
+| **Performance**  | `get_query_performance`     | ✅ Validated                | All test phases    |
+| **Performance**  | `get_connection_health`     | ✅ Validated                | All test phases    |
+| **Optimization** | `get_index_recommendations` | ✅ Validated                | All test phases    |
+| **Optimization** | `analyze_query_performance` | ✅ Validated                | All test phases    |
+| **Optimization** | `detect_query_bottlenecks`  | ✅ Validated                | All test phases    |
+|                  | **Optimization**            | `get_optimization_insights` | ✅ Validated       | All test phases |
+|                  | **Diagnostics**             | `get_server_info`           | ✅ Validated       | All test phases |
 
 #### **Security System (100% Validated)**
 
@@ -456,7 +457,7 @@ With Warp MCP integration, you can validate functionality by:
 
 ### Pass Criteria
 
-- ✅ All database operations (15 tools) work correctly
+- ✅ All database operations (16 tools) work correctly
 - ✅ Security system properly enforces read-only restrictions
 - ✅ Data retrieval and export functions correctly
 - ✅ Query execution and analysis works reliably
@@ -474,7 +475,7 @@ With Warp MCP integration, you can validate functionality by:
 
 #### ✅ FULLY PRODUCTION READY - COMPREHENSIVELY VALIDATED
 
-- **✅ All 15 MCP Tools**: 100% functional across all security phases
+- **✅ All 16 MCP Tools**: 100% functional across all security phases
 - **✅ Three-Tier Security**: 100% validated across 40 integration tests
 - **✅ MCP Protocol**: 100% compliant through 20 protocol tests
 - **✅ Enterprise Ready**: SSL/TLS, configuration management, error handling

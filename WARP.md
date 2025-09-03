@@ -32,7 +32,7 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 - **SqlServerMCP Class** (`index.js`): Main MCP server implementation that orchestrates all components
 - **🔒 Three-Tier Safety System**: Revolutionary security architecture with graduated safety levels
 - **Query Validation Engine**: Intelligent SQL parsing and security policy enforcement
-- **MCP Tools**: 15 different database operation tools exposed through the MCP interface
+- **MCP Tools**: 16 different database operation tools exposed through the MCP interface
 - **🏗️ Modular Architecture**: Extracted specialized components for better maintainability:
   - **ServerConfig** (`lib/config/server-config.js`): Centralized configuration management
   - **ConnectionManager** (`lib/database/connection-manager.js`): Database connection handling
@@ -66,6 +66,10 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 2. **analyze_query_performance**: Deep analysis of specific queries with optimization suggestions
 3. **detect_query_bottlenecks**: Identify and categorize performance bottlenecks across queries
 4. **get_optimization_insights**: Comprehensive database health analysis and optimization roadmap
+
+#### Server Diagnostics (NEW)
+
+1. **get_server_info**: Get comprehensive server diagnostics including configuration, runtime stats, and logging status
 
 ### Authentication Methods
 

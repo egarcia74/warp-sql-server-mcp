@@ -37,6 +37,7 @@ feature_names=(
     "Database Comparison & Synchronization"
     "Query Optimization & Performance Tools"
     "Natural Language Query Interface"
+    "Automatic Environment Configuration Detection"
 )
 
 search_patterns=(
@@ -47,6 +48,7 @@ search_patterns=(
     "Database Comparison"
     "Query Optimization"
     "Natural Language"
+    "Environment Configuration Detection|Automatic Environment Configuration"
 )
 
 # Find issues for each feature
@@ -74,29 +76,34 @@ echo "💾 Created backup: PRODUCT-BACKLOG.md.backup"
 # Update the backlog document
 echo "🔧 Updating PRODUCT-BACKLOG.md with issue links..."
 
-# Use sed to update the issue links (iterate over indexed arrays)
+# Iterate and update the Issue line under each feature heading using awk (portable, newline-safe)
 for i in "${!feature_names[@]}"; do
     feature="${feature_names[$i]}"
     issue_num="${issue_numbers[$i]}"
     if [[ -n "$issue_num" ]]; then
-        # Update the [Create GitHub Issue] placeholder with actual link
-        sed -i.tmp "s|\*\*Issue\*\*: \[Create GitHub Issue\]|\*\*Issue\*\*: [#$issue_num](https://github.com/egarcia74/warp-sql-server-mcp/issues/$issue_num)|g" PRODUCT-BACKLOG.md
-
-        # If that didn't match, try the more specific pattern
-        case "$feature" in
-            "Enhanced Data Visualization Support")
-                sed -i.tmp "s|### 1. Enhanced Data Visualization Support.*Issue.*: \[Create GitHub Issue\]|### 1. Enhanced Data Visualization Support\n\n- **Issue**: [#$issue_num](https://github.com/egarcia74/warp-sql-server-mcp/issues/$issue_num)|" PRODUCT-BACKLOG.md
-                ;;
-            "Query Builder & Template System")
-                sed -i.tmp "s|### 2. Query Builder & Template System.*Issue.*: \[Create GitHub Issue\]|### 2. Query Builder & Template System\n\n- **Issue**: [#$issue_num](https://github.com/egarcia74/warp-sql-server-mcp/issues/$issue_num)|" PRODUCT-BACKLOG.md
-                ;;
-            "Advanced Data Export Options")
-                sed -i.tmp "s|### 3. Advanced Data Export Options.*Issue.*: \[Create GitHub Issue\]|### 3. Advanced Data Export Options\n\n- **Issue**: [#$issue_num](https://github.com/egarcia74/warp-sql-server-mcp/issues/$issue_num)|" PRODUCT-BACKLOG.md
-                ;;
-            "Real-time Data Monitoring")
-                sed -i.tmp "s|### 4. Real-time Data Monitoring.*Issue.*: \[Create GitHub Issue\]|### 4. Real-time Data Monitoring\n\n- **Issue**: [#$issue_num](https://github.com/egarcia74/warp-sql-server-mcp/issues/$issue_num)|" PRODUCT-BACKLOG.md
-                ;;
-        esac
+        awk -v feature="$feature" -v issue="$issue_num" '
+            BEGIN { in_section=0; updated=0 }
+            {
+                if ($0 ~ /^### /) {
+                    # entering any new section resets flag
+                    in_section=0
+                }
+                if ($0 ~ "^### " feature "$") {
+                    in_section=1
+                    print $0
+                    next
+                }
+                if (in_section == 1 && $0 ~ /^- \*\*Issue\*\*:/) {
+                    print "- **Issue**: [#" issue "](https://github.com/egarcia74/warp-sql-server-mcp/issues/" issue ")"
+                    in_section=2; updated=1
+                    next
+                }
+                print $0
+            }
+            END {
+                # If needed, could handle insertion when no Issue line present
+            }
+        ' PRODUCT-BACKLOG.md > PRODUCT-BACKLOG.md.tmp && mv PRODUCT-BACKLOG.md.tmp PRODUCT-BACKLOG.md
     fi
 done
 
