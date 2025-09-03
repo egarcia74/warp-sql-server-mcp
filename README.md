@@ -192,10 +192,14 @@ npm install
 - **Phase 3 (DDL Operations)**: Full development mode - 10/10 tests ✅
 
 ```bash
+# Quick Start - Get comprehensive help
+npm run help               # Show all commands with detailed descriptions
+
 # Run tests locally
-npm test                    # All automated tests
-npm run test:coverage      # Coverage report
-npm run test:manual        # Manual integration tests (requires live DB)
+npm test                   # All automated unit tests (~10s)
+npm run test:coverage      # Coverage report with detailed metrics
+npm run test:manual        # Manual security tests (~30s, requires live DB)
+npm run test:manual:performance  # ⭐ Fast performance validation (~2s)
 ```
 
 ---

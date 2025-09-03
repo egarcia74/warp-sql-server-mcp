@@ -66,12 +66,23 @@ class SqlServerMCP {
       return { allowed: true, reason: 'Empty query' };
     }
 
-    const securityConfig = this.config.getSecurityConfig();
-
     // Use direct property access for tests that override properties
     const readOnlyMode = this.readOnlyMode;
     const allowDestructiveOperations = this.allowDestructiveOperations;
     const allowSchemaChanges = this.allowSchemaChanges;
+
+    // 🚀 OPTIMIZATION: Skip all parsing when in "full destruction mode"
+    // When all safety restrictions are disabled, bypass expensive parsing
+    if (!readOnlyMode && allowDestructiveOperations && allowSchemaChanges) {
+      return {
+        allowed: true,
+        reason: 'Full destruction mode - all restrictions disabled, query validation bypassed',
+        queryType: 'unrestricted',
+        optimized: true
+      };
+    }
+
+    const securityConfig = this.config.getSecurityConfig();
 
     // First, determine the query type
     const queryType = this._getQueryType(trimmedQuery, securityConfig);
@@ -570,25 +581,11 @@ class SqlServerMCP {
    * @private
    */
   async _logConfigurationWithConnectionInfo() {
-    // If SSL is enabled, try to connect first to get certificate info
-    if (process.env.SQL_SERVER_ENCRYPT === 'true') {
-      try {
-        await this.connectionManager.connect();
-        // Log with connection manager for SSL info
-        this.config.logConfiguration(this.connectionManager);
-      } catch (error) {
-        // Connection failed, just log basic config
-        this.config.logConfiguration();
-        if (process.env.NODE_ENV !== 'test') {
-          console.error(
-            `Note: Could not establish connection for SSL certificate details: ${error.message}`
-          );
-        }
-      }
-    } else {
-      // SSL not enabled, just log basic config
-      this.config.logConfiguration();
-    }
+    // Always log basic config first for clean startup
+    this.config.logConfiguration();
+
+    // Skip SSL certificate details during startup to avoid log corruption
+    // SSL info will be available through get_connection_health tool if needed
   }
 
   // Expose configuration properties for test compatibility
