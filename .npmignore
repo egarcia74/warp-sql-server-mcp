@@ -28,15 +28,15 @@ index.js.backup
 *.backup
 
 # Development documentation
-ARCHITECTURE.md
 MANIFESTO.md
 PERFORMANCE.md
 PRODUCT-BACKLOG.md
 WARP.md
-WARP_SETUP_GUIDE.md
 GIT-COMMIT-CHECKLIST.md
-INTEGRATION-TEST-CHANGES.md
 REFACTORING_PLAN.md
+
+# Documentation moved to docs/ directory (excluded by default)
+# docs/ directory contains non-essential documentation for npm package
 
 # Development tools config
 .prettierignore
@@ -56,4 +56,6 @@ warp-mcp-config.json
 # README.md (included by default)
 # CHANGELOG.md (included by default) 
 # LICENSE (included by default)
-# SECURITY.md (kept for security information)
+# CONTRIBUTING.md (included by default)
+# docs/ directory is excluded - contains comprehensive documentation
+#   but not needed for npm package installation
