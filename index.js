@@ -18,6 +18,7 @@ import { DatabaseToolsHandler } from './lib/tools/handlers/database-tools.js';
 import { PerformanceMonitor } from './lib/utils/performance-monitor.js';
 import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
+import { Logger } from './lib/utils/logger.js';
 
 // Load environment variables
 dotenv.config();
@@ -38,6 +39,17 @@ class SqlServerMCP {
 
     // Initialize components with dependency injection
     this.config = serverConfig;
+    // Force reload to ensure latest environment values are loaded
+    this.config.reload();
+
+    // Initialize logging system
+    this.logger = new Logger({
+      level: this.config.logging?.logLevel || 'info',
+      enableSecurityAudit: this.config.logging?.securityAudit ?? false,
+      logFile: process.env.LOG_FILE,
+      securityLogFile: process.env.SECURITY_LOG_FILE
+    });
+
     this.connectionManager = new ConnectionManager(this.config.getConnectionConfig());
 
     // Initialize performance monitoring
@@ -53,8 +65,7 @@ class SqlServerMCP {
     // Setup tool handlers
     this.setupToolHandlers();
 
-    // Log configuration on startup - will attempt connection to get SSL info if encryption is enabled
-    this._logConfigurationWithConnectionInfo();
+    // Configuration logging will happen after MCP server connects
   }
 
   /**
@@ -158,7 +169,7 @@ class SqlServerMCP {
 
     // Safety check for corrupted security patterns
     if (!securityConfig?.patterns) {
-      console.warn('Security patterns are corrupted, falling back to default behavior');
+      this.logger.warn('Security patterns are corrupted, falling back to default behavior');
       return 'unknown';
     }
 
@@ -284,6 +295,11 @@ class SqlServerMCP {
               content: await this.getOptimizationInsights(args.database)
             };
 
+          case 'get_server_info':
+            return {
+              content: this.getServerInfo(args.include_logs)
+            };
+
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
         }
@@ -303,10 +319,22 @@ class SqlServerMCP {
     // Validate query first
     const validation = this.validateQuery(query);
     if (!validation.allowed) {
+      this.logger.security('QUERY_BLOCKED', 'Query blocked by safety policy', {
+        query: query.substring(0, 200),
+        reason: validation.reason,
+        queryType: validation.queryType
+      });
       throw new Error(`Query blocked by safety policy: ${validation.reason}`);
     }
 
     const startTime = Date.now();
+
+    this.logger.debug('Executing query', {
+      tool: 'execute_query',
+      database,
+      queryLength: query.length,
+      queryType: validation.queryType
+    });
 
     try {
       const pool = await this.connectionManager.connect();
@@ -320,6 +348,14 @@ class SqlServerMCP {
       const result = await request.query(query);
       const executionTime = Date.now() - startTime;
 
+      // Log successful query execution
+      this.logger.logQueryExecution(
+        'execute_query',
+        query,
+        { database, securityLevel: validation.queryType },
+        { success: true, duration: executionTime, rowsAffected: result.rowsAffected }
+      );
+
       // Track performance (don't let performance monitoring failures break query execution)
       try {
         this.performanceMonitor.recordQuery({
@@ -331,7 +367,7 @@ class SqlServerMCP {
           timestamp: new Date(startTime)
         });
       } catch (perfError) {
-        console.warn('Performance monitoring failed:', perfError.message);
+        this.logger.warn('Performance monitoring failed', { error: perfError.message });
       }
 
       // Format results
@@ -350,6 +386,14 @@ class SqlServerMCP {
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
+      // Log failed query execution
+      this.logger.logQueryExecution(
+        'execute_query',
+        query,
+        { database, securityLevel: validation.queryType },
+        { success: false, duration: executionTime, error }
+      );
+
       // Track failed query (don't let performance monitoring failures break error handling)
       try {
         this.performanceMonitor.recordQuery({
@@ -362,7 +406,9 @@ class SqlServerMCP {
           timestamp: new Date(startTime)
         });
       } catch (perfError) {
-        console.warn('Performance monitoring failed during error handling:', perfError.message);
+        this.logger.warn('Performance monitoring failed during error handling', {
+          error: perfError.message
+        });
       }
 
       throw new McpError(ErrorCode.InternalError, `Query execution failed: ${error.message}`);
@@ -571,9 +617,103 @@ class SqlServerMCP {
     ];
   }
 
+  /**
+   * Get server configuration and status information
+   * @param {boolean} includeLogs - Whether to include recent log entries
+   * @returns {Array} Formatted server information
+   */
+  getServerInfo(includeLogs = false) {
+    const connectionSummary = this.config.getConnectionSummary();
+    const performanceStats = this.performanceMonitor.getStats();
+    const connectionHealth = this.getConnectionHealth();
+
+    const serverInfo = {
+      server: {
+        name: 'warp-sql-server-mcp',
+        version: '1.6.2',
+        status: 'Running',
+        uptime: process.uptime(),
+        nodeVersion: process.version,
+        platform: process.platform
+      },
+      configuration: {
+        connection: {
+          server: connectionSummary.server,
+          database: connectionSummary.database,
+          authType: connectionSummary.authType,
+          encrypt: connectionSummary.encrypt,
+          trustCert: connectionSummary.trustCert,
+          pool: `${connectionSummary.poolMin}-${connectionSummary.poolMax} connections`
+        },
+        security: {
+          readOnlyMode: this.readOnlyMode,
+          allowDestructiveOperations: this.allowDestructiveOperations,
+          allowSchemaChanges: this.allowSchemaChanges,
+          securityLevel: this.readOnlyMode
+            ? 'MAXIMUM (Read-Only)'
+            : this.allowSchemaChanges
+              ? 'MINIMAL (Full Access)'
+              : this.allowDestructiveOperations
+                ? 'MEDIUM (DML Allowed)'
+                : 'HIGH (DDL Blocked)'
+        },
+        performance: {
+          enabled: this.config.performanceMonitoring.enabled,
+          slowQueryThreshold: `${this.config.performanceMonitoring.slowQueryThreshold}ms`,
+          maxMetricsHistory: this.config.performanceMonitoring.maxMetricsHistory,
+          samplingRate: `${this.config.performanceMonitoring.samplingRate * 100}%`
+        },
+        logging: {
+          level: this.logger.config.level,
+          securityAudit: this.logger.config.enableSecurityAudit,
+          responseFormat: this.config.logging.responseFormat
+        },
+        streaming: {
+          enabled: this.config.streaming.enabled,
+          batchSize: this.config.streaming.batchSize,
+          maxMemoryMB: this.config.streaming.maxMemoryMB,
+          maxResponseSizeMB: Math.round(this.config.streaming.maxResponseSize / 1048576)
+        }
+      },
+      runtime: {
+        performance: performanceStats,
+        connection: connectionHealth,
+        environment: {
+          nodeEnv: process.env.NODE_ENV || 'production',
+          memoryUsage: process.memoryUsage(),
+          pid: process.pid
+        }
+      }
+    };
+
+    if (includeLogs) {
+      // Add some recent log information
+      serverInfo.logging = {
+        note: 'MCP server logs are sent to stdout/stderr and captured by Warp',
+        logLocation: 'Warp MCP log file (see Warp settings)',
+        structuredLogging: 'Winston-based with timestamps and metadata',
+        securityAudit: this.logger.config.enableSecurityAudit ? 'Enabled' : 'Disabled'
+      };
+    }
+
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success: true,
+            data: serverInfo
+          },
+          null,
+          2
+        )
+      }
+    ];
+  }
+
   // Configuration and utility methods
   printConfigurationSummary() {
-    this.config.logConfiguration();
+    this.config.logConfiguration(this.connectionManager, this.logger);
   }
 
   /**
@@ -581,8 +721,8 @@ class SqlServerMCP {
    * @private
    */
   async _logConfigurationWithConnectionInfo() {
-    // Always log basic config first for clean startup
-    this.config.logConfiguration();
+    // Log configuration using console.log for MCP compatibility (Warp captures this)
+    this.config.logConfiguration(null, null); // null logger = use console.log
 
     // Skip SSL certificate details during startup to avoid log corruption
     // SSL info will be available through get_connection_health tool if needed
@@ -615,7 +755,10 @@ class SqlServerMCP {
     await this.server.connect(transport);
 
     if (process.env.NODE_ENV !== 'test') {
-      console.error('SQL Server MCP server running on stdio');
+      this.logger.info('SQL Server MCP server running on stdio');
+
+      // Log configuration after MCP server is connected so Warp captures it
+      this._logConfigurationWithConnectionInfo();
     }
   }
 }
@@ -624,7 +767,8 @@ class SqlServerMCP {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const server = new SqlServerMCP();
   server.run().catch(error => {
-    console.error('Server error:', error);
+    // Use console.error here since logger might not be initialized yet
+    console.error('Server startup error:', error);
     process.exit(1);
   });
 }

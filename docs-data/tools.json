@@ -1,7 +1,7 @@
 {
-  "version": "1.7.1",
-  "generatedAt": "2025-09-02T10:55:29.754Z",
-  "toolsCount": 15,
+  "version": "1.7.2",
+  "generatedAt": "2025-09-03T14:28:21.159Z",
+  "toolsCount": 16,
   "tools": [
     {
       "name": "execute_query",
@@ -373,6 +373,23 @@
         "advanced": {
           "database": "MyDatabase",
           "analysis_period": "optional_value"
+        }
+      }
+    },
+    {
+      "name": "get_server_info",
+      "description": "Get MCP server configuration, status, and logging information",
+      "parameters": {
+        "include_logs": {
+          "type": "boolean",
+          "description": "Include recent log entries (optional, defaults to false)"
+        }
+      },
+      "required": [],
+      "examples": {
+        "basic": {},
+        "advanced": {
+          "include_logs": true
         }
       }
     }
