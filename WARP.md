@@ -411,6 +411,21 @@ npm run precommit
 npm run prepush
 ```
 
+#### Git Workflow Documentation
+
+Comprehensive checklists for quality git workflows:
+
+- **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)**: Pre-commit quality gates and guidelines
+  - Documents actual pre-commit hook behavior (ESLint --fix, Prettier --write, Markdownlint --fix, npm test)
+  - Conventional commits format with examples
+  - Manual verification steps for security and change review
+  - Generic guidelines for consistent development workflow
+- **[Git Push Checklist](docs/GIT-PUSH-CHECKLIST.md)**: Pre-push validation and deployment guidelines
+  - Documents automated pre-push checks (full test suite, coverage, security audit, linting)
+  - Troubleshooting guidance for common push failures
+  - Advanced push options and force push safety guidelines
+  - Pull request creation and post-push validation steps
+
 ### Environment Setup
 
 ```bash

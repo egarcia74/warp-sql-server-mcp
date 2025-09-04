@@ -173,6 +173,8 @@ npm install
 - **[Software Engineering Manifesto](MANIFESTO.md)** - Philosophy and engineering practices
 - **[Testing Guide](test/README.md)** - Comprehensive test documentation (535+ tests)
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and standards
+- **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
+- **[Git Push Checklist](docs/GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
 
 ---
 
