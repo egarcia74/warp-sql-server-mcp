@@ -7,9 +7,173 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [1.7.3] - 2025-01-03
 
-- Placeholder for future changes
+### Added - New MCP Tool: Server Information and Diagnostics
+
+- **🔍 get_server_info Tool**: Added comprehensive server diagnostics and configuration visibility
+  - **Server Status**: Real-time server information (name, version, uptime, platform, Node.js version)
+  - **Configuration Overview**: Complete configuration summary including connection, security, performance, and logging settings
+  - **Security Level Display**: Human-readable security level descriptions ("MAXIMUM (Read-Only)", "MEDIUM (DML Allowed)", "MINIMAL (Full Access)")
+  - **Runtime Statistics**: Performance metrics, connection health, memory usage, and process information
+  - **MCP-Compatible**: Accessible through Warp MCP interface with structured JSON responses
+  - **Optional Log Context**: Include recent logging information when requested
+  - **Troubleshooting Ready**: Perfect for diagnosing configuration issues and server health
+
+### Enhanced - Comprehensive Logging System Overhaul
+
+- **📝 File-Based Logging**: Complete logging system with structured file output
+  - **Main Application Logs**: Configurable via `LOG_FILE` environment variable
+  - **Security Audit Logs**: Dedicated security event logging via `SECURITY_LOG_FILE`
+  - **Winston Integration**: Professional logging with timestamps, metadata, and log levels
+  - **Development & Production**: Works in all environments when file paths are specified
+  - **Structured JSON**: Machine-readable logs with complete query context and performance data
+
+- **🛡️ Enhanced Security Audit Logging**: Comprehensive security event tracking
+  - **Query Blocking Events**: Detailed logs when queries are blocked by security policies
+  - **Policy Violation Details**: Full query text, violation reason, and security classification
+  - **Severity Assessment**: Automatic severity level assignment (LOW, MEDIUM, HIGH, CRITICAL)
+  - **Forensic Ready**: Complete audit trail with precise timestamps and context
+  - **Compliance Support**: SOX, GDPR, HIPAA-ready logging for regulatory requirements
+
+- **⚡ Performance and Query Logging**: Advanced query execution tracking
+  - **Execution Metrics**: Query duration, row counts, database context, and tool attribution
+  - **Security Context**: Security level classification for each query execution
+  - **Error Logging**: Complete error details with stack traces for debugging
+  - **Tool Attribution**: Track which MCP tool executed each query for usage analytics
+
+### Fixed - Configuration Loading and Logging
+
+- **🔧 Configuration Reload System**: Fixed configuration caching issues
+  - **Dynamic Reloading**: ServerConfig now properly reloads environment variables
+  - **Singleton Refresh**: Added reload mechanism to ensure latest configuration values
+  - **Environment Priority**: Proper handling of environment variable precedence
+  - **Development Experience**: Configuration changes take effect without full restarts
+
+- **📊 MCP Log Visibility**: Resolved logging visibility issues in MCP environments
+  - **File Path Configuration**: Logger now properly uses LOG_FILE and SECURITY_LOG_FILE environment variables
+  - **Console Fallback**: Graceful fallback to console logging when file paths not specified
+  - **MCP Compatibility**: Logs visible in both file-based systems and MCP protocol streams
+  - **Debug Enhancement**: Added debug-level logging for troubleshooting configuration issues
+
+### Added - Development Automation Enhancement
+
+- **🔧 Enhanced Backlog Management Scripts**: Fixed issue creation and link management
+  - **Duplicate Prevention**: Improved issue existence checking in `create-backlog-issues.sh`
+  - **Safer Issue Creation**: Added robust title pattern matching for better duplicate detection
+  - **Cleaner Code**: Removed duplicate code blocks and simplified script logic
+  - **User Feedback**: Enhanced status messages with emoji indicators
+  - **Script Reliability**: Fixed error handling and process management
+  - **Development Experience**: Better debugging output and error messages
+
+### Added - New Feature: Environment Configuration Detection
+
+- **⚡ New Backlog Feature**: Added automatic environment configuration detection system
+  - **Pool Size Optimization**: Intelligent connection pool size recommendations
+  - **Security Level Analysis**: Automatic security setting suggestions
+  - **SSL/TLS Configuration**: Detection and validation of encryption settings
+  - **Timeout Optimization**: Performance-based timeout adjustments
+  - **Added to Phase 2**: Scheduled for Q1 2026 implementation
+  - **Created Issue**: [#57](https://github.com/egarcia74/warp-sql-server-mcp/issues/57)
+
+## [1.7.2] - 2025-09-03
+
+### ⚡ Performance - Query Validation Enhancement
+
+- **🚀 Full Destruction Mode Optimization**: Added intelligent query validation bypass
+  - **Zero-Overhead Mode**: Complete validation bypass when all safety restrictions are disabled
+  - **Smart Detection**: Automatically activates in unrestricted environments
+  - **Performance Impact**: Eliminates AST parsing overhead for maximum throughput
+  - **Safety Preserved**: Full validation remains active when any restrictions enabled
+  - **Compatibility**: 100% backward compatible with existing configurations
+  - **Production Ready**: Validated through comprehensive performance test suite
+
+### 🐛 Fixed - Configuration Logging
+
+- **🔧 Resolved Configuration Display Corruption**: Fixed critical bug where configuration logging was fragmented and repeated
+  - **Root Cause**: Multiple line-by-line `console.error` calls during startup causing interleaved output
+  - **Impact**: Clean, professional configuration display with proper formatting and visual sections
+  - **Solution**: Consolidated configuration logging into single batched output call
+  - **Result**: One cohesive configuration block with proper emoji sections and no repeated lines
+  - **Production Ready**: Configuration output now appears professional and production-ready
+  - **MCP Protocol**: Eliminates log interference with MCP protocol communication during handshake
+
+### 🚀 Performance - Query Validation Optimization
+
+- **⚡ Full Destruction Mode Optimization**: Revolutionary performance improvement for unrestricted environments
+  - **Smart Validation Bypass**: When all safety restrictions are disabled
+    (`SQL_SERVER_READ_ONLY=false`, `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true`, `SQL_SERVER_ALLOW_SCHEMA_CHANGES=true`),
+    query validation is completely bypassed
+  - **Eliminated AST Parsing Overhead**: Skips expensive `node-sql-parser` AST analysis for unrestricted queries
+  - **Performance Gains**: Immediate query approval with `optimized: true` flag for monitoring
+  - **Preserved Security Boundaries**: Validation still applies when any restrictions are enabled
+  - **Zero Breaking Changes**: Existing security configurations continue to work as expected
+
+### 🐛 Fixed - DDL Query Validation Bug
+
+- **🔧 Resolved DDL Parsing Inconsistencies**: Fixed critical bug where complex DDL operations were incorrectly blocked
+  - **Root Cause**: AST parsing was inconsistently validating DDL statements even when `SQL_SERVER_ALLOW_SCHEMA_CHANGES=true`
+  - **Impact**: Complex CREATE TABLE, ALTER TABLE, DROP TABLE, CREATE INDEX operations now work reliably
+  - **Edge Cases Fixed**: Multi-line DDL, constraints, defaults, foreign keys, stored procedures, triggers
+  - **Validation Logic**: Improved query type detection and security boundary enforcement
+
+### ✅ Enhanced - Enterprise DDL Support
+
+- **🏗️ Complete DDL Operation Support**: All SQL Server DDL operations now fully functional
+  - **CREATE Operations**: Tables, indexes, views, stored procedures, functions, triggers
+  - **ALTER Operations**: Table modifications, column additions/changes
+  - **DROP Operations**: Complete object removal capabilities
+  - **Complex DDL**: Multi-line statements, constraints, foreign keys, defaults
+  - **Advanced Features**: User-defined functions, triggers, audit tables
+
+### 🧪 Validated - Advanced SQL Server Features
+
+- **📊 Comprehensive Feature Testing**: Extensive validation of enterprise SQL Server capabilities
+  - **Window Functions**: ROW_NUMBER, DENSE_RANK, LAG, LEAD, PERCENT_RANK
+  - **Common Table Expressions (CTEs)**: Multi-level CTEs with complex aggregations
+  - **MERGE Statements**: Complete upsert operations with WHEN MATCHED/NOT MATCHED
+  - **PIVOT Operations**: Dynamic data pivoting with aggregation
+  - **JSON Functions**: JSON_VALUE for data extraction from JSON columns
+  - **Table Variables**: DECLARE @table syntax with INSERT/SELECT operations
+  - **Transaction Management**: BEGIN/COMMIT/ROLLBACK with error handling
+  - **Bulk Operations**: Multi-row INSERT statements with VALUES clause
+  - **Unicode Support**: Full emoji and special character support in results
+
+### ⚡ Added - Enhanced Performance Testing Infrastructure
+
+- **🚀 Improved Performance Test Suite**: Complete overhaul of manual performance testing capabilities
+  - `test/manual/improved-performance-test.js` - New primary performance test with persistent MCP process
+  - **Persistent MCP Server**: Single long-running process eliminates connection delays and startup overhead
+  - **Concurrent Query Testing**: Built-in support for concurrent queries with proper listener management
+  - **Comprehensive Metrics**: Response time analysis with min/avg/median/95th/99th percentile reporting
+  - **Error Handling**: Robust error handling with detailed failure analysis and recovery
+  - **Performance Benchmarks**: Reliable performance validation with 100% success rate
+  - **ESLint Compliant**: All code passes linting with proper variable handling
+
+- **📊 Enhanced Performance Test Documentation**:
+  - `docs/MANUAL-PERFORMANCE-TESTING.md` - Complete guide to performance testing methodology
+  - `docs/TESTING-GUIDE.md` - Comprehensive overview of all test categories and usage
+  - **Performance Benchmarks**: Expected response times (50-500ms) and success rates (100%)
+  - **Test Comparison**: Clear guidance on when to use each performance test
+  - **Troubleshooting Guide**: Debug commands and common issue resolution
+
+- **🔗 Warp Integration Performance Test**: Specialized test for Warp MCP server validation
+  - `test/manual/warp-mcp-performance-test.js` - Tests against running Warp MCP instances
+  - **Real Integration Testing**: Validates production Warp setup and performance
+  - **95% Threshold Validation**: Specific testing for connection pool threshold fixes
+  - **Comprehensive Reporting**: Detailed performance analysis with success rate assessment
+
+- **📝 Updated Documentation & Commands**:
+  - Updated `WARP.md` with new performance test commands (`npm run test:manual:performance`)
+  - Enhanced `README.md` references to improved performance testing capabilities
+  - **Help System**: New help script with comprehensive command documentation
+  - **npm Scripts**: Dedicated commands for different performance test scenarios
+
+### 🔧 Fixed - Code Quality
+
+- **ESLint Compliance**: Resolved all unused variable errors across performance test files
+- **Markdown Linting**: Fixed code block language specification issues
+- **Code Quality**: All performance tests now pass pre-commit hooks and validation
 
 ## [1.7.1] - 2025-01-02
 

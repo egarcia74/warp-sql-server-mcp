@@ -10,9 +10,9 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ## 📊 Backlog Summary
 
-- **Total Features**: 17
+- **Total Features**: 18
 - **High Priority**: 4 features
-- **Medium Priority**: 7 features
+- **Medium Priority**: 8 features
 - **Low Priority**: 3 features
 - **Completed Features**: 1 feature ✅
 - **Technical Debt**: 2 features
@@ -53,7 +53,20 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ## 📊 MEDIUM PRIORITY Features
 
-### 5. Database Comparison & Synchronization
+### 5. Automatic Environment Configuration Detection
+
+- **Issue**: [#57](https://github.com/egarcia74/warp-sql-server-mcp/issues/57)
+- **Business Value**: ⭐⭐⭐⭐ | **Complexity**: 🔧🔧
+- **Phase**: 2 (3-6 months)
+- **Status**: 🤔 Research
+- **Description**: Add intelligent configuration detection and recommendations for optimal environment settings based on usage patterns, connection health, and performance metrics. Features:
+  - Connection pool size optimization
+  - Security level recommendations
+  - SSL/TLS configuration detection
+  - Timeout settings optimization
+  - Performance-based configuration adjustments
+
+### 6. Database Comparison & Synchronization
 
 - **Issue**: [#20](https://github.com/egarcia74/warp-sql-server-mcp/issues/20)
 - **Business Value**: ⭐⭐⭐⭐ | **Complexity**: 🔧🔧🔧🔧
@@ -165,6 +178,7 @@ This document maintains our prioritized feature backlog, organized by business v
 - Enhanced Data Visualization Support (#1)
 - Query Optimization & Performance Tools (#7)
 - Data Quality & Validation Framework (#8)
+- Automatic Environment Configuration Detection (#18)
 
 ### Phase 3: Medium-term (6-12 months) - Q2-Q3 2026
 
