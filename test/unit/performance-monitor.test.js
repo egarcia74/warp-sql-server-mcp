@@ -619,8 +619,8 @@ describe('PerformanceMonitor', () => {
     test('should detect connection pool near capacity', () => {
       monitor.metrics.poolStats = {
         totalConnections: 10,
-        activeConnections: 9, // 90% utilization
-        idleConnections: 1,
+        activeConnections: 10, // 100% utilization (>= 95% threshold)
+        idleConnections: 0,
         pendingRequests: 1,
         errors: 0
       };
@@ -664,23 +664,22 @@ describe('PerformanceMonitor', () => {
     test('should calculate health score correctly', () => {
       monitor.metrics.poolStats = {
         totalConnections: 10,
-        activeConnections: 9, // High utilization (-20 points)
-        idleConnections: 1,
-        pendingRequests: 8, // High pending requests (-20 points)
-        errors: 3 // Some errors (-6 points)
+        activeConnections: 10, // 100% utilization (>= 95% threshold)
+        idleConnections: 0,
+        pendingRequests: 8, // High pending requests
+        errors: 3 // Some errors
       };
 
       const health = monitor.assessPoolHealth();
 
-      // Let's calculate the actual score:
+      // Calculate the actual score with 95% threshold:
       // Starting at 100
-      // - 20 * 2 (number of issues: 'Connection pool near capacity' + 'High number of pending requests') = -40
+      // - 20 * 2 (issues: 'Connection pool near capacity' + 'High number of pending requests') = -40
       // - 10 (utilization > 0.8) = -10
       // - 10 (utilization > 0.9) = -10
       // - min(3 * 2, 30) = -6 (errors)
       // Total: 100 - 40 - 10 - 10 - 6 = 34
-      // But the test showed it returned 44, so let me check actual calculation
-      expect(health.score).toBe(44);
+      expect(health.score).toBe(34);
     });
   });
 

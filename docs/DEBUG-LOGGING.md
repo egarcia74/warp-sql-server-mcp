@@ -34,6 +34,37 @@ This enables:
 - Additional debug information in tool responses
 - More verbose connection and query logging
 
+## Server Information and Diagnostics
+
+### get_server_info MCP Tool
+
+The server includes a comprehensive diagnostics tool accessible through the MCP interface:
+
+```json
+// MCP tool call
+{
+  "name": "get_server_info",
+  "arguments": {
+    "include_logs": true // Optional: include logging context
+  }
+}
+```
+
+This tool provides:
+
+- **Server Status**: Real-time information (name, version, uptime, platform, Node.js version)
+- **Configuration Overview**: Complete configuration summary including connection, security, performance, and logging settings
+- **Security Level Display**: Human-readable security levels ("MAXIMUM (Read-Only)", "MEDIUM (DML Allowed)", "MINIMAL (Full Access)")
+- **Runtime Statistics**: Performance metrics, connection health, memory usage, and process information
+- **Optional Log Context**: Recent logging information when requested
+
+**Perfect for:**
+
+- Troubleshooting configuration issues
+- Verifying server health and performance
+- Understanding current security settings
+- Debugging MCP connectivity problems
+
 ## Log Analysis Tools
 
 ### Pretty-Print MCP Logs Script

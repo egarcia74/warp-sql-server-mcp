@@ -32,7 +32,7 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 - **SqlServerMCP Class** (`index.js`): Main MCP server implementation that orchestrates all components
 - **🔒 Three-Tier Safety System**: Revolutionary security architecture with graduated safety levels
 - **Query Validation Engine**: Intelligent SQL parsing and security policy enforcement
-- **MCP Tools**: 15 different database operation tools exposed through the MCP interface
+- **MCP Tools**: 16 different database operation tools exposed through the MCP interface
 - **🏗️ Modular Architecture**: Extracted specialized components for better maintainability:
   - **ServerConfig** (`lib/config/server-config.js`): Centralized configuration management
   - **ConnectionManager** (`lib/database/connection-manager.js`): Database connection handling
@@ -66,6 +66,10 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 2. **analyze_query_performance**: Deep analysis of specific queries with optimization suggestions
 3. **detect_query_bottlenecks**: Identify and categorize performance bottlenecks across queries
 4. **get_optimization_insights**: Comprehensive database health analysis and optimization roadmap
+
+#### Server Diagnostics (NEW)
+
+1. **get_server_info**: Get comprehensive server diagnostics including configuration, runtime stats, and logging status
 
 ### Authentication Methods
 
@@ -345,8 +349,12 @@ npm run test:manual:phase1    # Phase 1: Read-only security (20 tests)
 npm run test:manual:phase2    # Phase 2: DML operations (10 tests)
 npm run test:manual:phase3    # Phase 3: DDL operations (10 tests)
 
+# Run performance tests
+npm run test:manual:performance      # ⭐ Fast performance test (~2s, 100% success)
+npm run test:manual:warp-performance # Warp MCP integration test (~10s)
+
 # Run MCP protocol tests (requires live database)
-npm run test:protocol        # MCP client-server communication (20 tests)
+npm run test:manual:protocol # MCP client-server communication (20 tests)
 ```
 
 ### Code Quality and Formatting
@@ -607,6 +615,35 @@ In Warp's MCP settings, you must provide ALL environment variables:
   "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "true"
 }
 ```
+
+### 🚀 Performance Optimization - Full Destruction Mode
+
+**⚡ Revolutionary Performance Enhancement**: When all three safety restrictions are disabled, the MCP server automatically enables "Full Destruction Mode" optimization:
+
+```bash
+SQL_SERVER_READ_ONLY=false                      # Enable write operations
+SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true    # Allow data modifications
+SQL_SERVER_ALLOW_SCHEMA_CHANGES=true           # Allow schema changes
+```
+
+**Performance Benefits:**
+
+- **⚡ Zero Query Validation Overhead**: Completely bypasses expensive AST parsing with `node-sql-parser`
+- **🚀 Immediate Query Approval**: Direct execution without security analysis
+- **📊 Monitoring Flag**: Adds `optimized: true` flag to validation responses for tracking
+- **🔒 Preserved Security**: Validation still applies when any restriction is enabled
+- **🛡️ Enterprise DDL Support**: All complex DDL operations work reliably:
+  - Multi-line CREATE/ALTER/DROP statements
+  - Constraints, foreign keys, and defaults
+  - Stored procedures, functions, and triggers
+  - Advanced SQL Server features (CTEs, window functions, MERGE, PIVOT)
+
+**Use Cases for Full Destruction Mode:**
+
+- **🏗️ Database Development**: Full DDL capabilities for schema changes
+- **📊 Data Engineering**: Complex ETL operations and data transformations
+- **🧪 Testing Environments**: Rapid prototyping and testing workflows
+- **🔬 Data Science**: Unrestricted analytical queries and model development
 
 ### Configuration Methods
 
@@ -874,7 +911,7 @@ npm run test:manual:phase2            # DML operation validation
 npm run test:manual:phase3            # DDL operation validation
 
 # End-to-end protocol validation
-npm run test:protocol                 # MCP client-server communication
+npm run test:manual:protocol          # MCP client-server communication
 ```
 
 #### **3. Development Best Practices**

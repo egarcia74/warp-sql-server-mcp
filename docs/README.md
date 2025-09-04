@@ -47,7 +47,7 @@ Automated workflows and processes:
 
 Complete reference materials:
 
-- **[API Tools Reference](tools.html)** - Complete MCP tools documentation (15 tools)
+- **[API Tools Reference](tools.html)** - Complete MCP tools documentation (16 tools)
 - **[Documentation Site](index.html)** - Generated documentation landing page
 
 ## 📋 Documentation Organization
