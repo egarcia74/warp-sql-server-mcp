@@ -411,6 +411,21 @@ npm run precommit
 npm run prepush
 ```
 
+#### Git Workflow Documentation
+
+Comprehensive checklists for quality git workflows:
+
+- **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)**: Pre-commit quality gates and guidelines
+  - Documents actual pre-commit hook behavior (ESLint --fix, Prettier --write, Markdownlint --fix, npm test)
+  - Conventional commits format with examples
+  - Manual verification steps for security and change review
+  - Generic guidelines for consistent development workflow
+- **[Git Push Checklist](docs/GIT-PUSH-CHECKLIST.md)**: Pre-push validation and deployment guidelines
+  - Documents automated pre-push checks (full test suite, coverage, security audit, linting)
+  - Troubleshooting guidance for common push failures
+  - Advanced push options and force push safety guidelines
+  - Pull request creation and post-push validation steps
+
 ### Environment Setup
 
 ```bash
@@ -421,91 +436,48 @@ cp .env.example .env
 
 ## Environment Configuration
 
-### Environment Variables (Required)
+> **📖 Complete Reference**: See **[docs/ENV-VARS.md](docs/ENV-VARS.md)** for comprehensive documentation of all environment variables, defaults, context-aware behavior, and configuration examples.
 
-- `SQL_SERVER_HOST`: SQL Server hostname (default: localhost)
-- `SQL_SERVER_PORT`: SQL Server port (default: 1433)
-- `SQL_SERVER_DATABASE`: Initial database to connect to (default: master)
+### Essential Variables (Quick Reference)
 
-### Authentication Variables
+**Connection Settings:**
 
-For SQL Server Authentication:
+- `SQL_SERVER_HOST`, `SQL_SERVER_PORT`, `SQL_SERVER_DATABASE` - Server connection details
+- `SQL_SERVER_USER`, `SQL_SERVER_PASSWORD` - SQL Server authentication (leave empty for Windows Auth)
+- `SQL_SERVER_DOMAIN` - Windows domain for NTLM authentication
 
-- `SQL_SERVER_USER`: Database username
-- `SQL_SERVER_PASSWORD`: Database password
+**SSL/TLS Settings:**
 
-For Windows Authentication (leave user/password empty):
+- `SQL_SERVER_ENCRYPT` - Enable SSL encryption (default: `true`)
+- `SQL_SERVER_TRUST_CERT` - Context-aware SSL certificate trust (auto-detects dev/prod environments)
 
-- `SQL_SERVER_DOMAIN`: Optional Windows domain
+**Connection Pool:**
 
-### Security Options
+- `SQL_SERVER_CONNECT_TIMEOUT_MS`, `SQL_SERVER_REQUEST_TIMEOUT_MS` - Timeout settings
+- `SQL_SERVER_MAX_RETRIES`, `SQL_SERVER_RETRY_DELAY_MS` - Retry configuration
+- `SQL_SERVER_POOL_MAX`, `SQL_SERVER_POOL_MIN` - Connection pool sizing
 
-- `SQL_SERVER_ENCRYPT`: Enable SSL encryption (default: false)
-- `SQL_SERVER_TRUST_CERT`: Trust server certificate (default: true)
+### 🔒 Security Configuration (Three-Tier Safety System)
 
-### Timeout and Retry Configuration
+**⚠️ IMPORTANT**: Starting with v1.3.0, the MCP server defaults to maximum security.
 
-- `SQL_SERVER_CONNECT_TIMEOUT_MS`: Connection timeout in milliseconds (default: 10000)
-- `SQL_SERVER_REQUEST_TIMEOUT_MS`: Query request timeout in milliseconds (default: 30000)
-- `SQL_SERVER_MAX_RETRIES`: Maximum connection retry attempts (default: 3)
-- `SQL_SERVER_RETRY_DELAY_MS`: Delay between retries in milliseconds (default: 1000)
+> **📖 Complete Security Guide**: See **[docs/ENV-VARS.md#database-security-settings](docs/ENV-VARS.md#database-security-settings)** for detailed security configuration options.
 
-### Connection Pool Settings
+**Quick Security Levels:**
 
-- `SQL_SERVER_POOL_MAX`: Maximum pool connections (default: 10)
-- `SQL_SERVER_POOL_MIN`: Minimum pool connections (default: 0)
-- `SQL_SERVER_POOL_IDLE_TIMEOUT_MS`: Pool idle timeout in milliseconds (default: 30000)
+| Variable                                  | Default | Impact                      |
+| ----------------------------------------- | ------- | --------------------------- |
+| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed |
+| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Blocks INSERT/UPDATE/DELETE |
+| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER    |
 
-### 🔒 Security Configuration (NEW - CRITICAL)
+**Common Configurations:**
 
-**⚠️ BREAKING CHANGE**: Starting with v1.3.0, the MCP server defaults to maximum security.
+- **🔒 Maximum Security** (Default): All three restrictions enabled
+- **📆 Data Analysis**: Enable destructive operations, block schema changes
+- **🛠️ Full Development**: Disable all restrictions (use with caution)
 
-#### Three-Tier Safety System
-
-| Variable                                  | Default | Security Level | Impact                      |
-| ----------------------------------------- | ------- | -------------- | --------------------------- |
-| `SQL_SERVER_READ_ONLY`                    | `true`  | **SECURE**     | Only SELECT queries allowed |
-| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | **SECURE**     | Blocks INSERT/UPDATE/DELETE |
-| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | **SECURE**     | Blocks CREATE/DROP/ALTER    |
-
-#### Security Configurations
-
-**🔒 Maximum Security (Default - Production Recommended):**
-
-```bash
-SQL_SERVER_READ_ONLY=true                      # Only SELECT allowed
-SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false  # No data modifications
-SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
-```
-
-**📊 Data Analysis Mode:**
-
-```bash
-SQL_SERVER_READ_ONLY=false                     # Enable write operations
-SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true   # Allow data modifications
-SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # Block schema changes
-```
-
-**🛠️ Full Development Mode (Use with Caution):**
-
-```bash
-SQL_SERVER_READ_ONLY=false                     # Enable write operations
-SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true   # Allow data modifications
-SQL_SERVER_ALLOW_SCHEMA_CHANGES=true          # Allow schema changes
-```
-
-#### Security Status Monitoring
-
-The MCP server displays security status at startup:
-
-```bash
-# Maximum Security (Default)
-Security: 🔒 SECURE (RO, DML-, DDL-)
-
-# Unsafe Configuration
-Security: ⚠️ UNSAFE (RW, DML+, DDL+)
-WARNING: Read-write mode, DML allowed, DDL allowed - consider stricter settings for production
-```
+See **[docs/ENV-VARS.md#security-configuration-examples](docs/ENV-VARS.md#security-configuration-examples)** for complete configuration examples.
 
 ## Warp Integration
 
@@ -1326,14 +1298,13 @@ describe('new_tool security validation', () => {
 
 - Environment variables used for all sensitive connection details
 - No hardcoded credentials or connection strings
-- Optional SSL/TLS encryption support (disable for local development)
+- **Context-aware SSL/TLS encryption** with smart defaults for development vs production
 - Least privilege principle recommended for database accounts
 - Proper authentication method selection (SQL Server vs Windows/NTLM)
 
 ### Common Configuration Issues
 
 - **NTLM Authentication Errors**: Ensure proper authentication method is selected based on provided credentials
-- **Connection Timeouts**: Disable SSL encryption (`SQL_SERVER_ENCRYPT=false`) for local development
-- **Missing Environment Variables**: MCP servers require explicit configuration -
-  `.env` files are not loaded
+- **SSL Certificate Issues**: The MCP server now automatically detects development environments and trusts certificates appropriately. For production deployments, set `SQL_SERVER_TRUST_CERT=false` explicitly.
+- **Missing Environment Variables**: MCP servers require explicit configuration - `.env` files are not loaded
 - **First Request Delays**: Connection pool initialization at startup eliminates timeout issues

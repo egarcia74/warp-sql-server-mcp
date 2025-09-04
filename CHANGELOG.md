@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Enhanced - Documentation System & Configuration Management
+
+- **📖 Centralized Environment Variables Documentation**: Created comprehensive ENV-VARS.md reference
+  - **Single Source of Truth**: Complete reference for all 33+ environment variables with defaults, descriptions, and examples
+  - **Context-Aware SSL Documentation**: Detailed explanation of smart SSL certificate trust behavior for development vs production
+  - **Security Configuration Examples**: Clear examples for Maximum Security, Data Analysis, and Full Development modes
+  - **Cross-Referenced Documentation**: Updated all docs to reference ENV-VARS.md instead of duplicating variable details
+  - **Enhanced User Experience**: Progressive disclosure - basic setup with links to comprehensive configuration when needed
+
+- **🔧 Clean Configuration Files**: Overhauled .env.example and warp-mcp-config.json for better usability
+  - **Smart Defaults Approach**: Variables using defaults are commented out but documented with their default values
+  - **Required Variables Highlighted**: Only essential connection settings (HOST, PORT, DATABASE, USER, PASSWORD) uncommented
+  - **SSL Auto-Detection Explained**: Clear documentation of development vs production environment detection
+  - **CLI Tool Integration**: warp-mcp-config.json prominently features recommended CLI tool setup method
+  - **Security Configuration Examples**: Well-organized sections showing different security levels with warnings
+
+- **📋 Comprehensive MCP Tools Documentation Updates**: Fixed inconsistencies and completed tool listings
+  - **Complete 16-Tool Inventory**: Both quickstart guides now show all available MCP tools including get_server_info
+  - **Consistent Tool Lists**: QUICKSTART.md and QUICKSTART-VSCODE.md have identical, comprehensive tool listings
+  - **Organized Categories**: Tools grouped into Database Operations (8 tools) and Performance & Monitoring (8 tools)
+  - **Central Documentation References**: Both guides link to complete MCP Tools Reference for detailed API documentation
+  - **Natural Language Support**: VS Code guide shows both natural language commands and technical tool names
+
+### Added - Developer Experience Enhancements
+
+- **📋 Git Workflow Checklists**: Added comprehensive pre-commit and pre-push validation checklists
+  - **Git Commit Checklist** (`docs/GIT-COMMIT-CHECKLIST.md`): Reflects actual pre-commit hook behavior
+    - Documents automated checks: ESLint --fix, Prettier --write, Markdownlint --fix, npm test
+    - Includes conventional commits format with examples
+    - Manual verification steps for security and change review
+    - Generic, reusable guidelines for any feature development
+  - **Git Push Checklist** (`docs/GIT-PUSH-CHECKLIST.md`): Comprehensive pre-push validation guide
+    - Documents automated pre-push checks: full test suite, coverage, security audit, linting, format check, link check
+    - Advanced push guidance with troubleshooting for common failures
+    - Force push safety guidelines and pull request creation process
+    - Post-push validation steps and CI/CD monitoring
+  - **Documentation Index**: Added both checklists to `docs/README.md` DevOps & Automation section
+
+### Changed - Documentation Organization
+
+- **🗂️ File Organization Improvements**: Moved development documentation to appropriate locations
+  - **Moved GIT-COMMIT-CHECKLIST.md** from root to `docs/` directory for better organization
+  - **Updated .npmignore**: Removed explicit reference since `docs/` directory is excluded by default
+  - **Enhanced README.md**: Added Git checklists to Developer Resources section
+  - **Cleaner Project Root**: Reduces clutter while maintaining accessibility to developers
+  - **NPM Package Optimization**: Files automatically excluded from npm packages via docs/ exclusion
+
 ## [1.7.3] - 2025-01-03
 
 ### Added - New MCP Tool: Server Information and Diagnostics

@@ -296,7 +296,9 @@
     "VARCHAR",
     "recordset",
     "GETDATE",
-    "openrowset"
+    "openrowset",
+    "TOCTOU",
+    "Northwind"
   ],
   "flagWords": [],
   "ignorePaths": [

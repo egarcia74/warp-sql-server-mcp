@@ -53,7 +53,7 @@ Ideal for terminal-based workflows and command-line database interactions.
 - 📊 **Performance insights** - Query optimization and bottleneck detection
 - ☁️ **Cloud-ready** - AWS/Azure secret management
 - 🚀 **Streaming support** - Memory-efficient handling of large datasets
-- 📈 **15 Database Tools** - Complete database operations through AI
+- 📈 **16 Database Tools** - Complete database operations through AI
 
 ---
 
@@ -77,17 +77,20 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 
 ## 📋 Essential Environment Variables
 
-| Variable                | Required     | Default     | Description              |
-| ----------------------- | ------------ | ----------- | ------------------------ |
-| `SQL_SERVER_HOST`       | Yes          | `localhost` | SQL Server hostname      |
-| `SQL_SERVER_PORT`       | Yes          | `1433`      | SQL Server port          |
-| `SQL_SERVER_DATABASE`   | Yes          | `master`    | Initial database         |
-| `SQL_SERVER_USER`       | For SQL Auth | -           | Database username        |
-| `SQL_SERVER_PASSWORD`   | For SQL Auth | -           | Database password        |
-| `SQL_SERVER_ENCRYPT`    | No           | `false`     | Enable SSL/TLS           |
-| `SQL_SERVER_TRUST_CERT` | No           | `true`      | Trust server certificate |
+> **📖 Complete Reference**: See **[docs/ENV-VARS.md](docs/ENV-VARS.md)** for comprehensive documentation of all environment variables, defaults, and context-aware behavior.
 
-> **💡 Tip**: For Windows Authentication, leave `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD` empty.
+| Variable                | Required     | Default         | Description              |
+| ----------------------- | ------------ | --------------- | ------------------------ |
+| `SQL_SERVER_HOST`       | Yes          | `localhost`     | SQL Server hostname      |
+| `SQL_SERVER_PORT`       | Yes          | `1433`          | SQL Server port          |
+| `SQL_SERVER_DATABASE`   | Yes          | `master`        | Initial database         |
+| `SQL_SERVER_USER`       | For SQL Auth | -               | Database username        |
+| `SQL_SERVER_PASSWORD`   | For SQL Auth | -               | Database password        |
+| `SQL_SERVER_ENCRYPT`    | No           | `true`          | Enable SSL/TLS           |
+| `SQL_SERVER_TRUST_CERT` | No           | _context-aware_ | Trust server certificate |
+
+> **💡 Authentication**: For Windows Authentication, leave `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD` empty.
+> **💡 SSL Certificates**: `SQL_SERVER_TRUST_CERT` automatically adapts to your environment (trusts in development, requires valid certificates in production).
 
 ---
 
@@ -158,6 +161,7 @@ npm install
 
 ### **User Guides**
 
+- **[Environment Variables Reference](docs/ENV-VARS.md)** - Complete environment variables documentation
 - **[Security Guide](docs/SECURITY.md)** - Comprehensive security configuration and threat model
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - Technical deep-dive and system design
 - **[All MCP Tools](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Complete API reference (16 tools)
@@ -173,6 +177,8 @@ npm install
 - **[Software Engineering Manifesto](MANIFESTO.md)** - Philosophy and engineering practices
 - **[Testing Guide](test/README.md)** - Comprehensive test documentation (535+ tests)
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and standards
+- **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
+- **[Git Push Checklist](docs/GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
 
 ---
 
@@ -180,8 +186,8 @@ npm install
 
 **✅ PRODUCTION-VALIDATED**: This MCP server has been **fully tested** through:
 
-- **535+ Unit Tests**: All MCP tools, security boundaries, error scenarios
-- **40 Integration Tests**: Live database validation across all security phases
+- **618+ Comprehensive Tests**: All MCP tools, security boundaries, error scenarios (392 unit + 40 manual integration + 20 protocol tests)
+- **40 Manual Integration Tests**: Live database validation across all security phases
 - **20 Protocol Tests**: End-to-end MCP communication validation
 - **100% Success Rate**: All security phases validated in production scenarios
 
@@ -305,7 +311,7 @@ showcases rigorous engineering standards that can be applied to any production s
 
 **Key Engineering Highlights:**
 
-- 🔬 **535+ Comprehensive Tests** covering all functionality and edge cases
+- 🔬 **618+ Comprehensive Tests** covering all functionality and edge cases
 - 🛡️ **Multi-layered Security** with defense-in-depth architecture
 - 📊 **Production Observability** with structured logging and performance monitoring
 - ⚡ **Enterprise Reliability** featuring connection pooling and graceful error handling

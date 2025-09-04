@@ -171,6 +171,7 @@
     "codebases",
     "refactoring",
     "refactor",
+    "roadmaps",
     "hotfix",
     "rollback",
     "rollout",
@@ -297,7 +298,9 @@
     "VARCHAR",
     "recordset",
     "GETDATE",
-    "openrowset"
+    "openrowset",
+    "TOCTOU",
+    "Northwind"
   ],
   "flagWords": [],
   "ignorePaths": [

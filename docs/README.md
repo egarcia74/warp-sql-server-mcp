@@ -42,6 +42,8 @@ For developers and system administrators:
 Automated workflows and processes:
 
 - **[Dependabot Auto-Triage](DEPENDABOT-AUTO-TRIAGE.md)** - Dependency management automation
+- **[Git Commit Checklist](GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
+- **[Git Push Checklist](GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
 
 ## 📊 API Documentation
 

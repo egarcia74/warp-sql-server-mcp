@@ -31,7 +31,6 @@ index.js.backup
 MANIFESTO.md
 PRODUCT-BACKLOG.md
 WARP.md
-GIT-COMMIT-CHECKLIST.md
 
 # Documentation moved to docs/ directory (excluded by default)
 # docs/ directory contains non-essential documentation for npm package

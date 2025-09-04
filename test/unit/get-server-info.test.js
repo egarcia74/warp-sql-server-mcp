@@ -97,7 +97,7 @@ describe('get_server_info Tool', () => {
       expect(connectionConfig.database).toBe('testdb');
       expect(connectionConfig.authType).toBe('SQL Server Authentication');
       expect(connectionConfig.encrypt).toBe(true); // Default is true
-      expect(connectionConfig.trustCert).toBe(false); // Default is false when encrypt is true
+      expect(connectionConfig.trustCert).toBe(true); // Context-aware default: true for development environments (NODE_ENV=test, localhost)
       expect(connectionConfig.pool).toMatch(/\d+-\d+ connections/);
     });
 
