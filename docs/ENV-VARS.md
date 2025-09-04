@@ -101,8 +101,8 @@ The SQL Server MCP uses environment variables for all configuration. This approa
 - **Default**: **Context-Aware** (see below)
 - **Description**: Whether to trust the SQL Server's SSL certificate
 - **Context-Aware Behavior**:
-  - **Development environments**: `true` (localhost, private IPs, NODE_ENV=development/test)
-  - **Production environments**: `false` (public domains, NODE_ENV=production)
+  - **Development environments**: `true` (localhost/127.0.0.1 always; private IPs/.local only with NODE_ENV=development/test)
+  - **Production environments**: `false` (all other scenarios, including private IPs without explicit NODE_ENV)
 - **Override Options**:
   - `true` (always trust - useful for self-signed certificates)
   - `false` (never trust - requires valid CA-signed certificates)
@@ -110,23 +110,32 @@ The SQL Server MCP uses environment variables for all configuration. This approa
 
 #### Context-Aware SSL Certificate Detection
 
-The system automatically detects your environment and applies appropriate SSL certificate trust defaults:
+The system uses a **conservative security approach** and automatically detects your environment to apply appropriate SSL certificate trust defaults:
 
-**🔧 Development Environment Indicators** (auto-trust certificates):
+**🔧 Strong Development Indicators** (always auto-trust certificates):
 
 - `NODE_ENV=development` or `NODE_ENV=test`
 - `SQL_SERVER_HOST=localhost` or `SQL_SERVER_HOST=127.0.0.1`
-- `SQL_SERVER_HOST` ends with `.local`
-- `SQL_SERVER_HOST` is a private IP address (RFC 1918):
+
+**⚠️ Weak Development Indicators** (only trust with explicit NODE_ENV):
+
+- `SQL_SERVER_HOST` ends with `.local` **AND** `NODE_ENV=development/test`
+- `SQL_SERVER_HOST` is a private IP address **AND** `NODE_ENV=development/test`:
   - `192.168.x.x` ranges
   - `10.x.x.x` ranges
   - `172.16.x.x` through `172.31.x.x` ranges
 
-**🔒 Production Environment Indicators** (require valid certificates):
+**🔒 Production Environment (default)** (require valid certificates):
 
-- `NODE_ENV=production`
-- Public domain names
-- Public IP addresses
+- All other scenarios, including:
+  - `NODE_ENV=production` or no NODE_ENV set
+  - Public domain names and IP addresses
+  - Private IPs without explicit NODE_ENV=development/test
+  - `.local` domains without explicit NODE_ENV=development/test
+
+**Security Note**: The system errs on the side of security. Private networks and `.local` domains are **NOT**
+automatically trusted unless you explicitly set `NODE_ENV=development` or `NODE_ENV=test`. This prevents
+accidental certificate trust in cloud production environments using private IP addresses.
 
 ## Database Security Settings
 

@@ -27,7 +27,7 @@
         "_SQL_SERVER_DOMAIN": "your_domain",
 
         "_comment_ssl": "=== SSL/TLS Security - SMART DEFAULTS (Usually No Changes Needed) ===",
-        "_note_ssl_auto": "SSL auto-detects: localhost/private IPs = trust certs, public domains = require valid certs",
+        "_note_ssl_auto": "SSL auto-detects: localhost = always trust; private IPs = trust only with NODE_ENV=development/test",
         "_SQL_SERVER_ENCRYPT": "true (default: true - always enabled for security)",
         "_SSL_SERVER_TRUST_CERT_auto": "Leave unset for smart defaults based on hostname detection",
         "_SSL_SERVER_TRUST_CERT_explicit_prod": "Uncomment next line for production: never trust certificates",
