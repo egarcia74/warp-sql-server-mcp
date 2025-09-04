@@ -229,7 +229,7 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false
 
 # RECOMMENDED SECURITY SETTINGS
 SQL_SERVER_ENCRYPT=true
-SQL_SERVER_TRUST_CERT=false
+SQL_SERVER_TRUST_CERT=false  # Explicit for production - don't rely on auto-detection
 
 # CONNECTION LIMITS
 SQL_SERVER_CONNECT_TIMEOUT_MS=5000
@@ -246,7 +246,7 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false
 
 # SECURITY SETTINGS
 SQL_SERVER_ENCRYPT=true
-SQL_SERVER_TRUST_CERT=false
+SQL_SERVER_TRUST_CERT=false  # Explicit for staging - ensure production-level SSL
 ```
 
 #### Development Environment
@@ -259,7 +259,7 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
 
 # RELAXED SETTINGS FOR DEVELOPMENT
 SQL_SERVER_ENCRYPT=false
-SQL_SERVER_TRUST_CERT=true
+# SQL_SERVER_TRUST_CERT=true  # Usually not needed - auto-detects development environment
 ```
 
 ### Security Checklist
@@ -269,13 +269,87 @@ Before deploying to production:
 - [ ] **Verify Read-Only Mode**: Confirm `SQL_SERVER_READ_ONLY=true`
 - [ ] **Test Security Enforcement**: Verify DML/DDL operations are blocked
 - [ ] **Enable Encryption**: Set `SQL_SERVER_ENCRYPT=true` for remote connections
-- [ ] **Validate Certificates**: Set `SQL_SERVER_TRUST_CERT=false` for production
+- [ ] **Validate Certificates**: Set `SQL_SERVER_TRUST_CERT=false` for production (see SSL Certificate Trust section)
 - [ ] **Configure Timeouts**: Set appropriate timeout values for your environment
 - [ ] **Review Connection Limits**: Configure connection pool settings
 - [ ] **Test Error Handling**: Verify blocked operations return clear error messages
 - [ ] **Monitor Logs**: Ensure security warnings appear in MCP logs
 - [ ] **Document Configuration**: Record security settings in deployment documentation
 - [ ] **Regular Reviews**: Schedule periodic security configuration reviews
+
+## 🔐 SSL Certificate Trust Security
+
+### Smart Environment Detection
+
+The MCP server uses **conservative security defaults** for SSL certificate trust through intelligent
+environment detection. This prevents accidental certificate trust in production environments.
+
+> **📖 Complete SSL Configuration**: See **[ENV-VARS.md#ssl-tls-security-settings](ENV-VARS.md#ssltls-security-settings)** for comprehensive SSL configuration options.
+
+#### Trust Behavior
+
+**🔧 Strong Development Indicators** (always auto-trust certificates):
+
+- `NODE_ENV=development` or `NODE_ENV=test`
+- `SQL_SERVER_HOST=localhost` or `SQL_SERVER_HOST=127.0.0.1`
+
+**⚠️ Weak Development Indicators** (only trust with explicit NODE_ENV):
+
+- `SQL_SERVER_HOST` ends with `.local` **AND** `NODE_ENV=development/test`
+- Private IP addresses **AND** `NODE_ENV=development/test`:
+  - `192.168.x.x` ranges
+  - `10.x.x.x` ranges
+  - `172.16.x.x` through `172.31.x.x` ranges
+
+**🔒 Production Environment (default)** (require valid certificates):
+
+- All other scenarios, including:
+  - `NODE_ENV=production` or no NODE_ENV set
+  - Public domain names and IP addresses
+  - Private IPs without explicit NODE_ENV=development/test
+  - `.local` domains without explicit NODE_ENV=development/test
+
+#### Security Rationale
+
+**Why Conservative Defaults Matter:**
+
+1. **Cloud Production Safety**: Prevents accidental certificate trust in cloud environments
+   using private IP addresses (AWS VPC, Azure vNET, GCP VPC)
+2. **Corporate Network Security**: `.local` domains require explicit development marking
+3. **Container Deployment Safety**: Internal networking doesn't automatically trust certificates
+4. **Zero-Trust Principle**: Explicit configuration required for relaxed security
+
+**Examples:**
+
+```bash
+# ✅ TRUSTED (Strong indicators)
+NODE_ENV=development SQL_SERVER_HOST=localhost
+NODE_ENV=test SQL_SERVER_HOST=127.0.0.1
+
+# ✅ TRUSTED (Weak indicator + explicit NODE_ENV)
+NODE_ENV=development SQL_SERVER_HOST=db.local
+NODE_ENV=development SQL_SERVER_HOST=192.168.1.100
+
+# ❌ NOT TRUSTED (Production defaults)
+SQL_SERVER_HOST=db.local                    # Missing NODE_ENV
+SQL_SERVER_HOST=192.168.1.100              # Could be cloud production
+NODE_ENV=production SQL_SERVER_HOST=db.local # Explicit production
+```
+
+#### Explicit Override Options
+
+For explicit control, override the smart detection:
+
+```bash
+# Force trust certificates (development only)
+SQL_SERVER_TRUST_CERT=true
+
+# Force require valid certificates (production)
+SQL_SERVER_TRUST_CERT=false
+```
+
+**⚠️ Security Warning**: Only use `SQL_SERVER_TRUST_CERT=true` in isolated development
+environments with self-signed certificates.
 
 ## 🔧 Configuration Validation
 
