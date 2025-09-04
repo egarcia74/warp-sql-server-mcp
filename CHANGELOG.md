@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.4] - 2025-09-04
+
 ### Enhanced - Documentation System & Configuration Management
 
 - **📖 Centralized Environment Variables Documentation**: Created comprehensive ENV-VARS.md reference
@@ -53,6 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Enhanced README.md**: Added Git checklists to Developer Resources section
   - **Cleaner Project Root**: Reduces clutter while maintaining accessibility to developers
   - **NPM Package Optimization**: Files automatically excluded from npm packages via docs/ exclusion
+
+### Security - Dependency Updates
+
+- **🔒 Security Updates**: Updated multiple dependencies for security and compatibility
+  - **dotenv**: Updated from 17.2.1 to 17.2.2 (security patch)
+  - **@modelcontextprotocol/sdk**: Updated from 0.7.0 to 1.17.5 (major compatibility update)
+  - **@eslint-community/eslint-utils**: Updated for security improvements
+  - **All updates**: Validated through comprehensive test suite with 100% success rate
 
 ## [1.7.3] - 2025-01-03
 
