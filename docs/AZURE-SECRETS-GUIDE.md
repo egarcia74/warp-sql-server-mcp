@@ -23,6 +23,8 @@ Before you begin, ensure you have:
 - **Service Principal** or **Managed Identity** configured
 - **Node.js 18+** and the MCP project dependencies installed
 
+> **📖 Environment Variables Reference**: For complete documentation of all environment variables, defaults, and configuration options, see **[ENV-VARS.md](ENV-VARS.md)**.
+
 ## Azure Key Vault Setup
 
 ### 1. Create Azure Key Vault (if not exists)

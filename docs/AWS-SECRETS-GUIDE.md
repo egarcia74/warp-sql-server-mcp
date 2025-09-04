@@ -23,6 +23,8 @@ Before you begin, ensure you have:
 - **Node.js 18+** and the MCP project dependencies installed
 - **AWS SDK credentials** configured
 
+> **📖 Environment Variables Reference**: For complete documentation of all environment variables, defaults, and configuration options, see **[ENV-VARS.md](ENV-VARS.md)**.
+
 ## AWS Secrets Manager Setup
 
 ### 1. Create Secrets Using AWS CLI

@@ -402,7 +402,7 @@ describe('ConnectionManager', () => {
           database: 'master',
           options: expect.objectContaining({
             encrypt: true,
-            trustServerCertificate: false,
+            trustServerCertificate: true, // Now true for development environments (NODE_ENV=test)
             enableArithAbort: true
           })
         })
@@ -560,6 +560,154 @@ describe('ConnectionManager', () => {
       expect(devConfig.options.trustServerCertificate).toBe(true);
       // SSL info should not be present when encryption is disabled
       expect(devHealth.ssl).toBeUndefined();
+    });
+
+    test('should detect development environments correctly', () => {
+      const baseTestEnv = {
+        SQL_SERVER_HOST: 'localhost',
+        SQL_SERVER_PORT: '1433',
+        SQL_SERVER_DATABASE: 'testdb',
+        SQL_SERVER_USER: 'testuser',
+        SQL_SERVER_PASSWORD: 'testpass'
+      };
+
+      const testCases = [
+        // Development indicators
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'development' },
+          expected: true,
+          desc: 'NODE_ENV=development'
+        },
+        { env: { ...baseTestEnv, NODE_ENV: 'test' }, expected: true, desc: 'NODE_ENV=test' },
+        {
+          env: { ...baseTestEnv, SQL_SERVER_HOST: 'localhost' },
+          expected: true,
+          desc: 'localhost'
+        },
+        {
+          env: { ...baseTestEnv, SQL_SERVER_HOST: '127.0.0.1' },
+          expected: true,
+          desc: '127.0.0.1'
+        },
+        {
+          env: { ...baseTestEnv, SQL_SERVER_HOST: 'db.local' },
+          expected: true,
+          desc: '.local domain'
+        },
+        {
+          env: { ...baseTestEnv, SQL_SERVER_HOST: '192.168.1.10' },
+          expected: true,
+          desc: '192.168.x.x'
+        },
+        { env: { ...baseTestEnv, SQL_SERVER_HOST: '10.0.0.5' }, expected: true, desc: '10.x.x.x' },
+        {
+          env: { ...baseTestEnv, SQL_SERVER_HOST: '172.16.0.1' },
+          expected: true,
+          desc: '172.16-31.x.x'
+        },
+        {
+          env: { ...baseTestEnv, SQL_SERVER_HOST: '172.31.255.255' },
+          expected: true,
+          desc: '172.16-31.x.x boundary'
+        },
+
+        // Production indicators
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'production', SQL_SERVER_HOST: 'prod.company.com' },
+          expected: false,
+          desc: 'NODE_ENV=production with domain'
+        },
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'production', SQL_SERVER_HOST: 'db.company.com' },
+          expected: false,
+          desc: 'public domain'
+        },
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'production', SQL_SERVER_HOST: '203.0.113.10' },
+          expected: false,
+          desc: 'public IP'
+        },
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'production', SQL_SERVER_HOST: '172.15.0.1' },
+          expected: false,
+          desc: 'public 172.x range'
+        },
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'production', SQL_SERVER_HOST: '172.32.0.1' },
+          expected: false,
+          desc: 'public 172.x range'
+        }
+      ];
+
+      testCases.forEach(testCase => {
+        setupEnvironment(testCase.env);
+        const manager = new ConnectionManager();
+        expect(manager._isLikelyDevEnvironment()).toBe(
+          testCase.expected,
+          `Failed for ${testCase.desc}: expected ${testCase.expected}`
+        );
+      });
+    });
+
+    test('should use context-aware SSL certificate defaults', () => {
+      const baseTestEnv = {
+        SQL_SERVER_HOST: 'localhost',
+        SQL_SERVER_PORT: '1433',
+        SQL_SERVER_DATABASE: 'testdb',
+        SQL_SERVER_USER: 'testuser',
+        SQL_SERVER_PASSWORD: 'testpass'
+      };
+
+      const testCases = [
+        // Explicit settings (should override environment detection)
+        {
+          env: {
+            ...baseTestEnv,
+            SQL_SERVER_TRUST_CERT: 'true',
+            NODE_ENV: 'production',
+            SQL_SERVER_HOST: 'prod.company.com'
+          },
+          expected: true,
+          desc: 'explicit true overrides production detection'
+        },
+        {
+          env: { ...baseTestEnv, SQL_SERVER_TRUST_CERT: 'false', NODE_ENV: 'development' },
+          expected: false,
+          desc: 'explicit false overrides development detection'
+        },
+
+        // Environment-based defaults
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'development' },
+          expected: true,
+          desc: 'development environment auto-trusts certificates'
+        },
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'production', SQL_SERVER_HOST: 'prod.company.com' },
+          expected: false,
+          desc: 'production environment requires valid certificates'
+        },
+        {
+          env: { ...baseTestEnv, SQL_SERVER_HOST: 'localhost' },
+          expected: true,
+          desc: 'localhost auto-trusts certificates'
+        },
+        {
+          env: { ...baseTestEnv, NODE_ENV: 'production', SQL_SERVER_HOST: 'db.company.com' },
+          expected: false,
+          desc: 'public domain requires valid certificates'
+        }
+      ];
+
+      testCases.forEach(testCase => {
+        setupEnvironment(testCase.env);
+        const manager = new ConnectionManager();
+        const config = manager._buildConnectionConfig();
+        expect(config.options.trustServerCertificate).toBe(
+          testCase.expected,
+          `Failed for ${testCase.desc}: expected ${testCase.expected}`
+        );
+      });
     });
   });
 

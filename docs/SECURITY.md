@@ -217,6 +217,8 @@ if (!fs.existsSync(file)) {
 
 ### Environment-Specific Recommendations
 
+> **📖 Complete Environment Variables Reference**: See **[ENV-VARS.md](ENV-VARS.md)** for comprehensive documentation of all environment variables and their defaults.
+
 #### Production Environment
 
 ```bash
