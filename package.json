@@ -64,7 +64,7 @@
   "dependencies": {
     "@azure/identity": "^4.11.1",
     "@azure/keyvault-secrets": "^4.10.0",
-    "@modelcontextprotocol/sdk": "^1.17.4",
+    "@modelcontextprotocol/sdk": "^1.17.5",
     "aws-sdk": "^2.1692.0",
     "dotenv": "^17.2.1",
     "mssql": "^11.0.1",
