@@ -31,7 +31,21 @@ _These happen automatically when you `git push` - push will be blocked if any fa
 - [ ] **Check remote**: `git remote -v` (verify pushing to correct repository)
 - [ ] **Check ahead/behind**: `git status` (check if you need to pull first)
 
-### 3. **Commit History Review**
+### 3. **Documentation Impact Assessment**
+
+- [ ] **Check for documentation changes**: `git diff --name-only origin/main...HEAD | grep -E '\.(md)$'`
+- [ ] **Review documentation consistency**:
+  - [ ] **README.md**: Update if features, installation, or usage changed
+  - [ ] **WARP.md**: Update if MCP tools, architecture, or development workflow changed
+  - [ ] **CHANGELOG.md**: Add entries for user-facing changes
+  - [ ] **Related docs**: Check if changes affect other documentation files
+- [ ] **Assess broader documentation needs**:
+  - [ ] Do API changes require docs/tools.html regeneration?
+  - [ ] Do new environment variables need ENV-VARS.md updates?
+  - [ ] Do architectural changes need WARP.md updates?
+  - [ ] Do new features need example usage documentation?
+
+### 4. **Commit History Review**
 
 - [ ] **Review commits**: `git log --oneline -5` (check recent commits)
 - [ ] **Verify commit messages**: Ensure they follow conventional commit format
@@ -39,7 +53,7 @@ _These happen automatically when you `git push` - push will be blocked if any fa
 
 ## 🚀 Push Process
 
-### 4. **Push Commands**
+### 5. **Push Commands**
 
 ```bash
 # Standard push to feature branch
@@ -55,7 +69,7 @@ git push --force-with-lease origin feature/your-feature-name
 git push origin main --tags
 ```
 
-### 5. **First-time push** (new branch)
+### 6. **First-time push** (new branch)
 
 ```bash
 # Set upstream and push
@@ -64,13 +78,13 @@ git push -u origin feature/your-feature-name
 
 ## 🔍 Post-Push Validation
 
-### 6. **Verify Push Success**
+### 7. **Verify Push Success**
 
 - [ ] **Check GitHub**: Confirm commit appears in the repository
 - [ ] **Monitor CI/CD**: Watch GitHub Actions for any pipeline failures
 - [ ] **Check status checks**: Ensure all required checks pass
 
-### 7. **Pull Request** (if pushing to feature branch)
+### 8. **Pull Request** (if pushing to feature branch)
 
 - [ ] **Create PR**: From your feature branch to main/develop
 - [ ] **Add clear title**: Use conventional commit format if applicable
@@ -161,7 +175,7 @@ The automated pre-push hook will verify:
 
 - [ ] **Integration tests pass**: `npm run test:manual`
 - [ ] **Performance tests pass**: `npm run test:manual:performance`
-- [ ] **Documentation updated**: If APIs or features changed
+- [ ] **Documentation consistency**: Complete Documentation Impact Assessment (Section 3)
 - [ ] **Environment variables**: `.env.example` updated if needed
 
 ## 🔧 Commands Quick Reference
@@ -184,6 +198,9 @@ git branch -vv                      # Show local branches with tracking
 git remote -v                       # Show remotes
 git status                         # Check current state
 git log --oneline -5               # Recent commits
+
+# Documentation checks
+git diff --name-only origin/main...HEAD | grep -E '\.(md)$' # Check for doc changes
 ```
 
 ---
