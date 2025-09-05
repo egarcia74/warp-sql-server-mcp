@@ -709,7 +709,7 @@ class SqlServerMCP {
         structuredLogging: 'Winston-based with timestamps and metadata',
         mainLogFile: this.logger.config.logFile,
         securityLogFile: this.logger.config.securityLogFile,
-        developmentMode: this.logger._isDevelopmentEnvironment(),
+        developmentMode: process.env.NODE_ENV !== 'production',
         outputTargets: {
           console: 'stdout/stderr (captured by Warp)',
           fileLogging: this.logger.config.logFile ? 'Enabled' : 'Console only',

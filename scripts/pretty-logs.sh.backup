@@ -1,0 +1,382 @@
+#!/bin/bash
+
+# Flexible log pretty-printer for MCP server logs
+# Supports multiple input methods and cross-platform usage
+#
+# Usage:
+#   ./scripts/pretty-logs.sh [FILE|SHORTCUT] [OPTIONS]
+#   cat log_file | ./scripts/pretty-logs.sh [OPTIONS]
+#
+# Examples:
+#   ./scripts/pretty-logs.sh ./logs/server.log
+#   ./scripts/pretty-logs.sh server                # Short for ./logs/server.log
+#   ./scripts/pretty-logs.sh audit                # Short for ./logs/audit.log
+#   cat ./logs/server.log | ./scripts/pretty-logs.sh
+#   tail -f ./logs/server.log | ./scripts/pretty-logs.sh --compact
+#
+# Options:
+#   --compact     Show compact summaries only (no detailed JSON)
+#   --follow      Follow the log file in real-time (like tail -f)
+#   --all         Show entire log file content (no following)
+#   --server-only Show only server messages (filter MCP protocol noise)
+#   --help, -h    Show this help message
+
+set -euo pipefail
+
+# Default options
+COMPACT_MODE=false
+FOLLOW_MODE=false
+ALL_MODE=false
+SERVER_ONLY=false
+HELP_MODE=false
+LOG_FILE=""
+
+# Function to show help
+show_help() {
+    cat << 'EOF'
+🎯 MCP Log Pretty-Printer
+
+A flexible tool for pretty-printing MCP server logs with JSON formatting,
+cross-platform compatibility, and multiple input methods.
+
+USAGE:
+    ./scripts/pretty-logs.sh [FILE|SHORTCUT] [OPTIONS]
+    cat log_file | ./scripts/pretty-logs.sh [OPTIONS]
+
+INPUT METHODS:
+    FILE                      Full path to log file
+    server                    Short for ./logs/server.log  
+    audit                     Short for ./logs/audit.log
+    STDIN                     Pipe input from cat, tail, etc.
+
+OPTIONS:
+    --compact                 Show compact summaries (no detailed JSON)
+    --follow                  Follow log file in real-time (tail -f)
+    --all                     Show entire log file content (no following)
+    --server-only             Show only server messages (filter MCP noise)
+    --help, -h                Show this help message
+
+EXAMPLES:
+    # Pretty-print a log file
+    ./scripts/pretty-logs.sh ./logs/server.log
+
+    # Use shortcuts for common logs
+    ./scripts/pretty-logs.sh server
+    ./scripts/pretty-logs.sh audit
+
+    # Follow logs in real-time
+    ./scripts/pretty-logs.sh server --follow
+    ./scripts/pretty-logs.sh server --compact --follow
+
+    # View entire log content
+    ./scripts/pretty-logs.sh server --all
+
+    # Show only server messages (no MCP protocol noise)  
+    ./scripts/pretty-logs.sh server --server-only
+
+    # Pipe from other commands
+    cat ./logs/server.log | ./scripts/pretty-logs.sh
+    tail -f ./logs/server.log | ./scripts/pretty-logs.sh --compact
+    grep "ERROR" ./logs/server.log | ./scripts/pretty-logs.sh
+
+FEATURES:
+    🎯 Cross-platform (works on macOS, Linux, Windows/WSL)
+    📄 JSON pretty-printing with jq (fallback to python3)
+    🧹 Intelligent blank line filtering
+    📊 MCP protocol message summaries with emojis
+    🎨 Color-coded message types
+    ⚡ Multiple input methods (file, stdin, shortcuts)
+    🔍 Filtering options (server-only, compact mode)
+
+SHORTCUTS:
+    server  →  ./logs/server.log    (Main application logs)
+    audit   →  ./logs/audit.log     (Security audit logs)
+
+NPM INTEGRATION:
+    npm run pretty-logs server      # Same as ./scripts/pretty-logs.sh server
+    npm run pretty-logs audit       # Same as ./scripts/pretty-logs.sh audit
+
+EOF
+}
+
+# Function to resolve log file shortcuts
+resolve_log_file() {
+    local input="$1"
+    
+    case "$input" in
+        "server")
+            echo "./logs/server.log"
+            ;;
+        "audit") 
+            echo "./logs/audit.log"
+            ;;
+        "")
+            echo ""
+            ;;
+        *)
+            echo "$input"
+            ;;
+    esac
+}
+
+# Function to check if we're reading from stdin
+is_stdin() {
+    [[ ! -t 0 ]]
+}
+
+# Function to determine the input source
+get_input_source() {
+    if is_stdin; then
+        echo "stdin"
+    elif [[ -n "$LOG_FILE" ]]; then
+        if [[ -f "$LOG_FILE" ]]; then
+            echo "file"
+        else
+            echo "missing"
+        fi
+    else
+        echo "none"
+    fi
+}
+
+# Function to pretty-print a single log line
+pretty_print_line() {
+    local line="$1"
+    
+    # Skip blank lines
+    [[ "$line" =~ ^[[:space:]]*$ ]] && return
+    
+    # Handle MCP protocol messages
+    if [[ "$line" =~ "MCP CLI: Sending request:" ]] || [[ "$line" =~ "MCP CLI: Received response:" ]] || [[ "$line" =~ "MCP CLI: Sending notification:" ]]; then
+        # Skip MCP protocol messages if server-only mode is enabled
+        [[ "$SERVER_ONLY" == true ]] && return
+        
+        # Extract timestamp and message type
+        local timestamp=$(echo "$line" | cut -d' ' -f1-4)
+        
+        # Extract JSON from the message
+        local json_part=$(echo "$line" | grep -o '{.*}' | tail -1)
+        
+        # Determine message type and show summary
+        if [[ "$line" =~ "tools/list" ]]; then
+            echo "${timestamp} [info] 🔧 MCP: Requesting available tools"
+        elif [[ "$line" =~ "notifications/initialized" ]]; then
+            echo "${timestamp} [info] 🚀 MCP: Connection initialized"
+        elif [[ "$line" =~ "tools/call" ]]; then
+            echo "${timestamp} [info] ⚡ MCP: Tool execution request"
+        elif [[ "$line" =~ "Sending request:" ]]; then
+            echo "${timestamp} [info] 📤 MCP: Sending request"
+        elif [[ "$line" =~ "Received response:" ]]; then
+            echo "${timestamp} [info] 📥 MCP: Received response"
+        elif [[ "$line" =~ "Sending notification:" ]]; then
+            echo "${timestamp} [info] 📢 MCP: Sending notification"
+        else
+            echo "${timestamp} [info] 🔄 MCP: Protocol message"
+        fi
+        
+        # Pretty print the JSON if not in compact mode
+        if [[ "$COMPACT_MODE" == false && -n "$json_part" ]]; then
+            # Handle escaped JSON (unescape quotes)
+            local unescaped_json=$(echo "$json_part" | sed 's/\\\"/"/g')
+            
+            if command -v jq &> /dev/null; then
+                if ! echo "$unescaped_json" | jq . 2>/dev/null; then
+                    # If unescaping didn't work, try original
+                    if ! echo "$json_part" | jq . 2>/dev/null; then
+                        echo "   ⚠️ JSON formatting skipped (escaped): notifications message"
+                    fi
+                fi
+            else
+                # Fallback: basic formatting without jq
+                if ! echo "$unescaped_json" | python3 -m json.tool 2>/dev/null; then
+                    if ! echo "$json_part" | python3 -m json.tool 2>/dev/null; then
+                        echo "   ⚠️ JSON formatting skipped (escaped): notifications message"
+                    fi
+                fi
+            fi
+            echo ""  # Add spacing after JSON
+        fi
+        return
+    fi
+    
+    # Handle server messages (stderr)
+    if [[ "$line" =~ "stderr:" ]]; then
+        # Extract timestamp and the actual message
+        local timestamp=$(echo "$line" | grep -o '^[^|]*|[^|]*|')
+        local message=$(echo "$line" | sed 's/^.*stderr: //')
+        echo "${timestamp} [server] $message"
+        return
+    fi
+    
+    # Handle any remaining JSON (from tool responses)
+    if [[ "$line" =~ \{.*\} ]]; then
+        # Skip JSON responses if server-only mode is enabled
+        [[ "$SERVER_ONLY" == true ]] && return
+        
+        # Extract timestamp and prefix
+        local prefix=$(echo "$line" | sed -E 's/^([^{]*)\{.*$/\1/')
+        local json=$(echo "$line" | grep -o '{.*}')
+        
+        # Pretty print the JSON part
+        if [[ "$COMPACT_MODE" == false ]]; then
+            if command -v jq &> /dev/null; then
+                echo "$prefix"
+                echo "$json" | jq . 2>/dev/null || echo "$json"
+                echo ""  # Add spacing after JSON
+            else
+                # Fallback: basic formatting without jq
+                echo "$prefix"
+                echo "$json" | python3 -m json.tool 2>/dev/null || echo "$json"
+                echo ""  # Add spacing after JSON
+            fi
+        else
+            # Compact mode - just show prefix
+            echo "$prefix [JSON data]"
+        fi
+    else
+        # Non-JSON lines, print as-is
+        echo "$line"
+    fi
+}
+
+# Function to process log stream
+process_log_stream() {
+    while IFS= read -r line; do
+        pretty_print_line "$line"
+    done
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --compact)
+            COMPACT_MODE=true
+            shift
+            ;;
+        --follow)
+            FOLLOW_MODE=true
+            shift
+            ;;
+        --all)
+            ALL_MODE=true
+            shift
+            ;;
+        --server-only)
+            SERVER_ONLY=true
+            shift
+            ;;
+        --help|-h)
+            HELP_MODE=true
+            shift
+            ;;
+        -*)
+            echo "❌ Unknown option: $1"
+            echo "💡 Use --help for usage information"
+            exit 1
+            ;;
+        *)
+            if [[ -z "$LOG_FILE" ]]; then
+                LOG_FILE="$1"
+            else
+                echo "❌ Multiple log files specified: '$LOG_FILE' and '$1'"
+                echo "💡 Please specify only one log file or use stdin"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Show help if requested
+if [[ "$HELP_MODE" == true ]]; then
+    show_help
+    exit 0
+fi
+
+# Resolve log file shortcuts
+LOG_FILE=$(resolve_log_file "$LOG_FILE")
+
+# Determine input source
+INPUT_SOURCE=$(get_input_source)
+
+# Handle different input sources
+case "$INPUT_SOURCE" in
+    "stdin")
+        if [[ "$COMPACT_MODE" == true ]]; then
+            echo "📋 Processing logs from stdin (COMPACT mode - summaries only)..."
+        else
+            echo "📋 Processing logs from stdin (DETAILED mode - with pretty JSON)..."
+        fi
+        echo "🔄 Reading from pipe..."
+        echo ""
+        process_log_stream
+        ;;
+        
+    "file")
+        echo "📋 Processing MCP logs..."
+        echo "📁 Log file: $LOG_FILE"
+        
+        if [[ "$FOLLOW_MODE" == true ]]; then
+            if [[ "$COMPACT_MODE" == true ]]; then
+                echo "📊 Mode: Following with compact summaries"
+            else
+                echo "📊 Mode: Following with detailed JSON"
+            fi
+            echo "🔄 Press Ctrl+C to stop"
+            echo ""
+            
+            # Show last 1000 lines initially, then follow new ones
+            tail -n 1000 -f "$LOG_FILE" | process_log_stream
+            
+        elif [[ "$ALL_MODE" == true ]]; then
+            if [[ "$COMPACT_MODE" == true ]]; then
+                echo "📊 Mode: All content with compact summaries"
+            else  
+                echo "📊 Mode: All content with detailed JSON"
+            fi
+            echo "📏 Total lines: $(wc -l < "$LOG_FILE")"
+            echo ""
+            
+            cat "$LOG_FILE" | process_log_stream
+            
+        else
+            # Default: show recent logs (last 1000 lines)
+            if [[ "$COMPACT_MODE" == true ]]; then
+                echo "📊 Mode: Recent logs with compact summaries"
+            else
+                echo "📊 Mode: Recent logs with detailed JSON"
+            fi
+            echo "📏 Showing: Last 1000 lines"
+            echo ""
+            
+            tail -n 1000 "$LOG_FILE" | process_log_stream
+        fi
+        ;;
+        
+    "missing")
+        echo "❌ Log file not found: $LOG_FILE"
+        echo ""
+        echo "💡 Available shortcuts:"
+        echo "   server  →  ./logs/server.log"
+        echo "   audit   →  ./logs/audit.log"
+        echo ""
+        echo "💡 You can also:"
+        echo "   • Specify a full path to any log file"
+        echo "   • Pipe input: cat mylog.txt | $0"
+        echo "   • Use --help for more information"
+        exit 1
+        ;;
+        
+    "none")
+        echo "❌ No input source specified"
+        echo ""
+        echo "💡 Usage examples:"
+        echo "   $0 server                    # Pretty-print ./logs/server.log"
+        echo "   $0 audit                     # Pretty-print ./logs/audit.log" 
+        echo "   $0 /path/to/log.file         # Pretty-print custom log file"
+        echo "   cat log.txt | $0             # Pretty-print from stdin"
+        echo ""
+        echo "💡 Use --help for complete documentation"
+        exit 1
+        ;;
+esac
