@@ -20,6 +20,15 @@ import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
 
+// Read package.json for version info
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
+const VERSION = packageJson.version;
+
 // Load environment variables
 dotenv.config();
 
@@ -28,7 +37,7 @@ class SqlServerMCP {
     this.server = new Server(
       {
         name: 'warp-sql-server-mcp',
-        version: '1.6.2'
+        version: VERSION
       },
       {
         capabilities: {
@@ -630,7 +639,7 @@ class SqlServerMCP {
     const serverInfo = {
       server: {
         name: 'warp-sql-server-mcp',
-        version: '1.6.2',
+        version: VERSION,
         status: 'Running',
         uptime: process.uptime(),
         nodeVersion: process.version,
@@ -716,18 +725,6 @@ class SqlServerMCP {
     this.config.logConfiguration(this.connectionManager, this.logger);
   }
 
-  /**
-   * Log configuration with SSL certificate information if available
-   * @private
-   */
-  async _logConfigurationWithConnectionInfo() {
-    // Log configuration using console.log for MCP compatibility (Warp captures this)
-    this.config.logConfiguration(null, null); // null logger = use console.log
-
-    // Skip SSL certificate details during startup to avoid log corruption
-    // SSL info will be available through get_connection_health tool if needed
-  }
-
   // Expose configuration properties for test compatibility
   get readOnlyMode() {
     return this.config.getSecurityConfig().readOnlyMode;
@@ -757,8 +754,8 @@ class SqlServerMCP {
     if (process.env.NODE_ENV !== 'test') {
       this.logger.info('SQL Server MCP server running on stdio');
 
-      // Log configuration after MCP server is connected so Warp captures it
-      this._logConfigurationWithConnectionInfo();
+      // Log enriched configuration summary after MCP server is connected so Warp captures it
+      this.printConfigurationSummary();
     }
   }
 }

@@ -1,5 +1,13 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SqlServerMCP } from '../../index.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Read package.json for version
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
+const EXPECTED_VERSION = packageJson.version;
 
 /**
  * Unit Tests for get_server_info MCP Tool
@@ -72,7 +80,7 @@ describe('get_server_info Tool', () => {
 
       const serverInfo = data.data.server;
       expect(serverInfo.name).toBe('warp-sql-server-mcp');
-      expect(serverInfo.version).toBe('1.6.2');
+      expect(serverInfo.version).toBe(EXPECTED_VERSION);
       expect(serverInfo.status).toBe('Running');
       expect(serverInfo.uptime).toBeTypeOf('number');
       expect(serverInfo.nodeVersion).toBe(process.version);
