@@ -275,7 +275,9 @@ describe('get_server_info Tool', () => {
       const data = JSON.parse(result[0].text);
 
       expect(data.data.logging).toBeDefined();
-      expect(data.data.logging.note).toContain('MCP server logs');
+      expect(data.data.logging.note).toBe(
+        "MCP server logs provide detailed insights into the system's operations and security events."
+      );
       expect(data.data.logging.logLocation).toContain('Warp');
       expect(data.data.logging.structuredLogging).toContain('Winston');
       expect(data.data.logging.securityAudit).toMatch(/Enabled|Disabled/);

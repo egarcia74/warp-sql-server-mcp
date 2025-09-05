@@ -55,8 +55,10 @@ class SqlServerMCP {
     this.logger = new Logger({
       level: this.config.logging?.logLevel || 'info',
       enableSecurityAudit: this.config.logging?.securityAudit ?? false,
-      logFile: process.env.LOG_FILE,
-      securityLogFile: process.env.SECURITY_LOG_FILE
+      // Only pass log file paths if they are explicitly set
+      // This allows the Logger to use smart defaults when not specified
+      ...(process.env.LOG_FILE && { logFile: process.env.LOG_FILE }),
+      ...(process.env.SECURITY_LOG_FILE && { securityLogFile: process.env.SECURITY_LOG_FILE })
     });
 
     this.connectionManager = new ConnectionManager(this.config.getConnectionConfig());
@@ -675,7 +677,9 @@ class SqlServerMCP {
         logging: {
           level: this.logger.config.level,
           securityAudit: this.logger.config.enableSecurityAudit,
-          responseFormat: this.config.logging.responseFormat
+          responseFormat: this.config.logging.responseFormat,
+          logFile: this.logger.config.logFile || 'Not configured (console only)',
+          securityLogFile: this.logger.config.securityLogFile || 'Not configured (console only)'
         },
         streaming: {
           enabled: this.config.streaming.enabled,
@@ -696,12 +700,21 @@ class SqlServerMCP {
     };
 
     if (includeLogs) {
-      // Add some recent log information
+      // Add detailed logging information including file paths
       serverInfo.logging = {
-        note: 'MCP server logs are sent to stdout/stderr and captured by Warp',
-        logLocation: 'Warp MCP log file (see Warp settings)',
+        note: "MCP server logs provide detailed insights into the system's operations and security events.",
+        level: this.logger.config.level,
+        securityAudit: this.logger.config.enableSecurityAudit ? 'Enabled' : 'Disabled',
+        logLocation: 'stdout/stderr (captured by Warp)',
         structuredLogging: 'Winston-based with timestamps and metadata',
-        securityAudit: this.logger.config.enableSecurityAudit ? 'Enabled' : 'Disabled'
+        mainLogFile: this.logger.config.logFile,
+        securityLogFile: this.logger.config.securityLogFile,
+        developmentMode: this.logger._isDevelopmentEnvironment(),
+        outputTargets: {
+          console: 'stdout/stderr (captured by Warp)',
+          fileLogging: this.logger.config.logFile ? 'Enabled' : 'Console only',
+          structuredLogging: 'Winston-based with timestamps and metadata'
+        }
       };
     }
 
