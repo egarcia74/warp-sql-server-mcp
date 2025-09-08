@@ -175,6 +175,7 @@ npm install
 ### **Developer Resources**
 
 - **[Software Engineering Manifesto](MANIFESTO.md)** - Philosophy and engineering practices
+- **[Quality No-Compromise Case Study](docs/QUALITY-NO-COMPROMISE.md)** - Real-world analysis of zero-tolerance quality standards
 - **[Testing Guide](test/README.md)** - Comprehensive test documentation (535+ tests)
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and standards
 - **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines

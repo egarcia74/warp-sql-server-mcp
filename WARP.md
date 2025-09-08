@@ -981,6 +981,18 @@ npm run test:integration:protocol # MCP client-server communication
 
 This project maintains high code quality through automated tooling and architectural principles:
 
+#### **No-Compromise Quality Philosophy**
+
+> **📊 Case Study**: For a comprehensive analysis of the challenges and outcomes of implementing
+> **zero-tolerance quality standards**, see [Quality No-Compromise Case Study](docs/QUALITY-NO-COMPROMISE.md).
+>
+> This document captures real-world metrics from the WARP project including:
+> - **525 automated tests** with 100% pass rate enforcement
+> - **74% code coverage** with strict quality gates
+> - **3x development time** vs. 90% reduction in debugging time
+> - **The five critical challenges** teams face with no-compromise quality
+> - **Measurable outcomes** and lessons learned from production implementation
+
 #### **Automated Quality Tools**
 
 - **ESLint**: Modern flat config setup for JavaScript linting with focus on code

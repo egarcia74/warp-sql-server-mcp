@@ -44,6 +44,7 @@ Automated workflows and processes:
 - **[Dependabot Auto-Triage](DEPENDABOT-AUTO-TRIAGE.md)** - Dependency management automation
 - **[Git Commit Checklist](GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
 - **[Git Push Checklist](GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
+- **[Quality No-Compromise Case Study](QUALITY-NO-COMPROMISE.md)** - Real-world analysis of zero-tolerance quality standards
 
 ## 📊 API Documentation
 
