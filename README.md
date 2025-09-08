@@ -163,6 +163,7 @@ npm install
 
 - **[Environment Variables Reference](docs/ENV-VARS.md)** - Complete environment variables documentation
 - **[Security Guide](docs/SECURITY.md)** - Comprehensive security configuration and threat model
+- **[Security Threat Analysis Process](WARP.md#security-threat-analysis--response-process)** - Workflows for reviewing and responding to security alerts
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - Technical deep-dive and system design
 - **[All MCP Tools](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Complete API reference (16 tools)
 

@@ -406,6 +406,77 @@ npm run security:audit
 npm run audit:fix
 ```
 
+### Security Threat Analysis & Response Process
+
+This section documents standardized procedures for reviewing and responding to security analysis reports from automated tools.
+
+#### CodeQL Security Analysis Workflow
+
+**When CodeQL reports issues:**
+
+1. **Review Alert Details**: Check GitHub Security → Code scanning alerts for specific vulnerability details
+2. **Assess Impact**: Determine if the issue affects production code paths vs. test/development code
+3. **Prioritize Response**:
+   - **Critical/High**: Address immediately with input validation, bounds checking, or safe parsing methods
+   - **Medium**: Schedule for next development cycle
+   - **Low/Info**: Document for future consideration
+
+**Common CodeQL Remediation Patterns:**
+
+- **Integer Parsing**: Replace `parseInt()` with safe parsing methods that include range validation
+- **Regular Expressions**: Add size limits and timeout protection for ReDoS prevention
+- **Input Validation**: Add null checks, type validation, and boundary enforcement
+- **Error Handling**: Implement graceful fallbacks and secure error messages
+
+#### npm Security Audit Workflow
+
+**When npm audit reports vulnerabilities:**
+
+1. **Check Report Date**: npm audit reports can include historical vulnerabilities from supply chain incidents
+2. **Verify Exploitability**: Review if the reported package/version is actually used in production paths
+3. **Research Context**: Check if this is part of a known supply chain incident (e.g., September 8th, 2024 incident)
+4. **Response Actions**:
+   - **True Positives**: Update dependencies immediately
+   - **False Positives**: Document reasoning and monitor for resolution
+   - **Development Dependencies**: Lower priority but track for updates
+
+#### GitHub Security Alerts Response
+
+**For Dependabot and Advanced Security alerts:**
+
+1. **Immediate Assessment**: Review severity level and affected components
+2. **Impact Analysis**: Check if vulnerability affects runtime dependencies vs. development tools
+3. **Remediation Planning**:
+   - **Runtime Dependencies**: Update immediately or implement workarounds
+   - **Development Dependencies**: Schedule updates during next maintenance window
+   - **Test Dependencies**: Update when convenient but monitor for patches
+
+#### Security Enhancement Development Process
+
+**When implementing security improvements:**
+
+1. **Create Comprehensive Tests**: Add security-focused test cases before implementing fixes
+2. **Apply Defense in Depth**: Implement multiple layers of protection (validation + parsing + error handling)
+3. **Maintain Backward Compatibility**: Ensure security improvements don't break existing functionality
+4. **Document Changes**: Update relevant documentation and add inline code comments for complex security logic
+5. **Verify Integration**: Run full test suite and manual integration tests to validate security improvements
+
+#### Ongoing Security Monitoring
+
+**Regular security maintenance tasks:**
+
+- **Weekly**: Review GitHub Security tab for new alerts
+- **Before Releases**: Run `npm run security:audit` and review all findings
+- **Monthly**: Review and update security dependencies
+- **Quarterly**: Conduct comprehensive security review of authentication and validation logic
+
+**Security Metrics Tracking:**
+
+- CodeQL Advanced Security Analysis pass/fail status
+- Number of npm audit vulnerabilities (distinguish true vs. false positives)
+- Time to resolution for security alerts
+- Test coverage for security-critical code paths
+
 ### System Maintenance
 
 ```bash
