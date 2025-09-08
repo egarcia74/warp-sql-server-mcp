@@ -12,40 +12,39 @@ npm run test:watch    # Run tests in watch mode
 npm run test:coverage # Run with coverage report
 ```
 
-### Manual Tests - Complete Suite
+### Integration Tests - Complete Suite
 
 ```bash
-npm run test:manual                # Run ALL manual tests (~45s)
+npm run test:integration           # Run ALL integration tests with Docker
+npm run test:integration:run       # Run integration tests (requires running database)
+npm run test:integration:ci        # For CI environments with external database
 ```
 
-**Execution Order** (when running `npm run test:manual`):
+**Execution Order** (when running `npm run test:integration`):
 
-1. `npm run test:manual:performance` - Performance validation (~2s)
-2. `npm run test:manual:warp-performance` - Warp integration (~10s)
-3. `npm run test:manual:phase1` - Read-only security (~10s)
-4. `npm run test:manual:phase2` - DML operations security (~10s)
-5. `npm run test:manual:phase3` - DDL operations security (~10s)
-6. `npm run test:manual:protocol` - MCP protocol validation (~3s)
+1. Docker container setup and initialization
+2. `npm run test:integration:manual` - Manual phase tests (1, 2, 3)
+3. `npm run test:integration:protocol` - MCP protocol validation
+4. `npm run test:integration:performance` - Performance validation
+5. Docker container cleanup
 
-### Manual Tests - Individual Categories
+### Integration Tests - Individual Categories
 
 #### ⚡ Performance Tests
 
 ```bash
-npm run test:manual:performance     # ⭐ RECOMMENDED: Fast performance test (~2s)
-npm run test:manual:warp-performance # Warp MCP integration test (~10s)
+npm run test:integration:performance     # ⭐ RECOMMENDED: Fast performance test (~2s)
+npm run test:integration:warp           # Warp MCP integration test (~10s)
 ```
 
 - **Primary Performance Test**: Single persistent MCP process, concurrent testing, 100% success rate
 - **Warp Integration Test**: Tests against running Warp instance, validates production setup
 - **Prerequisites for Warp test**: Warp must be running with MCP server configured
 
-#### 🔒 Security Tests (Phase-based)
+#### 🔒 Security Tests (Manual Phases)
 
 ```bash
-npm run test:manual:phase1         # Read-only security tests
-npm run test:manual:phase2         # DML operations tests
-npm run test:manual:phase3         # DDL operations tests
+npm run test:integration:manual    # All manual phase tests (1, 2, 3)
 ```
 
 - **Phase 1**: Validates read-only mode and basic security
@@ -55,7 +54,7 @@ npm run test:manual:phase3         # DDL operations tests
 #### 📡 Protocol Tests
 
 ```bash
-npm run test:manual:protocol       # MCP protocol smoke test
+npm run test:integration:protocol  # MCP protocol smoke test
 ```
 
 ## 📁 Test File Organization
@@ -96,10 +95,10 @@ For most development and testing scenarios:
 npm test
 
 # Run performance validation
-npm run test:manual:performance
+npm run test:integration:performance
 
-# Run all manual tests (performance + security) if needed
-npm run test:manual
+# Run all integration tests if needed
+npm run test:integration
 ```
 
 ## 🔧 Troubleshooting
@@ -117,7 +116,7 @@ npm run test:manual
    - Restart SQL Server if needed
 
 3. **Performance Test Failures**
-   - Use `npm run test:manual:performance` for reliable performance testing
+   - Use `npm run test:integration:performance` for reliable performance testing
    - Check connection pool settings and SQL Server accessibility
 
 ### Debug Commands

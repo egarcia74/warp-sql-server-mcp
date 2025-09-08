@@ -191,6 +191,25 @@ npm install
 - **20 Protocol Tests**: End-to-end MCP communication validation
 - **100% Success Rate**: All security phases validated in production scenarios
 
+### 🐳 **Quick Testing with Docker** (Recommended for Development)
+
+```bash
+# One-command testing with automated SQL Server container
+npm run test:integration
+
+# This will:
+# 1. 🐳 Start SQL Server 2022 container
+# 2. ⏱️ Wait for database initialization (2-3 minutes)
+# 3. 🧪 Run all integration tests
+# 4. 🔄 Clean up and stop container
+```
+
+**Benefits:** ✨ Zero configuration, 🛡️ Complete isolation, ⚡ Fast setup, 📋 Consistent environment
+
+**[Complete Docker Testing Guide →](test/docker/README.md)**
+
+### 🔧 **Manual Setup Testing** (Production Validation)
+
 **Security Phases Tested:**
 
 - **Phase 1 (Read-Only)**: Maximum security - 20/20 tests ✅
@@ -202,10 +221,16 @@ npm install
 npm run help               # Show all commands with detailed descriptions
 
 # Run tests locally
-npm test                   # All automated unit tests (~10s)
+npm test                   # All automated unit + integration tests
 npm run test:coverage      # Coverage report with detailed metrics
-npm run test:manual        # Manual security tests (~30s, requires live DB)
-npm run test:manual:performance  # ⭐ Fast performance validation (~2s)
+npm run test:integration   # 🚀 Complete integration test suite with Docker
+npm run test:integration:ci  # For CI environments with external database
+npm run test:integration:performance  # ⭐ Fast performance validation (~2s)
+
+# View logs and monitor activity
+npm run logs               # Show recent server logs
+npm run logs:tail          # Follow logs in real-time
+npm run logs:audit         # Show security audit logs
 ```
 
 ---
@@ -254,7 +279,8 @@ Show me 50 rows from the Products table where Price > 100
 
 - Set `SQL_SERVER_ENCRYPT=false` for local development
 - MCP servers require explicit environment variables (`.env` files are not loaded automatically)
-- Check MCP server logs in your AI assistant for startup messages
+- Check MCP server logs: `npm run logs` or `npm run logs:tail` for real-time monitoring
+- View audit logs for security-related issues: `npm run logs:audit`
 
 ### **Platform-Specific**
 
@@ -286,11 +312,21 @@ This project demonstrates enterprise-grade software engineering practices. We we
 **Development Commands:**
 
 ```bash
+# Get comprehensive help for all available commands
+npm run help               # Show organized command reference with descriptions
+
+# Core development
 npm run dev                # Development mode with auto-restart
 npm test                   # Run all tests
 npm run lint:fix          # Fix linting issues
 npm run format            # Format code
 npm run ci                 # Full CI pipeline locally
+
+# Log viewing and monitoring
+npm run logs               # Show recent server logs
+npm run logs:tail          # Follow server logs in real-time
+npm run logs:audit         # Show security audit logs
+npm run logs:tail:audit    # Follow audit logs in real-time
 ```
 
 ---

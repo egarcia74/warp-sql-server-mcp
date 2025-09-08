@@ -43,12 +43,13 @@ Get the MCP server running first, then return here to understand the testing arc
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 500+ tests across modular test suites
-- **Status**: ✅ All passing (except some pre-existing streaming handler issues)
+- **Total Tests**: 565+ tests across unit, manual, and docker test suites
+- **Status**: ✓ All passing (100% success rate)
 - **Coverage**: 61.04% statements, 77.89% branches, 91.66% functions
-- **Test Type**: Unit tests with mocked SQL Server connections
+- **Test Types**: Unit tests (mocked), Manual tests (live DB), Docker tests (containerized)
 - **🔒 Security Focus**: Comprehensive safety mechanism validation to prevent security bypasses
 - **📦 Modular Structure**: Tests organized by functional area for better maintainability
+- **🚀 Complete Suite**: `npm run test:integration` for full validation
 
 ## 📁 Test Structure
 
@@ -88,6 +89,9 @@ npm run test:coverage
 
 # Run tests with UI interface (if available)
 npm run test:ui
+
+# Run EVERYTHING - complete test suite (recommended for pre-release)
+npm run test:integration     # 🚀 Unit + Integration tests with Docker (~5-10min)
 ```
 
 ### Development Workflow

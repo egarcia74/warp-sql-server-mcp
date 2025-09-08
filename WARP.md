@@ -330,7 +330,7 @@ npm start
 
 ### Testing
 
-```bash
+`````bash
 # Run all automated tests (unit + integration)
 npm test
 
@@ -343,18 +343,29 @@ npm run test:coverage
 # Run tests with UI interface
 npm run test:ui
 
+# Run EVERYTHING - complete test suite (recommended for pre-release)
+npm run test:all             # 🚀 Unit + Integration tests (complete test suite)
+
 # Run manual integration tests (requires live database)
-npm run test:manual          # All 3 phases (40 tests)
-npm run test:manual:phase1    # Phase 1: Read-only security (20 tests)
-npm run test:manual:phase2    # Phase 2: DML operations (10 tests)
-npm run test:manual:phase3    # Phase 3: DDL operations (10 tests)
+```bash
+npm run test:integration:manual    # All 3 phases (40 tests)
+# Note: Individual phases are run sequentially within the manual test script
+# Phase 1: Read-only security (20 tests)
+# Phase 2: DML operations (10 tests)
+# Phase 3: DDL operations (10 tests)
+```
 
-# Run performance tests
-npm run test:manual:performance      # ⭐ Fast performance test (~2s, 100% success)
-npm run test:manual:warp-performance # Warp MCP integration test (~10s)
+## Run performance tests
 
-# Run MCP protocol tests (requires live database)
-npm run test:manual:protocol # MCP client-server communication (20 tests)
+```bash
+npm run test:integration:performance # ⭐ Fast performance test (~2s, 100% success)
+npm run test:integration:warp # Warp MCP integration test (~10s)
+```
+
+## Run MCP protocol tests (requires live database)
+
+```bash
+npm run test:integration:protocol # MCP client-server communication (20 tests)
 ```
 
 ### Code Quality and Formatting
@@ -385,7 +396,7 @@ npm run links:check
 npm run links:check:ci
 ```
 
-### Security and Auditing
+## Security and Auditing
 
 ```bash
 # Run security audit (checks for high-severity vulnerabilities)
@@ -425,6 +436,37 @@ Comprehensive checklists for quality git workflows:
   - Troubleshooting guidance for common push failures
   - Advanced push options and force push safety guidelines
   - Pull request creation and post-push validation steps
+
+### Log Viewing Commands
+
+```bash
+# View server logs (smart path detection - development vs production)
+npm run logs
+
+# View server logs (explicit)
+npm run logs:server
+
+# View security audit logs
+npm run logs:audit
+
+# Follow server logs in real-time (like tail -f)
+npm run logs:tail
+npm run logs:tail:server
+
+# Follow security audit logs in real-time
+npm run logs:tail:audit
+
+# Direct script usage with options
+./scripts/show-logs.sh server --compact    # Compact format
+./scripts/show-logs.sh audit --all         # Show all entries
+./scripts/show-logs.sh --help              # Show help
+```
+
+**Smart Path Detection:**
+
+- **Development**: Uses `./logs/server.log` and `./logs/security-audit.log`
+- **Production**: Uses `~/.local/state/warp-sql-server-mcp/` directory
+- **Windows**: Uses `%LOCALAPPDATA%/warp-sql-server-mcp/` directory
 
 ### Environment Setup
 
@@ -689,6 +731,35 @@ Generated files:
 - **Comprehensive Coverage**: 392 unit tests + 40 integration tests + 20 protocol tests cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
+- **🐳 Docker Testing**: Automated containerized SQL Server for zero-configuration testing
+
+### 🐳 **Docker Testing (Recommended for Development)**
+
+**Automated SQL Server Container Testing**: Complete testing environment in Docker containers for fast, consistent validation.
+
+```bash
+# Quick automated testing with container management
+# Docker testing is done automatically via test:integration
+# These individual docker scripts don't exist as separate commands:
+# - All Docker testing is handled through npm run test:integration
+# - Docker containers are managed automatically during integration tests
+
+# Manual container management
+npm run docker:start                  # Start SQL Server 2022 container
+npm run docker:wait                   # Wait for database initialization
+npm run docker:stop                   # Stop and cleanup container
+npm run docker:clean                  # Remove all data and containers
+```
+
+**Docker Benefits:**
+
+- ✅ **Zero Configuration**: Works immediately on any Docker-enabled system
+- ✅ **Complete Isolation**: No interference with existing SQL Server instances
+- ✅ **Consistent Environment**: SQL Server 2022 with standardized test data
+- ✅ **Fast Setup**: 2-3 minutes vs 30+ minutes for manual setup
+- ✅ **Automatic Cleanup**: No leftover test databases or configuration
+
+**[Complete Docker Testing Guide →](test/docker/README.md)**
 
 ### Test Structure
 
@@ -712,6 +783,12 @@ test/
 │   ├── response-formatter.test.js      # Response formatting tests
 │   ├── logger.test.js                  # Logging system tests
 │   └── link-checker.test.js           # Link validation tests
+├── docker/                              # 🐳 Docker testing infrastructure
+│   ├── README.md                        # Docker testing setup guide
+│   ├── docker-compose.yml               # SQL Server container configuration
+│   ├── init-db.sql                     # Database initialization script
+│   ├── .env.docker                     # Docker environment variables
+│   └── wait-for-db.js                  # Database readiness verification
 ├── integration/                         # Integration tests
 │   ├── sqlserver-mcp-integration.test.js  # Automated integration tests (15 tests)
 │   └── manual/                          # 🆕 Manual integration tests (40 tests)
@@ -872,18 +949,24 @@ The project uses a comprehensive multi-layered tracking system for managing feat
 
 #### **2. Modular Testing Strategy**
 
-```bash
+````bash
 # Test individual components in isolation
 npm run test:watch                    # Watch mode for active development
 npm run test:coverage                 # Component test coverage
+```
 
-# Manual validation for database components
-npm run test:manual:phase1            # Security validation
-npm run test:manual:phase2            # DML operation validation
-npm run test:manual:phase3            # DDL operation validation
+### Manual validation for database components
 
-# End-to-end protocol validation
-npm run test:manual:protocol          # MCP client-server communication
+```bash
+npm run test:integration:manual      # Security validation (all phases)
+npm run test:integration:protocol    # Protocol validation
+npm run test:integration:performance # Performance validation
+```
+
+## End-to-end protocol validation
+
+```bash
+npm run test:integration:protocol # MCP client-server communication
 ```
 
 #### **3. Development Best Practices**
@@ -951,9 +1034,9 @@ npm run markdown:fix
 
 # Then retry your git operation
 git commit -m "Your message"
-```
+`````
 
-### ESLint and Prettier Integration
+## ESLint and Prettier Integration
 
 The project uses a coordinated approach:
 

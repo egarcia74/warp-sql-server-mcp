@@ -6,6 +6,7 @@
  */
 
 import { SqlServerMCP } from '../../../index.js';
+import { TestDatabaseHelper } from './test-database-helper.js';
 import { serverConfig } from '../../../lib/config/server-config.js';
 import dotenv from 'dotenv';
 
@@ -38,11 +39,42 @@ console.log('\n🔍 Server Configuration Loaded:');
 console.log('   readOnlyMode:', securityConfig.readOnlyMode);
 console.log('   allowDestructiveOperations:', securityConfig.allowDestructiveOperations);
 console.log('   allowSchemaChanges:', securityConfig.allowSchemaChanges);
+
+// CRITICAL: Ensure configuration is validated
+if (securityConfig.readOnlyMode !== false) {
+  console.error(
+    '❌ CRITICAL: Read-only mode is still enabled! Expected: false, Got:',
+    securityConfig.readOnlyMode
+  );
+  console.error('❌ This will cause all DDL tests to fail.');
+  process.exit(1);
+}
+
+if (securityConfig.allowDestructiveOperations !== true) {
+  console.error(
+    '❌ CRITICAL: Destructive operations are not enabled! Expected: true, Got:',
+    securityConfig.allowDestructiveOperations
+  );
+  console.error('❌ This will cause all DML tests to fail.');
+  process.exit(1);
+}
+
+if (securityConfig.allowSchemaChanges !== true) {
+  console.error(
+    '❌ CRITICAL: Schema changes are not enabled! Expected: true, Got:',
+    securityConfig.allowSchemaChanges
+  );
+  console.error('❌ This will cause all DDL tests to fail.');
+  process.exit(1);
+}
 console.log('');
 
 class DdlOperationsTest {
   constructor() {
     this.results = { passed: 0, failed: 0, tests: [] };
+    this.server = null;
+    this.dbHelper = null;
+    this.testDbName = null;
   }
 
   async runTest(name, description, testFn) {
@@ -66,40 +98,84 @@ class DdlOperationsTest {
 
   async runDdlTest() {
     console.log('🚀 Starting Phase 3: DDL Operations Test (Full Development Mode)');
-    console.log('================================================================\\n');
+    console.log(
+      '================================================================\
+'
+    );
 
     console.log('🔧 Current Configuration:');
     console.log('   🔓 Read-Only Mode: FALSE');
     console.log('   ⚠️  Allow Destructive Operations: TRUE');
     console.log('   🛠️  Allow Schema Changes: TRUE (DDL operations enabled)');
     console.log('   🔐 SSL Encryption: ENABLED');
-    console.log('   ⚠️  WARNING: This is full development mode - all operations allowed!\\n');
+    console.log(
+      '   ⚠️  WARNING: This is full development mode - all operations allowed!\
+'
+    );
 
-    // Create MCP server instance
-    const server = new SqlServerMCP();
+    // Create MCP server instance - force configuration reload first
+    serverConfig.reload(); // Ensure latest environment variables are loaded
+    this.server = new SqlServerMCP();
+
+    // Verify the server instance has the correct configuration
+    const serverSecurityConfig = this.server.config.getSecurityConfig();
+    console.log('🔍 Server Instance Security Config:');
+    console.log('   readOnlyMode:', serverSecurityConfig.readOnlyMode);
+    console.log('   allowDestructiveOperations:', serverSecurityConfig.allowDestructiveOperations);
+    console.log('   allowSchemaChanges:', serverSecurityConfig.allowSchemaChanges);
+
+    if (serverSecurityConfig.readOnlyMode !== false) {
+      throw new Error(
+        `Server instance still in read-only mode! Expected: false, Got: ${serverSecurityConfig.readOnlyMode}`
+      );
+    }
+
+    if (serverSecurityConfig.allowSchemaChanges !== true) {
+      throw new Error(
+        `Server instance schema changes not enabled! Expected: true, Got: ${serverSecurityConfig.allowSchemaChanges}`
+      );
+    }
+
+    // Create database helper and test database
+    this.dbHelper = new TestDatabaseHelper(this.server);
+
+    try {
+      console.log('🏗️  Setting up test environment...');
+      this.testDbName = await this.dbHelper.createTestDatabase('Phase3DDL');
+      console.log(`📊 Using test database: ${this.testDbName}\n`);
+    } catch (error) {
+      console.error('❌ Failed to set up test environment:', error.message);
+      throw error;
+    }
 
     console.log('📊 1. VERIFY ALL OPERATIONS WORK');
-    console.log('=================================\\n');
+    console.log(
+      '=================================\
+'
+    );
 
     // Verify read operations still work
     await this.runTest('select_operations', 'SELECT operations should work', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         'SELECT COUNT(*) as ProductCount FROM Products',
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
       }
     });
 
-    console.log('\\n🛠️  2. TEST DDL OPERATIONS (CREATE/ALTER/DROP)');
-    console.log('===============================================\\n');
+    console.log('\n🛠️  2. TEST DDL OPERATIONS (CREATE/ALTER/DROP)');
+    console.log(
+      '===============================================\
+'
+    );
 
     // Test CREATE TABLE (should now work)
     await this.runTest('ddl_create_table', 'CREATE TABLE should now be ALLOWED', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         'CREATE TABLE TestDdlTable (ID int PRIMARY KEY IDENTITY(1,1), Name nvarchar(100) NOT NULL, CreatedDate datetime2 DEFAULT GETDATE())',
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
@@ -114,9 +190,9 @@ class DdlOperationsTest {
 
     // Test ALTER TABLE (should now work)
     await this.runTest('ddl_alter_table', 'ALTER TABLE should now be ALLOWED', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         'ALTER TABLE TestDdlTable ADD Description nvarchar(255) NULL',
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
@@ -129,17 +205,20 @@ class DdlOperationsTest {
       }
     });
 
-    console.log('\\n🔓 3. TEST DML OPERATIONS (SHOULD ALSO WORK)');
-    console.log('==============================================\\n');
+    console.log('\n🔓 3. TEST DML OPERATIONS (SHOULD ALSO WORK)');
+    console.log(
+      '==============================================\
+'
+    );
 
     // Test INSERT into our test table
     await this.runTest(
       'dml_insert_test',
       'INSERT should work in full development mode',
       async () => {
-        const result = await server.executeQuery(
+        const result = await this.server.executeQuery(
           "INSERT INTO TestDdlTable (Name, Description) VALUES ('Test Record', 'Testing full development mode')",
-          'WarpMcpTest'
+          this.testDbName
         );
         if (!result.content || !result.content[0] || !result.content[0].text) {
           throw new Error('No content returned');
@@ -158,9 +237,9 @@ class DdlOperationsTest {
       'dml_update_test',
       'UPDATE should work in full development mode',
       async () => {
-        const result = await server.executeQuery(
+        const result = await this.server.executeQuery(
           "UPDATE TestDdlTable SET Description = 'Updated description for DDL testing' WHERE Name = 'Test Record'",
-          'WarpMcpTest'
+          this.testDbName
         );
         if (!result.content || !result.content[0] || !result.content[0].text) {
           throw new Error('No content returned');
@@ -179,9 +258,9 @@ class DdlOperationsTest {
       'verify_data_exists',
       'Verify test data was created and updated',
       async () => {
-        const result = await server.executeQuery(
+        const result = await this.server.executeQuery(
           "SELECT ID, Name, Description FROM TestDdlTable WHERE Name = 'Test Record'",
-          'WarpMcpTest'
+          this.testDbName
         );
         if (!result.content || !result.content[0] || !result.content[0].text) {
           throw new Error('No content returned');
@@ -195,14 +274,17 @@ class DdlOperationsTest {
       }
     );
 
-    console.log('\\n🗑️  4. CLEANUP - TEST DROP OPERATIONS');
-    console.log('======================================\\n');
+    console.log('\n🗑️  4. CLEANUP - TEST DROP OPERATIONS');
+    console.log(
+      '======================================\
+'
+    );
 
     // Test DELETE (cleanup data first)
     await this.runTest('dml_delete_cleanup', 'DELETE should work for cleanup', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         "DELETE FROM TestDdlTable WHERE Name = 'Test Record'",
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
@@ -217,7 +299,7 @@ class DdlOperationsTest {
 
     // Test DROP TABLE (should now work)
     await this.runTest('ddl_drop_table', 'DROP TABLE should now be ALLOWED (cleanup)', async () => {
-      const result = await server.executeQuery('DROP TABLE TestDdlTable', 'WarpMcpTest');
+      const result = await this.server.executeQuery('DROP TABLE TestDdlTable', this.testDbName);
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
       }
@@ -229,15 +311,18 @@ class DdlOperationsTest {
       }
     });
 
-    console.log('\\n⚡ 5. VERIFY ALL TOOLS STILL WORK');
-    console.log('=================================\\n');
+    console.log('\n⚡ 5. VERIFY ALL TOOLS STILL WORK');
+    console.log(
+      '=================================\
+'
+    );
 
     // Quick check that other MCP tools still work
     await this.runTest(
       'list_tables_verification',
       'Other MCP tools should still work (list_tables)',
       async () => {
-        const result = await server.listTables('WarpMcpTest');
+        const result = await this.server.listTables(this.testDbName);
         if (!result.content || !result.content[0] || !result.content[0].text) {
           throw new Error('No content returned');
         }
@@ -249,7 +334,7 @@ class DdlOperationsTest {
       'performance_monitoring_ddl',
       'Performance monitoring should track DDL operations',
       async () => {
-        const result = server.getPerformanceStats();
+        const result = this.server.getPerformanceStats();
         if (!result || !result[0] || !result[0].text) {
           throw new Error('No content returned');
         }
@@ -265,9 +350,22 @@ class DdlOperationsTest {
     );
   }
 
+  async cleanup() {
+    if (this.dbHelper) {
+      console.log('\n🧹 Cleaning up test environment...');
+      // Only clean up the specific database created by this test
+      if (this.testDbName) {
+        await this.dbHelper.cleanupDatabase(this.testDbName);
+        console.log(`✅ Cleaned up test database: ${this.testDbName}`);
+      } else {
+        console.log('⚠️ No test database to clean up');
+      }
+    }
+  }
+
   printSummary() {
-    console.log('\\n🎯 PHASE 3: DDL OPERATIONS TEST SUMMARY');
-    console.log('=======================================');
+    console.log('\n🎯 PHASE 3 DDL OPERATIONS RESULTS');
+    console.log('=================================');
     console.log(`✅ Tests Passed: ${this.results.passed}`);
     console.log(`❌ Tests Failed: ${this.results.failed}`);
     console.log(`📊 Total Tests: ${this.results.passed + this.results.failed}`);
@@ -276,13 +374,13 @@ class DdlOperationsTest {
     );
 
     if (this.results.failed > 0) {
-      console.log('\\n❌ Failed Tests:');
+      console.log('\n❌ Failed Tests:');
       this.results.tests
         .filter(t => t.status === 'FAILED')
         .forEach(t => console.log(`   • ${t.name}: ${t.error}`));
     }
 
-    console.log('\\n🏆 Phase 3 Assessment:');
+    console.log('\n🏆 Phase 3 Assessment:');
     if (this.results.failed === 0) {
       console.log('   ✅ PHASE 3 COMPLETE - DDL operations work correctly!');
       console.log('   🛠️  CREATE/ALTER/DROP operations: WORKING');
@@ -309,8 +407,17 @@ const ddlTest = new DdlOperationsTest();
 try {
   await ddlTest.runDdlTest();
   ddlTest.printSummary();
-  process.exit(0);
+
+  // Exit with failure code if any tests failed
+  if (ddlTest.results.failed > 0) {
+    console.error(`\
+💥 ${ddlTest.results.failed} test(s) failed`);
+    process.exit(1);
+  }
 } catch (error) {
-  console.error('💥 DDL test failed:', error);
+  console.error('💥 DDL test failed:', error.message);
   process.exit(1);
+} finally {
+  await ddlTest.cleanup();
 }
+process.exit(0);

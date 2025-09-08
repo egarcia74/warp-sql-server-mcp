@@ -1,6 +1,7 @@
 # Git Commit Checklist
 
-> **Note**: This checklist reflects what the automated git hooks will run, plus additional manual checks.
+> **⚠️ CRITICAL**: This checklist reflects what the automated git hooks will run, plus additional manual checks.  
+> **🚫 NEVER use `--no-verify` to bypass pre-commit hooks - fix the issues instead!**
 
 ## 🔄 Automated Pre-Commit Checks
 
@@ -13,32 +14,68 @@
 
 _These happen automatically when you `git commit` - no manual action needed!_
 
+## 🚨 **PRE-COMMIT HOOK FAILURES**
+
+### **If pre-commit hooks fail:**
+
+1. **🛠️ Fix the issues** - don't bypass them!
+2. **Use available fix commands**:
+   - `npm run lint:fix` - Fix ESLint issues
+   - `npm run format` - Fix formatting issues
+   - `npm run markdown:fix` - Fix markdown issues
+   - Manually fix remaining issues that can't be auto-fixed
+3. **Re-stage and commit** after fixes
+4. **🚫 NEVER use `--no-verify`** - this violates our quality standards
+
 ## 📋 Manual Pre-Commit Verification
 
 ### 1. **Development Checks** (if making significant changes)
 
 - [ ] **Run comprehensive tests**: `npm run test:coverage`
-- [ ] **Run manual integration tests**: `npm run test:manual`
+- [ ] **Run integration tests**: `npm run test:integration`
 - [ ] **Check for vulnerabilities**: `npm run security:audit`
 
-### 2. **Feature-Specific Checks**
+### 2. **Code Quality & Standards**
+
+- [ ] **Type safety**: Verify JSDoc comments for complex functions
+- [ ] **Error handling**: Ensure proper error handling and logging
+- [ ] **Performance impact**: Consider performance implications of changes
+- [ ] **Memory leaks**: Check for potential memory leaks in new code
+
+### 3. **Security Assessment** (for any non-trivial changes)
+
+- [ ] **Input validation**: Ensure all user inputs are properly validated
+- [ ] **SQL injection prevention**: Verify parameterized queries are used
+- [ ] **Logging security**: Ensure no sensitive data is logged
+- [ ] **Environment variables**: Check if new secrets need `.env.example` updates
+
+### 4. **Feature-Specific Checks**
 
 - [ ] **Environment variables**: Update `.env.example` if env vars changed
 - [ ] **Documentation**: Update relevant docs if APIs/features changed
 - [ ] **Test data cleanup**: Ensure no test artifacts left behind
+- [ ] **Backward compatibility**: Verify changes don't break existing functionality
 
 ## 🔍 Change Review
 
-### 3. **Review Changes**
+### 5. **Review Changes**
 
 - [ ] **Check git status**: `git status`
 - [ ] **Review modified files**: `git diff --name-only`
 - [ ] **Review specific changes**: `git diff [filename]`
 - [ ] **Verify no unintended changes**: Review each modified file
+- [ ] **Check for debugging artifacts**: Remove console.logs, debugger statements, TODO comments
+
+### 6. **Dependencies & Configuration**
+
+- [ ] **Package dependencies**: If package.json changed, verify `npm ci` works
+- [ ] **Environment variables**: Check if `.env.example` reflects new variables
+- [ ] **Configuration files**: Verify any config changes are documented
+- [ ] **Docker/scripts**: If container or script changes, test locally
 
 ## 📝 Staging Changes
 
-### 4. **Stage Files**
+### 7. **Stage Files**
 
 ```bash
 # Stage specific files
@@ -54,15 +91,40 @@ git add test/
 git add *.md
 ```
 
-### 5. **Verify Staged Changes**
+### 8. **Verify Staged Changes**
 
 - [ ] **Check staged files**: `git diff --cached --name-only`
 - [ ] **Review staged changes**: `git diff --cached`
 - [ ] **Ensure no sensitive data**: No passwords, API keys, or secrets
+- [ ] **Verify test coverage**: New code should have corresponding tests
+- [ ] **Check file sizes**: Ensure no large files were accidentally added
+
+## 🛡️ Enterprise Quality Gates (for significant changes)
+
+### **Security & Compliance**
+
+- [ ] **Secrets scanning**: Run `git secrets --scan` if available
+- [ ] **Dependency audit**: Verify `npm audit` shows no critical vulnerabilities
+- [ ] **File permissions**: Check that no files have overly permissive permissions
+- [ ] **License compatibility**: Ensure any new dependencies have compatible licenses
+
+### **Observability & Monitoring**
+
+- [ ] **Logging consistency**: Verify new code follows project logging patterns
+- [ ] **Error handling**: Ensure all error paths are properly logged
+- [ ] **Performance monitoring**: Add performance metrics for critical paths
+- [ ] **Health check impact**: Consider if changes affect health check endpoints
+
+### **Production Readiness**
+
+- [ ] **Configuration validation**: Test with different environment configurations
+- [ ] **Resource usage**: Consider memory and CPU impact of changes
+- [ ] **Graceful degradation**: Ensure system handles failures gracefully
+- [ ] **Rollback plan**: Consider if changes are easily reversible
 
 ## ✏️ Commit Message
 
-### 6. **Create Descriptive Commit**
+### 9. **Create Descriptive Commit**
 
 Use [Conventional Commits](https://conventionalcommits.org/) format:
 
@@ -113,27 +175,48 @@ git commit -m "refactor: extract validation logic into separate module"
 - `perf`: Performance improvement
 - `test`: Adding tests
 - `chore`: Maintenance tasks
+- `security`: Security-related changes
+- `deps`: Dependency updates
 
 ## 🔧 Commands Quick Reference
 
+### Essential Quality Checks
+
 ```bash
-# Quality checks
-npm run ci                    # Full CI pipeline
-npm test                      # All tests
-npm run test:manual           # Manual integration tests
-npm run lint                  # Code quality
-npm run format:check          # Format validation
+# Complete validation pipeline
+npm run ci                    # Full CI pipeline (recommended)
+npm test                      # All tests (unit + integration)
+npm run test:coverage         # Test coverage report
+npm run test:integration      # Integration tests only
+npm run security:audit        # Security vulnerability check
+npm run lint                  # Code quality check
+npm run format:check          # Code formatting validation
 
-# Git operations
+# Pre-commit validation
+git diff --name-only          # See which files changed
+git diff --cached             # Review staged changes
+git status                    # Current repository state
+```
+
+### Git Operations
+
+```bash
+# Staging and committing
+git add [files]               # Stage specific files
+git add .                     # Stage all changes (use carefully)
+git commit -m "message"       # Commit with message
+git commit --amend            # Amend last commit
+
+# Branch and remote management
 git status                    # Check current state
-git add [files]              # Stage changes
-git commit -m "message"      # Commit with message
-git push origin [branch]     # Push to remote
+git branch                    # List branches
+git remote -v                 # Check remote repositories
+git push origin [branch]      # Push to remote
 
-# Branch management
-git branch                   # List branches
-git checkout main           # Switch to main
-git merge [branch]          # Merge feature branch
+# Review and debugging
+git log --oneline -5          # Recent commit history
+git diff HEAD~1               # Compare with previous commit
+git show [commit-hash]        # Show specific commit details
 ```
 
 ---

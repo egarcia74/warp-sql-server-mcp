@@ -32,19 +32,19 @@ npm run test:coverage
 
 ```bash
 # Test all three security phases (40 tests)
-npm run test:manual
+npm run test:integration:manual
 
-# Test individual security phases
-npm run test:manual:phase1    # 20 tests - Read-only security
-npm run test:manual:phase2    # 10 tests - DML operations
-npm run test:manual:phase3    # 10 tests - DDL operations
+# Note: Individual phase tests are run sequentially within test:integration:manual
+# Phase 1: 20 tests - Read-only security
+# Phase 2: 10 tests - DML operations
+# Phase 3: 10 tests - DDL operations
 ```
 
 ### 📡 **Protocol Testing (MCP Client-Server Communication)**
 
 ```bash
 # Test MCP protocol communication (20 tests)
-npm run test:protocol
+npm run test:integration:protocol
 ```
 
 ## Prerequisites
@@ -305,27 +305,41 @@ npm run test:protocol
 
 #### **1. Development Testing**
 
-```bash
+````bash
 # Quick validation during development
 npm test                    # Run all automated tests
+```bash
 npm run test:coverage      # Check code coverage
-```
+````
+
+#### **Manual Testing (Live Database)**
+
+````bash
+npm run test:integration:manual          # All 3 security phases (40 tests)
+npm run test:integration:protocol        # MCP protocol validation (20 tests)
+```bash
+# End of previous section
+````
 
 #### **2. Pre-Production Validation**
 
 ```bash
 # Comprehensive manual testing before deployment
-npm run test:manual        # All 3 security phases (40 tests)
-npm run test:protocol      # MCP protocol validation (20 tests)
+npm run test:integration:manual          # All 3 security phases (40 tests)
+npm run test:integration:protocol        # MCP protocol validation (20 tests)
 ```
 
 #### **3. Production Readiness Check**
 
+````bash
+# Complete validation suite
+npm run ci                   # Full CI pipeline with security audit
+```bash
+npm run test:integration:manual          # Manual integration validation
+npm run test:integration:protocol        # Protocol communication validation
 ```bash
 # Complete validation suite
-npm run ci                 # Full CI pipeline with security audit
-npm run test:manual        # Manual integration validation
-npm run test:protocol      # Protocol communication validation
+npm run ci                   # Full CI pipeline with security audit
 ```
 
 ### 📋 **Comprehensive Testing Guides**
@@ -344,10 +358,8 @@ npm run test:protocol      # Protocol communication validation
 
 #### **Manual Tests (Pre-Production)**
 
-- [ ] **Phase 1** - `npm run test:manual:phase1` (Read-only security)
-- [ ] **Phase 2** - `npm run test:manual:phase2` (DML operations)
-- [ ] **Phase 3** - `npm run test:manual:phase3` (DDL operations)
-- [ ] **Protocol** - `npm run test:protocol` (MCP communication)
+- [ ] **Phase 1-3** - `npm run test:integration:manual` (All security phases)
+- [ ] **Protocol** - `npm run test:integration:protocol` (MCP communication)
 
 ### 🎯 **Using Warp AI Terminal**
 
@@ -533,3 +545,5 @@ This MCP server demonstrates enterprise-grade software development practices wit
 ---
 
 _This document should be updated as issues are resolved and new features are added._
+```
+````

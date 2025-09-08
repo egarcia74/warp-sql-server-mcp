@@ -6,6 +6,7 @@ import {
   CallToolRequestSchema,
   ErrorCode,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
   McpError
 } from '@modelcontextprotocol/sdk/types.js';
 import dotenv from 'dotenv';
@@ -30,19 +31,52 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'ut
 const VERSION = packageJson.version;
 
 // Load environment variables
-dotenv.config();
+// Suppress dotenv output in MCP environments to avoid parsing warnings
+const isMcpEnvironment =
+  process.env.VSCODE_MCP === 'true' ||
+  process.env.MCP_TRANSPORT === 'stdio' ||
+  process.env.PARENT_PROCESS?.includes('code') ||
+  process.env.PARENT_PROCESS?.includes('mcp') ||
+  (!process.stdout.isTTY &&
+    (!process.stdin.isTTY || process.stdin.isTTY === undefined) &&
+    process.ppid);
+
+if (isMcpEnvironment) {
+  // In MCP environments, capture and suppress dotenv output to prevent parsing errors
+  const originalConsoleLog = console.log;
+  const originalConsoleWarn = console.warn;
+
+  // Temporarily suppress console output during dotenv loading
+  console.log = () => {};
+  console.warn = () => {};
+
+  try {
+    dotenv.config({ debug: false });
+  } finally {
+    // Restore console methods
+    console.log = originalConsoleLog;
+    console.warn = originalConsoleWarn;
+  }
+} else {
+  dotenv.config();
+}
 
 class SqlServerMCP {
   constructor() {
     this.server = new Server(
       {
         name: 'warp-sql-server-mcp',
-        version: VERSION
+        version: VERSION,
+        description: packageJson.description
       },
       {
         capabilities: {
-          tools: {}
-        }
+          tools: {},
+          resources: {},
+          logging: {}
+        },
+        instructions:
+          "🗄️ SQL Server MCP Server - Enterprise-grade database operations with graduated safety levels\n\n📊 Available Operations:\n• Database exploration: list_databases, list_tables, describe_table\n• Data operations: execute_query, get_table_data, export_table_csv\n• Performance analysis: get_performance_stats, analyze_query_performance\n• Query optimization: get_index_recommendations, detect_query_bottlenecks\n• Server diagnostics: get_server_info, get_connection_health\n\n🔒 Security Features:\n• Three-tier safety system with read-only, DML, and DDL restrictions\n• Query validation and SQL injection protection\n• Comprehensive audit logging and performance monitoring\n\n⚙️ Configuration:\n• Use 'get_server_info' tool to view current security settings\n• Supports both SQL Server and Windows authentication\n• Enterprise secret management (Azure Key Vault, AWS Secrets Manager)\n\n🚀 Quick Start: Try 'list_databases' to explore available databases"
       }
     );
 
@@ -206,6 +240,11 @@ class SqlServerMCP {
     // Register tools from the tool registry
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: getAllTools()
+    }));
+
+    // Handle resources list (return empty since this server only provides tools)
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+      resources: []
     }));
 
     // Handle tool calls
@@ -709,7 +748,7 @@ class SqlServerMCP {
         structuredLogging: 'Winston-based with timestamps and metadata',
         mainLogFile: this.logger.config.logFile,
         securityLogFile: this.logger.config.securityLogFile,
-        developmentMode: process.env.NODE_ENV !== 'production',
+        developmentMode: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test',
         outputTargets: {
           console: 'stdout/stderr (captured by Warp)',
           fileLogging: this.logger.config.logFile ? 'Enabled' : 'Console only',

@@ -792,4 +792,62 @@ describe('Logger', () => {
       });
     });
   });
+
+  describe('Environment Detection', () => {
+    beforeEach(() => {
+      logger = new Logger();
+    });
+
+    test('should detect development environment when in project directory', () => {
+      // Since we're running tests in the project directory, this should return true
+      const isDev = logger._isDevelopmentEnvironment();
+      expect(isDev).toBe(true);
+    });
+
+    test('should respect NODE_ENV environment variable', () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+
+      try {
+        // Test development environment
+        process.env.NODE_ENV = 'development';
+        const logger1 = new Logger();
+        expect(logger1._isDevelopmentEnvironment()).toBe(true);
+
+        // Test test environment
+        process.env.NODE_ENV = 'test';
+        const logger2 = new Logger();
+        expect(logger2._isDevelopmentEnvironment()).toBe(true);
+
+        // Test production environment (should still be true because we're in project dir)
+        process.env.NODE_ENV = 'production';
+        const logger3 = new Logger();
+        expect(logger3._isDevelopmentEnvironment()).toBe(true); // Still true due to project detection
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
+    test('should provide smart log file defaults', () => {
+      const defaults = logger._getSmartLogDefaults();
+
+      expect(defaults).toHaveProperty('logFile');
+      expect(defaults).toHaveProperty('securityLogFile');
+      expect(typeof defaults.logFile).toBe('string');
+      expect(typeof defaults.securityLogFile).toBe('string');
+    });
+
+    test('should use appropriate log paths based on environment', () => {
+      const defaults = logger._getSmartLogDefaults();
+
+      if (logger._isDevelopmentEnvironment()) {
+        // In development, should use project directory
+        expect(defaults.logFile).toContain('logs/server.log');
+        expect(defaults.securityLogFile).toContain('logs/security-audit.log');
+      } else {
+        // In production, should use user state directory
+        expect(defaults.logFile).toContain('warp-sql-server-mcp');
+        expect(defaults.securityLogFile).toContain('warp-sql-server-mcp');
+      }
+    });
+  });
 });

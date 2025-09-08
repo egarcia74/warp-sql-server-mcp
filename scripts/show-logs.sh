@@ -21,6 +21,7 @@
 #   --follow, -f      Follow logs in real-time (like tail -f)
 #   --all             Show all log entries (default shows last 50)
 #   --compact, -c     Show compact format without JSON details
+#   --file, --path    Specify custom log file path (bypasses smart detection)
 #   --help, -h        Show this help message
 
 set -euo pipefail
@@ -32,6 +33,7 @@ ALL_MODE=false
 COMPACT_MODE=false
 HELP_MODE=false
 MAX_LINES=50
+CUSTOM_FILE_PATH=""
 
 # Color codes
 readonly RED='\033[0;31m'
@@ -70,6 +72,7 @@ OPTIONS:
     --follow, -f              Follow logs in real-time (like tail -f)
     --all                     Show all log entries (default shows last 50)
     --compact, -c             Show compact format without JSON details
+    --file PATH, --path PATH  Specify custom log file path (bypasses smart detection)
     --help, -h                Show this help message
 
 EXAMPLES:
@@ -87,6 +90,10 @@ EXAMPLES:
     # Show all server logs in compact format
     ./scripts/show-logs.sh server --all --compact
 
+    # Use custom log file path
+    ./scripts/show-logs.sh --file /path/to/custom.log
+    ./scripts/show-logs.sh --path ~/my-logs/server.log --follow
+
     # NPM integration
     npm run logs
     npm run logs:server
@@ -97,6 +104,7 @@ EXAMPLES:
 
 FEATURES:
     🎯 Smart path detection (development vs production)
+    📁 Custom file path support (--file or --path)
     📄 Clean JSON log formatting with proper indentation
     🎨 Color-coded log levels and timestamps
     📊 Intelligent message content display
@@ -104,42 +112,105 @@ FEATURES:
     🔍 Automatic log file discovery
 
 SMART PATH DETECTION:
-    Development:  ./logs/warp-sql-server-mcp.log
-                  ./logs/warp-sql-server-mcp-security.log
-    Production:   ~/.local/state/warp-sql-server-mcp/warp-sql-server-mcp.log
-                  ~/.local/state/warp-sql-server-mcp/warp-sql-server-mcp-security.log
+    Development:  ./logs/server.log
+                  ./logs/security-audit.log
+    Production:   ~/.local/state/warp-sql-server-mcp/server.log
+                  ~/.local/state/warp-sql-server-mcp/security-audit.log
+                  (Windows: %LOCALAPPDATA%/warp-sql-server-mcp/server.log)
 
 EOF
 }
 
-# Function to detect the correct log file path
+# Function to determine if we're in development environment (matches Logger class logic)
+is_development_environment() {
+    # Method 1: Check if we're in project directory (has package.json with correct name)
+    if [[ -f "package.json" ]]; then
+        if command -v jq >/dev/null 2>&1; then
+            local pkg_name
+            pkg_name=$(jq -r '.name' package.json 2>/dev/null || echo "")
+            if [[ "$pkg_name" == "warp-sql-server-mcp" ]]; then
+                return 0
+            fi
+        else
+            # Fallback without jq
+            if grep -q '"name".*"warp-sql-server-mcp"' package.json 2>/dev/null; then
+                return 0
+            fi
+        fi
+    fi
+
+    # Method 2: Check NODE_ENV
+    if [[ "${NODE_ENV:-}" == "development" || "${NODE_ENV:-}" == "test" ]]; then
+        return 0
+    fi
+
+    # Method 3: Check if we're in typical development locations
+    local cwd
+    cwd=$(pwd)
+    if [[ "$cwd" == *"/src/"* || "$cwd" == *"/dev/"* || "$cwd" == *"/repos/"* || "$cwd" == *"/projects/"* ]]; then
+        return 0
+    fi
+
+    # Method 4: Check if we're running from npm/node_modules (production install)
+    if [[ "$cwd" == *"node_modules"* ]]; then
+        return 1
+    fi
+
+    # Default to production for safety
+    return 1
+}
+
+# Function to detect the correct log file path (matches Logger class smart defaults)
 get_log_path() {
     local log_type="$1"
-    local dev_dir="./logs"
-    local prod_dir="${XDG_STATE_HOME:-$HOME/.local/state}/warp-sql-server-mcp"
     
-    case "$log_type" in
-        "server")
-            local dev_file="$dev_dir/warp-sql-server-mcp.log"
-            local prod_file="$prod_dir/warp-sql-server-mcp.log"
-            ;;
-        "audit")
-            local dev_file="$dev_dir/warp-sql-server-mcp-security.log"
-            local prod_file="$prod_dir/warp-sql-server-mcp-security.log"
-            ;;
-        *)
-            echo "❌ Invalid log type: $log_type"
-            exit 1
-            ;;
-    esac
-    
-    # Check development path first
-    if [[ -f "$dev_file" ]]; then
-        echo "$dev_file"
-    elif [[ -f "$prod_file" ]]; then
-        echo "$prod_file"
+    if is_development_environment; then
+        # Development: Use project directory logs (matches Logger class)
+        case "$log_type" in
+            "server")
+                echo "./logs/server.log"
+                ;;
+            "audit")
+                echo "./logs/security-audit.log"
+                ;;
+            *)
+                echo "❌ Invalid log type: $log_type" >&2
+                exit 1
+                ;;
+        esac
     else
-        echo ""
+        # Production: Use user state directory (matches Logger class)
+        if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+            # Windows
+            local app_data="${LOCALAPPDATA:-$HOME/AppData/Local}"
+            case "$log_type" in
+                "server")
+                    echo "$app_data/warp-sql-server-mcp/server.log"
+                    ;;
+                "audit")
+                    echo "$app_data/warp-sql-server-mcp/security-audit.log"
+                    ;;
+                *)
+                    echo "❌ Invalid log type: $log_type" >&2
+                    exit 1
+                    ;;
+            esac
+        else
+            # Unix/Linux/macOS
+            local state_dir="$HOME/.local/state/warp-sql-server-mcp"
+            case "$log_type" in
+                "server")
+                    echo "$state_dir/server.log"
+                    ;;
+                "audit")
+                    echo "$state_dir/security-audit.log"
+                    ;;
+                *)
+                    echo "❌ Invalid log type: $log_type" >&2
+                    exit 1
+                    ;;
+            esac
+        fi
     fi
 }
 
@@ -292,6 +363,15 @@ while [[ $# -gt 0 ]]; do
             COMPACT_MODE=true
             shift
             ;;
+        --file|--path)
+            if [[ -n "${2:-}" ]]; then
+                CUSTOM_FILE_PATH="$2"
+                shift 2
+            else
+                echo "❌ Error: --file/--path requires a file path argument"
+                exit 1
+            fi
+            ;;
         --help|-h)
             HELP_MODE=true
             shift
@@ -324,24 +404,46 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # Get the log file path
-LOG_FILE=$(get_log_path "$LOG_TYPE")
+if [[ -n "$CUSTOM_FILE_PATH" ]]; then
+    LOG_FILE="$CUSTOM_FILE_PATH"
+    echo -e "${CYAN}📁 Using custom file path: $LOG_FILE${NC}"
+else
+    LOG_FILE=$(get_log_path "$LOG_TYPE")
+fi
 
-if [[ -z "$LOG_FILE" ]]; then
-    echo "❌ No log file found for type: $LOG_TYPE"
-    echo ""
-    echo "🔍 Checked paths:"
-    case "$LOG_TYPE" in
-        "server")
-            echo "   Development: ./logs/warp-sql-server-mcp.log"
-            echo "   Production:  ~/.local/state/warp-sql-server-mcp/warp-sql-server-mcp.log"
-            ;;
-        "audit")
-            echo "   Development: ./logs/warp-sql-server-mcp-security.log"
-            echo "   Production:  ~/.local/state/warp-sql-server-mcp/warp-sql-server-mcp-security.log"
-            ;;
-    esac
-    echo ""
-    echo "💡 Make sure the MCP server is running and has been active to generate logs"
+# Check if log file exists
+if [[ ! -f "$LOG_FILE" ]]; then
+    if [[ -n "$CUSTOM_FILE_PATH" ]]; then
+        echo "❌ Custom log file not found: $LOG_FILE"
+        echo "💡 Verify the file path and ensure the file exists"
+    else
+        echo "❌ No log file found for type: $LOG_TYPE"
+        echo ""
+        echo "🔍 Expected path: $LOG_FILE"
+        echo "🌍 Environment: $(is_development_environment && echo "Development" || echo "Production")"
+        echo ""
+        echo "📁 All possible paths for $LOG_TYPE logs:"
+        case "$LOG_TYPE" in
+            "server")
+                echo "   Development: ./logs/server.log"
+                echo "   Production:  ~/.local/state/warp-sql-server-mcp/server.log"
+                if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+                    echo "   Windows:     %LOCALAPPDATA%/warp-sql-server-mcp/server.log"
+                fi
+                ;;
+            "audit")
+                echo "   Development: ./logs/security-audit.log"
+                echo "   Production:  ~/.local/state/warp-sql-server-mcp/security-audit.log"
+                if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+                    echo "   Windows:     %LOCALAPPDATA%/warp-sql-server-mcp/security-audit.log"
+                fi
+                ;;
+        esac
+        echo ""
+        echo "💡 Make sure the MCP server is running and has been active to generate logs"
+        echo "💡 Check that logging is enabled in your MCP server configuration"
+        echo "💡 Or use --file to specify a custom log file path"
+    fi
     exit 1
 fi
 
@@ -354,12 +456,14 @@ fi
 
 # Determine log file source for display
 log_source=""
-if [[ "$LOG_FILE" =~ \./logs/.* ]]; then
+if [[ -n "$CUSTOM_FILE_PATH" ]]; then
+    log_source="(Custom Path)"
+elif [[ "$LOG_FILE" =~ \./logs/.* ]]; then
     log_source="(Development)"
 elif [[ "$LOG_FILE" =~ .*\.local/state/warp-sql-server-mcp.* ]] || [[ "$LOG_FILE" =~ .*/warp-sql-server-mcp/warp-sql-server-mcp.*\.log$ ]]; then
     log_source="(Production)"
 else
-    log_source="(Custom Path)"
+    log_source="(Auto-detected)"
 fi
 
 # Display header
@@ -383,7 +487,7 @@ if [[ "$FOLLOW_MODE" == true ]]; then
     tail -f -n 0 "$LOG_FILE" | process_log_stream
     
 elif [[ "$ALL_MODE" == true ]]; then
-    local total_lines=$(wc -l < "$LOG_FILE")
+    total_lines=$(wc -l < "$LOG_FILE")
     echo -e "${GRAY}📏 Showing: All $total_lines entries${NC}"
     if [[ "$COMPACT_MODE" == true ]]; then
         echo -e "${GRAY}📋 Format: Compact${NC}"

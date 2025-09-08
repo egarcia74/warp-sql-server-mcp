@@ -1,5 +1,10 @@
 # Integration Test Organization Summary
 
+> **Note**: This document reflects historical changes. The current npm scripts have been updated:
+>
+> - `npm run test:integration:manual` (was `test:manual`)
+> - `npm run test:integration:protocol` (was `test:manual:protocol`)
+
 ## 🎯 **Changes Made**
 
 We have successfully reorganized the integration test files to ensure they are **properly isolated** from automated CI/CD processes while still being easily accessible for manual validation.
@@ -41,31 +46,34 @@ exclude: [
 
 ## 🚀 **New npm Scripts**
 
-### **Manual Integration Test Scripts**
+### **Manual Integration Test Scripts** (Historical - Now Updated)
 
 ```bash
-# Run all 40 manual integration tests
-npm run test:manual
+# Current scripts (updated):
+npm run test:integration:manual    # Runs all phases sequentially
 
-# Run all phases sequentially
-npm run test:manual:all
-
-# Run individual phases
-npm run test:manual:phase1    # 20 tests - Read-only security
-npm run test:manual:phase2    # 10 tests - DML operations
-npm run test:manual:phase3    # 10 tests - DDL operations
+# Historical scripts (documented here for reference):
+# npm run test:manual              # Old name
+# npm run test:manual:phase1       # Individual phases no longer separate
+# npm run test:manual:phase2       # Now run together in test:integration:manual
+# npm run test:manual:phase3
 ```
 
-### **Script Implementation**
+### **Script Implementation** (Historical Reference)
 
-Added to `package.json`:
+**Note**: These scripts have been restructured. Current implementation uses `test:integration:manual`.
+
+Historical package.json entries (for reference):
 
 ```json
+// OLD (documented for historical reference):
 "test:manual": "npm run test:manual:all",
 "test:manual:all": "echo '🧪 Running all manual integration tests...' && npm run test:manual:phase1 && npm run test:manual:phase2 && npm run test:manual:phase3",
-"test:manual:phase1": "echo '\\n🔒 Phase 1: Read-Only Security Testing...' && node test/integration/manual/phase1-readonly-security.test.js",
-"test:manual:phase2": "echo '\\n⚠️  Phase 2: DML Operations Testing...' && node test/integration/manual/phase2-dml-operations.test.js",
-"test:manual:phase3": "echo '\\n🛠️  Phase 3: DDL Operations Testing...' && node test/integration/manual/phase3-ddl-operations.test.js"
+
+// CURRENT (simplified structure):
+"test:integration:manual": "MCP_TESTING_MODE=docker node test/integration/manual/phase1-readonly-security.test.js &&
+  MCP_TESTING_MODE=docker node test/integration/manual/phase2-dml-operations.test.js &&
+  MCP_TESTING_MODE=docker node test/integration/manual/phase3-ddl-operations.test.js",
 ```
 
 ## 📚 **Documentation Updates**

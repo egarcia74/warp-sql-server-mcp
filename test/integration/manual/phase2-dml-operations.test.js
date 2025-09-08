@@ -6,6 +6,7 @@
  */
 
 import { SqlServerMCP } from '../../../index.js';
+import { TestDatabaseHelper } from './test-database-helper.js';
 import { serverConfig } from '../../../lib/config/server-config.js';
 import dotenv from 'dotenv';
 
@@ -40,9 +41,31 @@ console.log('   allowDestructiveOperations:', securityConfig.allowDestructiveOpe
 console.log('   allowSchemaChanges:', securityConfig.allowSchemaChanges);
 console.log('');
 
+// CRITICAL: Ensure configuration is validated
+if (securityConfig.readOnlyMode !== false) {
+  console.error(
+    '❌ CRITICAL: Read-only mode is still enabled! Expected: false, Got:',
+    securityConfig.readOnlyMode
+  );
+  console.error('❌ This will cause all DML tests to fail.');
+  process.exit(1);
+}
+
+if (securityConfig.allowDestructiveOperations !== true) {
+  console.error(
+    '❌ CRITICAL: Destructive operations are not enabled! Expected: true, Got:',
+    securityConfig.allowDestructiveOperations
+  );
+  console.error('❌ This will cause all DML tests to fail.');
+  process.exit(1);
+}
+
 class DmlOperationsTest {
   constructor() {
     this.results = { passed: 0, failed: 0, tests: [] };
+    this.server = null;
+    this.dbHelper = null;
+    this.testDbName = null;
   }
 
   async runTest(name, description, testFn) {
@@ -66,39 +89,65 @@ class DmlOperationsTest {
 
   async runDmlTest() {
     console.log('🚀 Starting Phase 2: DML Operations Test');
-    console.log('========================================\\n');
+    console.log('========================================\n');
 
     console.log('🔧 Current Configuration:');
     console.log('   🔓 Read-Only Mode: FALSE');
     console.log('   ⚠️  Allow Destructive Operations: TRUE');
     console.log('   ✅ Allow Schema Changes: FALSE (DDL still blocked)');
-    console.log('   🔐 SSL Encryption: ENABLED\\n');
+    console.log('   🔐 SSL Encryption: ENABLED\n');
 
-    // Create MCP server instance
-    const server = new SqlServerMCP();
+    // Create MCP server instance - force configuration reload first
+    serverConfig.reload(); // Ensure latest environment variables are loaded
+    this.server = new SqlServerMCP();
+
+    // Verify the server instance has the correct configuration
+    const serverSecurityConfig = this.server.config.getSecurityConfig();
+    console.log('🔍 Server Instance Security Config:');
+    console.log('   readOnlyMode:', serverSecurityConfig.readOnlyMode);
+    console.log('   allowDestructiveOperations:', serverSecurityConfig.allowDestructiveOperations);
+    console.log('   allowSchemaChanges:', serverSecurityConfig.allowSchemaChanges);
+
+    if (serverSecurityConfig.readOnlyMode !== false) {
+      throw new Error(
+        `Server instance still in read-only mode! Expected: false, Got: ${serverSecurityConfig.readOnlyMode}`
+      );
+    }
+
+    // Create database helper and test database
+    this.dbHelper = new TestDatabaseHelper(this.server);
+
+    try {
+      console.log('🏗️  Setting up test environment...');
+      this.testDbName = await this.dbHelper.createTestDatabase('Phase2DML');
+      console.log(`📊 Using test database: ${this.testDbName}\n`);
+    } catch (error) {
+      console.error('❌ Failed to set up test environment:', error.message);
+      throw error;
+    }
 
     console.log('📊 1. VERIFY READ OPERATIONS STILL WORK');
-    console.log('=======================================\\n');
+    console.log('=======================================\n');
 
     // Verify read operations still work
     await this.runTest('select_operations', 'SELECT operations should still work', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         'SELECT COUNT(*) as ProductCount FROM Products',
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
       }
     });
 
-    console.log('\\n🔓 2. TEST DML OPERATIONS (NOW ALLOWED)');
-    console.log('========================================\\n');
+    console.log('\n🔓 2. TEST DML OPERATIONS (NOW ALLOWED)');
+    console.log('========================================\n');
 
     // Test INSERT operation (should now work)
     await this.runTest('insert_operation', 'INSERT should now be ALLOWED', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         "INSERT INTO Categories (CategoryName, Description) VALUES ('TestCategory', 'Test Description for DML testing')",
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
@@ -114,9 +163,9 @@ class DmlOperationsTest {
 
     // Test UPDATE operation (should now work)
     await this.runTest('update_operation', 'UPDATE should now be ALLOWED', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         "UPDATE Categories SET Description = 'Updated test description' WHERE CategoryName = 'TestCategory'",
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
@@ -132,9 +181,9 @@ class DmlOperationsTest {
 
     // Verify the changes were actually made
     await this.runTest('verify_dml_changes', 'Verify DML changes were persisted', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         "SELECT CategoryName, Description FROM Categories WHERE CategoryName = 'TestCategory'",
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
@@ -147,15 +196,15 @@ class DmlOperationsTest {
       }
     });
 
-    console.log('\\n🔒 3. VERIFY DDL OPERATIONS STILL BLOCKED');
-    console.log('==========================================\\n');
+    console.log('\n🔒 3. VERIFY DDL OPERATIONS STILL BLOCKED');
+    console.log('==========================================\n');
 
     // Test CREATE TABLE (should still be blocked)
     await this.runTest('ddl_create_blocked', 'CREATE TABLE should still be BLOCKED', async () => {
       try {
-        await server.executeQuery(
+        await this.server.executeQuery(
           'CREATE TABLE TestDmlTable (ID int PRIMARY KEY, Name nvarchar(100))',
-          'WarpMcpTest'
+          this.testDbName
         );
         throw new Error('CREATE TABLE was NOT blocked - security failure!');
       } catch (error) {
@@ -169,7 +218,7 @@ class DmlOperationsTest {
     // Test DROP TABLE (should still be blocked)
     await this.runTest('ddl_drop_blocked', 'DROP TABLE should still be BLOCKED', async () => {
       try {
-        await server.executeQuery('DROP TABLE IF EXISTS TestDmlTable', 'WarpMcpTest');
+        await this.server.executeQuery('DROP TABLE IF EXISTS TestDmlTable', this.testDbName);
         throw new Error('DROP TABLE was NOT blocked - security failure!');
       } catch (error) {
         if (error.message.includes('Schema changes') || error.message.includes('DROP')) {
@@ -182,9 +231,9 @@ class DmlOperationsTest {
     // Test ALTER TABLE (should still be blocked)
     await this.runTest('ddl_alter_blocked', 'ALTER TABLE should still be BLOCKED', async () => {
       try {
-        await server.executeQuery(
+        await this.server.executeQuery(
           'ALTER TABLE Categories ADD TestColumn nvarchar(50)',
-          'WarpMcpTest'
+          this.testDbName
         );
         throw new Error('ALTER TABLE was NOT blocked - security failure!');
       } catch (error) {
@@ -195,17 +244,17 @@ class DmlOperationsTest {
       }
     });
 
-    console.log('\\n🗑️  4. TEST DELETE OPERATION');
-    console.log('=============================\\n');
+    console.log('\n🗑️  4. TEST DELETE OPERATION');
+    console.log('=============================\n');
 
     // Test DELETE operation (should now work) - Clean up our test data
     await this.runTest(
       'delete_operation',
       'DELETE should now be ALLOWED (cleanup test data)',
       async () => {
-        const result = await server.executeQuery(
+        const result = await this.server.executeQuery(
           "DELETE FROM Categories WHERE CategoryName = 'TestCategory'",
-          'WarpMcpTest'
+          this.testDbName
         );
         if (!result.content || !result.content[0] || !result.content[0].text) {
           throw new Error('No content returned');
@@ -222,9 +271,9 @@ class DmlOperationsTest {
 
     // Verify the test data was cleaned up
     await this.runTest('verify_cleanup', 'Verify test data was properly deleted', async () => {
-      const result = await server.executeQuery(
+      const result = await this.server.executeQuery(
         "SELECT COUNT(*) as TestCount FROM Categories WHERE CategoryName = 'TestCategory'",
-        'WarpMcpTest'
+        this.testDbName
       );
       if (!result.content || !result.content[0] || !result.content[0].text) {
         throw new Error('No content returned');
@@ -287,15 +336,15 @@ class DmlOperationsTest {
       throw new Error('Test data cleanup verification failed - could not determine count');
     });
 
-    console.log('\\n⚡ 5. VERIFY PERFORMANCE MONITORING WORKS');
-    console.log('=========================================\\n');
+    console.log('\n⚡ 5. VERIFY PERFORMANCE MONITORING WORKS');
+    console.log('=========================================\n');
 
     // Quick check that performance monitoring still works
     await this.runTest(
       'performance_monitoring',
       'Performance monitoring should track DML operations',
       async () => {
-        const result = server.getPerformanceStats();
+        const result = this.server.getPerformanceStats();
         if (!result || !result[0] || !result[0].text) {
           throw new Error('No content returned');
         }
@@ -312,9 +361,16 @@ class DmlOperationsTest {
     );
   }
 
+  async cleanup() {
+    if (this.dbHelper) {
+      console.log('\n🧹 Cleaning up test environment...');
+      await this.dbHelper.cleanupAllDatabases();
+    }
+  }
+
   printSummary() {
-    console.log('\\n🎯 PHASE 2: DML OPERATIONS TEST SUMMARY');
-    console.log('=======================================');
+    console.log('\n🎯 PHASE 2 DML OPERATIONS RESULTS');
+    console.log('=================================');
     console.log(`✅ Tests Passed: ${this.results.passed}`);
     console.log(`❌ Tests Failed: ${this.results.failed}`);
     console.log(`📊 Total Tests: ${this.results.passed + this.results.failed}`);
@@ -323,13 +379,13 @@ class DmlOperationsTest {
     );
 
     if (this.results.failed > 0) {
-      console.log('\\n❌ Failed Tests:');
+      console.log('\n❌ Failed Tests:');
       this.results.tests
         .filter(t => t.status === 'FAILED')
         .forEach(t => console.log(`   • ${t.name}: ${t.error}`));
     }
 
-    console.log('\\n🏆 Phase 2 Assessment:');
+    console.log('\n🏆 Phase 2 Assessment:');
     if (this.results.failed === 0) {
       console.log('   ✅ PHASE 2 COMPLETE - DML operations work correctly!');
       console.log('   🔓 INSERT/UPDATE/DELETE operations: WORKING');
@@ -348,8 +404,16 @@ const dmlTest = new DmlOperationsTest();
 try {
   await dmlTest.runDmlTest();
   dmlTest.printSummary();
-  process.exit(0);
+
+  // Exit with failure code if any tests failed
+  if (dmlTest.results.failed > 0) {
+    console.error(`\n💥 ${dmlTest.results.failed} test(s) failed`);
+    process.exit(1);
+  }
 } catch (error) {
-  console.error('💥 DML test failed:', error);
+  console.error('💥 DML test failed:', error.message);
   process.exit(1);
+} finally {
+  await dmlTest.cleanup();
 }
+process.exit(0);
