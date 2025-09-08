@@ -27,6 +27,14 @@ _These happen automatically when you `git commit` - no manual action needed!_
 3. **Re-stage and commit** after fixes
 4. **🚫 NEVER use `--no-verify`** - this violates our quality standards
 
+### **Common markdown linting issues:**
+
+- **Fenced code blocks**: Add language specification (``bash`,``json`, ````text`)
+- **Line length**: Break long lines (max 200 characters)
+- **Trailing spaces**: Remove trailing whitespace
+- **Heading hierarchy**: Ensure proper heading increments (h1 → h2 → h3)
+- **Duplicate headings**: Make headings unique within document
+
 ## 📋 Manual Pre-Commit Verification
 
 ### 1. **Development Checks** (if making significant changes)
@@ -65,6 +73,7 @@ _These happen automatically when you `git commit` - no manual action needed!_
 - [ ] **Review specific changes**: `git diff [filename]`
 - [ ] **Verify no unintended changes**: Review each modified file
 - [ ] **Check for debugging artifacts**: Remove console.logs, debugger statements, TODO comments
+- [ ] **Auto-generated files**: Ensure no auto-generated files are staged (check `.gitignore`)
 
 ### 6. **Dependencies & Configuration**
 
@@ -72,6 +81,7 @@ _These happen automatically when you `git commit` - no manual action needed!_
 - [ ] **Environment variables**: Check if `.env.example` reflects new variables
 - [ ] **Configuration files**: Verify any config changes are documented
 - [ ] **Docker/scripts**: If container or script changes, test locally
+- [ ] **npm script references**: Verify all documentation references to npm scripts are accurate
 
 ## 📝 Staging Changes
 
@@ -98,6 +108,8 @@ git add *.md
 - [ ] **Ensure no sensitive data**: No passwords, API keys, or secrets
 - [ ] **Verify test coverage**: New code should have corresponding tests
 - [ ] **Check file sizes**: Ensure no large files were accidentally added
+- [ ] **Exclude auto-generated files**: Verify files like `.platform-config.json` are not staged
+- [ ] **Validate documentation changes**: Check that updated docs are accurate and complete
 
 ## 🛡️ Enterprise Quality Gates (for significant changes)
 
@@ -121,6 +133,15 @@ git add *.md
 - [ ] **Resource usage**: Consider memory and CPU impact of changes
 - [ ] **Graceful degradation**: Ensure system handles failures gracefully
 - [ ] **Rollback plan**: Consider if changes are easily reversible
+
+### **Checklist Maintenance**
+
+- [ ] **Process improvement**: Did you encounter any issues or steps not covered in this checklist?
+- [ ] **Update checklist**: If gaps were found, update this checklist to help future commits
+- [ ] **Document learnings**: Add common issues, fix commands, or validation steps discovered during this commit
+
+> 💡 **Keep the checklist current**: This checklist should evolve based on real experience. If you found missing steps,
+> unclear instructions, or encountered new types of issues, please update the checklist as part of your commit.
 
 ## ✏️ Commit Message
 
@@ -191,6 +212,12 @@ npm run test:integration      # Integration tests only
 npm run security:audit        # Security vulnerability check
 npm run lint                  # Code quality check
 npm run format:check          # Code formatting validation
+npm run markdown:lint         # Markdown linting check
+
+# Manual fix commands (if pre-commit hooks fail)
+npm run lint:fix              # Auto-fix ESLint issues
+npm run format                # Auto-fix formatting issues
+npm run markdown:fix          # Auto-fix markdown issues
 
 # Pre-commit validation
 git diff --name-only          # See which files changed
