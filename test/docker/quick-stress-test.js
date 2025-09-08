@@ -55,7 +55,7 @@ test('Architecture Detection', () => {
 // Test 2: Docker capabilities detection
 test('Docker Capabilities', () => {
   const info = checkDockerCapabilities();
-  return info && typeof info.hasDocker === 'boolean';
+  return typeof info.hasDocker === 'boolean';
 });
 
 // Test 3: Configuration selection works
@@ -63,7 +63,7 @@ test('Configuration Selection', () => {
   const hostInfo = detectArchitecture();
   const dockerInfo = checkDockerCapabilities();
   const config = chooseBestConfiguration(hostInfo, dockerInfo);
-  return config && config.config && config.config.image;
+  return config.config.image;
 });
 
 // Test 4: Docker is available (developer environment check)

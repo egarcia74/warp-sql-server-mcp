@@ -184,7 +184,7 @@ test('Configuration selection', 'Must choose optimal SQL Server setup for your h
     // Restore console.log
     console.log = originalLog;
 
-    return selectedConfig && selectedConfig.config && selectedConfig.config.image;
+    return selectedConfig.config.image;
   } catch (error) {
     console.log(`     Configuration error: ${error.message}`);
     return false;

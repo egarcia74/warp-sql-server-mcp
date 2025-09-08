@@ -326,7 +326,8 @@ function objectToYaml(obj, indent = 0) {
           value.includes('"') ||
           value.includes("'")
         ) {
-          outputValue = `"${value.replace(/"/g, '\\"')}"`;
+          // Properly escape backslashes first, then double quotes
+          outputValue = `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
         }
         // Quote boolean strings to prevent YAML interpretation
         else if (value === 'true' || value === 'false' || value === 'yes' || value === 'no') {
