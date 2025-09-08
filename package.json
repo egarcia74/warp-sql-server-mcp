@@ -72,7 +72,9 @@
     "ci": "npm run lint && npm run format:check && npm run markdown:lint && npm run links:check:ci && npm run test:coverage && npm run security:audit",
     "security:audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix",
-    "clean": "rm -rf node_modules coverage .vitest"
+    "clean": "rm -rf node_modules coverage .vitest",
+    "cleanup": "./scripts/cleanup-test-processes.sh",
+    "cleanup:processes": "./scripts/cleanup-test-processes.sh"
   },
   "keywords": [
     "mcp",

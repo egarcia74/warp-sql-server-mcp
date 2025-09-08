@@ -70,10 +70,23 @@ test/
 │   │   ├── phase2-dml-operations.test.js
 │   │   └── phase3-ddl-operations.test.js
 │   ├── test-aws-secrets.js      # AWS integration
-│   └── test-azure-secrets.js    # Azure integration
+│   ├── test-azure-secrets.js    # Azure integration
+│   ├── sqlserver-mcp-integration.test.js  # Core MCP integration
+│   └── error-scenarios-integration.test.js # Error handling tests
+├── protocol/                     # MCP protocol tests
+│   └── mcp-client-smoke-test.js  # Protocol communication validation
+├── docker/                       # Docker testing infrastructure
+│   ├── quick-stress-test.js      # Docker stress testing
+│   ├── test-connectivity.js      # Connection validation
+│   ├── verify-platform-detection.js # Platform detection
+│   └── troubleshoot-apple-silicon.js # Apple Silicon troubleshooting
+├── unit/                        # Automated unit tests
+│   └── *.test.js                # Component unit tests
 ├── archived/                     # Deprecated tests
-└── unit/                        # Automated unit tests
-    └── *.test.js
+├── temp/                         # Temporary test artifacts
+├── setup.js                     # Test environment setup
+├── README.md                    # Testing documentation
+└── TEST_IMPROVEMENTS.md         # Testing methodology improvements
 ```
 
 ## 🎯 When to Use Each Test

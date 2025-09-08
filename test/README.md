@@ -8,6 +8,7 @@ This directory contains all test-related files organized by type and purpose.
 test/
 ├── README.md                           # This file - test documentation
 ├── setup.js                            # Global test setup and mocks
+├── TEST_IMPROVEMENTS.md                # Test improvement tracking
 │
 ├── unit/                               # Unit tests (fast, mocked dependencies)
 │   ├── sqlserver-mcp.test.js          # Original monolithic test suite (127 tests)
@@ -23,14 +24,34 @@ test/
 │   ├── response-formatter.test.js     # Response formatting tests
 │   ├── secret-manager.test.js         # Secret management tests
 │   ├── streaming-handler.test.js      # Streaming handler tests
-│   └── mcp-shared-fixtures.js         # Shared test fixtures and utilities
+│   ├── mcp-shared-fixtures.js         # Shared test fixtures and utilities
+│   └── fixtures/                      # Test fixtures and sample data
 │
 ├── integration/                       # Integration tests (real services)
 │   ├── test-aws-secrets.js           # AWS Secrets Manager integration test
-│   └── test-azure-secrets.js         # Azure Key Vault integration test
+│   ├── test-azure-secrets.js         # Azure Key Vault integration test
+│   └── manual/                        # Manual integration tests with live DB
+│       ├── README.md                  # Manual testing documentation
+│       ├── phase1-readonly-security.test.js   # Phase 1: Read-only security tests
+│       ├── phase2-dml-operations.test.js      # Phase 2: DML operations tests
+│       └── phase3-ddl-operations.test.js      # Phase 3: DDL operations tests
 │
-└── utils/                             # Test utilities and helpers
-    └── (future test utilities)
+├── protocol/                          # MCP protocol-level tests
+│   ├── README.md                      # Protocol testing documentation
+│   ├── mcp-client-smoke-test.js      # Basic MCP client communication test
+│   └── mcp-protocol-validation.test.js # Protocol validation tests
+│
+├── docker/                            # Docker-based testing infrastructure
+│   └── (Docker test configurations)
+│
+├── manual/                            # Additional manual test scripts
+│   └── (Manual testing utilities)
+│
+├── temp/                              # Temporary test files and artifacts
+│   └── (Temporary test data)
+│
+└── archived/                          # Archived/legacy test files
+    └── (Archived test files)
 ```
 
 **🚀 New to this project?** Choose your preferred setup:
@@ -57,6 +78,7 @@ Get the MCP server running first, then return here to understand the testing arc
 test/
 ├── README.md                        # This documentation
 ├── setup.js                         # Global test setup and mock configurations
+├── TEST_IMPROVEMENTS.md             # Test improvement tracking
 ├── unit/                            # Unit test suites
 │   ├── sqlserver-mcp.test.js       # Original monolithic test suite (127 tests)
 │   ├── mcp-connection.test.js      # Database connection tests (4 tests)
@@ -66,10 +88,24 @@ test/
 │   ├── mcp-performance-tools.test.js # Performance monitoring tests (22 tests)
 │   ├── mcp-server-lifecycle.test.js # Server lifecycle tests (15 tests)
 │   ├── mcp-shared-fixtures.js      # Shared test fixtures and utilities
+│   ├── fixtures/                   # Test fixtures and sample data
 │   └── [other utility test files]   # Logger, performance monitor, etc.
 ├── integration/                     # Integration tests
 │   ├── test-aws-secrets.js         # AWS Secrets Manager tests
-│   └── test-azure-secrets.js       # Azure Key Vault tests
+│   ├── test-azure-secrets.js       # Azure Key Vault tests
+│   └── manual/                      # Manual integration tests with live DB
+│       ├── README.md                # Manual testing documentation
+│       ├── phase1-readonly-security.test.js   # Phase 1 security tests
+│       ├── phase2-dml-operations.test.js      # Phase 2 DML tests
+│       └── phase3-ddl-operations.test.js      # Phase 3 DDL tests
+├── protocol/                        # MCP protocol-level tests
+│   ├── README.md                    # Protocol testing documentation
+│   ├── mcp-client-smoke-test.js    # Basic MCP client communication test
+│   └── mcp-protocol-validation.test.js # Protocol validation tests
+├── docker/                          # Docker-based testing infrastructure
+├── manual/                          # Additional manual test scripts
+├── temp/                            # Temporary test files and artifacts
+├── archived/                        # Archived/legacy test files
 └── vitest.config.js                 # Test configuration (in root directory)
 ```
 

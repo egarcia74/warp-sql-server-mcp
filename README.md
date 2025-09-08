@@ -328,6 +328,10 @@ npm run logs               # Show recent server logs
 npm run logs:tail          # Follow server logs in real-time
 npm run logs:audit         # Show security audit logs
 npm run logs:tail:audit    # Follow audit logs in real-time
+
+# System maintenance and cleanup
+npm run cleanup            # Clean up leftover test processes
+npm run cleanup:processes  # Same as cleanup (alias)
 ```
 
 ---
