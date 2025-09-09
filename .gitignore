@@ -55,3 +55,7 @@ jspm_packages/
 # JetBrains IDEs
 .idea/
 test/temp/
+
+# Generated Docker platform detection files
+test/docker/.platform-config.json
+test/docker/docker-compose.yml
