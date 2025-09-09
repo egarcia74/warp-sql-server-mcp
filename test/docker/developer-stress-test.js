@@ -99,11 +99,7 @@ test(
   'Architecture classification',
   'Must correctly identify architecture type',
   () =>
-    hostInfo.isAppleSilicon ||
-    hostInfo.isIntelMac ||
-    hostInfo.isLinuxARM64 ||
-    hostInfo.isLinuxAMD64 ||
-    true
+    hostInfo.isAppleSilicon || hostInfo.isIntelMac || hostInfo.isLinuxARM64 || hostInfo.isLinuxAMD64
 );
 
 // Step 2: Docker Environment

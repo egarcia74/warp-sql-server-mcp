@@ -258,15 +258,41 @@ indent_text() {
     fi
 }
 
+# Fallback JSON parsing without jq (basic extraction)
+extract_json_field() {
+    local json="$1"
+    local field="$2"
+    
+    # Use sed to extract field values (basic approach)
+    # This handles simple cases like "field": "value" or "field": value
+    echo "$json" | sed -n 's/.*"'"$field"'"\s*:\s*"\([^"]*\)".*/\1/p' | head -n1 | sed 's/\\"/"/g'
+}
+
+# Fallback function to check if line is valid JSON
+is_valid_json_fallback() {
+    local line="$1"
+    # Basic check: starts with { and ends with }
+    [[ "$line" =~ ^[[:space:]]*\{.*\}[[:space:]]*$ ]]
+}
+
 # Function to format and display a JSON log entry
 format_log_entry() {
     local json_line="$1"
     
-    # Parse JSON fields
-    local timestamp=$(echo "$json_line" | jq -r '.timestamp // empty')
-    local level=$(echo "$json_line" | jq -r '.level // empty')
-    local message=$(echo "$json_line" | jq -r '.message // empty')
-    local service=$(echo "$json_line" | jq -r '.service // empty')
+    # Parse JSON fields using jq if available, otherwise use fallback
+    local timestamp level message service
+    
+    if [[ "$HAS_JQ" == true ]]; then
+        timestamp=$(echo "$json_line" | jq -r '.timestamp // empty')
+        level=$(echo "$json_line" | jq -r '.level // empty')
+        message=$(echo "$json_line" | jq -r '.message // empty')
+        service=$(echo "$json_line" | jq -r '.service // empty')
+    else
+        timestamp=$(extract_json_field "$json_line" "timestamp")
+        level=$(extract_json_field "$json_line" "level")
+        message=$(extract_json_field "$json_line" "message")
+        service=$(extract_json_field "$json_line" "service")
+    fi
     
     # Skip empty or invalid entries
     [[ -z "$timestamp" && -z "$level" && -z "$message" ]] && return
@@ -286,7 +312,13 @@ format_log_entry() {
         local has_additional=false
         
         # Check for configuration content
-        local configuration=$(echo "$json_line" | jq -r '.configuration // empty')
+        local configuration
+        if [[ "$HAS_JQ" == true ]]; then
+            configuration=$(echo "$json_line" | jq -r '.configuration // empty')
+        else
+            configuration=$(extract_json_field "$json_line" "configuration")
+        fi
+        
         if [[ -n "$configuration" ]]; then
             echo -e "${CYAN}Configuration Details:${NC}"
             indent_text "$configuration"
@@ -294,7 +326,12 @@ format_log_entry() {
         fi
         
         # Check for summary data (but skip if configuration is already shown to avoid redundancy)
-        local summary=$(echo "$json_line" | jq -r '.summary // empty')
+        local summary
+        if [[ "$HAS_JQ" == true ]]; then
+            summary=$(echo "$json_line" | jq -r '.summary // empty')
+        else
+            summary=$(extract_json_field "$json_line" "summary")
+        fi
         if [[ -n "$summary" && "$summary" != "null" && -z "$configuration" ]]; then
             echo -e "${CYAN}Summary:${NC}"
             echo "$json_line" | jq -r '.summary' | jq . | indent_text
@@ -302,19 +339,36 @@ format_log_entry() {
         fi
         
         # Check for error details
-        local error_info=$(echo "$json_line" | jq -r '.error // empty')
+        local error_info
+        if [[ "$HAS_JQ" == true ]]; then
+            error_info=$(echo "$json_line" | jq -r '.error // empty')
+        else
+            error_info=$(extract_json_field "$json_line" "error")
+        fi
+        
         if [[ -n "$error_info" && "$error_info" != "null" ]]; then
             echo -e "${RED}Error Details:${NC}"
-            echo "$json_line" | jq -r '.error' | jq . | indent_text
+            if [[ "$HAS_JQ" == true ]]; then
+                echo "$json_line" | jq -r '.error' | jq . | indent_text
+            else
+                indent_text "$error_info"
+            fi
             has_additional=true
         fi
         
         # Check for other interesting fields (excluding standard ones)
-        local other_fields=$(echo "$json_line" | jq -r '. | del(.timestamp, .level, .message, .service, .configuration, .summary, .error) | to_entries | map(select(.value != null and .value != "")) | from_entries')
-        if [[ "$other_fields" != "{}" && "$other_fields" != "null" ]]; then
-            echo -e "${PURPLE}Additional Data:${NC}"
-            echo "$other_fields" | jq . | indent_text
-            has_additional=true
+        local other_fields
+        if [[ "$HAS_JQ" == true ]]; then
+            other_fields=$(echo "$json_line" | jq -r '. | del(.timestamp, .level, .message, .service, .configuration, .summary, .error) | to_entries | map(select(.value != null and .value != "")) | from_entries')
+            if [[ "$other_fields" != "{}" && "$other_fields" != "null" ]]; then
+                echo -e "${PURPLE}Additional Data:${NC}"
+                echo "$other_fields" | jq . | indent_text
+                has_additional=true
+            fi
+        else
+            # For fallback mode, we'll skip complex field processing since we don't have jq
+            # This is acceptable as it's a fallback mode for basic functionality
+            :
         fi
         
         # Add spacing after entries with additional content
@@ -331,7 +385,18 @@ process_log_stream() {
         [[ "$line" =~ ^[[:space:]]*$ ]] && continue
         
         # Try to parse as JSON
-        if echo "$line" | jq . >/dev/null 2>&1; then
+        local is_json=false
+        if [[ "$HAS_JQ" == true ]]; then
+            if echo "$line" | jq . >/dev/null 2>&1; then
+                is_json=true
+            fi
+        else
+            if is_valid_json_fallback "$line"; then
+                is_json=true
+            fi
+        fi
+        
+        if [[ "$is_json" == true ]]; then
             format_log_entry "$line"
         else
             # Non-JSON line, display as-is with minimal formatting
@@ -396,11 +461,13 @@ if [[ "$HELP_MODE" == true ]]; then
     exit 0
 fi
 
-# Check for required tools
-if ! command -v jq >/dev/null 2>&1; then
-    echo "❌ Error: jq is required but not installed"
-    echo "💡 Install with: brew install jq (macOS) or sudo apt install jq (Linux)"
-    exit 1
+# Check for jq availability
+HAS_JQ=false
+if command -v jq >/dev/null 2>&1; then
+    HAS_JQ=true
+else
+    echo "⚠️  Warning: jq not found, using fallback JSON parsing (limited functionality)"
+    echo "💡 For better formatting: brew install jq (macOS) or sudo apt install jq (Linux)"
 fi
 
 # Get the log file path

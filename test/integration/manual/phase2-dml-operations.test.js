@@ -8,6 +8,7 @@
 import { SqlServerMCP } from '../../../index.js';
 import { TestDatabaseHelper } from './test-database-helper.js';
 import { serverConfig } from '../../../lib/config/server-config.js';
+import { validateServerConfiguration } from '../shared/config-validator.js';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file first
@@ -34,31 +35,14 @@ console.log('   SQL_SERVER_ALLOW_SCHEMA_CHANGES:', process.env.SQL_SERVER_ALLOW_
 console.log('   SQL_SERVER_TRUST_CERT:', process.env.SQL_SERVER_TRUST_CERT);
 
 // Verify the server config actually loaded the changes
-const securityConfig = serverConfig.getSecurityConfig();
-console.log('\n🔍 Server Configuration Loaded:');
-console.log('   readOnlyMode:', securityConfig.readOnlyMode);
-console.log('   allowDestructiveOperations:', securityConfig.allowDestructiveOperations);
-console.log('   allowSchemaChanges:', securityConfig.allowSchemaChanges);
-console.log('');
-
-// CRITICAL: Ensure configuration is validated
-if (securityConfig.readOnlyMode !== false) {
-  console.error(
-    '❌ CRITICAL: Read-only mode is still enabled! Expected: false, Got:',
-    securityConfig.readOnlyMode
-  );
-  console.error('❌ This will cause all DML tests to fail.');
-  process.exit(1);
-}
-
-if (securityConfig.allowDestructiveOperations !== true) {
-  console.error(
-    '❌ CRITICAL: Destructive operations are not enabled! Expected: true, Got:',
-    securityConfig.allowDestructiveOperations
-  );
-  console.error('❌ This will cause all DML tests to fail.');
-  process.exit(1);
-}
+validateServerConfiguration(
+  serverConfig,
+  {
+    readOnlyMode: false,
+    allowDestructiveOperations: true
+  },
+  'DML'
+);
 
 class DmlOperationsTest {
   constructor() {
