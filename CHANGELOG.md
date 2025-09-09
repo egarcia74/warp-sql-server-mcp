@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.5] - 2025-09-09
+
+### 🛠️ Infrastructure Improvements & Development Workflow Enhancement
+
+This patch release improves development workflow with better gitignore management, comprehensive Docker testing infrastructure,
+and enhanced VS Code integration following a major merge of development tooling improvements.
+
+### Fixed - Version Control & Generated Files
+
+- **🗃️ Enhanced .gitignore Management**: Proper exclusion of auto-generated Docker platform detection files
+  - **Platform Detection Files**: Added `test/docker/.platform-config.json` to .gitignore to exclude auto-generated Docker configuration
+  - **Docker Compose Files**: Added `test/docker/docker-compose.yml` to .gitignore for generated Docker compositions
+  - **Merge Conflict Resolution**: Resolved .gitignore conflicts from major development infrastructure merge
+  - **Clean Repository State**: Prevents generated Docker platform-specific configurations from being committed
+
 ### Enhanced - Error Handling & Tool Reliability
 
 - **🔧 Enhanced Error Handling**: Improved error handling throughout the MCP server
@@ -929,6 +944,7 @@ removed for security reasons.
 - Complete release process guide in WARP.md
 - Updated test documentation with current coverage and test counts
 
+[1.7.5]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.7.4...v1.7.5
 [1.4.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.4.0
 [1.3.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.2.0
