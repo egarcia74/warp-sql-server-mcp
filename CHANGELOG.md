@@ -7,36 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.7.5] - 2025-09-09
+## [1.7.6] - 2025-09-09
 
-### 🛠️ Infrastructure Improvements & Development Workflow Enhancement
+### Hotfix - API Consistency & Usability
 
-This patch release improves development workflow with better gitignore management, comprehensive Docker testing infrastructure,
-and enhanced VS Code integration following a major merge of development tooling improvements.
+- **Removed connect() Tool**: The dedicated database connection verification tool was removed for API consistency and to avoid redundant manual connection management.
+  Connection is now always handled automatically by the MCP server. Use `get_connection_health` for status and diagnostics.
 
-### Fixed - Version Control & Generated Files
+### Other changes
 
-- **🗃️ Enhanced .gitignore Management**: Proper exclusion of auto-generated Docker platform detection files
-  - **Platform Detection Files**: Added `test/docker/.platform-config.json` to .gitignore to exclude auto-generated Docker configuration
-  - **Docker Compose Files**: Added `test/docker/docker-compose.yml` to .gitignore for generated Docker compositions
-  - **Merge Conflict Resolution**: Resolved .gitignore conflicts from major development infrastructure merge
-  - **Clean Repository State**: Prevents generated Docker platform-specific configurations from being committed
-
-### Enhanced - Error Handling & Tool Reliability
-
-- **🔧 Enhanced Error Handling**: Improved error handling throughout the MCP server
-  - **McpError Wrapping**: Better error context with proper MCP error types and codes
-  - **Connection Error Management**: Enhanced handling of database connection failures
-  - **Tool Call Error Handling**: Improved error responses for MCP tool invocations
-  - **Logging Integration**: Better error logging with connection manager context
-
-- **🔗 New connect() Tool**: Added dedicated database connection verification tool
-  - **Connection Validation**: Direct tool to test and validate database connections
-  - **Health Check Integration**: Integrated with existing connection health monitoring
-  - **MCP-Compatible**: Accessible through standard MCP tool interface
-  - **Error Reporting**: Clear connection status reporting and error diagnostics
-
-### Added - Testing Infrastructure & Code Quality
+- See 1.7.5 for previous infrastructure and error handling improvements.
 
 - **🧪 Enhanced Testing Framework**: Comprehensive test suite improvements
   - **Unit Test Coverage**: New comprehensive unit tests for main server (test/unit/index.test.js)
@@ -944,7 +924,6 @@ removed for security reasons.
 - Complete release process guide in WARP.md
 - Updated test documentation with current coverage and test counts
 
-[1.7.5]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.7.4...v1.7.5
 [1.4.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.4.0
 [1.3.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/egarcia74/warp-sql-server-mcp/releases/tag/v1.2.0
