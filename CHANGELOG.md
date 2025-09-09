@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Enhanced - Error Handling & Tool Reliability
+
+- **🔧 Enhanced Error Handling**: Improved error handling throughout the MCP server
+  - **McpError Wrapping**: Better error context with proper MCP error types and codes
+  - **Connection Error Management**: Enhanced handling of database connection failures
+  - **Tool Call Error Handling**: Improved error responses for MCP tool invocations
+  - **Logging Integration**: Better error logging with connection manager context
+
+- **🔗 New connect() Tool**: Added dedicated database connection verification tool
+  - **Connection Validation**: Direct tool to test and validate database connections
+  - **Health Check Integration**: Integrated with existing connection health monitoring
+  - **MCP-Compatible**: Accessible through standard MCP tool interface
+  - **Error Reporting**: Clear connection status reporting and error diagnostics
+
+### Added - Testing Infrastructure & Code Quality
+
+- **🧪 Enhanced Testing Framework**: Comprehensive test suite improvements
+  - **Unit Test Coverage**: New comprehensive unit tests for main server (test/unit/index.test.js)
+  - **Protocol Testing**: Simplified MCP protocol startup validation (test/protocol/mcp-server-startup-test.js)
+  - **Mocking Integration**: Enhanced Sinon.js integration for reliable test isolation
+  - **Test Summary Reporting**: New test summary script for better CI/CD feedback
+
+- **🛠️ Code Quality Improvements**: Enhanced code structure and maintainability
+  - **ESLint Compliance**: Fixed all ESLint issues for better code quality
+  - **Constructor Standardization**: Updated analyzer constructors with proper ConnectionManager integration
+  - **Import Cleanup**: Removed unused imports and optimized module loading
+  - **Method Signature Updates**: Standardized method signatures across analysis modules
+
 ### Enhanced - Infrastructure & Development Workflow
 
 - **🚀 VS Code Integration**: Added comprehensive VS Code workspace configuration
