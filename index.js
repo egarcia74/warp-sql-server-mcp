@@ -350,11 +350,6 @@ class SqlServerMCP {
               content: this.getServerInfo(args.include_logs)
             };
 
-          case 'connect':
-            return {
-              content: await this.connect(args.database)
-            };
-
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
         }
@@ -470,32 +465,6 @@ class SqlServerMCP {
       }
 
       throw new McpError(ErrorCode.InternalError, `Query execution failed: ${error.message}`);
-    }
-  }
-
-  /**
-   * Explicitly connect to a database, ensuring the connection pool is active.
-   * This is useful for smoke tests or clients that need to verify connectivity.
-   */
-  async connect(database = null) {
-    try {
-      const pool = await this.connectionManager.connect(database);
-      if (pool && pool.connected) {
-        const dbName = database || this.connectionManager.currentDatabase || 'default';
-        const message = `Successfully connected to database: ${dbName}`;
-        this.logger.info(message);
-        return {
-          content: [{ type: 'text', text: message }]
-        };
-      }
-      throw new Error('Connection attempt did not result in a connected pool.');
-    } catch (error) {
-      this.logger.error('Explicit connect call failed', { error: error.message, database });
-      // Re-throw as an McpError so the client can handle it
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to connect to database: ${error.message}`
-      );
     }
   }
 
