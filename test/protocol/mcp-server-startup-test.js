@@ -104,11 +104,17 @@ class MCPServerStartupTest {
 
       this.serverProcess.stdout.on('data', data => {
         const message = data.toString().trim();
-        console.log('STDOUT:', message);
 
         try {
           const response = JSON.parse(message);
           if (response.id === 1 && response.result) {
+            // Only show detailed JSON response in verbose mode
+            if (process.env.VERBOSE || process.env.DEBUG) {
+              console.log('📋 MCP Initialize Response:');
+              console.log('========================================');
+              console.log(JSON.stringify(response, null, 2));
+              console.log('========================================');
+            }
             console.log('✅ Received valid initialize response');
             clearTimeout(timeout); // Clear timeout immediately
 
