@@ -1,0 +1,50 @@
+services:
+  sqlserver:
+    image: "mcr.microsoft.com/mssql/server:2022-latest"
+    platform: linux/amd64
+    container_name: warp-mcp-sqlserver
+    hostname: warp-mcp-sqlserver
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: WarpMCP123!
+      MSSQL_PID: Developer
+      MSSQL_AGENT_ENABLED: "true"
+      MSSQL_COLLATION: SQL_Latin1_General_CP1_CI_AS
+      MSSQL_TCP_PORT: 1433
+      MSSQL_ENABLE_HADR: 0
+      MSSQL_MEMORY_LIMIT_MB: 2048
+    ports:
+      - 1433:1433
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "WarpMCP123!" -C -Q "SELECT 1" -t 10 || exit 1'
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 45s
+    restart: unless-stopped
+    networks:
+      - warp-mcp-network
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G
+        reservations:
+          memory: 1G
+    init: true
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+volumes:
+  sqlserver_data:
+    driver: local
+networks:
+  warp-mcp-network:
+    driver: bridge

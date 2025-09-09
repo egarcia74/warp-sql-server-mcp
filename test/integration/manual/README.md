@@ -82,12 +82,12 @@ These tests are **intentionally excluded** from:
 
 ```bash
 # Run all three phases sequentially
-npm run test:manual
+npm run test:integration:manual
 
-# Or run individual phases
-npm run test:manual:phase1  # Read-only security
-npm run test:manual:phase2  # DML operations
-npm run test:manual:phase3  # DDL operations
+# Note: Individual phases are now run together within the above command
+# Phase 1: Read-only security tests
+# Phase 2: DML operations tests
+# Phase 3: DDL operations tests
 ```
 
 ### 📋 **Manual Execution**

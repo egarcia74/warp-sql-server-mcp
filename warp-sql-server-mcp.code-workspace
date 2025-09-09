@@ -1,0 +1,37 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "github.copilot.enable": {
+      "*": true,
+      "markdown": true
+    },
+    "github.copilot.chat.welcomeMessage": "always",
+    "github.copilot.editor.enableAutoCompletions": true,
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/coverage/**": true,
+      "**/logs/**": true,
+      "**/.git/**": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/coverage": true,
+      "**/logs": true
+    },
+    "files.associations": {
+      "WARP.md": "markdown",
+      "*.md": "markdown"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "github.copilot",
+      "github.copilot-chat",
+      "ms-vscode.vscode-json"
+    ]
+  }
+}

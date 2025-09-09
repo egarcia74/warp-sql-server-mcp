@@ -245,9 +245,13 @@ warp-sql-server-mcp/
 │   ├── 📄 AWS-SECRETS-GUIDE.md
 │   └── 📄 AZURE-SECRETS-GUIDE.md
 ├── 📁 lib/                     # Core modules
+│   ├── 📁 analysis/            # Query optimization & performance analysis
 │   ├── 📁 config/              # Configuration management
+│   ├── 📁 database/            # Database connection management
 │   ├── 📁 security/            # Security validation
+│   ├── 📁 tools/               # MCP tool implementations
 │   └── 📁 utils/               # Utilities
+├── 📁 scripts/                 # Development and maintenance scripts
 ├── 📁 test/                    # Comprehensive tests
 ├── 📄 index.js                 # Main MCP server
 ├── 📄 package.json             # Project configuration

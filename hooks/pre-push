@@ -4,6 +4,13 @@ set -euo pipefail
 
 echo "[pre-push] Running pre-push checks..."
 
+# Clean up any leftover test processes first
+if [ -f "scripts/cleanup-test-processes.sh" ]; then
+  echo "[pre-push] 🧹 Cleaning up leftover test processes..."
+  ./scripts/cleanup-test-processes.sh
+  echo "[pre-push] ✅ Process cleanup complete."
+fi
+
 # Check if we're in a Node.js project
 if [ ! -f "package.json" ]; then
   echo "[pre-push] No package.json found, skipping Node.js checks"

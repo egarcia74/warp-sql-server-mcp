@@ -101,13 +101,13 @@ describe('SqlServerMCP Integration Tests', () => {
         })
       };
 
-      vi.spyOn(server.connectionManager, 'connect').mockResolvedValue(mockPool);
+      vi.spyOn(server.connectionManager, 'getPool').mockResolvedValue(mockPool);
 
       const result = await server.databaseTools.listDatabases();
 
       expect(result).toBeDefined();
       expect(result[0].text).toContain('master');
-      expect(server.connectionManager.connect).toHaveBeenCalled();
+      expect(server.connectionManager.getPool).toHaveBeenCalled();
     });
 
     test('should validate queries before execution in full pipeline', async () => {
@@ -263,7 +263,7 @@ describe('SqlServerMCP Integration Tests', () => {
         })
       };
 
-      vi.spyOn(server.connectionManager, 'connect').mockResolvedValue(mockPool);
+      vi.spyOn(server.connectionManager, 'getPool').mockResolvedValue(mockPool);
 
       // Perform multiple operations
       await server.executeQuery('SELECT * FROM users');

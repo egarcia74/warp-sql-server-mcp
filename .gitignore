@@ -49,9 +49,15 @@ jspm_packages/
 # macOS
 .DS_Store
 
-# VS Code
-.vscode/
+# VS Code (allow team settings, ignore personal preferences)
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/c_cpp_properties.json
+.vscode/extensions.json
+# Keep settings.json for team standardization
 
 # JetBrains IDEs
 .idea/
 test/temp/
+# Auto-generated files
+test/docker/.platform-config.json

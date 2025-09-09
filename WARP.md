@@ -273,6 +273,29 @@ STREAMING_MAX_RESPONSE_SIZE=1000000
 - **Progress Tracking**: Performance metrics track streaming statistics
 - **Error Resilience**: Proper error handling for large dataset operations
 
+#### Streaming Security Enhancements (v1.7.4+)
+
+**Secure JSON Reconstruction**: The streaming handler now includes comprehensive security validation for JSON chunk processing:
+
+- **Prototype Pollution Protection**: Detects and blocks `__proto__`, `constructor`, and `prototype` key manipulations
+- **Safe JSON Parsing**: Validates JSON structure and prevents malformed data injection
+- **Size Limit Enforcement**: 10MB maximum JSON chunk size to prevent DoS attacks
+- **Input Type Validation**: Ensures only valid string data is processed for JSON parsing
+- **Recursive Security Scanning**: Deep validation of nested object structures
+
+**Security Features**:
+
+```javascript
+// Enhanced streaming security validates:
+- JSON structure integrity before parsing
+- Prototype pollution attempt detection
+- Malicious key pattern recognition
+- Size-based DoS attack prevention
+- Safe reconstruction from trusted chunks
+```
+
+**Security Configuration**: Uses existing streaming settings with additional validation layers - no configuration changes required.
+
 ### ⚡ Performance Monitoring
 
 **Comprehensive Performance Tracking**: Enterprise-grade monitoring and alerting:
@@ -330,7 +353,7 @@ npm start
 
 ### Testing
 
-```bash
+`````bash
 # Run all automated tests (unit + integration)
 npm test
 
@@ -343,18 +366,29 @@ npm run test:coverage
 # Run tests with UI interface
 npm run test:ui
 
+# Run EVERYTHING - complete test suite (recommended for pre-release)
+npm run test:all             # 🚀 Unit + Integration tests (complete test suite)
+
 # Run manual integration tests (requires live database)
-npm run test:manual          # All 3 phases (40 tests)
-npm run test:manual:phase1    # Phase 1: Read-only security (20 tests)
-npm run test:manual:phase2    # Phase 2: DML operations (10 tests)
-npm run test:manual:phase3    # Phase 3: DDL operations (10 tests)
+```bash
+npm run test:integration:manual    # All 3 phases (40 tests)
+# Note: Individual phases are run sequentially within the manual test script
+# Phase 1: Read-only security (20 tests)
+# Phase 2: DML operations (10 tests)
+# Phase 3: DDL operations (10 tests)
+```
 
-# Run performance tests
-npm run test:manual:performance      # ⭐ Fast performance test (~2s, 100% success)
-npm run test:manual:warp-performance # Warp MCP integration test (~10s)
+## Run performance tests
 
-# Run MCP protocol tests (requires live database)
-npm run test:manual:protocol # MCP client-server communication (20 tests)
+```bash
+npm run test:integration:performance # ⭐ Fast performance test (~2s, 100% success)
+npm run test:integration:warp # Warp MCP integration test (~10s)
+```
+
+## Run MCP protocol tests (requires live database)
+
+```bash
+npm run test:integration:protocol # MCP client-server communication (20 tests)
 ```
 
 ### Code Quality and Formatting
@@ -385,7 +419,7 @@ npm run links:check
 npm run links:check:ci
 ```
 
-### Security and Auditing
+## Security and Auditing
 
 ```bash
 # Run security audit (checks for high-severity vulnerabilities)
@@ -393,6 +427,90 @@ npm run security:audit
 
 # Fix security vulnerabilities automatically
 npm run audit:fix
+```
+
+### Security Threat Analysis & Response Process
+
+This section documents standardized procedures for reviewing and responding to security analysis reports from automated tools.
+
+#### CodeQL Security Analysis Workflow
+
+**When CodeQL reports issues:**
+
+1. **Review Alert Details**: Check GitHub Security → Code scanning alerts for specific vulnerability details
+2. **Assess Impact**: Determine if the issue affects production code paths vs. test/development code
+3. **Prioritize Response**:
+   - **Critical/High**: Address immediately with input validation, bounds checking, or safe parsing methods
+   - **Medium**: Schedule for next development cycle
+   - **Low/Info**: Document for future consideration
+
+**Common CodeQL Remediation Patterns:**
+
+- **Integer Parsing**: Replace `parseInt()` with safe parsing methods that include range validation
+- **Regular Expressions**: Add size limits and timeout protection for ReDoS prevention
+- **Input Validation**: Add null checks, type validation, and boundary enforcement
+- **Error Handling**: Implement graceful fallbacks and secure error messages
+
+#### npm Security Audit Workflow
+
+**When npm audit reports vulnerabilities:**
+
+1. **Check Report Date**: npm audit reports can include historical vulnerabilities from supply chain incidents
+2. **Verify Exploitability**: Review if the reported package/version is actually used in production paths
+3. **Research Context**: Check if this is part of a known supply chain incident (e.g., September 8th, 2024 incident)
+4. **Response Actions**:
+   - **True Positives**: Update dependencies immediately
+   - **False Positives**: Document reasoning and monitor for resolution
+   - **Development Dependencies**: Lower priority but track for updates
+
+#### GitHub Security Alerts Response
+
+**For Dependabot and Advanced Security alerts:**
+
+1. **Immediate Assessment**: Review severity level and affected components
+2. **Impact Analysis**: Check if vulnerability affects runtime dependencies vs. development tools
+3. **Remediation Planning**:
+   - **Runtime Dependencies**: Update immediately or implement workarounds
+   - **Development Dependencies**: Schedule updates during next maintenance window
+   - **Test Dependencies**: Update when convenient but monitor for patches
+
+#### Security Enhancement Development Process
+
+**When implementing security improvements:**
+
+1. **Create Comprehensive Tests**: Add security-focused test cases before implementing fixes
+2. **Apply Defense in Depth**: Implement multiple layers of protection (validation + parsing + error handling)
+3. **Maintain Backward Compatibility**: Ensure security improvements don't break existing functionality
+4. **Document Changes**: Update relevant documentation and add inline code comments for complex security logic
+5. **Verify Integration**: Run full test suite and manual integration tests to validate security improvements
+
+#### Ongoing Security Monitoring
+
+**Regular security maintenance tasks:**
+
+- **Weekly**: Review GitHub Security tab for new alerts
+- **Before Releases**: Run `npm run security:audit` and review all findings
+- **Monthly**: Review and update security dependencies
+- **Quarterly**: Conduct comprehensive security review of authentication and validation logic
+
+**Security Metrics Tracking:**
+
+- CodeQL Advanced Security Analysis pass/fail status
+- Number of npm audit vulnerabilities (distinguish true vs. false positives)
+- Time to resolution for security alerts
+- Test coverage for security-critical code paths
+
+### System Maintenance
+
+```bash
+# Clean up leftover test processes to free system memory
+npm run cleanup
+
+# Alternative cleanup command (same functionality)
+npm run cleanup:processes
+
+# Show current system resource usage
+./scripts/cleanup-test-processes.sh
 ```
 
 ### Git Hooks and CI
@@ -425,6 +543,37 @@ Comprehensive checklists for quality git workflows:
   - Troubleshooting guidance for common push failures
   - Advanced push options and force push safety guidelines
   - Pull request creation and post-push validation steps
+
+### Log Viewing Commands
+
+```bash
+# View server logs (smart path detection - development vs production)
+npm run logs
+
+# View server logs (explicit)
+npm run logs:server
+
+# View security audit logs
+npm run logs:audit
+
+# Follow server logs in real-time (like tail -f)
+npm run logs:tail
+npm run logs:tail:server
+
+# Follow security audit logs in real-time
+npm run logs:tail:audit
+
+# Direct script usage with options
+./scripts/show-logs.sh server --compact    # Compact format
+./scripts/show-logs.sh audit --all         # Show all entries
+./scripts/show-logs.sh --help              # Show help
+```
+
+**Smart Path Detection:**
+
+- **Development**: Uses `./logs/server.log` and `./logs/security-audit.log`
+- **Production**: Uses `~/.local/state/warp-sql-server-mcp/` directory
+- **Windows**: Uses `%LOCALAPPDATA%/warp-sql-server-mcp/` directory
 
 ### Environment Setup
 
@@ -689,6 +838,35 @@ Generated files:
 - **Comprehensive Coverage**: 392 unit tests + 40 integration tests + 20 protocol tests cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
+- **🐳 Docker Testing**: Automated containerized SQL Server for zero-configuration testing
+
+### 🐳 **Docker Testing (Recommended for Development)**
+
+**Automated SQL Server Container Testing**: Complete testing environment in Docker containers for fast, consistent validation.
+
+```bash
+# Quick automated testing with container management
+# Docker testing is done automatically via test:integration
+# These individual docker scripts don't exist as separate commands:
+# - All Docker testing is handled through npm run test:integration
+# - Docker containers are managed automatically during integration tests
+
+# Manual container management
+npm run docker:start                  # Start SQL Server 2022 container
+npm run docker:wait                   # Wait for database initialization
+npm run docker:stop                   # Stop and cleanup container
+npm run docker:clean                  # Remove all data and containers
+```
+
+**Docker Benefits:**
+
+- ✅ **Zero Configuration**: Works immediately on any Docker-enabled system
+- ✅ **Complete Isolation**: No interference with existing SQL Server instances
+- ✅ **Consistent Environment**: SQL Server 2022 with standardized test data
+- ✅ **Fast Setup**: 2-3 minutes vs 30+ minutes for manual setup
+- ✅ **Automatic Cleanup**: No leftover test databases or configuration
+
+**[Complete Docker Testing Guide →](test/docker/README.md)**
 
 ### Test Structure
 
@@ -712,6 +890,12 @@ test/
 │   ├── response-formatter.test.js      # Response formatting tests
 │   ├── logger.test.js                  # Logging system tests
 │   └── link-checker.test.js           # Link validation tests
+├── docker/                              # 🐳 Docker testing infrastructure
+│   ├── README.md                        # Docker testing setup guide
+│   ├── docker-compose.yml               # SQL Server container configuration
+│   ├── init-db.sql                     # Database initialization script
+│   ├── .env.docker                     # Docker environment variables
+│   └── wait-for-db.js                  # Database readiness verification
 ├── integration/                         # Integration tests
 │   ├── sqlserver-mcp-integration.test.js  # Automated integration tests (15 tests)
 │   └── manual/                          # 🆕 Manual integration tests (40 tests)
@@ -872,18 +1056,24 @@ The project uses a comprehensive multi-layered tracking system for managing feat
 
 #### **2. Modular Testing Strategy**
 
-```bash
+````bash
 # Test individual components in isolation
 npm run test:watch                    # Watch mode for active development
 npm run test:coverage                 # Component test coverage
+```
 
-# Manual validation for database components
-npm run test:manual:phase1            # Security validation
-npm run test:manual:phase2            # DML operation validation
-npm run test:manual:phase3            # DDL operation validation
+### Manual validation for database components
 
-# End-to-end protocol validation
-npm run test:manual:protocol          # MCP client-server communication
+```bash
+npm run test:integration:manual      # Security validation (all phases)
+npm run test:integration:protocol    # Protocol validation
+npm run test:integration:performance # Performance validation
+```
+
+## End-to-end protocol validation
+
+```bash
+npm run test:integration:protocol # MCP client-server communication
 ```
 
 #### **3. Development Best Practices**
@@ -897,6 +1087,18 @@ npm run test:manual:protocol          # MCP client-server communication
 ### Code Quality Standards
 
 This project maintains high code quality through automated tooling and architectural principles:
+
+#### **No-Compromise Quality Philosophy**
+
+> **📊 Case Study**: For a comprehensive analysis of the challenges and outcomes of implementing
+> **zero-tolerance quality standards**, see [Quality No-Compromise Case Study](docs/QUALITY-NO-COMPROMISE.md).
+>
+> This document captures real-world metrics from the WARP project including:
+> - **525 automated tests** with 100% pass rate enforcement
+> - **74% code coverage** with strict quality gates
+> - **3x development time** vs. 90% reduction in debugging time
+> - **The five critical challenges** teams face with no-compromise quality
+> - **Measurable outcomes** and lessons learned from production implementation
 
 #### **Automated Quality Tools**
 
@@ -953,7 +1155,49 @@ npm run markdown:fix
 git commit -m "Your message"
 ```
 
-### ESLint and Prettier Integration
+### System Maintenance and Resource Management
+
+The project includes comprehensive system maintenance tools to manage development environment resources effectively:
+
+#### **Process Cleanup Infrastructure**
+
+During intensive testing sessions (like our 525-test comprehensive suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
+
+The project includes automated cleanup tools:
+
+```bash
+# Quick cleanup of leftover test processes
+npm run cleanup
+
+# Alternative alias
+npm run cleanup:processes
+
+# Direct script execution
+./scripts/cleanup-test-processes.sh
+```
+
+#### **Automated Integration**
+
+- **Pre-Push Hook Integration**: Cleanup runs automatically before comprehensive testing
+- **Smart Detection**: Only targets actual Vitest test processes (no false positives)
+- **Resource Monitoring**: Reports system load improvements after cleanup
+- **Quality Gate Protection**: Prevents system overload during testing
+
+#### **Real-World Validation**
+
+The cleanup infrastructure has been validated under extreme conditions:
+- **Tested under 138% CPU load** during comprehensive test execution
+- **Freed 1.8GB RAM** from 3 orphaned Vitest processes
+- **Maintained quality standards** while managing system resources
+- **Integrated seamlessly** with existing quality gates
+
+> **📋 Complete Guide**: See [System Maintenance Guide](docs/MAINTENANCE.md) for comprehensive
+> maintenance procedures, troubleshooting, and prevention strategies.
+
+## ESLint and Prettier Integration
+`````
+
+## ESLint and Prettier Integration
 
 The project uses a coordinated approach:
 

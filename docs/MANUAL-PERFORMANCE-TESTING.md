@@ -4,7 +4,7 @@ This document describes how to use the manual performance testing feature to val
 
 ## Overview
 
-The manual performance test (`npm run test:manual:performance`) provides comprehensive validation of:
+The performance test (`npm run test:integration:performance`) provides comprehensive validation of:
 
 - **Performance Monitoring System**: Validates our improved 95% threshold and monitoring accuracy
 - **Connection Pool Health**: Tests pool behavior and health scoring
@@ -16,7 +16,7 @@ The manual performance test (`npm run test:manual:performance`) provides compreh
 ## Running the Test
 
 ```bash
-npm run test:manual:performance
+npm run test:integration:performance
 ```
 
 ## Test Components
@@ -183,7 +183,7 @@ While this is a "manual" test, it can be integrated into automated workflows:
 
 ```bash
 # Example CI script
-npm run test:manual:performance > performance-test-results.txt
+npm run test:integration:performance > performance-test-results.txt
 ```
 
 The test provides structured output that can be parsed for automated analysis and alerting.

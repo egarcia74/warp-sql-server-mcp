@@ -36,6 +36,12 @@ class ImprovedPerformanceTest {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
+      // Set high max listeners early to prevent warnings during concurrent tests
+      // Set max listeners for all streams to handle concurrent operations
+      this.mcpProcess.stdout.setMaxListeners(50);
+      this.mcpProcess.stderr.setMaxListeners(50);
+      this.mcpProcess.stdin.setMaxListeners(50);
+
       let startupOutput = '';
       let startupError = '';
       const startupTimeout = setTimeout(() => {
@@ -281,8 +287,12 @@ class ImprovedPerformanceTest {
     // Temporarily increase max listeners to accommodate concurrent requests
     const originalMaxListeners = this.mcpProcess.stdout.getMaxListeners();
     const originalMaxListenersStderr = this.mcpProcess.stderr.getMaxListeners();
-    this.mcpProcess.stdout.setMaxListeners(count + 10); // Extra buffer for safety
-    this.mcpProcess.stderr.setMaxListeners(count + 10); // Handle stderr as well
+    const originalMaxListenersStdin = this.mcpProcess.stdin.getMaxListeners();
+
+    // Set higher limits for concurrent operations
+    this.mcpProcess.stdout.setMaxListeners(count + 20); // Extra buffer for safety
+    this.mcpProcess.stderr.setMaxListeners(count + 20); // Handle stderr as well
+    this.mcpProcess.stdin.setMaxListeners(count + 20); // Handle stdin as well
 
     const promises = [];
     for (let i = 0; i < count; i++) {
@@ -318,6 +328,7 @@ class ImprovedPerformanceTest {
     // Restore original max listeners
     this.mcpProcess.stdout.setMaxListeners(originalMaxListeners);
     this.mcpProcess.stderr.setMaxListeners(originalMaxListenersStderr);
+    this.mcpProcess.stdin.setMaxListeners(originalMaxListenersStdin);
 
     // Log results
     results.forEach((r, i) => {

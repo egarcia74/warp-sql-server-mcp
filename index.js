@@ -6,6 +6,7 @@ import {
   CallToolRequestSchema,
   ErrorCode,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
   McpError
 } from '@modelcontextprotocol/sdk/types.js';
 import dotenv from 'dotenv';
@@ -30,19 +31,52 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'ut
 const VERSION = packageJson.version;
 
 // Load environment variables
-dotenv.config();
+// Suppress dotenv output in MCP environments to avoid parsing warnings
+const isMcpEnvironment =
+  process.env.VSCODE_MCP === 'true' ||
+  process.env.MCP_TRANSPORT === 'stdio' ||
+  process.env.PARENT_PROCESS?.includes('code') ||
+  process.env.PARENT_PROCESS?.includes('mcp') ||
+  (!process.stdout.isTTY &&
+    (!process.stdin.isTTY || process.stdin.isTTY === undefined) &&
+    process.ppid);
+
+if (isMcpEnvironment) {
+  // In MCP environments, capture and suppress dotenv output to prevent parsing errors
+  const originalConsoleLog = console.log;
+  const originalConsoleWarn = console.warn;
+
+  // Temporarily suppress console output during dotenv loading
+  console.log = () => {};
+  console.warn = () => {};
+
+  try {
+    dotenv.config({ debug: false });
+  } finally {
+    // Restore console methods
+    console.log = originalConsoleLog;
+    console.warn = originalConsoleWarn;
+  }
+} else {
+  dotenv.config();
+}
 
 class SqlServerMCP {
   constructor() {
     this.server = new Server(
       {
         name: 'warp-sql-server-mcp',
-        version: VERSION
+        version: VERSION,
+        description: packageJson.description
       },
       {
         capabilities: {
-          tools: {}
-        }
+          tools: {},
+          resources: {},
+          logging: {}
+        },
+        instructions:
+          "🗄️ SQL Server MCP Server - Enterprise-grade database operations with graduated safety levels\n\n📊 Available Operations:\n• Database exploration: list_databases, list_tables, describe_table\n• Data operations: execute_query, get_table_data, export_table_csv\n• Performance analysis: get_performance_stats, analyze_query_performance\n• Query optimization: get_index_recommendations, detect_query_bottlenecks\n• Server diagnostics: get_server_info, get_connection_health\n\n🔒 Security Features:\n• Three-tier safety system with read-only, DML, and DDL restrictions\n• Query validation and SQL injection protection\n• Comprehensive audit logging and performance monitoring\n\n⚙️ Configuration:\n• Use 'get_server_info' tool to view current security settings\n• Supports both SQL Server and Windows authentication\n• Enterprise secret management (Azure Key Vault, AWS Secrets Manager)\n\n🚀 Quick Start: Try 'list_databases' to explore available databases"
       }
     );
 
@@ -55,8 +89,10 @@ class SqlServerMCP {
     this.logger = new Logger({
       level: this.config.logging?.logLevel || 'info',
       enableSecurityAudit: this.config.logging?.securityAudit ?? false,
-      logFile: process.env.LOG_FILE,
-      securityLogFile: process.env.SECURITY_LOG_FILE
+      // Only pass log file paths if they are explicitly set
+      // This allows the Logger to use smart defaults when not specified
+      ...(process.env.LOG_FILE && { logFile: process.env.LOG_FILE }),
+      ...(process.env.SECURITY_LOG_FILE && { securityLogFile: process.env.SECURITY_LOG_FILE })
     });
 
     this.connectionManager = new ConnectionManager(this.config.getConnectionConfig());
@@ -68,8 +104,8 @@ class SqlServerMCP {
     this.databaseTools = new DatabaseToolsHandler(this.connectionManager, this.performanceMonitor);
 
     // Initialize analyzers
-    this.queryOptimizer = new QueryOptimizer();
-    this.bottleneckDetector = new BottleneckDetector();
+    this.queryOptimizer = new QueryOptimizer(this.connectionManager);
+    this.bottleneckDetector = new BottleneckDetector(this.connectionManager);
 
     // Setup tool handlers
     this.setupToolHandlers();
@@ -206,8 +242,13 @@ class SqlServerMCP {
       tools: getAllTools()
     }));
 
+    // Handle resources list (return empty since this server only provides tools)
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+      resources: []
+    }));
+
     // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async request => {
+    this.handleCallToolRequest = async request => {
       const { name, arguments: args } = request.params;
 
       try {
@@ -309,16 +350,24 @@ class SqlServerMCP {
               content: this.getServerInfo(args.include_logs)
             };
 
+          case 'connect':
+            return {
+              content: await this.connect(args.database)
+            };
+
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
         }
       } catch (error) {
+        // Ensure all thrown errors are McpError instances
         if (error instanceof McpError) {
           throw error;
         }
+        // Wrap other errors in a generic McpError
         throw new McpError(ErrorCode.InternalError, `Tool execution failed: ${error.message}`);
       }
-    });
+    };
+    this.server.setRequestHandler(CallToolRequestSchema, this.handleCallToolRequest);
   }
 
   /**
@@ -425,6 +474,32 @@ class SqlServerMCP {
   }
 
   /**
+   * Explicitly connect to a database, ensuring the connection pool is active.
+   * This is useful for smoke tests or clients that need to verify connectivity.
+   */
+  async connect(database = null) {
+    try {
+      const pool = await this.connectionManager.connect(database);
+      if (pool && pool.connected) {
+        const dbName = database || this.connectionManager.currentDatabase || 'default';
+        const message = `Successfully connected to database: ${dbName}`;
+        this.logger.info(message);
+        return {
+          content: [{ type: 'text', text: message }]
+        };
+      }
+      throw new Error('Connection attempt did not result in a connected pool.');
+    } catch (error) {
+      this.logger.error('Explicit connect call failed', { error: error.message, database });
+      // Re-throw as an McpError so the client can handle it
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to connect to database: ${error.message}`
+      );
+    }
+  }
+
+  /**
    * Format query results for display
    */
   formatQueryResults(data) {
@@ -463,39 +538,71 @@ class SqlServerMCP {
   }
 
   // Connection management methods for test compatibility
-  async connectToDatabase() {
-    return await this.connectionManager.connect();
+  async connectToDatabase(...args) {
+    try {
+      return await this.connectionManager.connect(...args);
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   // Database operation methods that delegate to handlers
-  async listDatabases() {
-    return { content: await this.databaseTools.listDatabases() };
+  async listDatabases(...args) {
+    try {
+      return { content: await this.databaseTools.listDatabases(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async listTables(database, schema) {
-    return { content: await this.databaseTools.listTables(database, schema) };
+  async listTables(...args) {
+    try {
+      return { content: await this.databaseTools.listTables(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async describeTable(tableName, database, schema) {
-    return { content: await this.databaseTools.describeTable(tableName, database, schema) };
+  async describeTable(...args) {
+    try {
+      return { content: await this.databaseTools.describeTable(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async listForeignKeys(database, schema) {
-    return { content: await this.databaseTools.listForeignKeys(database, schema) };
+  async listForeignKeys(...args) {
+    try {
+      return { content: await this.databaseTools.listForeignKeys(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async getTableData(tableName, database, schema, limit, offset) {
-    return {
-      content: await this.databaseTools.getTableData(tableName, database, schema, limit, offset)
-    };
+  async getTableData(...args) {
+    try {
+      return {
+        content: await this.databaseTools.getTableData(...args)
+      };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async exportTableCsv(tableName, database, schema) {
-    return { content: await this.databaseTools.exportTableCsv(tableName, database, schema) };
+  async exportTableCsv(...args) {
+    try {
+      return { content: await this.databaseTools.exportTableCsv(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async explainQuery(query, database) {
-    return { content: await this.databaseTools.explainQuery(query, database) };
+  async explainQuery(...args) {
+    try {
+      return { content: await this.databaseTools.explainQuery(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   // Performance monitoring methods
@@ -559,20 +666,24 @@ class SqlServerMCP {
 
   // Query optimization methods
   async getIndexRecommendations(database) {
-    const recommendations = await this.queryOptimizer.analyzeIndexUsage(database);
-    return [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            success: true,
-            data: recommendations
-          },
-          null,
-          2
-        )
-      }
-    ];
+    try {
+      const recommendations = await this.queryOptimizer.analyzeIndexUsage(database);
+      return [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              success: true,
+              data: recommendations
+            },
+            null,
+            2
+          )
+        }
+      ];
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   async analyzeQueryPerformance(query, database) {
@@ -593,37 +704,45 @@ class SqlServerMCP {
   }
 
   async detectQueryBottlenecks(database) {
-    const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database);
-    return [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            success: true,
-            data: bottlenecks
-          },
-          null,
-          2
-        )
-      }
-    ];
+    try {
+      const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database);
+      return [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              success: true,
+              data: bottlenecks
+            },
+            null,
+            2
+          )
+        }
+      ];
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   async getOptimizationInsights(database) {
-    const insights = await this.queryOptimizer.getOptimizationInsights(database);
-    return [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            success: true,
-            data: insights
-          },
-          null,
-          2
-        )
-      }
-    ];
+    try {
+      const insights = await this.queryOptimizer.getOptimizationInsights(database);
+      return [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              success: true,
+              data: insights
+            },
+            null,
+            2
+          )
+        }
+      ];
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   /**
@@ -675,7 +794,9 @@ class SqlServerMCP {
         logging: {
           level: this.logger.config.level,
           securityAudit: this.logger.config.enableSecurityAudit,
-          responseFormat: this.config.logging.responseFormat
+          responseFormat: this.config.logging.responseFormat,
+          logFile: this.logger.config.logFile || 'Not configured (console only)',
+          securityLogFile: this.logger.config.securityLogFile || 'Not configured (console only)'
         },
         streaming: {
           enabled: this.config.streaming.enabled,
@@ -696,12 +817,21 @@ class SqlServerMCP {
     };
 
     if (includeLogs) {
-      // Add some recent log information
+      // Add detailed logging information including file paths
       serverInfo.logging = {
-        note: 'MCP server logs are sent to stdout/stderr and captured by Warp',
-        logLocation: 'Warp MCP log file (see Warp settings)',
+        note: "MCP server logs provide detailed insights into the system's operations and security events.",
+        level: this.logger.config.level,
+        securityAudit: this.logger.config.enableSecurityAudit ? 'Enabled' : 'Disabled',
+        logLocation: 'stdout/stderr (captured by Warp)',
         structuredLogging: 'Winston-based with timestamps and metadata',
-        securityAudit: this.logger.config.enableSecurityAudit ? 'Enabled' : 'Disabled'
+        mainLogFile: this.logger.config.logFile,
+        securityLogFile: this.logger.config.securityLogFile,
+        developmentMode: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test',
+        outputTargets: {
+          console: 'stdout/stderr (captured by Warp)',
+          fileLogging: this.logger.config.logFile ? 'Enabled' : 'Console only',
+          structuredLogging: 'Winston-based with timestamps and metadata'
+        }
       };
     }
 
