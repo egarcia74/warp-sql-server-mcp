@@ -276,6 +276,8 @@ describe('get_server_info Tool', () => {
 
       expect(data.data.logging).toBeDefined();
       expect(data.data.logging.note).toContain('MCP server logs');
+      expect(data.data.logging.note).toContain('detailed insights');
+      expect(data.data.logging.note).toContain('security events');
       expect(data.data.logging.logLocation).toContain('Warp');
       expect(data.data.logging.structuredLogging).toContain('Winston');
       expect(data.data.logging.securityAudit).toMatch(/Enabled|Disabled/);

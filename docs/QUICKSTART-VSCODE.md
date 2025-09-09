@@ -174,18 +174,34 @@ To modify security settings, edit your config file:
 
 ## Troubleshooting
 
+**📋 Get comprehensive help:**
+
+```bash
+npm run help               # Show all available commands with descriptions
+```
+
+**📊 Monitor server activity:**
+
+```bash
+npm run logs               # Show recent server logs
+npm run logs:tail          # Follow logs in real-time for debugging
+npm run logs:audit         # Show security audit logs
+```
+
 **Copilot not finding the MCP server?**
 
 1. Verify the server is installed: `warp-sql-server-mcp config`
 2. Check VS Code settings have the correct MCP configuration
 3. Restart VS Code completely
 4. Check VS Code Developer Console (`Help` → `Toggle Developer Tools`)
+5. Monitor MCP server logs: `npm run logs:tail` in a separate terminal
 
 **Connection issues?**
 
 - Verify SQL Server is running: `telnet localhost 1433`
 - Check your config file credentials: `warp-sql-server-mcp config`
 - Test the MCP server directly: `warp-sql-server-mcp start`
+- Review server logs for errors: `npm run logs`
 
 **Permission errors?**
 

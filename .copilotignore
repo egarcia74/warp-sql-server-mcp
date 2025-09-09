@@ -1,0 +1,33 @@
+# Copilot ignore patterns - exclude these from context
+
+# Generated coverage and logs
+coverage/
+logs/
+*.log
+
+# Dependencies
+node_modules/
+
+# Temporary and cache files
+.nyc_output/
+temp/
+.temp/
+
+# Build artifacts
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files (except our VS Code config)
+.idea/
+*.swp
+*.swo
+
+# But always include our key documentation files
+!WARP.md
+!README.md
+!docs/
+!.github/copilot-instructions.md

@@ -44,7 +44,7 @@ These tests simulate exactly what a real MCP client (like Warp) would experience
 
 ```bash
 # Run MCP protocol smoke test
-npm run test:protocol
+npm run test:manual:protocol
 ```
 
 ### **Manual Execution**
@@ -175,7 +175,7 @@ When tests fail, detailed error information is provided:
 The protocol test inherits debug settings from the MCP server. Enable detailed logging:
 
 ```bash
-SQL_SERVER_DEBUG=true npm run test:protocol
+SQL_SERVER_DEBUG=true npm run test:manual:protocol
 ```
 
 ## 📊 **Comparison: Test Types**
