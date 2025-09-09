@@ -104,8 +104,8 @@ class SqlServerMCP {
     this.databaseTools = new DatabaseToolsHandler(this.connectionManager, this.performanceMonitor);
 
     // Initialize analyzers
-    this.queryOptimizer = new QueryOptimizer();
-    this.bottleneckDetector = new BottleneckDetector();
+    this.queryOptimizer = new QueryOptimizer(this.connectionManager);
+    this.bottleneckDetector = new BottleneckDetector(this.connectionManager);
 
     // Setup tool handlers
     this.setupToolHandlers();
@@ -248,7 +248,7 @@ class SqlServerMCP {
     }));
 
     // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async request => {
+    this.handleCallToolRequest = async request => {
       const { name, arguments: args } = request.params;
 
       try {
@@ -350,16 +350,24 @@ class SqlServerMCP {
               content: this.getServerInfo(args.include_logs)
             };
 
+          case 'connect':
+            return {
+              content: await this.connect(args.database)
+            };
+
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
         }
       } catch (error) {
+        // Ensure all thrown errors are McpError instances
         if (error instanceof McpError) {
           throw error;
         }
+        // Wrap other errors in a generic McpError
         throw new McpError(ErrorCode.InternalError, `Tool execution failed: ${error.message}`);
       }
-    });
+    };
+    this.server.setRequestHandler(CallToolRequestSchema, this.handleCallToolRequest);
   }
 
   /**
@@ -466,6 +474,32 @@ class SqlServerMCP {
   }
 
   /**
+   * Explicitly connect to a database, ensuring the connection pool is active.
+   * This is useful for smoke tests or clients that need to verify connectivity.
+   */
+  async connect(database = null) {
+    try {
+      const pool = await this.connectionManager.connect(database);
+      if (pool && pool.connected) {
+        const dbName = database || this.connectionManager.currentDatabase || 'default';
+        const message = `Successfully connected to database: ${dbName}`;
+        this.logger.info(message);
+        return {
+          content: [{ type: 'text', text: message }]
+        };
+      }
+      throw new Error('Connection attempt did not result in a connected pool.');
+    } catch (error) {
+      this.logger.error('Explicit connect call failed', { error: error.message, database });
+      // Re-throw as an McpError so the client can handle it
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to connect to database: ${error.message}`
+      );
+    }
+  }
+
+  /**
    * Format query results for display
    */
   formatQueryResults(data) {
@@ -504,39 +538,71 @@ class SqlServerMCP {
   }
 
   // Connection management methods for test compatibility
-  async connectToDatabase() {
-    return await this.connectionManager.connect();
+  async connectToDatabase(...args) {
+    try {
+      return await this.connectionManager.connect(...args);
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   // Database operation methods that delegate to handlers
-  async listDatabases() {
-    return { content: await this.databaseTools.listDatabases() };
+  async listDatabases(...args) {
+    try {
+      return { content: await this.databaseTools.listDatabases(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async listTables(database, schema) {
-    return { content: await this.databaseTools.listTables(database, schema) };
+  async listTables(...args) {
+    try {
+      return { content: await this.databaseTools.listTables(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async describeTable(tableName, database, schema) {
-    return { content: await this.databaseTools.describeTable(tableName, database, schema) };
+  async describeTable(...args) {
+    try {
+      return { content: await this.databaseTools.describeTable(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async listForeignKeys(database, schema) {
-    return { content: await this.databaseTools.listForeignKeys(database, schema) };
+  async listForeignKeys(...args) {
+    try {
+      return { content: await this.databaseTools.listForeignKeys(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async getTableData(tableName, database, schema, limit, offset) {
-    return {
-      content: await this.databaseTools.getTableData(tableName, database, schema, limit, offset)
-    };
+  async getTableData(...args) {
+    try {
+      return {
+        content: await this.databaseTools.getTableData(...args)
+      };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async exportTableCsv(tableName, database, schema) {
-    return { content: await this.databaseTools.exportTableCsv(tableName, database, schema) };
+  async exportTableCsv(...args) {
+    try {
+      return { content: await this.databaseTools.exportTableCsv(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
-  async explainQuery(query, database) {
-    return { content: await this.databaseTools.explainQuery(query, database) };
+  async explainQuery(...args) {
+    try {
+      return { content: await this.databaseTools.explainQuery(...args) };
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   // Performance monitoring methods
@@ -600,20 +666,24 @@ class SqlServerMCP {
 
   // Query optimization methods
   async getIndexRecommendations(database) {
-    const recommendations = await this.queryOptimizer.analyzeIndexUsage(database);
-    return [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            success: true,
-            data: recommendations
-          },
-          null,
-          2
-        )
-      }
-    ];
+    try {
+      const recommendations = await this.queryOptimizer.analyzeIndexUsage(database);
+      return [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              success: true,
+              data: recommendations
+            },
+            null,
+            2
+          )
+        }
+      ];
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   async analyzeQueryPerformance(query, database) {
@@ -634,37 +704,45 @@ class SqlServerMCP {
   }
 
   async detectQueryBottlenecks(database) {
-    const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database);
-    return [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            success: true,
-            data: bottlenecks
-          },
-          null,
-          2
-        )
-      }
-    ];
+    try {
+      const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database);
+      return [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              success: true,
+              data: bottlenecks
+            },
+            null,
+            2
+          )
+        }
+      ];
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   async getOptimizationInsights(database) {
-    const insights = await this.queryOptimizer.getOptimizationInsights(database);
-    return [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            success: true,
-            data: insights
-          },
-          null,
-          2
-        )
-      }
-    ];
+    try {
+      const insights = await this.queryOptimizer.getOptimizationInsights(database);
+      return [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              success: true,
+              data: insights
+            },
+            null,
+            2
+          )
+        }
+      ];
+    } catch (error) {
+      throw new McpError(ErrorCode.InternalError, error.message);
+    }
   }
 
   /**

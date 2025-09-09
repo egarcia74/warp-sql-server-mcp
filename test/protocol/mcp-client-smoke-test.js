@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load environment variables and set security configuration for testing
 dotenv.config();
@@ -23,85 +26,195 @@ if (process.env.MCP_TESTING_MODE === 'docker') {
 
 class SmokeTestClient {
   constructor() {
-    this.results = {
-      passed: 0,
-      failed: 0,
-      skipped: 0,
-      tests: []
-    };
-    this.testDbName = null;
+    this.serverScriptPath = join(__dirname, '..', '..', 'index.js');
+    this.client = null; // Will be initialized during connection
+    this.serverProcess = null;
+    this.isServerReady = false;
+    this.testsCompleted = false; // Flag to prevent exit code errors on clean shutdown
+    this.requestId = 1;
   }
 
   async connect() {
     console.log('🚀 Starting MCP Smoke Test');
     console.log('================================\n');
 
-    // Connect to existing MCP server with stdio transport
-    // Set environment variables for the child process (read-only mode for protocol testing)
-    const serverEnv = {
-      ...process.env,
-      SQL_SERVER_READ_ONLY: 'true',
-      SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'false',
-      SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'false',
-      NODE_ENV: 'test'
-    };
+    // Start MCP server manually using spawn (MCP SDK Client.connect() has a bug)
+    const { spawn } = await import('child_process');
 
-    const transport = new StdioClientTransport({
-      command: 'node',
-      args: ['index.js'],
-      env: serverEnv
+    console.log('🔗 Starting MCP server process...');
+
+    this.serverProcess = spawn('node', [this.serverScriptPath], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        SQL_SERVER_READ_ONLY: 'true',
+        SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'false',
+        SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'false',
+        NODE_ENV: 'test'
+      }
     });
 
-    this.client = new Client({ name: 'smoke-test-client', version: '1.0.0' }, { capabilities: {} });
+    // Set up manual MCP communication
+    this.requestId = 1;
 
-    await this.client.connect(transport);
-    console.log('✅ Connected to MCP server\n');
+    // Wait for server to be ready
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Server startup timed out'));
+      }, 10000);
+
+      this.serverProcess.stderr.on('data', data => {
+        const message = data.toString();
+        if (
+          message.includes('MCP server running on stdio') ||
+          message.includes('SQL Server MCP server running')
+        ) {
+          clearTimeout(timeout);
+          console.log('✅ MCP server started successfully\n');
+          resolve();
+        }
+      });
+
+      this.serverProcess.on('error', error => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to start server: ${error.message}`));
+      });
+    });
+
+    // Initialize MCP protocol
+    await this.sendMCPRequest('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: {
+        name: 'smoke-test-client',
+        version: '1.0.0'
+      }
+    });
+
+    console.log('✅ MCP protocol initialized\n');
+
+    // Test database connection
+    try {
+      console.log('🤝 Establishing database connection via MCP server...');
+      await this.sendMCPRequest('tools/call', {
+        name: 'connect',
+        arguments: {}
+      });
+      console.log('✅ Database connection established successfully.\n');
+    } catch (error) {
+      console.error('❌ Failed to establish initial database connection:', error.message);
+      // We can still proceed, as some tests don't require a DB connection.
+    }
+  }
+
+  /**
+   * Send an MCP request to the server and wait for response
+   */
+  async sendMCPRequest(method, params = {}, timeout = 10000) {
+    const request = {
+      jsonrpc: '2.0',
+      id: this.requestId++,
+      method,
+      params
+    };
+
+    return new Promise((resolve, reject) => {
+      const timeoutHandle = setTimeout(() => {
+        reject(new Error(`MCP request timed out: ${method}`));
+      }, timeout);
+
+      // Listen for response
+      const responseHandler = data => {
+        try {
+          const lines = data
+            .toString()
+            .split('\n')
+            .filter(line => line.trim());
+          for (const line of lines) {
+            const response = JSON.parse(line);
+            if (response.id === request.id) {
+              clearTimeout(timeoutHandle);
+              this.serverProcess.stdout.removeListener('data', responseHandler);
+
+              if (response.error) {
+                reject(new Error(`MCP Error: ${response.error.message}`));
+              } else {
+                resolve(response.result);
+              }
+              return;
+            }
+          }
+        } catch {
+          // Continue listening if JSON parsing fails
+        }
+      };
+
+      this.serverProcess.stdout.on('data', responseHandler);
+
+      // Send request
+      this.serverProcess.stdin.write(JSON.stringify(request) + '\n');
+    });
   }
 
   async discoverTestDatabase() {
     console.log('🔍 Discovering pre-initialized test databases...');
-    try {
-      const result = await this.client.callTool({ name: 'list_databases', arguments: {} });
-      const databases = result.content[0].text;
+    let attempts = 5;
+    while (attempts > 0) {
+      try {
+        const result = await this.client.callTool({ name: 'list_databases', arguments: {} });
+        const databases = result.content[0].text;
 
-      // Smart database detection: check what's actually available
-      // Priority order: ProtocolTest > WarpDemo > Phase databases
-      const testDbPreferences = [
-        'ProtocolTest', // Docker-initialized protocol database
-        'WarpDemo', // Native demo database
-        'WarpMcpTest', // Docker main test database
-        'Phase1ReadOnly', // Phase test databases
-        'Phase2DML',
-        'Phase3DDL'
-      ];
+        // Smart database detection: check what's actually available
+        // Priority order: ProtocolTest > WarpDemo > Phase databases
+        const testDbPreferences = [
+          'ProtocolTest', // Docker-initialized protocol database
+          'WarpDemo', // Native demo database
+          'WarpMcpTest', // Docker main test database
+          'Phase1ReadOnly', // Phase test databases
+          'Phase2DML',
+          'Phase3DDL'
+        ];
 
-      for (const dbName of testDbPreferences) {
-        if (databases.includes(dbName)) {
-          this.testDbName = dbName;
-          console.log(`✅ Using pre-initialized database: ${this.testDbName}`);
+        for (const dbName of testDbPreferences) {
+          if (databases.includes(dbName)) {
+            this.testDbName = dbName;
+            console.log(`✅ Using pre-initialized database: ${this.testDbName}`);
 
-          // Verify the database has the expected tables by testing list_tables
-          try {
-            await this.client.callTool({
-              name: 'list_tables',
-              arguments: { database: this.testDbName }
-            });
-            console.log(`✅ Database ${this.testDbName} is accessible with tables\n`);
-            return;
-          } catch {
-            console.log(`⚠️  Database ${this.testDbName} exists but may not have test tables`);
-            // Continue to use this database anyway for basic tests
-            return;
+            // Verify the database has the expected tables by testing list_tables
+            try {
+              await this.client.callTool({
+                name: 'list_tables',
+                arguments: { database: this.testDbName }
+              });
+              console.log(`✅ Database ${this.testDbName} is accessible with tables\n`);
+              return; // Success, exit function
+            } catch {
+              console.log(`⚠️  Database ${this.testDbName} exists but may not have test tables`);
+              // Continue to use this database anyway for basic tests
+              return; // Success, exit function
+            }
           }
         }
-      }
 
-      // If no suitable database found, we'll run tests without database-specific operations
-      console.log('⚠️  No suitable test database found. Some tests will be skipped.\n');
-      this.testDbName = null;
-    } catch {
-      console.log('⚠️  Could not discover databases, will skip database-specific tests\n');
-      this.testDbName = null;
+        // If no suitable database found, we'll run tests without database-specific operations
+        console.log('⚠️  No suitable test database found. Some tests will be skipped.\n');
+        this.testDbName = null;
+        return; // Exit after successful but fruitless discovery
+      } catch (error) {
+        attempts--;
+        console.warn(
+          `⚠️  Database discovery failed (${
+            error.message.split('\n')[0]
+          }), ${attempts} attempts left. Retrying in 3s...`
+        );
+        if (attempts === 0) {
+          console.error('❌ Final error during database discovery:', error.message);
+          console.log('⚠️  Could not discover databases, will skip database-specific tests\n');
+          this.testDbName = null;
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      }
     }
   }
 

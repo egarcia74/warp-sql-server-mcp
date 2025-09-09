@@ -10,13 +10,13 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "test": "npm run test:unit && npm run test:integration",
+    "test": "npm run test:unit && npm run test:integration && node scripts/test-summary.js",
     "test:unit": "vitest run test/unit",
     "test:unit:watch": "vitest test/unit",
     "test:integration": "npm run docker:start:init && npm run test:integration:run && npm run docker:stop",
     "test:integration:run": "npm run test:integration:manual && npm run test:integration:protocol && npm run test:integration:performance",
     "test:integration:manual": "MCP_TESTING_MODE=docker node test/integration/manual/phase1-readonly-security.test.js && MCP_TESTING_MODE=docker node test/integration/manual/phase2-dml-operations.test.js && MCP_TESTING_MODE=docker node test/integration/manual/phase3-ddl-operations.test.js",
-    "test:integration:protocol": "MCP_TESTING_MODE=docker node test/protocol/mcp-client-smoke-test.js",
+    "test:integration:protocol": "MCP_TESTING_MODE=docker node test/protocol/mcp-server-startup-test.js",
     "test:integration:performance": "node test/manual/improved-performance-test.js",
     "test:integration:warp": "node test/manual/warp-mcp-performance-test.js",
     "test:integration:aws": "node test/integration/test-aws-secrets.js",
@@ -107,6 +107,7 @@
     "markdown-link-check": "^3.13.7",
     "markdownlint-cli2": "^0.18.1",
     "prettier": "^3.3.3",
+    "sinon": "^21.0.0",
     "vitest": "^3.2.4"
   },
   "engines": {

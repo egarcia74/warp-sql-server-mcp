@@ -357,7 +357,8 @@ describe('DatabaseToolsHandler', () => {
   describe('error handling', () => {
     test('should handle connection manager errors', async () => {
       const error = new Error('Connection pool exhausted');
-      mockConnectionManager.connect.mockRejectedValue(error);
+      // Mock getPool to simulate a connection failure
+      mockConnectionManager.getPool.mockRejectedValue(error);
 
       await expect(handler.listDatabases()).rejects.toThrow('Connection pool exhausted');
     });
