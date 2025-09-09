@@ -54,8 +54,16 @@ npm run test:integration:manual    # All manual phase tests (1, 2, 3)
 #### 📡 Protocol Tests
 
 ```bash
-npm run test:integration:protocol  # MCP protocol smoke test
+npm run test:integration:protocol           # MCP protocol smoke test
+VERBOSE=1 npm run test:integration:protocol # Protocol test with detailed JSON output
+DEBUG=1 npm run test:integration:protocol   # Protocol test with detailed JSON output
 ```
+
+**Protocol Test Features**:
+
+- **Standard Mode**: Clean output showing only test results and status
+- **Verbose Mode**: Pretty-printed MCP initialize response for debugging
+- **JSON Response Analysis**: Detailed server capabilities, protocol version, and instructions
 
 ## 📁 Test File Organization
 
@@ -74,7 +82,7 @@ test/
 │   ├── sqlserver-mcp-integration.test.js  # Core MCP integration
 │   └── error-scenarios-integration.test.js # Error handling tests
 ├── protocol/                     # MCP protocol tests
-│   └── mcp-client-smoke-test.js  # Protocol communication validation
+│   └── mcp-server-startup-test.js # Protocol communication validation (supports VERBOSE=1)
 ├── docker/                       # Docker testing infrastructure
 │   ├── quick-stress-test.js      # Docker stress testing
 │   ├── test-connectivity.js      # Connection validation
@@ -137,6 +145,12 @@ npm run test:integration
 ```bash
 # Check for running MCP processes
 ps aux | grep "node index.js"
+
+# Run protocol test with verbose JSON output
+VERBOSE=1 npm run test:integration:protocol
+
+# Run tests with clean output (suppressed ReDoS warnings)
+npm run test:unit    # Automatically suppresses security warnings during testing
 
 # Test direct SQL connection (manual check)
 node -e "

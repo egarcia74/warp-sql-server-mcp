@@ -26,8 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **🧪 Enhanced Testing Framework**: Comprehensive test suite improvements
   - **Unit Test Coverage**: New comprehensive unit tests for main server (test/unit/index.test.js)
   - **Protocol Testing**: Simplified MCP protocol startup validation (test/protocol/mcp-server-startup-test.js)
-  - **Mocking Integration**: Enhanced Sinon.js integration for reliable test isolation
+  - **Mocking Integration**: Enhanced Vitest integration for reliable test isolation with corrected mock targets
   - **Test Summary Reporting**: New test summary script for better CI/CD feedback
+  - **Verbose Protocol Testing**: Added verbose mode for detailed JSON response debugging (`VERBOSE=1`)
+  - **Clean Test Output**: Suppressed ReDoS security warnings during testing while preserving production functionality
 
 - **🛠️ Code Quality Improvements**: Enhanced code structure and maintainability
   - **ESLint Compliance**: Fixed all ESLint issues for better code quality
