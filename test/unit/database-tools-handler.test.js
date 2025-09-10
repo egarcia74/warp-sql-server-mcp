@@ -361,6 +361,14 @@ describe('DatabaseToolsHandler', () => {
       mockConnectionManager.getPool.mockRejectedValue(error);
 
       await expect(handler.listDatabases()).rejects.toThrow('Connection pool exhausted');
+
+      // Reset mock to default for other tests
+      const mockPool = {
+        request: vi.fn(() => mockRequest),
+        connected: true,
+        close: vi.fn()
+      };
+      mockConnectionManager.getPool.mockReturnValue(mockPool);
     });
 
     test('should handle SQL syntax errors', async () => {

@@ -1,6 +1,4 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Logger } from '../../lib/utils/logger.js';
-import winston from 'winston';
 
 // Mock winston to control logging behavior in tests
 vi.mock('winston', () => {
@@ -38,6 +36,9 @@ vi.mock('winston', () => {
     }
   };
 });
+
+import winston from 'winston';
+import { Logger } from '../../lib/utils/logger.js';
 
 describe('Logger', () => {
   let logger;
