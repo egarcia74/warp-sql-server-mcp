@@ -20,6 +20,17 @@ pids
 # Logs
 logs
 *.log
+# Individual MCP config with credentials
+codex-mcp-config.json
+*.secrets.*
+*.secret.*
+*.private.*
+*.credentials.*
+*.creds.*
+*.key
+*.pem
+*.p12
+*.pfx
 # Coverage directory used by tools like istanbul
 coverage/
 *.lcov
@@ -45,6 +56,9 @@ jspm_packages/
 
 # dotenv environment variables file
 .env
+.env.*.local
+.env.*
+!.env.example
 
 # macOS
 .DS_Store
@@ -55,3 +69,11 @@ jspm_packages/
 # JetBrains IDEs
 .idea/
 test/temp/
+
+# Generated Docker platform detection files
+test/docker/.platform-config.json
+test/docker/docker-compose.yml
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md

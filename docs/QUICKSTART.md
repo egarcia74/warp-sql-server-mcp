@@ -99,11 +99,26 @@ Your SQL Server is now connected to Warp's AI! 🤖
 
 ## Need Help?
 
+**📋 Get comprehensive help:**
+
+```bash
+npm run help               # Show all available commands with descriptions
+```
+
+**📊 Monitor server activity:**
+
+```bash
+npm run logs               # Show recent server logs
+npm run logs:tail          # Follow logs in real-time
+npm run logs:audit         # Show security audit logs
+```
+
 **Not connecting?**
 
 - Check that SQL Server is running: `telnet localhost 1433`
 - Verify your username/password in the config file
 - Review SSL settings if using remote servers
+- Check server logs: `npm run logs` for detailed error information
 
 > **🔧 Advanced configuration?** Check the [Environment Variables Reference](ENV-VARS.md) for detailed troubleshooting, SSL settings, security configuration, and performance tuning options.
 

@@ -749,4 +749,83 @@ describe('StreamingHandler', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('Security Validation', () => {
+    it('should safely parse valid JSON chunks', () => {
+      const chunks = [
+        { data: '[{"id": 1, "name": "test"}]' },
+        { data: [{ id: 2, name: 'test2' }] }
+      ];
+
+      const result = handler.reconstructFromChunks(chunks, 'json');
+      expect(result).toEqual([
+        { id: 1, name: 'test' },
+        { id: 2, name: 'test2' }
+      ]);
+    });
+
+    it('should reject JSON with prototype pollution attempts', () => {
+      const chunks = [{ data: '[{"__proto__": {"isAdmin": true}}]' }];
+
+      expect(() => {
+        handler.reconstructFromChunks(chunks, 'json');
+      }).toThrow('Potentially dangerous JSON key detected: __proto__');
+    });
+
+    it('should reject JSON with constructor pollution attempts', () => {
+      const chunks = [{ data: '[{"constructor": {"prototype": {"isAdmin": true}}}]' }];
+
+      expect(() => {
+        handler.reconstructFromChunks(chunks, 'json');
+      }).toThrow('Potentially dangerous JSON key detected: constructor');
+    });
+
+    it('should reject JSON with prototype key attempts', () => {
+      const chunks = [{ data: '[{"prototype": {"toString": null}}]' }];
+
+      expect(() => {
+        handler.reconstructFromChunks(chunks, 'json');
+      }).toThrow('Potentially dangerous JSON key detected: prototype');
+    });
+
+    it('should reject malformed JSON', () => {
+      const chunks = [{ data: '[invalid json}' }];
+
+      expect(() => {
+        handler.reconstructFromChunks(chunks, 'json');
+      }).toThrow('Invalid JSON chunk data');
+    });
+
+    it('should reject JSON that exceeds size limit', () => {
+      // Create a large JSON string (over 10MB)
+      const largeData = JSON.stringify({ data: 'x'.repeat(11 * 1024 * 1024) });
+      const chunks = [{ data: largeData }];
+
+      expect(() => {
+        handler.reconstructFromChunks(chunks, 'json');
+      }).toThrow('JSON data exceeds maximum size limit');
+    });
+
+    it('should reject non-array JSON data', () => {
+      const chunks = [{ data: '{"notAnArray": true}' }];
+
+      expect(() => {
+        handler.reconstructFromChunks(chunks, 'json');
+      }).toThrow('Parsed JSON data is not an array');
+    });
+
+    it('should reject non-string input to _safeJsonParse', () => {
+      expect(() => {
+        handler._safeJsonParse(123);
+      }).toThrow('Input must be a string');
+    });
+
+    it('should handle nested prototype pollution attempts', () => {
+      const chunks = [{ data: '[{"user": {"__proto__": {"isAdmin": true}}}]' }];
+
+      expect(() => {
+        handler.reconstructFromChunks(chunks, 'json');
+      }).toThrow('Potentially dangerous JSON key detected: __proto__');
+    });
+  });
 });

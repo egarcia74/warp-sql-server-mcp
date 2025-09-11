@@ -1,0 +1,21 @@
+{
+  "github.copilot.enable": {
+    "*": true,
+    "plaintext": false,
+    "markdown": true,
+    "scminput": false
+  },
+  "github.copilot.editor.enableAutoCompletions": true,
+  "github.copilot.advanced": {},
+  "files.associations": {
+    "WARP.md": "markdown"
+  },
+  "workbench.editorAssociations": {
+    "*.md": "vscode.markdown.preview.editor",
+    "*.copilotmd": "vscode.markdown.preview.editor"
+  },
+  "github.copilot.chat.welcomeMessage": "always",
+  "editor.suggest.showSnippets": true,
+  "editor.inlineSuggest.enabled": true,
+  "github.copilot.editor.iterativeSearch": true
+}

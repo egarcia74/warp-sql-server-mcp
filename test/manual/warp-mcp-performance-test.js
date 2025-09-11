@@ -3,7 +3,7 @@
 /**
  * Warp MCP Performance Test
  * Tests performance against Warp's running MCP server instance
- * Run with: npm run test:manual:warp-performance
+ * Run with: npm run test:integration:warp
  */
 
 // MCP client imports for future Warp integration
@@ -137,14 +137,14 @@ class WarpMCPPerformanceTest {
     // Try to connect to Warp's MCP server
     const connected = await this.connectToWarpMCP();
     if (!connected) {
-      console.log('\\n⚠️  Could not connect to Warp MCP server');
+      console.log('\n⚠️  Could not connect to Warp MCP server');
       console.log('   This test requires an active MCP server connection');
       console.log('   Please ensure your MCP server is configured in Warp and running');
       return;
     }
 
     // Test 1: Basic SQL connectivity
-    console.log('\\n🔍 Testing SQL Server Connectivity');
+    console.log('\n🔍 Testing SQL Server Connectivity');
     console.log('   ' + '-'.repeat(50));
     try {
       const startTime = performance.now();
@@ -183,7 +183,7 @@ class WarpMCPPerformanceTest {
     }
 
     // Test 2: Performance monitoring
-    console.log('\\n📊 Testing Performance Monitoring');
+    console.log('\n📊 Testing Performance Monitoring');
     console.log('   ' + '-'.repeat(50));
     try {
       const result = await this.sendMCPRequest('tools/call', {
@@ -222,7 +222,7 @@ class WarpMCPPerformanceTest {
     }
 
     // Test 3: Connection health
-    console.log('\\n🔌 Testing Connection Pool Health');
+    console.log('\n🔌 Testing Connection Pool Health');
     console.log('   ' + '-'.repeat(50));
     try {
       const result = await this.sendMCPRequest('tools/call', {
@@ -286,7 +286,7 @@ class WarpMCPPerformanceTest {
     ];
 
     for (const test of dbTests) {
-      console.log(`\\n🗃️  Testing ${test.name}`);
+      console.log(`\n🗃️  Testing ${test.name}`);
       console.log('   ' + '-'.repeat(50));
 
       try {
@@ -323,7 +323,7 @@ class WarpMCPPerformanceTest {
   generateReport() {
     const totalDuration = this.stats.endTime - this.stats.startTime;
 
-    console.log('\\n📈 WARP MCP PERFORMANCE TEST REPORT');
+    console.log('\n📈 WARP MCP PERFORMANCE TEST REPORT');
     console.log('='.repeat(70));
 
     console.log('🔍 Test Summary:');
@@ -343,20 +343,20 @@ class WarpMCPPerformanceTest {
       const minTime = Math.round(Math.min(...this.stats.responseTimes));
       const maxTime = Math.round(Math.max(...this.stats.responseTimes));
 
-      console.log('\\n⏱️  Response Time Analysis:');
+      console.log('\n⏱️  Response Time Analysis:');
       console.log(`  • Average: ${avgTime}ms`);
       console.log(`  • Min: ${minTime}ms`);
       console.log(`  • Max: ${maxTime}ms`);
     }
 
     if (this.stats.errors.length > 0) {
-      console.log('\\n❌ Errors:');
+      console.log('\n❌ Errors:');
       this.stats.errors.forEach((error, index) => {
         console.log(`  ${index + 1}. ${error}`);
       });
     }
 
-    console.log('\\n🎯 Assessment:');
+    console.log('\n🎯 Assessment:');
     const successRate = (this.stats.successfulRequests / this.stats.totalRequests) * 100;
 
     if (successRate >= 90) {
@@ -367,22 +367,31 @@ class WarpMCPPerformanceTest {
       console.log('  ⚠️  WARNING - MCP server has connectivity issues');
     }
 
-    console.log('\\n✅ Key Validations:');
+    console.log('\n✅ Key Validations:');
     console.log('  ✅ MCP protocol communication working');
     console.log('  ✅ SQL Server connectivity functional');
     console.log('  ✅ Performance monitoring operational');
     console.log('  ✅ Connection pool health monitoring active');
     console.log('  ✅ 95% threshold behavior validated');
 
-    console.log('\\n🎉 Warp MCP performance test completed!');
+    // Check for failures and exit with appropriate code
+    if (this.stats.failedRequests > 0) {
+      const errorRate = (this.stats.failedRequests / this.stats.totalRequests) * 100;
+      console.error(
+        `\n💥 Performance test failed: ${this.stats.failedRequests} failed requests (${errorRate.toFixed(2)}% error rate)`
+      );
+      process.exit(1);
+    }
+
+    console.log('\n🎉 Warp MCP performance test completed!');
   }
 }
 
 // Run the test
-console.log('Starting Warp MCP Performance Test...\\n');
+console.log('Starting Warp MCP Performance Test...\n');
 
 const test = new WarpMCPPerformanceTest();
 test.runWarpMCPTest().catch(error => {
-  console.error('\\n❌ Warp MCP performance test failed:', error.message);
+  console.error('\n❌ Warp MCP performance test failed:', error.message);
   process.exit(1);
 });

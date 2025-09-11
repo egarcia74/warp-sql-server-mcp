@@ -1,6 +1,4 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Logger } from '../../lib/utils/logger.js';
-import winston from 'winston';
 
 // Mock winston to control logging behavior in tests
 vi.mock('winston', () => {
@@ -38,6 +36,9 @@ vi.mock('winston', () => {
     }
   };
 });
+
+import winston from 'winston';
+import { Logger } from '../../lib/utils/logger.js';
 
 describe('Logger', () => {
   let logger;
@@ -170,6 +171,8 @@ describe('Logger', () => {
 
   describe('Logger Creation', () => {
     test('should create logger with development format', () => {
+      // Ensure MCP environment heuristics don't disable color output in dev
+      const mcpSpy = vi.spyOn(Logger.prototype, '_isMcpEnvironment').mockReturnValue(false);
       process.env.NODE_ENV = 'development';
 
       logger = new Logger();
@@ -178,6 +181,7 @@ describe('Logger', () => {
       expect(winston.format.colorize).toHaveBeenCalled();
       expect(winston.format.printf).toHaveBeenCalled();
       expect(winston.format.json).not.toHaveBeenCalled();
+      mcpSpy.mockRestore();
     });
 
     test('should create logger with production format', () => {
@@ -790,6 +794,64 @@ describe('Logger', () => {
         service: 'warp-sql-server-mcp',
         timestamp: '2023-01-01T00:00:00.000Z'
       });
+    });
+  });
+
+  describe('Environment Detection', () => {
+    beforeEach(() => {
+      logger = new Logger();
+    });
+
+    test('should detect development environment when in project directory', () => {
+      // Since we're running tests in the project directory, this should return true
+      const isDev = logger._isDevelopmentEnvironment();
+      expect(isDev).toBe(true);
+    });
+
+    test('should respect NODE_ENV environment variable', () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+
+      try {
+        // Test development environment
+        process.env.NODE_ENV = 'development';
+        const logger1 = new Logger();
+        expect(logger1._isDevelopmentEnvironment()).toBe(true);
+
+        // Test test environment
+        process.env.NODE_ENV = 'test';
+        const logger2 = new Logger();
+        expect(logger2._isDevelopmentEnvironment()).toBe(true);
+
+        // Test production environment (should still be true because we're in project dir)
+        process.env.NODE_ENV = 'production';
+        const logger3 = new Logger();
+        expect(logger3._isDevelopmentEnvironment()).toBe(true); // Still true due to project detection
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
+    test('should provide smart log file defaults', () => {
+      const defaults = logger._getSmartLogDefaults();
+
+      expect(defaults).toHaveProperty('logFile');
+      expect(defaults).toHaveProperty('securityLogFile');
+      expect(typeof defaults.logFile).toBe('string');
+      expect(typeof defaults.securityLogFile).toBe('string');
+    });
+
+    test('should use appropriate log paths based on environment', () => {
+      const defaults = logger._getSmartLogDefaults();
+
+      if (logger._isDevelopmentEnvironment()) {
+        // In development, should use project directory
+        expect(defaults.logFile).toContain('logs/server.log');
+        expect(defaults.securityLogFile).toContain('logs/security-audit.log');
+      } else {
+        // In production, should use user state directory
+        expect(defaults.logFile).toContain('warp-sql-server-mcp');
+        expect(defaults.securityLogFile).toContain('warp-sql-server-mcp');
+      }
     });
   });
 });
