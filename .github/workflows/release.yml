@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      create_version_pr:
+        description: 'Create PR to bump package.json version'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -315,6 +320,81 @@ jobs:
               **Auto-created by**: Release automation workflow`,
               labels: ['documentation', 'automated', 'post-release']
             });
+
+  version-pr:
+    name: Create Version Bump PR
+    runs-on: ubuntu-latest
+    needs: [check-changes, release]
+    if: success() && needs.check-changes.outputs.should_release == 'true' && github.event.inputs.dry_run != 'true' && github.event.inputs.create_version_pr == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '18'
+
+      - name: Prepare version bump commit
+        id: bumpfile
+        run: |
+          VERSION="${{ needs.release.outputs.version }}"
+          BRANCH="chore/release/v$VERSION"
+          echo "Using version: $VERSION"
+          echo "Using branch: $BRANCH"
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          # Create branch from current main
+          git checkout -b "$BRANCH"
+          # Update package.json version to match released tag
+          node -e "const fs=require('fs'); const p=require('./package.json'); p.version='$VERSION'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n');"
+          # Only commit if there is a change
+          if ! git diff --quiet -- package.json; then
+            git add package.json
+            git commit -m "chore(release): bump package.json to v$VERSION"
+            git push -u origin "$BRANCH"
+          else
+            echo "No package.json version change needed"
+          fi
+
+      - name: Open pull request
+        if: always()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const version = process.env.VERSION || '${{ needs.release.outputs.version }}';
+            const branch = process.env.BRANCH || `chore/release/v${{ needs.release.outputs.version }}`;
+            const { owner, repo } = context.repo;
+            
+            // Check if PR already exists
+            const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', head: `${owner}:${branch}` });
+            if (prs.length > 0) {
+              core.info(`PR already exists: #${prs[0].number}`);
+              return;
+            }
+            
+            const body = [
+              `This automated PR bumps package.json to v${version} to match the released tag.`,
+              '',
+              `- Version: v${version}`,
+              `- Source workflow: Release Automation`,
+            ].join('\n');
+            
+            const pr = await github.rest.pulls.create({
+              owner,
+              repo,
+              title: `chore(release): bump package.json to v${version}`,
+              head: branch,
+              base: 'main',
+              body
+            });
+            core.info(`Opened PR #${pr.data.number}`);
 
   cleanup:
     name: Cleanup
