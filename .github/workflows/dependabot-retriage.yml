@@ -1,0 +1,135 @@
+name: Dependabot Re-Triage
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_auto_merge:
+        description: "Enable auto-merge for eligible PRs (patch/minor)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      dry_run:
+        description: "Dry run (print actions but do not modify PRs)"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+      comment_on_prs:
+        description: "Leave a classification comment on each PR"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+permissions:
+  contents: read
+
+jobs:
+  triage:
+    name: Re-classify Dependabot PRs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v5
+
+      - name: Re-triage open Dependabot PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENABLE_AUTO_MERGE: ${{ inputs.enable_auto_merge }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          COMMENT_ON_PRS: ${{ inputs.comment_on_prs }}
+        run: |
+          set -euo pipefail
+
+          echo "🔎 Listing open Dependabot PRs..."
+          mapfile -t prs < <(gh pr list --state open --author "dependabot[bot]" --json number,title,url --jq '.[] | "\(.number)\t\(.title)\t\(.url)"')
+
+          if [ ${#prs[@]} -eq 0 ]; then
+            echo "No open Dependabot PRs found."
+            exit 0
+          fi
+
+          classify_pr() {
+            local title="$1"
+            local dep from to fv tv fmaj fmin fpat tmaj tmin tpat bump="unknown"
+            if echo "$title" | grep -qiE 'bump .+ from [0-9]'; then
+              dep=$(echo "$title" | sed -E 's/.*bump ([^ ]+) from .*/\1/i')
+              from=$(echo "$title" | sed -nE 's/.* from ([0-9][^ ]*) to .*/\1/ip' | head -n1)
+              to=$(echo "$title" | sed -nE 's/.* to ([0-9][^ ]*)\s*$/\1/ip' | head -n1)
+            fi
+            if [ -n "${from:-}" ] && [ -n "${to:-}" ]; then
+              fv=$(echo "$from" | sed -E 's/^v//' | cut -d- -f1 | cut -d+ -f1)
+              tv=$(echo "$to"   | sed -E 's/^v//' | cut -d- -f1 | cut -d+ -f1)
+              fmaj=${fv%%.*}; fmin=${fv#*.}; fmin=${fmin%%.*}; fpat=${fv##*.}
+              tmaj=${tv%%.*}; tmin=${tv#*.}; tmin=${tmin%%.*}; tpat=${tv##*.}
+              if [ "$tmaj" != "$fmaj" ]; then bump="major";
+              elif [ "$tmin" != "$fmin" ]; then bump="minor";
+              elif [ "$tpat" != "$fpat" ]; then bump="patch";
+              else bump="none"; fi
+            fi
+            echo "$bump"
+          }
+
+          for row in "${prs[@]}"; do
+            number=$(echo "$row" | cut -f1)
+            title=$(echo "$row" | cut -f2)
+            url=$(echo "$row" | cut -f3)
+
+            bump_type=$(classify_pr "$title")
+            echo "PR #$number ($bump_type): $title"
+
+            # Security-critical action patterns
+            if echo "$title" | grep -qi "github/codeql-action\|step-security"; then
+              echo " - Security-critical action: manual review required"
+              if [ "$DRY_RUN" = "false" ]; then
+                gh pr edit "$number" --add-label "manual-review-required" || true
+                gh pr edit "$number" --remove-label "auto-merge-eligible" || true
+              fi
+              [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: security-critical action detected (CodeQL/StepSecurity). Marking as manual review required." || true
+              continue
+            fi
+
+            # Security update keywords: allow auto-merge
+            if echo "$title" | grep -qi "security\|vulnerability\|cve"; then
+              echo " - Security update: eligible for auto-merge"
+              if [ "$DRY_RUN" = "false" ]; then
+                gh pr edit "$number" --add-label "auto-merge-eligible" || true
+                gh pr edit "$number" --remove-label "manual-review-required" || true
+                if [ "$ENABLE_AUTO_MERGE" = "true" ]; then
+                  gh pr merge "$number" --auto --squash --delete-branch || true
+                fi
+              fi
+              [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: security-related dependency update. Auto-merge eligible (subject to checks)." || true
+              continue
+            fi
+
+            case "$bump_type" in
+              major)
+                echo " - Major bump: manual review required"
+                if [ "$DRY_RUN" = "false" ]; then
+                  gh pr edit "$number" --add-label "manual-review-required" || true
+                  gh pr edit "$number" --remove-label "auto-merge-eligible" || true
+                fi
+                [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: major version bump detected via title parsing. Marking as manual review required." || true
+                ;;
+              minor|patch)
+                echo " - $bump_type bump: auto-merge eligible"
+                if [ "$DRY_RUN" = "false" ]; then
+                  gh pr edit "$number" --add-label "auto-merge-eligible" || true
+                  gh pr edit "$number" --remove-label "manual-review-required" || true
+                  if [ "$ENABLE_AUTO_MERGE" = "true" ]; then
+                    gh pr merge "$number" --auto --squash --delete-branch || true
+                  fi
+                fi
+                [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: $bump_type version bump detected via title parsing. Marked auto-merge eligible (subject to checks)." || true
+                ;;
+              *)
+                echo " - Unable to classify bump; leaving as-is"
+                ;;
+            esac
+          done
+
