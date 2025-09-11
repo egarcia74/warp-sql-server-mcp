@@ -39,9 +39,10 @@ jobs:
       - name: Re-triage open Dependabot PRs
         env:
           GH_TOKEN: ${{ github.token }}
-          ENABLE_AUTO_MERGE: ${{ inputs.enable_auto_merge }}
-          DRY_RUN: ${{ inputs.dry_run }}
-          COMMENT_ON_PRS: ${{ inputs.comment_on_prs }}
+          # For workflow_dispatch, inputs are available via github.event.inputs
+          ENABLE_AUTO_MERGE: ${{ github.event.inputs.enable_auto_merge || 'false' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+          COMMENT_ON_PRS: ${{ github.event.inputs.comment_on_prs || 'true' }}
         run: |
           set -euo pipefail
 
