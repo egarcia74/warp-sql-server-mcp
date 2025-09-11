@@ -84,7 +84,9 @@ jobs:
             let hasDocsOrChore = false;
             
             for (const commit of commits) {
-              const msg = commit.toLowerCase();
+              // Strip leading hash and whitespace, analyze only the subject
+              const subject = commit.replace(/^[a-f0-9]+\s+/, '');
+              const msg = subject.toLowerCase();
               const startsWith = (type) => msg.startsWith(`${type}:`) || msg.startsWith(`${type}(`);
               if (msg.includes('breaking change') || msg.includes('!:')) {
                 hasBreaking = true;
