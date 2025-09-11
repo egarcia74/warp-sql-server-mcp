@@ -345,6 +345,8 @@ jobs:
 
       - name: Prepare version bump commit
         id: bumpfile
+        env:
+          PUSH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.release.outputs.version }}"
           BRANCH="chore/release/v$VERSION"
@@ -352,15 +354,28 @@ jobs:
           echo "Using branch: $BRANCH"
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
-          # Create branch from current main
-          git checkout -b "$BRANCH"
+          # Ensure we have latest refs
+          git fetch origin --prune
+          # Create or update local branch from remote if it exists
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Remote branch exists. Checking out tracking branch: $BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            echo "Remote branch does not exist. Creating new branch: $BRANCH"
+            git checkout -b "$BRANCH"
+          fi
           # Update package.json version to match released tag
           node -e "const fs=require('fs'); const p=require('./package.json'); p.version='$VERSION'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n');"
           # Only commit if there is a change
           if ! git diff --quiet -- package.json; then
             git add package.json
             git commit -m "chore(release): bump package.json to v$VERSION"
-            git push -u origin "$BRANCH"
+            # Try normal push first using token to ensure CI triggers
+            if ! git push -u "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$BRANCH"; then
+              echo "Non-fast-forward push rejected. Rebasing and retrying with force-with-lease..."
+              git pull --rebase origin "$BRANCH" || true
+              git push --force-with-lease "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$BRANCH"
+            fi
           else
             echo "No package.json version change needed"
           fi
@@ -369,6 +384,7 @@ jobs:
         if: always()
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
         with:
+          github-token: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             const version = process.env.VERSION || '${{ needs.release.outputs.version }}';
             const branch = process.env.BRANCH || `chore/release/v${{ needs.release.outputs.version }}`;
