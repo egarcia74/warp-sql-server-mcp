@@ -341,7 +341,7 @@ function generateToolsDocumentation() {
       examples: generateExamples(tool.name, tool.parameters, tool.required)
     }));
 
-    // Generate the documentation data
+    // Generate the documentation data (candidate)
     const docData = {
       version: getPackageVersion(),
       generatedAt: new Date().toISOString(),
@@ -355,7 +355,29 @@ function generateToolsDocumentation() {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    fs.writeFileSync(path.join(outputDir, 'tools.json'), JSON.stringify(docData, null, 2));
+    const outPath = path.join(outputDir, 'tools.json');
+
+    // Avoid trivial PRs: if the only change is generatedAt, keep the previous timestamp
+    try {
+      if (fs.existsSync(outPath)) {
+        const prev = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+        const normalize = obj => {
+          const copy = JSON.parse(JSON.stringify(obj));
+          delete copy.generatedAt;
+          return copy;
+        };
+        const prevNorm = normalize(prev);
+        const nextNorm = normalize(docData);
+        if (JSON.stringify(prevNorm) === JSON.stringify(nextNorm)) {
+          // Preserve previous generatedAt to keep file identical
+          docData.generatedAt = prev.generatedAt || docData.generatedAt;
+        }
+      }
+    } catch {
+      // Non-fatal: proceed with current docData
+    }
+
+    fs.writeFileSync(outPath, JSON.stringify(docData, null, 2));
 
     // Format the generated JSON with Prettier to ensure consistency
     try {
