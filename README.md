@@ -181,6 +181,7 @@ npm install
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and standards
 - **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
 - **[Git Push Checklist](docs/GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
+- **[Git Release Checklist](docs/GIT-RELEASE-CHECKLIST.md)** - Step-by-step release guide (automation + npm)
 
 ---
 
