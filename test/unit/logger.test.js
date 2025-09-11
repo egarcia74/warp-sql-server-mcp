@@ -171,6 +171,8 @@ describe('Logger', () => {
 
   describe('Logger Creation', () => {
     test('should create logger with development format', () => {
+      // Ensure MCP environment heuristics don't disable color output in dev
+      const mcpSpy = vi.spyOn(Logger.prototype, '_isMcpEnvironment').mockReturnValue(false);
       process.env.NODE_ENV = 'development';
 
       logger = new Logger();
@@ -179,6 +181,7 @@ describe('Logger', () => {
       expect(winston.format.colorize).toHaveBeenCalled();
       expect(winston.format.printf).toHaveBeenCalled();
       expect(winston.format.json).not.toHaveBeenCalled();
+      mcpSpy.mockRestore();
     });
 
     test('should create logger with production format', () => {

@@ -1376,6 +1376,20 @@ The project includes a GitHub Actions workflow for releases that can be manually
 **Note**: The automated workflow is currently set to `workflow_dispatch`
 (manual trigger) to provide better control over releases.
 
+#### Behavior Notes (Automation Details)
+
+- Auto detection (when `release_type=auto`):
+  - `BREAKING CHANGE` or `!:` → major
+  - `feat:` / `feature:` → minor
+  - `fix:` / `bugfix:` → patch
+  - `docs:` / `chore:` → patch (treated as release‑worthy for auditability)
+- Tag collision handling: If the computed tag (e.g., `vX.Y.Z`) already exists, the workflow
+  automatically increments the patch version until it finds a free tag, then proceeds. The
+  version bump is not committed to `main` (by design, to respect branch protection); only the
+  tag and GitHub Release are created.
+- Dry runs: Set `dry_run=true` to preview the computed version and changelog without creating a
+  tag or GitHub Release. The run summary includes the preview.
+
 ### Post-Release Tasks
 
 1. **Verify Artifacts**: Check that the GitHub release contains correct information
