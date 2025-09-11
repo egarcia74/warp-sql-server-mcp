@@ -302,7 +302,7 @@ npm run docker:start
 
 ```bash
 # Test with limited resources
-docker run --memory=500m --cpus=0.5 mcr.microsoft.com/mssql/server:2022-latest
+docker run --memory=500m --cpus=0.5 mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f
 
 # Test with different Docker Compose versions
 docker-compose version

@@ -23,7 +23,8 @@ const __dirname = path.dirname(__filename);
 // Configuration templates
 const CONFIG_TEMPLATES = {
   sqlserver_amd64: {
-    image: 'mcr.microsoft.com/mssql/server:2022-latest',
+    image:
+      'mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f',
     platform: null, // Native AMD64
     environment: {
       MSSQL_PID: 'Developer',
@@ -38,7 +39,8 @@ const CONFIG_TEMPLATES = {
     }
   },
   sqlserver_arm64_rosetta: {
-    image: 'mcr.microsoft.com/mssql/server:2022-latest',
+    image:
+      'mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f',
     platform: 'linux/amd64', // Force AMD64 on ARM64 with Rosetta
     environment: {
       MSSQL_PID: 'Developer',
