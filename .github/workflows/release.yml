@@ -80,13 +80,14 @@ jobs:
             
             for (const commit of commits) {
               const msg = commit.toLowerCase();
+              const startsWith = (type) => msg.startsWith(`${type}:`) || msg.startsWith(`${type}(`);
               if (msg.includes('breaking change') || msg.includes('!:')) {
                 hasBreaking = true;
-              } else if (msg.includes('feat:') || msg.includes('feature:')) {
+              } else if (startsWith('feat') || msg.includes('feature:')) {
                 hasFeature = true;
-              } else if (msg.includes('fix:') || msg.includes('bugfix:')) {
+              } else if (startsWith('fix') || msg.includes('bugfix:')) {
                 hasFix = true;
-              } else if (msg.includes('docs:') || msg.includes('doc:') || msg.includes('chore:')) {
+              } else if (startsWith('docs') || msg.includes('doc:') || startsWith('chore')) {
                 hasDocsOrChore = true;
               }
             }
