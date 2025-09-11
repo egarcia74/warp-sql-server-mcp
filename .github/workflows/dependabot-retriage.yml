@@ -56,10 +56,10 @@ jobs:
           classify_pr() {
             local title="$1"
             local dep from to fv tv fmaj fmin fpat tmaj tmin tpat bump="unknown"
-            if echo "$title" | grep -qiE 'bump .+ from [0-9]'; then
+            if echo "$title" | grep -qiE 'bump .+ from v?[0-9]'; then
               dep=$(echo "$title" | sed -E 's/.*bump ([^ ]+) from .*/\1/i')
-              from=$(echo "$title" | sed -nE 's/.* from ([0-9][^ ]*) to .*/\1/ip' | head -n1)
-              to=$(echo "$title" | sed -nE 's/.* to ([0-9][^ ]*)\s*$/\1/ip' | head -n1)
+              from=$(echo "$title" | sed -nE 's/.* from v?([0-9][^ ]*) to .*/\1/ip' | head -n1)
+              to=$(echo "$title" | sed -nE 's/.* to v?([0-9][^ ]*)\s*$/\1/ip' | head -n1)
             fi
             if [ -n "${from:-}" ] && [ -n "${to:-}" ]; then
               fv=$(echo "$from" | sed -E 's/^v//' | cut -d- -f1 | cut -d+ -f1)
