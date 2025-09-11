@@ -49,7 +49,7 @@ function test(name, testFn) {
 // Test 1: Basic detection works
 test('Architecture Detection', () => {
   const info = detectArchitecture();
-  return info && info.arch && info.platform;
+  return Boolean(info?.arch && info?.platform);
 });
 
 // Test 2: Docker capabilities detection
