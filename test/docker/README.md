@@ -162,7 +162,8 @@ SQL_SERVER_TRUST_CERT=true
 
 ### Container Configuration
 
-- **Image**: `mcr.microsoft.com/mssql/server:2022-latest`
+- **Image**: `mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f`
+  - Note: Using a pinned digest ensures reproducible builds and satisfies supply‑chain checks.
 - **Port**: `1433` (mapped to host)
 - **Memory**: 2GB allocated
 - **Storage**: Persistent volume for data
