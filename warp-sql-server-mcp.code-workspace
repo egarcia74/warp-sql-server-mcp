@@ -25,7 +25,8 @@
     "files.associations": {
       "WARP.md": "markdown",
       "*.md": "markdown"
-    }
+    },
+    "chatgpt.openOnStartup": true
   },
   "extensions": {
     "recommendations": [

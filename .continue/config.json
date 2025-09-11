@@ -1,0 +1,29 @@
+{
+  // Workspace-level Continue config
+  // Goal: Always prioritize `WARP.md` as the primary knowledge doc
+
+  // System rule to bias the assistant towards WARP.md
+  "systemMessage": "In this workspace, always consult WARP.md first for project knowledge, architecture, terminology, workflows, and conventions. Defer to it on conflicts.",
+
+  // Ensure common context providers are available
+  "contextProviders": ["file", "folder", "codebase", "terminal", "web"],
+
+  // Pin WARP.md as a default context item that is easy to include.
+  // Many Continue builds expose the `file` context provider with an optional `filepath` param.
+  // The item below appears in the context dropdown so you can add it in one click.
+  "customContext": [
+    {
+      "name": "WARP Knowledge Doc",
+      "provider": "file",
+      "params": {
+        "filepath": "WARP.md"
+      }
+    }
+  ],
+
+  // Optional: default embedding provider to enable fast local semantic search
+  // If your Continue install supports local embeddings, this enables codebase search without cloud calls
+  "embeddingsProvider": {
+    "provider": "local"
+  }
+}
