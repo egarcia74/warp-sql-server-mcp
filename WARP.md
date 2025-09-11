@@ -474,6 +474,15 @@ This section documents standardized procedures for reviewing and responding to s
    - **Development Dependencies**: Schedule updates during next maintenance window
    - **Test Dependencies**: Update when convenient but monitor for patches
 
+#### Supply Chain Hardening (Containers & CI)
+
+- Docker image pinning: All container images used in tests are pinned by digest to ensure reproducible builds and prevent tag drift.
+  - Example: `mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f` (see `test/docker/Dockerfile` and `test/docker/detect-platform.js`).
+  - Guidance: Periodically refresh to a newer digest after validation; keep docs in `test/docker/README.md` in sync.
+- GitHub Actions pinning: Third‑party actions are pinned to commit SHAs where feasible.
+- SAST coverage: CodeQL runs on all branches (push and pull_request) to maximize coverage and satisfy Scorecard SAST checks.
+- CI enforcement: Protect `main` by requiring "Tests" and "CodeQL" checks to pass before merge.
+
 #### Security Enhancement Development Process
 
 **When implementing security improvements:**
