@@ -93,7 +93,18 @@ jobs:
               continue
             fi
 
-            # Security update keywords: allow auto-merge
+            # Block auto-merge for any major bump regardless of keywords
+            if [ "$bump_type" = "major" ]; then
+              echo " - Major bump: manual review required (takes precedence over security keywords)"
+              if [ "$DRY_RUN" = "false" ]; then
+                gh pr edit "$number" --add-label "manual-review-required" || true
+                gh pr edit "$number" --remove-label "auto-merge-eligible" || true
+              fi
+              [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: major version bump detected via title parsing. Manual review required even if security-related." || true
+              continue
+            fi
+
+            # Security update keywords: allow auto-merge (only for non‑major bumps)
             if echo "$title" | grep -qi "security\|vulnerability\|cve"; then
               echo " - Security update: eligible for auto-merge"
               if [ "$DRY_RUN" = "false" ]; then
@@ -108,14 +119,6 @@ jobs:
             fi
 
             case "$bump_type" in
-              major)
-                echo " - Major bump: manual review required"
-                if [ "$DRY_RUN" = "false" ]; then
-                  gh pr edit "$number" --add-label "manual-review-required" || true
-                  gh pr edit "$number" --remove-label "auto-merge-eligible" || true
-                fi
-                [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: major version bump detected via title parsing. Marking as manual review required." || true
-                ;;
               minor|patch)
                 echo " - $bump_type bump: auto-merge eligible"
                 if [ "$DRY_RUN" = "false" ]; then
@@ -132,4 +135,3 @@ jobs:
                 ;;
             esac
           done
-
