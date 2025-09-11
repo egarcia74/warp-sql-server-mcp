@@ -543,6 +543,10 @@ Comprehensive checklists for quality git workflows:
   - Troubleshooting guidance for common push failures
   - Advanced push options and force push safety guidelines
   - Pull request creation and post-push validation steps
+ - **[Git Release Checklist](docs/GIT-RELEASE-CHECKLIST.md)**: Step-by-step release guide
+   - Covers automated Release workflow (dry runs, auto detection, tag-collision handling)
+   - Version-bump PR to sync `package.json` with released tag
+   - Manual release fallback and npm publish instructions
 
 ### Log Viewing Commands
 
