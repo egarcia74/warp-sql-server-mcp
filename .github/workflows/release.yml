@@ -53,7 +53,7 @@ jobs:
 
       - name: Check conventional commits
         id: check
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const { execSync } = require('child_process');
@@ -163,7 +163,7 @@ jobs:
 
       - name: Generate changelog
         id: changelog # This step dynamically sets the 'changelog' output
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const { execSync } = require('child_process');
@@ -292,14 +292,14 @@ jobs:
       issues: write
     steps:
       - name: Update README badge
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             console.log('🎉 Release completed successfully!');
             console.log('Consider updating documentation or notifying stakeholders.');
 
       - name: Create follow-up issue for documentation
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -382,7 +382,7 @@ jobs:
 
       - name: Open pull request
         if: always()
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           github-token: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
