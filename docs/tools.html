@@ -169,7 +169,7 @@
         <h1>🛠️ MCP Tools Documentation</h1>
         <p>Detailed reference for all available SQL Server MCP tools</p>
         <div>
-            <strong>Version 1.7.0 • 15 Tools Available</strong>
+            <strong>Version 1.7.9 • 16 Tools Available</strong>
         </div>
     </div>
 
@@ -197,6 +197,7 @@
             <li><a href="#get_index_recommendations">get_index_recommendations</a> - Get index recommendations for database optimization</li>
             <li><a href="#detect_query_bottlenecks">detect_query_bottlenecks</a> - Detect and analyze query bottlenecks in the database</li>
             <li><a href="#get_optimization_insights">get_optimization_insights</a> - Get comprehensive database optimization insights and health analysis</li>
+            <li><a href="#get_server_info">get_server_info</a> - Get MCP server configuration, status, and logging information</li>
         </ul>
     </div>
 
@@ -978,8 +979,48 @@
         </div>
     </div>
 
+    <div class="tool" id="get_server_info">
+        <h2><span class="tool-name">get_server_info</span></h2>
+        <div class="description">Get MCP server configuration, status, and logging information</div>
+        
+        <div class="section">
+            <h3>📝 Parameters</h3>
+                        <table class="parameters-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Required</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><span class="param-name">include_logs</span></td>
+                    <td><span class="param-type">boolean</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Include recent log entries (optional, defaults to false)</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h3>💡 Examples</h3>
+                        <div class="example">
+                <h4>🔸 Advanced Usage</h4>
+                <div class="example-code">{
+  "tool": "get_server_info",
+  "arguments": {
+    "include_logs": true
+  }
+}</div>
+            </div>
+        </div>
+    </div>
+
     <footer style="margin-top: 3rem; text-align: center; color: #6c757d; border-top: 1px solid #e9ecef; padding-top: 1rem;">
-        <p>Generated automatically from code • Last updated: 02/09/2025</p>
+        <p>Generated automatically from code • Last updated: 9/11/2025</p>
     </footer>
 </body>
 </html>
