@@ -29,6 +29,7 @@ const EXAMPLE_CONFIG = {
 };
 
 function showHelp() {
+  // Help should go to stdout for CLI usage
   console.log(`
 Warp SQL Server MCP - Secure database connectivity for Warp
 
@@ -109,9 +110,16 @@ function showConfig() {
 }
 
 function loadConfigToEnv() {
+  // Detect MCP/stdio environment to avoid polluting stdout during handshake
+  const isMcpEnv =
+    process.env.VSCODE_MCP === 'true' ||
+    process.env.MCP_TRANSPORT === 'stdio' ||
+    (!process.stdout.isTTY && (!process.stdin.isTTY || process.stdin.isTTY === undefined));
+  const out = isMcpEnv ? console.error : console.log;
+
   if (!fs.existsSync(CONFIG_FILE)) {
-    console.log(`⚠️  No configuration file found at: ${CONFIG_FILE}`);
-    console.log(
+    out(`⚠️  No configuration file found at: ${CONFIG_FILE}`);
+    out(
       'Using environment variables only. Run "warp-sql-server-mcp init" to create a config file.'
     );
     return;
@@ -125,7 +133,7 @@ function loadConfigToEnv() {
         process.env[key] = value;
       }
     }
-    console.log(`✅ Configuration loaded from: ${CONFIG_FILE}`);
+    out(`✅ Configuration loaded from: ${CONFIG_FILE}`);
   } catch (error) {
     console.error(`❌ Failed to load configuration file: ${error.message}`);
     process.exit(1);
@@ -133,7 +141,14 @@ function loadConfigToEnv() {
 }
 
 function startServer() {
-  console.log('🚀 Starting Warp SQL Server MCP...');
+  // Detect MCP/stdio environment to avoid polluting stdout during handshake
+  const isMcpEnv =
+    process.env.VSCODE_MCP === 'true' ||
+    process.env.MCP_TRANSPORT === 'stdio' ||
+    (!process.stdout.isTTY && (!process.stdin.isTTY || process.stdin.isTTY === undefined));
+  const out = isMcpEnv ? console.error : console.log;
+
+  out('🚀 Starting Warp SQL Server MCP...');
   // Load configuration into environment
   loadConfigToEnv();
   // Start the actual MCP server

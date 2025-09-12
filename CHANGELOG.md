@@ -634,7 +634,7 @@ This release introduces comprehensive project management capabilities and enhanc
   - Enhanced contribution guidelines with backlog integration
   - Cross-referenced documentation between backlog and GitHub issues
 
-### Fixed
+### Fixes
 
 - **🔧 Template and Documentation Fixes**:
   - Corrected broken links in feature request template
@@ -899,3 +899,11 @@ This release represents a significant architectural evolution with enterprise-gr
   - Prominent Quick Start links in README.md, SECURITY.md, CONTRIBUTING.md, WARP.md
   - Improved navigation for new users
   - Better documentation discoverability
+
+## [1.7.12] - 2025-09-12
+
+### Fixed
+
+- CLI: Route startup banners to stderr in MCP/stdio environments to prevent JSON handshake pollution on Windows (VS Code/Warp).
+  - Detect MCP via `VSCODE_MCP`, `MCP_TRANSPORT=stdio`, or non‑TTY stdio.
+  - No behavior change for normal terminal usage.
