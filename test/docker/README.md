@@ -169,6 +169,12 @@ SQL_SERVER_TRUST_CERT=true
 - **Storage**: Persistent volume for data
 - **Network**: Isolated Docker network
 
+Design notes:
+
+- We do not build a custom image. The compose file uses the upstream SQL Server image directly and mounts `init-db.sql` into the container.
+- Legacy test entrypoint scripts and a custom Dockerfile have been removed to reduce drift and maintenance.
+- Initialization runs the mounted SQL script after the container passes health checks.
+
 ### Password Standardization
 
 **All environments now use the same password: `WarpMCP123!`**
