@@ -244,10 +244,7 @@ function generateDockerCompose(selectedConfig) {
           ...selectedConfig.config.environment
         },
         ports: ['1433:1433'],
-        volumes: [
-          './init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro',
-          'sqlserver_data:/var/opt/mssql'
-        ],
+        volumes: ['./init-db.sql:/tmp/init-db.sql:ro', 'sqlserver_data:/var/opt/mssql'],
         healthcheck: {
           test: selectedConfig.config.healthcheck.test,
           interval: selectedConfig.config.healthcheck.interval || '10s',
