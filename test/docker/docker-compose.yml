@@ -16,7 +16,7 @@ services:
     ports:
       - 1433:1433
     volumes:
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./init-db.sql:/tmp/init-db.sql:ro
       - sqlserver_data:/var/opt/mssql
     healthcheck:
       test:

@@ -25,7 +25,7 @@ echo "✅ SQL Server is ready"
 
 # Run initialization script
 echo "🚀 Running initialization script..."
-/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -i /docker-entrypoint-initdb.d/init-db.sql
+/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -i /tmp/init-db.sql/init-db.sql
 
 echo "✅ Initialization complete"
 
