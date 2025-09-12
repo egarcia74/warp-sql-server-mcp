@@ -114,6 +114,42 @@ If migrating from `contents: write` permissions:
 - **Monitor token usage** regularly
 - **Rotate tokens** when team membership changes
 
+## Docs Automation Token (DOCS_PAT)
+
+The Documentation Automation workflow can use a fine‑grained PAT to ensure
+that auto‑generated docs PRs trigger CI/CodeQL checks. Without this token,
+PRs created by GITHUB_TOKEN may leave required checks in an
+"Expected — Waiting" state.
+
+### When to use
+
+- You run `.github/workflows/docs.yml` to auto‑update docs (tools.json/tools.html) on `main`.
+- Your branch protection requires CI/CodeQL checks to run on pull requests.
+
+### Create a fine‑grained PAT
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens
+2. Choose “Fine‑grained tokens” and generate a new token with:
+   - Repository access: This repository only
+   - Repository permissions: Contents (read/write), Pull requests (read/write)
+   - Expiration: per your policy (90 days recommended)
+3. Copy the token value
+
+### Add as a repository secret
+
+1. Repo → Settings → Secrets and variables → Actions → New repository secret
+2. Name: `DOCS_PAT`
+3. Value: paste the token
+
+### Effect in workflow
+
+- `.github/workflows/docs.yml` prefers `DOCS_PAT` for pushing the auto‑update branch and creating the PR.
+- Falls back to `GITHUB_TOKEN` if `DOCS_PAT` is not set (checks may not trigger automatically).
+
+### Rotation
+
+- Create a new fine‑grained token before the old one expires, update the `DOCS_PAT` secret, then revoke the old token.
+
 ## Support
 
 If you encounter issues:
