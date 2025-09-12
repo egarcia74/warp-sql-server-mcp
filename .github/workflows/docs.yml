@@ -268,7 +268,10 @@ jobs:
 
       - name: Create documentation update PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Prefer a fine-grained PAT so CI/CodeQL workflows trigger on the PR branch
+          # Fallback to GITHUB_TOKEN if DOCS_PAT is not configured (PR may require a manual noop commit)
+          PUSH_TOKEN: ${{ secrets.DOCS_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DOCS_PAT || github.token }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -294,7 +297,8 @@ jobs:
             - Updated index.html with current tool count
             - Extracted $tool_count MCP tools"
             
-            git push origin "$branch_name"
+            # Push using token-authenticated URL to ensure CI can be triggered when using a PAT
+            git push "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$branch_name"
             
             # Create PR using GitHub CLI
             if gh pr create \
@@ -333,6 +337,7 @@ jobs:
               echo "   Branch: $branch_name"
               echo "   Command: gh pr create --head $branch_name --base main --title '📚 Auto-update API documentation' --label documentation --label automated"
               echo "🔗 Direct link: https://github.com/${{ github.repository }}/compare/main...$branch_name"
+              echo "💡 Tip: Configure a DOCS_PAT repository secret with 'contents:write' and 'pull_request:write' to allow docs PRs to trigger CI checks automatically."
             fi
           fi
 
