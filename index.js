@@ -860,7 +860,8 @@ class SqlServerMCP {
 }
 
 // Main execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Use fileURLToPath for cross-platform compatibility (Windows vs Unix path formats)
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   const server = new SqlServerMCP();
   server.run().catch(error => {
     // Use console.error here since logger might not be initialized yet
