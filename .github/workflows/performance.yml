@@ -171,7 +171,7 @@ jobs:
           echo "**Analysis completed at**: $(date -u)" >> bundle-report.md
 
       - name: Upload bundle analysis
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: bundle-analysis-report
           path: bundle-report.md
@@ -266,7 +266,7 @@ jobs:
           rm -f audit.json outdated.json
 
       - name: Upload security report
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: security-analysis-report
           path: security-report.md
