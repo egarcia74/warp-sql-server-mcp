@@ -88,7 +88,7 @@ jobs:
       # Auto-assign reviewers for PRs
       - name: Auto-assign reviewers
         if: github.event_name == 'pull_request'
-        uses: kentaro-m/auto-assign-action@f4648c0a9fdb753479e9e75fc251f507ce17bb7e # v2.0.0
+        uses: kentaro-m/auto-assign-action@a6d59add3a817df08cafa9b166367768d2c337f8 # v2.0.1
         with:
           configuration-path: .github/auto_assign.yml
 
