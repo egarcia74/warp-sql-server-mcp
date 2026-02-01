@@ -568,7 +568,8 @@ making the MCP server production-ready for enterprise environments with enhanced
   - Corrected markdown formatting issues in setup guides
   - Ensured all CI/CD checks pass (linting, formatting, testing)
 
-This completes the performance monitoring implementation started in GitHub issue #15, providing comprehensive query performance tracking, error handling, and diagnostics across all database operation methods.
+This completes the performance monitoring implementation started in GitHub issue #15, providing comprehensive query performance tracking,
+error handling, and diagnostics across all database operation methods.
 
 ### Enhanced - Test Suite Modularization
 
