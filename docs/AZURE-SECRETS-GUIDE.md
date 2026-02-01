@@ -21,7 +21,7 @@ Before you begin, ensure you have:
 - **Azure Key Vault** resource created
 - **Azure CLI** installed (`az cli`) or **Azure PowerShell**
 - **Service Principal** or **Managed Identity** configured
-- **Node.js 18+** and the MCP project dependencies installed
+- **Node.js 20+** and the MCP project dependencies installed
 
 > **📖 Environment Variables Reference**: For complete documentation of all environment variables, defaults, and configuration options, see **[ENV-VARS.md](ENV-VARS.md)**.
 

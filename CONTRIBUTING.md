@@ -27,7 +27,7 @@ These guides will help you understand both the technical architecture and practi
 
 ### Prerequisites
 
-- Node.js 18.0.0 or higher
+- Node.js 20.0.0 or higher
 - npm (comes with Node.js)
 - SQL Server instance (for integration testing - optional)
 
@@ -152,7 +152,7 @@ The project follows these style guidelines:
 
 GitHub Actions automatically runs:
 
-- **Tests** on Node.js 18, 20, and 22
+- **Tests** on Node.js 20 and 22
 - **Linting** with ESLint, Prettier, and markdownlint
 - **Security audit** with npm audit
 - **Coverage reporting** with Codecov (when configured)
