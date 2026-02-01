@@ -17,10 +17,10 @@ const mocks = vi.hoisted(() => {
       return mockSqlRequest;
     }
   }
-  
+
   // Return the class directly wrapped in vi.fn() to make it spyable
   const SpyableMockRequestClass = vi.fn(MockRequestClass);
-  
+
   return {
     mockSqlRequest,
     MockRequestClass: SpyableMockRequestClass
@@ -37,7 +37,6 @@ vi.mock('mssql', () => {
   };
 });
 
-import sql from 'mssql';
 import { StreamingHandler } from '../../lib/utils/streaming-handler.js';
 
 describe('StreamingHandler', () => {
@@ -47,7 +46,7 @@ describe('StreamingHandler', () => {
   beforeEach(() => {
     // Reset all mocks before each test
     vi.clearAllMocks();
-    
+
     // Reset the mock request state
     mockSqlRequest.parent = {};
     mockSqlRequest.query.mockReset();
@@ -292,7 +291,7 @@ describe('StreamingHandler', () => {
 
       // Mock event handlers
       let recordsetHandler, rowHandler, doneHandler;
-      
+
       mockSqlRequest.on.mockImplementation((event, handler) => {
         if (event === 'recordset') recordsetHandler = handler;
         if (event === 'row') rowHandler = handler;

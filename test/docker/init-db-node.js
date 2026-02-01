@@ -26,6 +26,42 @@ const config = {
     }
 };
 
+/**
+ * Splits SQL script into batches separated by GO statements
+ * @param {string} sqlScript - The SQL script to split
+ * @returns {string[]} Array of SQL batches
+ */
+function splitSqlBatches(sqlScript) {
+    // Standardize line endings to \n
+    const lines = sqlScript.replace(/\r\n/g, '\n').split('\n');
+    const batches = [];
+    let currentBatch = [];
+
+    for (const line of lines) {
+        if (line.trim().toUpperCase() === 'GO') {
+            if (currentBatch.length > 0) {
+                const batch = currentBatch.join('\n').trim();
+                if (batch.length > 0) {
+                    batches.push(batch);
+                }
+                currentBatch = [];
+            }
+        } else {
+            currentBatch.push(line);
+        }
+    }
+
+    // Add final batch if exists
+    if (currentBatch.length > 0) {
+        const batch = currentBatch.join('\n').trim();
+        if (batch.length > 0) {
+            batches.push(batch);
+        }
+    }
+
+    return batches;
+}
+
 async function initDb() {
     console.log(`🔌 Connecting to ${config.server}:${config.port}...`);
     let pool;
@@ -36,15 +72,12 @@ async function initDb() {
         const sqlScriptPath = path.join(process.cwd(), 'test/docker/init-db.sql');
         const sqlScript = fs.readFileSync(sqlScriptPath, 'utf8');
 
-        // Split by GO (simple split for this script)
-        const batches = sqlScript.split(/^\s*GO\s*$/im);
+        // Split SQL script into batches separated by GO statements
+        const batches = splitSqlBatches(sqlScript);
 
-        for (let batch of batches) {
-            batch = batch.trim();
-            if (batch) {
-                console.log('🚀 Executing SQL batch...');
-                await pool.request().query(batch);
-            }
+        for (const batch of batches) {
+            console.log('🚀 Executing SQL batch...');
+            await pool.request().query(batch);
         }
 
         console.log('✅ Database initialization complete.');

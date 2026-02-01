@@ -101,13 +101,13 @@ const hoistedMocks = vi.hoisted(() => {
 export const mocks = hoistedMocks;
 
 // Export hoisted mocks for use in tests
-export const { 
-  mockRequest, 
-  mockPool, 
-  mockConnectionManager, 
-  mockServerConfig, 
-  mockPerformanceMonitor, 
-  mockStdioTransport 
+export const {
+  mockRequest,
+  mockPool,
+  mockConnectionManager,
+  mockServerConfig,
+  mockPerformanceMonitor,
+  mockStdioTransport
 } = hoistedMocks;
 
 // Mock the mssql module first (must be hoisted)
@@ -449,7 +449,7 @@ export const createTestMcpServer = async (envOverrides = {}) => {
   vi.resetModules();
 
   const { serverConfig } = await import('../../lib/config/server-config.js');
-  serverConfig.reload(); 
+  serverConfig.reload();
 
   const { SqlServerMCP } = await import('../../index.js');
 
