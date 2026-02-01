@@ -24,17 +24,23 @@ const mocks = vi.hoisted(() => {
 // Mock AWS SDK
 vi.mock('aws-sdk', () => ({
   default: {
-    SecretsManager: vi.fn().mockImplementation(function() { return mocks.mockAWSSecretsClient; })
+    SecretsManager: vi.fn().mockImplementation(function () {
+      return mocks.mockAWSSecretsClient;
+    })
   }
 }));
 
 // Mock Azure SDK
 vi.mock('@azure/keyvault-secrets', () => ({
-  SecretClient: vi.fn().mockImplementation(function() { return mocks.mockAzureSecretClient; })
+  SecretClient: vi.fn().mockImplementation(function () {
+    return mocks.mockAzureSecretClient;
+  })
 }));
 
 vi.mock('@azure/identity', () => ({
-  DefaultAzureCredential: vi.fn().mockImplementation(function() { return mocks.mockDefaultAzureCredential; })
+  DefaultAzureCredential: vi.fn().mockImplementation(function () {
+    return mocks.mockDefaultAzureCredential;
+  })
 }));
 
 import { SecretManager } from '../../lib/config/secret-manager.js';

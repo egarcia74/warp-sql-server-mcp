@@ -115,11 +115,15 @@ vi.mock('mssql', () => ({
   default: {
     connect: vi.fn(),
     ConnectionPool: vi.fn(),
-    Request: vi.fn(function() { return mocks.mockRequest; })
+    Request: vi.fn(function () {
+      return mocks.mockRequest;
+    })
   },
   connect: vi.fn(),
   ConnectionPool: vi.fn(),
-  Request: vi.fn(function() { return mocks.mockRequest; })
+  Request: vi.fn(function () {
+    return mocks.mockRequest;
+  })
 }));
 
 export const setupMssqlMock = () => {
@@ -127,7 +131,9 @@ export const setupMssqlMock = () => {
 };
 
 vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: vi.fn(function() { return mocks.mockStdioTransport; })
+  StdioServerTransport: vi.fn(function () {
+    return mocks.mockStdioTransport;
+  })
 }));
 
 export const setupStdioMock = () => {
@@ -487,7 +493,7 @@ export const setupMcpTest = (envOverrides = {}) => {
 
   // Mock the new module imports
   vi.mock('../../lib/database/connection-manager.js', () => ({
-    ConnectionManager: vi.fn().mockImplementation(function() {
+    ConnectionManager: vi.fn().mockImplementation(function () {
       return {
         connect: vi.fn().mockResolvedValue(mocks.mockPool),
         getPool: vi.fn().mockReturnValue(mocks.mockPool),
@@ -552,7 +558,9 @@ export const createTestMcpServerV4V2 = createTestMcpServer;
 // Setup mocks for new modules
 export const setupModularMocks = () => {
   vi.mock('../../lib/database/connection-manager.js', () => ({
-    ConnectionManager: vi.fn().mockImplementation(function() { return mocks.mockConnectionManager; })
+    ConnectionManager: vi.fn().mockImplementation(function () {
+      return mocks.mockConnectionManager;
+    })
   }));
 
   vi.mock('../../lib/config/server-config.js', () => ({
@@ -568,7 +576,7 @@ export const setupModularMocks = () => {
   }));
 
   vi.mock('../../lib/tools/handlers/database-tools.js', () => ({
-    DatabaseToolsHandler: vi.fn().mockImplementation(function() {
+    DatabaseToolsHandler: vi.fn().mockImplementation(function () {
       return {
         listDatabases: vi.fn().mockImplementation(async () => {
           const query = `

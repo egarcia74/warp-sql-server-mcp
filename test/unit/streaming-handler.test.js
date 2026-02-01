@@ -55,7 +55,7 @@ describe('StreamingHandler', () => {
 
     // Reset the constructor mock
     MockRequestClass.mockClear();
-    MockRequestClass.mockImplementation(function() {
+    MockRequestClass.mockImplementation(function () {
       return mockSqlRequest;
     });
 
@@ -112,51 +112,31 @@ describe('StreamingHandler', () => {
 
     it('should return true when forceStreaming is set', async () => {
       const context = { forceStreaming: true };
-      const result = await handler.shouldStreamQuery(
-        req,
-        'SELECT id FROM users',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT id FROM users', context);
       expect(result).toBe(true);
     });
 
     it('should return true for SELECT * without WHERE clause', async () => {
       const context = {};
-      const result = await handler.shouldStreamQuery(
-        req,
-        'SELECT * FROM large_table',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM large_table', context);
       expect(result).toBe(true);
     });
 
     it('should return true for queries with BULK operations', async () => {
       const context = {};
-      const result = await handler.shouldStreamQuery(
-        req,
-        'BULK INSERT data FROM file',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'BULK INSERT data FROM file', context);
       expect(result).toBe(true);
     });
 
     it('should return true for EXPORT operations', async () => {
       const context = {};
-      const result = await handler.shouldStreamQuery(
-        req,
-        'EXPORT TABLE users TO csv',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'EXPORT TABLE users TO csv', context);
       expect(result).toBe(true);
     });
 
     it('should return true for BACKUP operations', async () => {
       const context = {};
-      const result = await handler.shouldStreamQuery(
-        req,
-        'BACKUP DATABASE test TO disk',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'BACKUP DATABASE test TO disk', context);
       expect(result).toBe(true);
     });
 
@@ -168,11 +148,7 @@ describe('StreamingHandler', () => {
         recordset: [{ estimated_rows: 50000, estimated_size_mb: 25 }]
       });
 
-      const result = await handler.shouldStreamQuery(
-        req,
-        'SELECT * FROM large_table',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM large_table', context);
       expect(result).toBe(true);
       expect(req.query).toHaveBeenCalledWith(expect.stringContaining('sys.tables'));
     });
@@ -185,11 +161,7 @@ describe('StreamingHandler', () => {
         recordset: [{ estimated_rows: 100, estimated_size_mb: 1 }]
       });
 
-      const result = await handler.shouldStreamQuery(
-        req,
-        'SELECT * FROM small_table',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM small_table', context);
       expect(result).toBe(false);
     });
 
@@ -200,11 +172,7 @@ describe('StreamingHandler', () => {
       // Mock query failure
       req.query.mockRejectedValue(new Error('Table not found'));
 
-      const result = await handler.shouldStreamQuery(
-        req,
-        'SELECT * FROM unknown_table',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM unknown_table', context);
       expect(result).toBe(false);
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Could not determine table size'),
@@ -268,7 +236,10 @@ describe('StreamingHandler', () => {
         })
       };
 
-      const result = await handler.executeRegularQuery(localMockRequest, 'SELECT * FROM empty_table');
+      const result = await handler.executeRegularQuery(
+        localMockRequest,
+        'SELECT * FROM empty_table'
+      );
 
       expect(result.success).toBe(true);
       expect(result.recordset).toEqual([]);
@@ -303,7 +274,7 @@ describe('StreamingHandler', () => {
       // Note: We avoid checking if recordsetHandler is defined to prevent race conditions
       // The test setup ensures handlers are registered before this runs
       mockSqlRequest.query.mockImplementation(() => {
-        const promise = new Promise((resolve) => {
+        const promise = new Promise(resolve => {
           setTimeout(() => {
             // Trigger events if handlers are registered
             if (recordsetHandler) recordsetHandler(mockColumns);
@@ -344,7 +315,7 @@ describe('StreamingHandler', () => {
       });
 
       mockSqlRequest.query.mockImplementation(() => {
-        const promise = new Promise((resolve) => {
+        const promise = new Promise(resolve => {
           setTimeout(() => {
             // Simulate 5 rows (should create 3 batches: 2+2+1)
             if (rowHandler) {
