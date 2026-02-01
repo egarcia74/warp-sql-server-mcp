@@ -1,25 +1,40 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
+// Define hoisted mocks for SDKs
+const mocks = vi.hoisted(() => {
+  const mockAWSSecretsClient = {
+    getSecretValue: vi.fn(),
+    listSecrets: vi.fn()
+  };
+
+  const mockAzureSecretClient = {
+    getSecret: vi.fn(),
+    listPropertiesOfSecrets: vi.fn()
+  };
+
+  const mockDefaultAzureCredential = {};
+
+  return {
+    mockAWSSecretsClient,
+    mockAzureSecretClient,
+    mockDefaultAzureCredential
+  };
+});
+
 // Mock AWS SDK
 vi.mock('aws-sdk', () => ({
   default: {
-    SecretsManager: vi.fn().mockImplementation(() => ({
-      getSecretValue: vi.fn(),
-      listSecrets: vi.fn()
-    }))
+    SecretsManager: vi.fn().mockImplementation(function() { return mocks.mockAWSSecretsClient; })
   }
 }));
 
 // Mock Azure SDK
 vi.mock('@azure/keyvault-secrets', () => ({
-  SecretClient: vi.fn().mockImplementation(() => ({
-    getSecret: vi.fn(),
-    listPropertiesOfSecrets: vi.fn()
-  }))
+  SecretClient: vi.fn().mockImplementation(function() { return mocks.mockAzureSecretClient; })
 }));
 
 vi.mock('@azure/identity', () => ({
-  DefaultAzureCredential: vi.fn().mockImplementation(() => ({}))
+  DefaultAzureCredential: vi.fn().mockImplementation(function() { return mocks.mockDefaultAzureCredential; })
 }));
 
 import { SecretManager } from '../../lib/config/secret-manager.js';
@@ -28,8 +43,8 @@ import { SecretClient } from '@azure/keyvault-secrets';
 
 describe('SecretManager', () => {
   let secretManager;
-  let mockAWSSecretsClient;
-  let mockAzureSecretClient;
+  // Use the hoisted mocks directly
+  const { mockAWSSecretsClient, mockAzureSecretClient } = mocks;
   let originalEnv;
 
   beforeEach(() => {
@@ -38,20 +53,6 @@ describe('SecretManager', () => {
 
     // Reset all mocks
     vi.clearAllMocks();
-
-    // Setup AWS mock
-    mockAWSSecretsClient = {
-      getSecretValue: vi.fn(),
-      listSecrets: vi.fn()
-    };
-    AWS.SecretsManager.mockImplementation(() => mockAWSSecretsClient);
-
-    // Setup Azure mock
-    mockAzureSecretClient = {
-      getSecret: vi.fn(),
-      listPropertiesOfSecrets: vi.fn()
-    };
-    SecretClient.mockImplementation(() => mockAzureSecretClient);
 
     // Mock console methods
     vi.spyOn(console, 'error').mockImplementation(() => {});

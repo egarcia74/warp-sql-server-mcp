@@ -34,7 +34,7 @@
     "docker:start:verbose": "npm run docker:detect && echo '🐳 Starting optimized SQL Server container...' && docker compose -f test/docker/docker-compose.yml up -d && npm run docker:wait",
     "docker:start:init": "npm run docker:start && npm run docker:init || (echo '❌ Docker initialization failed - see errors above' && exit 1)",
     "docker:start:verbose:init": "npm run docker:start:verbose && npm run docker:init || (echo '❌ Docker initialization failed - see errors above' && exit 1)",
-    "docker:init": "echo '🔧 Initializing database schema...' && docker exec warp-mcp-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P WarpMCP123! -C -b -i /tmp/init-db.sql && echo '✅ Database initialization completed successfully' || (echo '❌ Database initialization FAILED - check logs above' && exit 1)",
+    "docker:init": "echo '🔧 Initializing database schema via node...' && node test/docker/init-db-node.js && echo '✅ Database initialization completed successfully' || (echo '❌ Database initialization FAILED' && exit 1)",
     "docker:stop": "echo '🔴 Stopping SQL Server container...' && docker compose -f test/docker/docker-compose.yml down",
     "docker:restart": "npm run docker:stop && npm run docker:start",
     "docker:reset": "echo '🔄 Resetting SQL Server container with fresh data...' && npm run docker:clean && npm run docker:start",
@@ -111,7 +111,7 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "publishConfig": {
     "access": "public"
