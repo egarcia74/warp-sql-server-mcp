@@ -11,7 +11,7 @@ Connect **GitHub Copilot** in VS Code directly to your **SQL Server** using MCP!
 
 ## Prerequisites
 
-- ✅ **Node.js 18+** installed
+- ✅ **Node.js 20+** installed
 - ✅ **SQL Server** running (localhost:1433)
 - ✅ **VS Code** with **GitHub Copilot** extension
 - ✅ **GitHub Copilot subscription** (required for MCP support)
