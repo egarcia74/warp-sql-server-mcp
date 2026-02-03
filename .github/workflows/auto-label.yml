@@ -67,7 +67,7 @@ jobs:
         uses: actions/first-interaction@1c4688942c71f71d4f5502a26ea67c331730fa4d # v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-message: |
+          pr_message: |
             👋 Thanks for your first contribution to this project! 
             
             We appreciate you taking the time to contribute. Your PR will be reviewed soon.
@@ -78,7 +78,7 @@ jobs:
             - [ ] Code follows our style guide
             
             Welcome to the community! 🎉
-          issue-message: |
+          issue_message: |
             👋 Thanks for opening your first issue! 
             
             We appreciate you taking the time to report this. Someone will look into it soon.
