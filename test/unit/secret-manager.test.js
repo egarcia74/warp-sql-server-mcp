@@ -112,6 +112,21 @@ describe('SecretManager', () => {
       expect(secretManager.awsSecretsClient).toBeDefined();
     });
 
+    test("should fall back to default AWS region when AWS_REGION is invalid", () => {
+      process.env.AWS_REGION = "../../etc/passwd";
+      process.env.AWS_ACCESS_KEY_ID = "test-key";
+      process.env.AWS_SECRET_ACCESS_KEY = "test-secret";
+
+      secretManager = new SecretManager({ secretSource: "aws" });
+
+      expect(console.warn).toHaveBeenCalled();
+      expect(AWS.SecretsManager).toHaveBeenCalledWith({
+        region: "us-east-1",
+        accessKeyId: "test-key",
+        secretAccessKey: "test-secret"
+      });
+    });
+
     test('should initialize Azure provider correctly', () => {
       process.env.AZURE_KEY_VAULT_URL = 'https://test-vault.vault.azure.net/';
 
