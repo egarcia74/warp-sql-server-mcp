@@ -1,19 +1,39 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import sql from 'mssql';
 
-// Mock mssql module
-vi.mock('mssql', () => {
-  const mockRequest = {
+// Define hoisted mocks
+const mocks = vi.hoisted(() => {
+  const mockSqlRequest = {
     parent: {},
     query: vi.fn(),
     on: vi.fn(),
     stream: false
   };
 
+  // Mock the Request class constructor specifically
+  // Vitest mock constructors must be newable
+  class MockRequestClass {
+    constructor() {
+      // In ES6 classes, returning an object from constructor overrides 'this'
+      return mockSqlRequest;
+    }
+  }
+
+  // Return the class directly wrapped in vi.fn() to make it spyable
+  const SpyableMockRequestClass = vi.fn(MockRequestClass);
+
+  return {
+    mockSqlRequest,
+    MockRequestClass: SpyableMockRequestClass
+  };
+});
+
+// Mock mssql module
+vi.mock('mssql', () => {
   return {
     default: {
-      Request: vi.fn(() => mockRequest)
-    }
+      Request: mocks.MockRequestClass
+    },
+    Request: mocks.MockRequestClass
   };
 });
 
@@ -21,10 +41,23 @@ import { StreamingHandler } from '../../lib/utils/streaming-handler.js';
 
 describe('StreamingHandler', () => {
   let handler;
+  const { mockSqlRequest, MockRequestClass } = mocks;
 
   beforeEach(() => {
     // Reset all mocks before each test
     vi.clearAllMocks();
+
+    // Reset the mock request state
+    mockSqlRequest.parent = {};
+    mockSqlRequest.query.mockReset();
+    mockSqlRequest.on.mockReset();
+    mockSqlRequest.stream = false;
+
+    // Reset the constructor mock
+    MockRequestClass.mockClear();
+    MockRequestClass.mockImplementation(function () {
+      return mockSqlRequest;
+    });
 
     // Create a fresh handler instance
     handler = new StreamingHandler();
@@ -68,67 +101,42 @@ describe('StreamingHandler', () => {
   });
 
   describe('shouldStreamQuery', () => {
-    let mockSqlRequest;
-
-    beforeEach(() => {
-      mockSqlRequest = {
-        query: vi.fn()
-      };
-    });
+    // We can use the hoisted mock request here since we control it
+    const req = mockSqlRequest;
 
     it('should return false when streaming is disabled', async () => {
       handler.updateConfig({ enableStreaming: false });
-      const result = await handler.shouldStreamQuery(mockSqlRequest, 'SELECT * FROM users');
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM users');
       expect(result).toBe(false);
     });
 
     it('should return true when forceStreaming is set', async () => {
       const context = { forceStreaming: true };
-      const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
-        'SELECT id FROM users',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT id FROM users', context);
       expect(result).toBe(true);
     });
 
     it('should return true for SELECT * without WHERE clause', async () => {
       const context = {};
-      const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
-        'SELECT * FROM large_table',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM large_table', context);
       expect(result).toBe(true);
     });
 
     it('should return true for queries with BULK operations', async () => {
       const context = {};
-      const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
-        'BULK INSERT data FROM file',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'BULK INSERT data FROM file', context);
       expect(result).toBe(true);
     });
 
     it('should return true for EXPORT operations', async () => {
       const context = {};
-      const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
-        'EXPORT TABLE users TO csv',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'EXPORT TABLE users TO csv', context);
       expect(result).toBe(true);
     });
 
     it('should return true for BACKUP operations', async () => {
       const context = {};
-      const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
-        'BACKUP DATABASE test TO disk',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'BACKUP DATABASE test TO disk', context);
       expect(result).toBe(true);
     });
 
@@ -136,32 +144,24 @@ describe('StreamingHandler', () => {
       const context = { tableName: 'large_table', schema: 'dbo' };
 
       // Mock table size query result - large table
-      mockSqlRequest.query.mockResolvedValue({
+      req.query.mockResolvedValue({
         recordset: [{ estimated_rows: 50000, estimated_size_mb: 25 }]
       });
 
-      const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
-        'SELECT * FROM large_table',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM large_table', context);
       expect(result).toBe(true);
-      expect(mockSqlRequest.query).toHaveBeenCalledWith(expect.stringContaining('sys.tables'));
+      expect(req.query).toHaveBeenCalledWith(expect.stringContaining('sys.tables'));
     });
 
     it('should not stream for small tables', async () => {
       const context = { tableName: 'small_table', schema: 'dbo' };
 
       // Mock table size query result - small table
-      mockSqlRequest.query.mockResolvedValue({
+      req.query.mockResolvedValue({
         recordset: [{ estimated_rows: 100, estimated_size_mb: 1 }]
       });
 
-      const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
-        'SELECT * FROM small_table',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM small_table', context);
       expect(result).toBe(false);
     });
 
@@ -170,13 +170,9 @@ describe('StreamingHandler', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       // Mock query failure
-      mockSqlRequest.query.mockRejectedValue(new Error('Table not found'));
+      req.query.mockRejectedValue(new Error('Table not found'));
 
-      const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
-        'SELECT * FROM unknown_table',
-        context
-      );
+      const result = await handler.shouldStreamQuery(req, 'SELECT * FROM unknown_table', context);
       expect(result).toBe(false);
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Could not determine table size'),
@@ -189,7 +185,7 @@ describe('StreamingHandler', () => {
     it('should return false for regular SELECT queries with conditions', async () => {
       const context = {};
       const result = await handler.shouldStreamQuery(
-        mockSqlRequest,
+        req,
         'SELECT id, name FROM users WHERE active = 1',
         context
       );
@@ -199,7 +195,7 @@ describe('StreamingHandler', () => {
 
   describe('executeRegularQuery', () => {
     it('should execute regular query and return formatted result', async () => {
-      const mockSqlRequest = {
+      const localMockRequest = {
         query: vi.fn().mockResolvedValue({
           recordset: [
             { id: 1, name: 'John' },
@@ -217,7 +213,7 @@ describe('StreamingHandler', () => {
 
       const startTime = Date.now() - 100;
       const result = await handler.executeRegularQuery(
-        mockSqlRequest,
+        localMockRequest,
         'SELECT * FROM users',
         {},
         startTime
@@ -232,7 +228,7 @@ describe('StreamingHandler', () => {
     });
 
     it('should handle empty results', async () => {
-      const mockSqlRequest = {
+      const localMockRequest = {
         query: vi.fn().mockResolvedValue({
           recordset: [],
           recordsets: [[]],
@@ -240,7 +236,10 @@ describe('StreamingHandler', () => {
         })
       };
 
-      const result = await handler.executeRegularQuery(mockSqlRequest, 'SELECT * FROM empty_table');
+      const result = await handler.executeRegularQuery(
+        localMockRequest,
+        'SELECT * FROM empty_table'
+      );
 
       expect(result.success).toBe(true);
       expect(result.recordset).toEqual([]);
@@ -257,20 +256,34 @@ describe('StreamingHandler', () => {
         { id: 3, name: 'Bob' }
       ];
 
-      const mockStreamRequest = {
-        on: vi.fn(),
-        query: vi.fn(),
-        stream: false
-      };
-
-      sql.Request.mockReturnValue(mockStreamRequest);
+      // Use the hoisted mock object
+      // The class MockRequestClass is already set up to return mockSqlRequest
+      // We just need to configure mockSqlRequest behavior
 
       // Mock event handlers
       let recordsetHandler, rowHandler, doneHandler;
-      mockStreamRequest.on.mockImplementation((event, handler) => {
+
+      mockSqlRequest.on.mockImplementation((event, handler) => {
         if (event === 'recordset') recordsetHandler = handler;
         if (event === 'row') rowHandler = handler;
         if (event === 'done') doneHandler = handler;
+        return mockSqlRequest; // Return self for chaining if needed
+      });
+
+      // Use a custom mock implementation that doesn't trigger the constructor spy
+      // Note: We avoid checking if recordsetHandler is defined to prevent race conditions
+      // The test setup ensures handlers are registered before this runs
+      mockSqlRequest.query.mockImplementation(() => {
+        const promise = new Promise(resolve => {
+          setTimeout(() => {
+            // Trigger events if handlers are registered
+            if (recordsetHandler) recordsetHandler(mockColumns);
+            if (rowHandler) mockRows.forEach(row => rowHandler(row));
+            if (doneHandler) doneHandler({ rowsAffected: [3] });
+            resolve();
+          }, 10);
+        });
+        return promise;
       });
 
       const queryPromise = handler.executeStreamingQuery(
@@ -280,11 +293,6 @@ describe('StreamingHandler', () => {
         Date.now() - 50
       );
 
-      // Simulate streaming events
-      recordsetHandler(mockColumns);
-      mockRows.forEach(row => rowHandler(row));
-      doneHandler({ rowsAffected: [3] });
-
       const result = await queryPromise;
 
       expect(result.success).toBe(true);
@@ -293,24 +301,33 @@ describe('StreamingHandler', () => {
       expect(result.chunkCount).toBe(1);
       expect(result.chunks).toHaveLength(1);
       expect(result.performance.memoryEfficient).toBe(true);
-      expect(mockStreamRequest.stream).toBe(true);
+      expect(mockSqlRequest.stream).toBe(true);
     });
 
     it('should process multiple batches', async () => {
       handler.updateConfig({ batchSize: 2 });
 
-      const mockStreamRequest = {
-        on: vi.fn(),
-        query: vi.fn(),
-        stream: false
-      };
-
-      sql.Request.mockReturnValue(mockStreamRequest);
-
       let rowHandler, doneHandler;
-      mockStreamRequest.on.mockImplementation((event, handler) => {
+      mockSqlRequest.on.mockImplementation((event, handler) => {
         if (event === 'row') rowHandler = handler;
         if (event === 'done') doneHandler = handler;
+        return mockSqlRequest;
+      });
+
+      mockSqlRequest.query.mockImplementation(() => {
+        const promise = new Promise(resolve => {
+          setTimeout(() => {
+            // Simulate 5 rows (should create 3 batches: 2+2+1)
+            if (rowHandler) {
+              for (let i = 1; i <= 5; i++) {
+                rowHandler({ id: i, name: `User${i}` });
+              }
+            }
+            if (doneHandler) doneHandler({ rowsAffected: [5] });
+            resolve();
+          }, 10);
+        });
+        return promise;
       });
 
       const queryPromise = handler.executeStreamingQuery(
@@ -319,12 +336,6 @@ describe('StreamingHandler', () => {
         {},
         Date.now()
       );
-
-      // Simulate 5 rows (should create 3 batches: 2+2+1)
-      for (let i = 1; i <= 5; i++) {
-        rowHandler({ id: i, name: `User${i}` });
-      }
-      doneHandler({ rowsAffected: [5] });
 
       const result = await queryPromise;
 
@@ -335,17 +346,23 @@ describe('StreamingHandler', () => {
     });
 
     it('should handle streaming errors', async () => {
-      const mockStreamRequest = {
-        on: vi.fn(),
-        query: vi.fn(),
-        stream: false
-      };
-
-      sql.Request.mockReturnValue(mockStreamRequest);
-
       let errorHandler;
-      mockStreamRequest.on.mockImplementation((event, handler) => {
+      mockSqlRequest.on.mockImplementation((event, handler) => {
         if (event === 'error') errorHandler = handler;
+        return mockSqlRequest;
+      });
+
+      mockSqlRequest.query.mockImplementation(() => {
+        const promise = new Promise((resolve, reject) => {
+          setTimeout(() => {
+            // Simulate error
+            const testError = new Error('Table does not exist');
+            if (errorHandler) errorHandler(testError);
+            reject(testError);
+          }, 10);
+        });
+        // We catch here because executeStreamingQuery will catch it, but the promise we return needs to reject so the handler knows it failed
+        return promise.catch(() => {});
       });
 
       const queryPromise = handler.executeStreamingQuery(
@@ -355,17 +372,13 @@ describe('StreamingHandler', () => {
         Date.now()
       );
 
-      // Simulate error
-      const testError = new Error('Table does not exist');
-      errorHandler(testError);
-
       await expect(queryPromise).rejects.toThrow('Table does not exist');
     });
   });
 
   describe('executeQueryWithStreaming', () => {
     it('should choose streaming for queries that should stream', async () => {
-      const mockSqlRequest = { parent: {}, query: vi.fn() };
+      const req = { parent: {}, query: vi.fn() };
 
       // Mock shouldStreamQuery to return true
       const shouldStreamSpy = vi.spyOn(handler, 'shouldStreamQuery').mockResolvedValue(true);
@@ -375,14 +388,14 @@ describe('StreamingHandler', () => {
         chunks: []
       });
 
-      await handler.executeQueryWithStreaming(mockSqlRequest, 'SELECT * FROM large_table');
+      await handler.executeQueryWithStreaming(req, 'SELECT * FROM large_table');
 
       expect(shouldStreamSpy).toHaveBeenCalled();
       expect(executeStreamingSpy).toHaveBeenCalled();
     });
 
     it('should choose regular execution for queries that should not stream', async () => {
-      const mockSqlRequest = {
+      const req = {
         parent: {},
         query: vi.fn().mockResolvedValue({ recordset: [], rowsAffected: [0] })
       };
@@ -391,7 +404,7 @@ describe('StreamingHandler', () => {
       const shouldStreamSpy = vi.spyOn(handler, 'shouldStreamQuery').mockResolvedValue(false);
       const executeRegularSpy = vi.spyOn(handler, 'executeRegularQuery');
 
-      await handler.executeQueryWithStreaming(mockSqlRequest, 'SELECT id FROM users WHERE id = 1');
+      await handler.executeQueryWithStreaming(req, 'SELECT id FROM users WHERE id = 1');
 
       expect(shouldStreamSpy).toHaveBeenCalled();
       expect(executeRegularSpy).toHaveBeenCalled();

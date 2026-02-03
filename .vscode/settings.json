@@ -11,7 +11,7 @@
     "WARP.md": "markdown"
   },
   "workbench.editorAssociations": {
-    "*.md": "vscode.markdown.preview.editor",
+    "*.md": "default",
     "*.copilotmd": "vscode.markdown.preview.editor"
   },
   "github.copilot.chat.welcomeMessage": "always",
