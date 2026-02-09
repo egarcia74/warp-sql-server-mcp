@@ -226,14 +226,12 @@ test('Docker Compose syntax', 'Generated configuration must be valid', () => {
 });
 
 // Step 5: Container Validation (only if Docker is available)
-showProgress(++currentStep);
+showProgress(currentStep + 1); // Last step, no need to store incremented value
 
 if (dockerAvailable && selectedConfig) {
   console.log('  Testing container lifecycle...');
 
-  let containerStarted = false;
-
-  test('Container startup', 'Must start SQL Server without platform warnings', () => {
+  const containerStarted = test('Container startup', 'Must start SQL Server without platform warnings', () => {
     try {
       // Ensure clean state
       try {
@@ -249,9 +247,7 @@ if (dockerAvailable && selectedConfig) {
       const output = execSync('docker ps --filter name=warp-mcp-sqlserver --format "{{.Names}}"', {
         encoding: 'utf8'
       });
-      containerStarted = output.includes('warp-mcp-sqlserver');
-
-      return containerStarted;
+      return output.includes('warp-mcp-sqlserver');
     } catch (error) {
       console.log(`     Startup failed: ${error.message}`);
       return false;
