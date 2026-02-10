@@ -231,28 +231,35 @@ showProgress(currentStep + 1); // Last step, no need to store incremented value
 if (dockerAvailable && selectedConfig) {
   console.log('  Testing container lifecycle...');
 
-  const containerStarted = test('Container startup', 'Must start SQL Server without platform warnings', () => {
-    try {
-      // Ensure clean state
+  const containerStarted = test(
+    'Container startup',
+    'Must start SQL Server without platform warnings',
+    () => {
       try {
-        execSync('docker-compose -f test/docker/docker-compose.yml down -v', { stdio: 'ignore' });
-      } catch {
-        /* ignore */
+        // Ensure clean state
+        try {
+          execSync('docker-compose -f test/docker/docker-compose.yml down -v', { stdio: 'ignore' });
+        } catch {
+          /* ignore */
+        }
+
+        // Start container
+        execSync('docker-compose -f test/docker/docker-compose.yml up -d', { stdio: 'ignore' });
+
+        // Quick check if running
+        const output = execSync(
+          'docker ps --filter name=warp-mcp-sqlserver --format "{{.Names}}"',
+          {
+            encoding: 'utf8'
+          }
+        );
+        return output.includes('warp-mcp-sqlserver');
+      } catch (error) {
+        console.log(`     Startup failed: ${error.message}`);
+        return false;
       }
-
-      // Start container
-      execSync('docker-compose -f test/docker/docker-compose.yml up -d', { stdio: 'ignore' });
-
-      // Quick check if running
-      const output = execSync('docker ps --filter name=warp-mcp-sqlserver --format "{{.Names}}"', {
-        encoding: 'utf8'
-      });
-      return output.includes('warp-mcp-sqlserver');
-    } catch (error) {
-      console.log(`     Startup failed: ${error.message}`);
-      return false;
     }
-  });
+  );
 
   if (containerStarted) {
     test(
