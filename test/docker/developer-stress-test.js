@@ -12,8 +12,28 @@ import {
   checkDockerCapabilities,
   chooseBestConfiguration
 } from './detect-platform.js';
-import { execSync } from 'child_process';
+import { execSync as baseExecSync } from 'child_process';
 import fs from 'fs';
+
+// Safe path for execSync to satisfy Sonar S4036
+const SAFE_PATH = '/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin:/bin:/sbin';
+
+/**
+ * Safe execution helper to satisfy Sonar S4036
+ * Ensures PATH only contains fixed, unwriteable directories
+ */
+function execSync(command, options = {}) {
+  const mergedOptions = {
+    encoding: 'utf8',
+    ...options,
+    env: {
+      ...process.env,
+      PATH: SAFE_PATH,
+      ...(options.env || {})
+    }
+  };
+  return baseExecSync(command, mergedOptions);
+}
 
 console.log('🧪 Platform Detection Developer Test\n');
 
