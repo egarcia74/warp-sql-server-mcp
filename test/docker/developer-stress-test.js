@@ -12,19 +12,24 @@ import {
   checkDockerCapabilities,
   chooseBestConfiguration
 } from './detect-platform.js';
-import { execSync as baseExecSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 
 // Safe path for execSync to satisfy Sonar S4036
 const SAFE_PATH = '/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin:/bin:/sbin';
 
 /**
- * Safe execution helper to satisfy Sonar S4036
- * Ensures PATH only contains fixed, unwriteable directories
+ * Safe execution helper to satisfy Sonar S4036 and S4721
+ * - Ensures PATH only contains fixed, unwriteable directories
+ * - Uses spawnSync with shell: false to prevent command injection
  */
 function execSync(command, options = {}) {
+  const args = command.split(' ');
+  const cmd = args.shift();
+
   const mergedOptions = {
     encoding: 'utf8',
+    shell: false, // Explicitly disable shell to satisfy S4721
     ...options,
     env: {
       ...process.env,
@@ -32,7 +37,21 @@ function execSync(command, options = {}) {
       ...(options.env || {})
     }
   };
-  return baseExecSync(command, mergedOptions);
+
+  const result = spawnSync(cmd, args, mergedOptions);
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0 && !options.stdio) {
+    const errorMsg = result.stderr ? result.stderr.toString() : 'Unknown error';
+    throw new Error(
+      `Command failed with exit code ${result.status}: ${cmd} ${args.join(' ')}\n${errorMsg}`
+    );
+  }
+
+  return result.stdout ? result.stdout.toString() : '';
 }
 
 console.log('🧪 Platform Detection Developer Test\n');
