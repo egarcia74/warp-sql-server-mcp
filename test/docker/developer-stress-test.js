@@ -44,7 +44,7 @@ function execSync(command, options = {}) {
     throw result.error;
   }
 
-  if (result.status !== 0 && !options.stdio) {
+  if (result.status !== 0) {
     const errorMsg = result.stderr ? result.stderr.toString() : 'Unknown error';
     throw new Error(
       `Command failed with exit code ${result.status}: ${cmd} ${args.join(' ')}\n${errorMsg}`
