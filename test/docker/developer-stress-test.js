@@ -22,9 +22,31 @@ const SAFE_PATH = '/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin:/bin:/sbin'
  * Safe execution helper to satisfy Sonar S4036 and S4721
  * - Ensures PATH only contains fixed, unwriteable directories
  * - Uses spawnSync with shell: false to prevent command injection
+ * - Handles quoted arguments correctly
  */
 function execSync(command, options = {}) {
-  const args = command.split(' ');
+  // Parse command arguments respecting double quotes
+  const args = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ' ' && !inQuotes) {
+      if (current) {
+        args.push(current);
+        current = '';
+      }
+    } else {
+      current += char;
+    }
+  }
+  if (current) {
+    args.push(current);
+  }
+
   const cmd = args.shift();
 
   const mergedOptions = {
@@ -33,8 +55,8 @@ function execSync(command, options = {}) {
     ...options,
     env: {
       ...process.env,
-      PATH: SAFE_PATH,
-      ...(options.env || {})
+      ...(options.env || {}),
+      PATH: SAFE_PATH // Apply PATH last to prevent overrides
     }
   };
 
