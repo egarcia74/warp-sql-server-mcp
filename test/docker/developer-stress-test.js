@@ -13,10 +13,12 @@ import {
   chooseBestConfiguration
 } from './detect-platform.js';
 import { spawnSync } from 'child_process';
-import fs from 'fs';
+import path from 'path';
 
 // Safe path for execSync to satisfy Sonar S4036
-const SAFE_PATH = '/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin:/bin:/sbin';
+// Include current Node.js bin to ensure npm/node are reachable (Satisfies Codex review)
+const NODE_BIN = path.dirname(process.execPath);
+const SAFE_PATH = `${NODE_BIN}:/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin:/bin:/sbin`;
 
 /**
  * Safe execution helper to satisfy Sonar S4036 and S4721
