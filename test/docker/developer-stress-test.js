@@ -13,6 +13,7 @@ import {
   chooseBestConfiguration
 } from './detect-platform.js';
 import { spawnSync } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 
 // Safe path for execSync to satisfy Sonar S4036
