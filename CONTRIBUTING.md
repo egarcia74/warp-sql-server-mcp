@@ -27,7 +27,7 @@ These guides will help you understand both the technical architecture and practi
 
 ### Prerequisites
 
-- Node.js 20.0.0 or higher
+- Node.js 20.19.0 or higher
 - npm (comes with Node.js)
 - SQL Server instance (for integration testing - optional)
 

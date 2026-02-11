@@ -99,10 +99,11 @@
     "winston": "^3.11.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^25.2.0",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
-    "eslint": "^9.15.0",
+    "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "markdown-link-check": "^3.13.7",
     "markdownlint-cli2": "^0.20.0",
@@ -111,7 +112,7 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.19.0"
   },
   "publishConfig": {
     "access": "public"

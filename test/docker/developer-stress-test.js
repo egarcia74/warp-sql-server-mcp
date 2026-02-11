@@ -12,8 +12,72 @@ import {
   checkDockerCapabilities,
   chooseBestConfiguration
 } from './detect-platform.js';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
+import path from 'path';
+
+// Safe path for execSync to satisfy Sonar S4036
+// Include current Node.js bin to ensure npm/node are reachable (Satisfies Codex review)
+const NODE_BIN = path.dirname(process.execPath);
+const SAFE_PATH = `${NODE_BIN}:/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin:/bin:/sbin`;
+
+/**
+ * Safe execution helper to satisfy Sonar S4036 and S4721
+ * - Ensures PATH only contains fixed, unwriteable directories
+ * - Uses spawnSync with shell: false to prevent command injection
+ * - Handles quoted arguments correctly
+ */
+function execSync(command, options = {}) {
+  // Parse command arguments respecting double quotes
+  const args = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ' ' && !inQuotes) {
+      if (current) {
+        args.push(current);
+        current = '';
+      }
+    } else {
+      current += char;
+    }
+  }
+  if (current) {
+    args.push(current);
+  }
+
+  const cmd = args.shift();
+
+  const mergedOptions = {
+    encoding: 'utf8',
+    shell: false, // Explicitly disable shell to satisfy S4721
+    ...options,
+    env: {
+      ...process.env,
+      ...(options.env || {}),
+      PATH: SAFE_PATH // Apply PATH last to prevent overrides
+    }
+  };
+
+  const result = spawnSync(cmd, args, mergedOptions);
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    const errorMsg = result.stderr ? result.stderr.toString() : 'Unknown error';
+    throw new Error(
+      `Command failed with exit code ${result.status}: ${cmd} ${args.join(' ')}\n${errorMsg}`
+    );
+  }
+
+  return result.stdout ? result.stdout.toString() : '';
+}
 
 console.log('🧪 Platform Detection Developer Test\n');
 
@@ -226,37 +290,40 @@ test('Docker Compose syntax', 'Generated configuration must be valid', () => {
 });
 
 // Step 5: Container Validation (only if Docker is available)
-showProgress(++currentStep);
+showProgress(currentStep + 1); // Last step, no need to store incremented value
 
 if (dockerAvailable && selectedConfig) {
   console.log('  Testing container lifecycle...');
 
-  let containerStarted = false;
-
-  test('Container startup', 'Must start SQL Server without platform warnings', () => {
-    try {
-      // Ensure clean state
+  const containerStarted = test(
+    'Container startup',
+    'Must start SQL Server without platform warnings',
+    () => {
       try {
-        execSync('docker-compose -f test/docker/docker-compose.yml down -v', { stdio: 'ignore' });
-      } catch {
-        /* ignore */
+        // Ensure clean state
+        try {
+          execSync('docker-compose -f test/docker/docker-compose.yml down -v', { stdio: 'ignore' });
+        } catch {
+          /* ignore */
+        }
+
+        // Start container
+        execSync('docker-compose -f test/docker/docker-compose.yml up -d', { stdio: 'ignore' });
+
+        // Quick check if running
+        const output = execSync(
+          'docker ps --filter name=warp-mcp-sqlserver --format "{{.Names}}"',
+          {
+            encoding: 'utf8'
+          }
+        );
+        return output.includes('warp-mcp-sqlserver');
+      } catch (error) {
+        console.log(`     Startup failed: ${error.message}`);
+        return false;
       }
-
-      // Start container
-      execSync('docker-compose -f test/docker/docker-compose.yml up -d', { stdio: 'ignore' });
-
-      // Quick check if running
-      const output = execSync('docker ps --filter name=warp-mcp-sqlserver --format "{{.Names}}"', {
-        encoding: 'utf8'
-      });
-      containerStarted = output.includes('warp-mcp-sqlserver');
-
-      return containerStarted;
-    } catch (error) {
-      console.log(`     Startup failed: ${error.message}`);
-      return false;
     }
-  });
+  );
 
   if (containerStarted) {
     test(

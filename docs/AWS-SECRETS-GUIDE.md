@@ -20,7 +20,7 @@ Before you begin, ensure you have:
 - **AWS Account** with appropriate permissions
 - **AWS CLI** installed and configured (`aws cli`)
 - **IAM User/Role** with Secrets Manager permissions
-- **Node.js 20+** and the MCP project dependencies installed
+- **Node.js 20.19+** and the MCP project dependencies installed
 - **AWS SDK credentials** configured
 
 > **📖 Environment Variables Reference**: For complete documentation of all environment variables, defaults, and configuration options, see **[ENV-VARS.md](ENV-VARS.md)**.
