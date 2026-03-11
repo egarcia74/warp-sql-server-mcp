@@ -9,7 +9,8 @@
 
 ## 1. Purpose of This Document
 
-This document records the research findings, user scenario analysis, existing capability inventory, and proposed staged delivery plan for the **Automatic Environment Configuration Detection** feature (`detect_optimal_config` MCP tool).
+This document records the research findings, user scenario analysis, existing capability inventory, and proposed staged delivery plan for the
+**Automatic Environment Configuration Detection** feature (`detect_optimal_config` MCP tool).
 
 No code is implemented here. This document is the basis for driving implementation decisions.
 
@@ -17,7 +18,8 @@ No code is implemented here. This document is the basis for driving implementati
 
 ## 2. User Scenarios — Who Benefits and How
 
-The following scenarios were identified by cross-referencing the project's stated use cases (`README.md`, `docs/SECURITY.md`, `docs/QUICKSTART.md`), the three-tier security model, and the configuration surface area in `.env.example` and `docs/ENV-VARS.md`.
+The following scenarios were identified by cross-referencing the project's stated use cases (`README.md`, `docs/SECURITY.md`, `docs/QUICKSTART.md`),
+the three-tier security model, and the configuration surface area in `.env.example` and `docs/ENV-VARS.md`.
 
 ### Scenario 1 — First-Time Developer Setup
 
@@ -148,12 +150,12 @@ The following scenarios were identified by cross-referencing the project's state
 The following table maps each feature requirement from Issue #57 to existing code, and identifies the specific gap to close.
 
 | Requirement | Existing Code | Gap |
-|---|---|---|
+| --- | --- | --- |
 | **`detect_optimal_config` MCP tool** | `lib/tools/tool-registry.js` (OPTIMIZATION_TOOLS array) | No entry. One new object + handler branch needed. |
-| **Connection pool size analysis** | `PerformanceMonitor.getPoolStats()`, `assessPoolHealth()`, `calculateHealthScore()` in `lib/utils/performance-monitor.js` | No correlation to `POOL_MAX` config value. |
+| **Connection pool size analysis** | `PerformanceMonitor.getPoolStats()`, `assessPoolHealth()`, `calculateHealthScore()` | No correlation to `POOL_MAX` config value. |
 | **Security level detection** | `ServerConfig.getSecurityConfig()`, `lib/security/query-validator.js`, `ServerConfig._analyzeEnvironment()` | No recommendation engine that compares posture to environment. |
-| **SSL/TLS configuration detection** | `ConnectionManager.getConnectionHealth()`, `ConnectionManager._extractSSLInfo()`, `ServerConfig.getConnectionSummary()` (trustCert + securityDecision) | Already fully implemented. Needs surfacing only. |
-| **Timeout optimisation** | `ServerConfig` exposes all timeout values; `PerformanceMonitor.generateRecommendations()` generates query-time recommendations | Not correlated: no code compares `requestTimeout` config to observed p95 query durations. |
+| **SSL/TLS configuration detection** | `ConnectionManager.getConnectionHealth()`, `ConnectionManager._extractSSLInfo()`, `ServerConfig.getConnectionSummary()` | Already fully implemented. Needs surfacing only. |
+| **Timeout optimisation** | `ServerConfig` exposes all timeout values; `PerformanceMonitor.generateRecommendations()` generates query-time recommendations | Not correlated: no code compares `requestTimeout` to observed p95 query durations. |
 | **Configuration health scoring** | `PerformanceMonitor.calculateHealthScore()` (pool-only, 0–100) | Partial. Pool-only, does not cover security, SSL, or timeouts. Needs holistic scorer. |
 | **Configuration adjustment recommendations** | `PerformanceMonitor.generateRecommendations()` (query/pool prose) | Recommendations do not include concrete env var names and values. |
 | **Security model compliance** | Three-tier safety system fully implemented and validated | Needs to be reflected in tool output without exposing credentials. |
@@ -172,29 +174,35 @@ The following table maps each feature requirement from Issue #57 to existing cod
 
 1. **`detect_optimal_config` tool registration** — Without this, nothing is user-facing. One entry in `tool-registry.js`. Zero risk, mandatory.
 
-2. **Security posture report** (Scenarios 2 & 4) — Surfaces already-computed `ServerConfig` and `ConnectionManager` state in a single structured response. Directly reduces production security incidents. The raw data is all available; this is orchestration only.
+2. **Security posture report** (Scenarios 2 & 4) — Surfaces already-computed `ServerConfig` and `ConnectionManager` state in a single structured response.
+   Directly reduces production security incidents. The raw data is all available; this is orchestration only.
 
-3. **Connection pool analysis with config correlation** (Scenario 3) — Compares live pool utilisation from `PerformanceMonitor` against `POOL_MAX` env var. High business value because it converts a metric the user can already see (`get_performance_stats`) into an action (`increase POOL_MAX`).
+3. **Connection pool analysis with config correlation** (Scenario 3) — Compares live pool utilisation from `PerformanceMonitor` against `POOL_MAX` env var.
+   High business value because it converts a metric the user can already see (`get_performance_stats`) into an action (`increase POOL_MAX`).
 
-4. **Timeout recommendation** (Scenario 3) — Compares `requestTimeout` / `connectionTimeout` config against `PerformanceMonitor.metrics.aggregates.avgQueryTime` and `maxQueryTime`. Concrete, deterministic, testable.
+4. **Timeout recommendation** (Scenario 3) — Compares `requestTimeout` / `connectionTimeout` config against
+   `PerformanceMonitor.metrics.aggregates.avgQueryTime` and `maxQueryTime`. Concrete, deterministic, testable.
 
 5. **Holistic configuration health score** — Extend the existing pool health score to cover security tier, SSL posture, and timeout headroom. Single 0–100 score gives users an immediate signal.
 
 ### 🟡 Should-Have (Deliver in Stage 3)
 
-6. **First-time setup guidance** (Scenario 1) — Useful but the quick-start guide already covers this. Add to `detect_optimal_config` output as a lower-priority section.
+1. **First-time setup guidance** (Scenario 1) — Useful but the quick-start guide already covers this.
+   Add to `detect_optimal_config` output as a lower-priority section.
 
-7. **Production readiness checklist** (Scenario 2) — Machine-readable pass/fail items derived from `ServerConfig.validate()` (which already produces warnings and errors). Low additional code, but needs careful design of the output schema.
+2. **Production readiness checklist** (Scenario 2) — Machine-readable pass/fail items derived from `ServerConfig.validate()`
+   (which already produces warnings and errors). Low additional code, but needs careful design of the output schema.
 
-8. **Secret manager health** (Scenario 6) — `SecretManager` already exists. Adding its status to the output is low effort but low urgency.
+3. **Secret manager health** (Scenario 6) — `SecretManager` already exists. Adding its status to the output is low effort but low urgency.
 
 ### 🔵 Nice-to-Have (Stage 4 or later)
 
-9. **Streaming config recommendations** (Scenario 5) — Valuable but requires sufficient historical metrics to be non-trivial. Adds complexity to the scoring algorithm. Defer until Stage 3 core is proven.
+1. **Streaming config recommendations** (Scenario 5) — Valuable but requires sufficient historical metrics to be non-trivial. Adds complexity to the scoring algorithm. Defer until Stage 3 core is proven.
 
-10. **CI/CD pipeline mode** (Scenario 7) — Requires structured exit-code semantics and a CLI integration point. Significant scope addition. Defer to a separate feature request.
+2. **CI/CD pipeline mode** (Scenario 7) — Requires structured exit-code semantics and a CLI integration point. Significant scope addition. Defer to a separate feature request.
 
-11. **Statistical pattern detection** — The issue mentions "statistical analysis". Rule-based thresholds deliver most of the value. Statistical modelling is genuinely Phase 2 complexity; defer or scope explicitly.
+3. **Statistical pattern detection** — The issue mentions "statistical analysis". Rule-based thresholds deliver most of the value.
+   Statistical modelling is genuinely Phase 2 complexity; defer or scope explicitly.
 
 ---
 
@@ -263,8 +271,10 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
    - Compare `POOL_MAX` config vs `PerformanceMonitor.getPoolStats().current.activeConnections` peak.
    - Compare `idleTimeoutMillis` vs observed idle connection patterns.
 2. Each recommendation must include the concrete env var name and recommended value (not just prose).
-   - Example: `{ envVar: "SQL_SERVER_REQUEST_TIMEOUT_MS", recommendedValue: 10000, reason: "p95 query time is 4800ms, current timeout is 5000ms — increase headroom" }`.
-3. Handle the cold-start case gracefully: if `PerformanceMonitor` has fewer than N queries recorded, emit a `"Insufficient data — collect more usage history before acting on performance recommendations"` advisory.
+   - Example: `{ envVar: "SQL_SERVER_REQUEST_TIMEOUT_MS", recommendedValue: 10000,`
+     `reason: "p95 query time is 4800ms, current timeout is 5000ms — increase headroom" }`.
+3. Handle the cold-start case gracefully: if `PerformanceMonitor` has fewer than N queries recorded, emit an advisory:
+   `"Insufficient data — collect more usage history before acting on performance recommendations"`.
 
 **Quality Gate**:
 - Stage 1 quality gate still passes.
@@ -316,20 +326,20 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 ## 7. Risk Register
 
 | Risk | Likelihood | Severity | Mitigation |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `detect_optimal_config` output leaks `SQL_SERVER_PASSWORD` or secret values | Low (if redaction enforced) | **Critical** | Explicitly use `ServerConfig._redactSensitive()` pattern; test with a non-empty password set. |
-| Recommendations suggest lowering security settings | Low | **High** | Recommendations must never suggest disabling `READ_ONLY` unless current mode is already non-read-only. Security recommendations go upward (more secure), never downward. |
+| Recommendations suggest lowering security settings | Low | **High** | Recommendations must never suggest disabling `READ_ONLY` unless current mode is already non-read-only. |
 | Score algorithm misleads users into false confidence | Medium | Medium | Score must be clearly labelled as "configuration health" not "system health". Performance score requires data threshold. |
 | SSL introspection gaps mislead about actual TLS state | Low | Low | Explicitly note in output that SSL posture is config-derived, not live TLS socket verification. |
 | Over-engineering statistical analysis | Medium | Medium | Explicitly constrain Stage 1–3 to rule-based thresholds. Statistical analysis is deferred post-Stage 4. |
-| Streaming config recommendations too noisy without enough data | Medium | Low | Cold-start advisory in Stage 2 gates performance recommendations on minimum data threshold (configurable, default: 50 queries). |
+| Streaming config recommendations too noisy without enough data | Medium | Low | Cold-start advisory in Stage 2 gates performance recommendations on minimum data threshold (default: 50 queries). |
 
 ---
 
 ## 8. Scenario Priority Matrix
 
 | Scenario | Business Value | Implementation Effort | Stage |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 — First-time setup guidance | High | Low | Stage 1 (partial: environment detection already done) |
 | 2 — Dev-to-production promotion | **Very High** | Low | Stage 1 |
 | 3 — Diagnosing load/timeout issues | **Very High** | Medium | Stage 2 |
@@ -348,7 +358,8 @@ The feature is well-scoped and the majority of required data is already computed
 2. One tool registry entry.
 3. One handler dispatch branch.
 
-The highest-value delivery is **Stage 1** (security posture + environment detection + basic health score), which can be completed with minimal risk and directly addresses Scenarios 2 and 4 — the scenarios most likely to cause production incidents today.
+The highest-value delivery is **Stage 1** (security posture + environment detection + basic health score), which can be completed with minimal risk
+and directly addresses Scenarios 2 and 4 — the scenarios most likely to cause production incidents today.
 
 The credential safety constraint is the single most important design rule for this feature and must be enforced at code review.
 

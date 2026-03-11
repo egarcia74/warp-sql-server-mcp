@@ -66,7 +66,8 @@ This document maintains our prioritized feature backlog, organized by business v
   - SSL/TLS configuration detection
   - Timeout settings optimization
   - Performance-based configuration adjustments
-- **Staged Plan**: Four delivery stages defined. Stage 1 creates `ConfigDetector` class + `detect_optimal_config` MCP tool wired to existing `PerformanceMonitor`, `ServerConfig`, `ConnectionManager`. See research document for full breakdown.
+- **Staged Plan**: Four delivery stages defined. Stage 1 creates `ConfigDetector` class + `detect_optimal_config` MCP tool wired to existing
+  `PerformanceMonitor`, `ServerConfig`, `ConnectionManager`. See research document for full breakdown.
 
 ### 6. Database Comparison & Synchronization
 
