@@ -58,13 +58,15 @@ This document maintains our prioritized feature backlog, organized by business v
 - **Issue**: [#57](https://github.com/egarcia74/warp-sql-server-mcp/issues/57)
 - **Business Value**: ⭐⭐⭐⭐ | **Complexity**: 🔧🔧
 - **Phase**: 2 (3-6 months)
-- **Status**: 🤔 Research
+- **Status**: 📋 Planned (Research Complete)
+- **Research**: [docs/AUTO-CONFIG-DETECTION-RESEARCH.md](docs/AUTO-CONFIG-DETECTION-RESEARCH.md)
 - **Description**: Add intelligent configuration detection and recommendations for optimal environment settings based on usage patterns, connection health, and performance metrics. Features:
   - Connection pool size optimization
   - Security level recommendations
   - SSL/TLS configuration detection
   - Timeout settings optimization
   - Performance-based configuration adjustments
+- **Staged Plan**: Four delivery stages defined. Stage 1 creates `ConfigDetector` class + `detect_optimal_config` MCP tool wired to existing `PerformanceMonitor`, `ServerConfig`, `ConnectionManager`. See research document for full breakdown.
 
 ### 6. Database Comparison & Synchronization
 
