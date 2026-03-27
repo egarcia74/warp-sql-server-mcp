@@ -101,15 +101,20 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.2.0",
-    "@vitest/coverage-v8": "^4.1.1",
-    "@vitest/ui": "^4.1.1",
+    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/expect": "^4.1.2",
+    "@vitest/mocker": "^4.1.2",
+    "@vitest/runner": "^4.1.2",
+    "@vitest/snapshot": "^4.1.2",
+    "@vitest/spy": "^4.1.2",
+    "@vitest/ui": "^4.1.2",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "markdown-link-check": "^3.13.7",
     "markdownlint-cli2": "^0.22.0",
     "prettier": "^3.3.3",
     "sinon": "^21.0.0",
-    "vitest": "^4.1.1"
+    "vitest": "^4.1.2"
   },
   "overrides": {
     "flatted": "3.4.2",
