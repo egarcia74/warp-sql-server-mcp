@@ -26,11 +26,13 @@ the three-tier security model, and the configuration surface area in `.env.examp
 **Persona**: Developer setting up the MCP server for the first time against a local SQL Server instance.
 
 **Pain today**:
+
 - Must manually read `.env.example` (155 lines) and `docs/ENV-VARS.md` to understand which settings matter.
 - Gets connection failures due to `SQL_SERVER_TRUST_CERT` mismatches without clear guidance.
 - Unsure which pool size, timeout, or security level to start with.
 
 **How `detect_optimal_config` helps**:
+
 - Analyses the current environment (`localhost` / `NODE_ENV`) and confirms auto-detection is working.
 - Recommends appropriate starter config (e.g., read-only + trust cert auto for dev).
 - Surfaces any explicit settings that contradict auto-detection.
@@ -44,12 +46,14 @@ the three-tier security model, and the configuration surface area in `.env.examp
 **Persona**: DevOps engineer or developer taking the MCP server from a local dev environment into production (cloud VM, container, CI pipeline).
 
 **Pain today**:
+
 - `SQL_SERVER_TRUST_CERT` auto-detection is conservative but the error message when it fails is not actionable.
 - Private IP ranges in cloud VPCs (AWS VPC, Azure vNET) may look like dev to the user but default to prod security posture — confusing.
 - Security level settings (`READ_ONLY`, `ALLOW_DESTRUCTIVE_OPERATIONS`, `ALLOW_SCHEMA_CHANGES`) have no tooling to verify the final effective configuration.
 - No way to get a "go/no-go" checklist before promoting to production.
 
 **How `detect_optimal_config` helps**:
+
 - Detects the environment type (dev/staging/prod) with confidence scoring.
 - Produces a **security posture report**: current vs recommended settings for the detected environment.
 - Flags mismatches (e.g., `ALLOW_SCHEMA_CHANGES=true` on what appears to be a production host).
@@ -64,11 +68,13 @@ the three-tier security model, and the configuration surface area in `.env.examp
 **Persona**: Developer or DBA using the MCP server during a load test or high-traffic period and experiencing timeouts or slow responses.
 
 **Pain today**:
+
 - `get_connection_health` shows pool state but does not correlate pool exhaustion with configured `POOL_MAX`.
 - `get_performance_stats` shows slow query counts but does not suggest which config setting to change.
 - No guidance on whether `SQL_SERVER_CONNECT_TIMEOUT_MS` or `SQL_SERVER_REQUEST_TIMEOUT_MS` is too tight vs the observed query durations.
 
 **How `detect_optimal_config` helps**:
+
 - Compares live `PerformanceMonitor` query stats (avg/p95 duration) against `requestTimeout` config.
 - Compares pool utilisation (`active/total`) against `POOL_MAX` config.
 - Emits concrete, actionable recommendations: `"Observed p95 query time is 4,800ms but SQL_SERVER_REQUEST_TIMEOUT_MS=5000 — increase to 10000ms to avoid transient timeouts"`.
@@ -82,11 +88,13 @@ the three-tier security model, and the configuration surface area in `.env.examp
 **Persona**: Security team member or compliance officer reviewing the MCP server deployment for a regulated environment (financial, healthcare, etc.).
 
 **Pain today**:
+
 - Security posture is split across the startup log, query responses (`safetyInfo`), and `get_connection_health`.
 - No single MCP tool produces a consolidated security configuration report.
 - SSL certificate trust decisions are logged at startup but not queryable at runtime.
 
 **How `detect_optimal_config` helps**:
+
 - Returns a single security configuration snapshot: security tier, SSL posture, cert trust decision and its source (explicit vs auto-detected), environment classification.
 - Provides a **configuration health score** (0–100) for the security dimension.
 - Highlights any setting that deviates from the recommended posture for the detected environment.
@@ -100,11 +108,13 @@ the three-tier security model, and the configuration surface area in `.env.examp
 **Persona**: Data analyst or DBA running complex JOINs and large exports against a multi-gigabyte database.
 
 **Pain today**:
+
 - `STREAMING_BATCH_SIZE`, `STREAMING_MAX_MEMORY_MB`, and `STREAMING_MAX_RESPONSE_SIZE` are set by default and rarely re-evaluated.
 - Slow large exports have no guidance on whether to tune streaming settings vs pool settings vs request timeouts.
 - The `get_optimization_insights` tool covers query-level analysis but not MCP server-level config tuning.
 
 **How `detect_optimal_config` helps**:
+
 - Analyses `PerformanceMonitor` metrics for tools like `export_table_csv` and `get_table_data`.
 - Detects patterns (e.g., frequent streaming aborts, high memory delta) and recommends streaming config adjustments.
 - Separates SQL-level optimisation (already covered by `analyze_query_performance`) from server config optimisation.
@@ -118,10 +128,12 @@ the three-tier security model, and the configuration surface area in `.env.examp
 **Persona**: Cloud engineer connecting the MCP server to AWS Secrets Manager or Azure Key Vault.
 
 **Pain today**:
+
 - `SECRET_MANAGER_TYPE` is set but there is no way to verify the secret provider is healthy or reachable before use.
 - No status report on cache hit rates or secret refresh state.
 
 **How `detect_optimal_config` helps**:
+
 - Reports the active secret manager type and its health state.
 - Flags misconfigured or unreachable secret providers.
 
@@ -134,10 +146,12 @@ the three-tier security model, and the configuration surface area in `.env.examp
 **Persona**: DevOps engineer running the MCP server in a CI/CD pipeline across dev, staging, and production environments.
 
 **Pain today**:
+
 - No way to assert "this configuration is appropriate for this environment" as a pipeline step.
 - Manual verification required before each environment promotion.
 
 **How `detect_optimal_config` helps**:
+
 - Could be called as a pipeline step to produce a machine-readable config health report.
 - Exit code / structured output allows blocking a pipeline on a failing security check.
 
@@ -149,16 +163,16 @@ the three-tier security model, and the configuration surface area in `.env.examp
 
 The following table maps each feature requirement from Issue #57 to existing code, and identifies the specific gap to close.
 
-| Requirement | Existing Code | Gap |
-| --- | --- | --- |
-| **`detect_optimal_config` MCP tool** | `lib/tools/tool-registry.js` (OPTIMIZATION_TOOLS array) | No entry. One new object + handler branch needed. |
-| **Connection pool size analysis** | `PerformanceMonitor.getPoolStats()`, `assessPoolHealth()`, `calculateHealthScore()` | No correlation to `POOL_MAX` config value. |
-| **Security level detection** | `ServerConfig.getSecurityConfig()`, `lib/security/query-validator.js`, `ServerConfig._analyzeEnvironment()` | No recommendation engine that compares posture to environment. |
-| **SSL/TLS configuration detection** | `ConnectionManager.getConnectionHealth()`, `ConnectionManager._extractSSLInfo()`, `ServerConfig.getConnectionSummary()` | Already fully implemented. Needs surfacing only. |
-| **Timeout optimisation** | `ServerConfig` exposes all timeout values; `PerformanceMonitor.generateRecommendations()` generates query-time recommendations | Not correlated: no code compares `requestTimeout` to observed p95 query durations. |
-| **Configuration health scoring** | `PerformanceMonitor.calculateHealthScore()` (pool-only, 0–100) | Partial. Pool-only, does not cover security, SSL, or timeouts. Needs holistic scorer. |
-| **Configuration adjustment recommendations** | `PerformanceMonitor.generateRecommendations()` (query/pool prose) | Recommendations do not include concrete env var names and values. |
-| **Security model compliance** | Three-tier safety system fully implemented and validated | Needs to be reflected in tool output without exposing credentials. |
+| Requirement                                  | Existing Code                                                                                                                  | Gap                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| **`detect_optimal_config` MCP tool**         | `lib/tools/tool-registry.js` (OPTIMIZATION_TOOLS array)                                                                        | No entry. One new object + handler branch needed.                                     |
+| **Connection pool size analysis**            | `PerformanceMonitor.getPoolStats()`, `assessPoolHealth()`, `calculateHealthScore()`                                            | No correlation to `POOL_MAX` config value.                                            |
+| **Security level detection**                 | `ServerConfig.getSecurityConfig()`, `lib/security/query-validator.js`, `ServerConfig._analyzeEnvironment()`                    | No recommendation engine that compares posture to environment.                        |
+| **SSL/TLS configuration detection**          | `ConnectionManager.getConnectionHealth()`, `ConnectionManager._extractSSLInfo()`, `ServerConfig.getConnectionSummary()`        | Already fully implemented. Needs surfacing only.                                      |
+| **Timeout optimisation**                     | `ServerConfig` exposes all timeout values; `PerformanceMonitor.generateRecommendations()` generates query-time recommendations | Not correlated: no code compares `requestTimeout` to observed p95 query durations.    |
+| **Configuration health scoring**             | `PerformanceMonitor.calculateHealthScore()` (pool-only, 0–100)                                                                 | Partial. Pool-only, does not cover security, SSL, or timeouts. Needs holistic scorer. |
+| **Configuration adjustment recommendations** | `PerformanceMonitor.generateRecommendations()` (query/pool prose)                                                              | Recommendations do not include concrete env var names and values.                     |
+| **Security model compliance**                | Three-tier safety system fully implemented and validated                                                                       | Needs to be reflected in tool output without exposing credentials.                    |
 
 ### What Does NOT Need to Be Built
 
@@ -211,6 +225,7 @@ The following table maps each feature requirement from Issue #57 to existing cod
 ### Security — Credential Safety
 
 The `detect_optimal_config` tool output **must never** include:
+
 - `SQL_SERVER_PASSWORD` (or any derivative)
 - `SQL_SERVER_USER` in plain text beyond what `ServerConfig._redactSensitive()` already produces
 - AWS/Azure secret values
@@ -221,6 +236,7 @@ The existing `ServerConfig._redactSensitive()` method and the `getConnectionSumm
 ### No Runtime Configuration Mutation
 
 Recommendations are **advisory only**. The tool must not:
+
 - Write to `.env` files
 - Call `ServerConfig.reload()` or `updateConfig()` automatically
 - Change any in-memory configuration state
@@ -242,6 +258,7 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 **Objective**: Deliver a working `detect_optimal_config` MCP tool that returns structured, useful output for Scenarios 2 and 4.
 
 **Delivery Items**:
+
 1. Create `lib/config/config-detector.js` — new class `ConfigDetector` that reads from `PerformanceMonitor`, `ServerConfig`, and `ConnectionManager`.
 2. Implement `detectOptimalConfig()` method returning:
    - `environment` — detected type, confidence, indicators
@@ -254,6 +271,7 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 5. Add unit tests in `test/unit/config-detector.test.js` (Vitest, consistent with existing test patterns).
 
 **Quality Gate**:
+
 - All existing unit tests pass (`npm test`).
 - `config-detector.test.js` has ≥ 12 test cases covering: score calculation, security mismatch detection, SSL posture, credential redaction, and recommendation format.
 - CodeQL scan clean.
@@ -266,6 +284,7 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 **Objective**: Add data-driven, actionable timeout and pool-size recommendations by correlating live `PerformanceMonitor` data with current config (Scenario 3).
 
 **Delivery Items**:
+
 1. Extend `ConfigDetector.detectOptimalConfig()` with a `performance` section:
    - Compare `requestTimeout` config vs `PerformanceMonitor.metrics.aggregates.maxQueryTime` and `avgQueryTime`.
    - Compare `POOL_MAX` config vs `PerformanceMonitor.getPoolStats().current.activeConnections` peak.
@@ -277,6 +296,7 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
    `"Insufficient data — collect more usage history before acting on performance recommendations"`.
 
 **Quality Gate**:
+
 - Stage 1 quality gate still passes.
 - New tests cover: cold-start advisory, correct recommendation when `maxQueryTime > requestTimeout * 0.8`, no recommendation when headroom is sufficient.
 
@@ -287,6 +307,7 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 **Objective**: Add a machine-readable production readiness checklist and secret manager status (Scenarios 2 and 6).
 
 **Delivery Items**:
+
 1. Extend `ConfigDetector` with a `productionReadiness` section — array of checklist items, each with:
    - `item` — e.g., `"Read-only mode enabled"`
    - `status` — `pass` / `fail` / `warn`
@@ -299,6 +320,7 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 5. Update `CHANGELOG.md`.
 
 **Quality Gate**:
+
 - All previous quality gates pass.
 - Tests cover: all checklist items pass in a correctly configured production-like env; at least 3 specific failure conditions.
 - `detect_optimal_config` response passes JSON schema validation.
@@ -310,12 +332,14 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 **Objective**: Complete the feature with streaming config tuning and full integration validation (Scenario 5).
 
 **Delivery Items**:
+
 1. Extend `ConfigDetector` with a `streaming` section — compare current `STREAMING_BATCH_SIZE`, `STREAMING_MAX_MEMORY_MB` against observed memory deltas and tool-specific performance metrics from `PerformanceMonitor`.
 2. Add integration test that starts the MCP server (mock connection), calls `detect_optimal_config`, and validates the response schema end-to-end.
 3. PR converted from Draft to Ready.
 4. Update `PRODUCT-BACKLOG.md` status to ✅ Complete.
 
 **Quality Gate**:
+
 - Full test suite passes.
 - CodeQL scan clean.
 - Integration test validates response shape.
@@ -325,28 +349,28 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 
 ## 7. Risk Register
 
-| Risk | Likelihood | Severity | Mitigation |
-| --- | --- | --- | --- |
-| `detect_optimal_config` output leaks `SQL_SERVER_PASSWORD` or secret values | Low (if redaction enforced) | **Critical** | Explicitly use `ServerConfig._redactSensitive()` pattern; test with a non-empty password set. |
-| Recommendations suggest lowering security settings | Low | **High** | Recommendations must never suggest disabling `READ_ONLY` unless current mode is already non-read-only. |
-| Score algorithm misleads users into false confidence | Medium | Medium | Score must be clearly labelled as "configuration health" not "system health". Performance score requires data threshold. |
-| SSL introspection gaps mislead about actual TLS state | Low | Low | Explicitly note in output that SSL posture is config-derived, not live TLS socket verification. |
-| Over-engineering statistical analysis | Medium | Medium | Explicitly constrain Stage 1–3 to rule-based thresholds. Statistical analysis is deferred post-Stage 4. |
-| Streaming config recommendations too noisy without enough data | Medium | Low | Cold-start advisory in Stage 2 gates performance recommendations on minimum data threshold (default: 50 queries). |
+| Risk                                                                        | Likelihood                  | Severity     | Mitigation                                                                                                               |
+| --------------------------------------------------------------------------- | --------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `detect_optimal_config` output leaks `SQL_SERVER_PASSWORD` or secret values | Low (if redaction enforced) | **Critical** | Explicitly use `ServerConfig._redactSensitive()` pattern; test with a non-empty password set.                            |
+| Recommendations suggest lowering security settings                          | Low                         | **High**     | Recommendations must never suggest disabling `READ_ONLY` unless current mode is already non-read-only.                   |
+| Score algorithm misleads users into false confidence                        | Medium                      | Medium       | Score must be clearly labelled as "configuration health" not "system health". Performance score requires data threshold. |
+| SSL introspection gaps mislead about actual TLS state                       | Low                         | Low          | Explicitly note in output that SSL posture is config-derived, not live TLS socket verification.                          |
+| Over-engineering statistical analysis                                       | Medium                      | Medium       | Explicitly constrain Stage 1–3 to rule-based thresholds. Statistical analysis is deferred post-Stage 4.                  |
+| Streaming config recommendations too noisy without enough data              | Medium                      | Low          | Cold-start advisory in Stage 2 gates performance recommendations on minimum data threshold (default: 50 queries).        |
 
 ---
 
 ## 8. Scenario Priority Matrix
 
-| Scenario | Business Value | Implementation Effort | Stage |
-| --- | --- | --- | --- |
-| 1 — First-time setup guidance | High | Low | Stage 1 (partial: environment detection already done) |
-| 2 — Dev-to-production promotion | **Very High** | Low | Stage 1 |
-| 3 — Diagnosing load/timeout issues | **Very High** | Medium | Stage 2 |
-| 4 — Security audit / compliance | **High** | Low | Stage 1 |
-| 5 — Large database performance tuning | Medium | Medium | Stage 4 |
-| 6 — Cloud secret manager health | Medium | Low | Stage 3 |
-| 7 — CI/CD pipeline integration | Medium | High | Post-Stage 4 / separate feature |
+| Scenario                              | Business Value | Implementation Effort | Stage                                                 |
+| ------------------------------------- | -------------- | --------------------- | ----------------------------------------------------- |
+| 1 — First-time setup guidance         | High           | Low                   | Stage 1 (partial: environment detection already done) |
+| 2 — Dev-to-production promotion       | **Very High**  | Low                   | Stage 1                                               |
+| 3 — Diagnosing load/timeout issues    | **Very High**  | Medium                | Stage 2                                               |
+| 4 — Security audit / compliance       | **High**       | Low                   | Stage 1                                               |
+| 5 — Large database performance tuning | Medium         | Medium                | Stage 4                                               |
+| 6 — Cloud secret manager health       | Medium         | Low                   | Stage 3                                               |
+| 7 — CI/CD pipeline integration        | Medium         | High                  | Post-Stage 4 / separate feature                       |
 
 ---
 
