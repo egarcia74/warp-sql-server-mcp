@@ -34,7 +34,7 @@ jobs:
       # Label based on PR size
       - name: Label PR size
         if: github.event_name == 'pull_request'
-        uses: pascalgn/size-label-action@f8edde36b3be04b4f65dcfead05dc8691b374348 # v0.5.5
+        uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -88,7 +88,7 @@ jobs:
       # Auto-assign reviewers for PRs
       - name: Auto-assign reviewers
         if: github.event_name == 'pull_request'
-        uses: kentaro-m/auto-assign-action@a6d59add3a817df08cafa9b166367768d2c337f8 # v2.0.1
+        uses: kentaro-m/auto-assign-action@0a2c53d3721e4c5cfcce6afd4014aecc337979f6 # v2.0.2
         with:
           configuration-path: .github/auto_assign.yml
 
