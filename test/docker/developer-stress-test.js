@@ -150,7 +150,7 @@ if (hostInfo.isAppleSilicon) {
 test(
   'Hardware detection works',
   'Platform detection must work for configuration selection',
-  () => hostInfo?.arch != null && hostInfo?.platform != null
+  () => !!(hostInfo?.arch && hostInfo?.platform)
 );
 
 test(
@@ -234,7 +234,7 @@ test('Configuration selection', 'Must choose optimal SQL Server setup for your h
     console.log = () => {};
 
     selectedConfig = chooseBestConfiguration(hostInfo, dockerInfo);
-    return selectedConfig?.config?.image != null;
+    return !!selectedConfig?.config?.image;
   } catch (error) {
     console.log(`     Configuration error: ${error.message}`);
     return false;
