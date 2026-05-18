@@ -66,6 +66,9 @@ jspm_packages/
 # VS Code
 .vscode/
 
+# Local Codacy CLI workspace
+.codacy/
+
 # JetBrains IDEs
 .idea/
 test/temp/
