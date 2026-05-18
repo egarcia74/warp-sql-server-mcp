@@ -12,14 +12,9 @@ import {
   checkDockerCapabilities,
   chooseBestConfiguration
 } from './detect-platform.js';
+import { parseCommandArguments, buildMergedEnv } from './command-utils.js';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
-
-// Safe path for execSync to satisfy Sonar S4036
-// Include current Node.js bin to ensure npm/node are reachable (Satisfies Codex review)
-const NODE_BIN = path.dirname(process.execPath);
-const SAFE_PATH = `${NODE_BIN}:/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin:/bin:/sbin`;
 
 /**
  * Safe execution helper to satisfy Sonar S4036 and S4721
@@ -27,44 +22,6 @@ const SAFE_PATH = `${NODE_BIN}:/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin
  * - Uses spawnSync with shell: false to prevent command injection
  * - Handles quoted arguments correctly
  */
-function parseCommandArguments(command) {
-  const args = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (const char of command) {
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ' ' && !inQuotes) {
-      if (current) {
-        args.push(current);
-        current = '';
-      }
-    } else {
-      current += char;
-    }
-  }
-  if (current) {
-    args.push(current);
-  }
-
-  return args;
-}
-
-function buildMergedEnv(customEnv) {
-  const mergedEnv = {
-    ...process.env
-  };
-
-  if (customEnv) {
-    Object.assign(mergedEnv, customEnv);
-  }
-
-  mergedEnv.PATH = SAFE_PATH;
-
-  return mergedEnv;
-}
-
 function execSync(command, options = {}) {
   // Parse command arguments respecting double quotes
   const args = parseCommandArguments(command);
