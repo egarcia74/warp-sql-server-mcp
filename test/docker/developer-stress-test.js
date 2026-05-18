@@ -12,14 +12,9 @@ import {
   checkDockerCapabilities,
   chooseBestConfiguration
 } from './detect-platform.js';
+import { parseCommandArguments, buildMergedEnv } from './command-utils.js';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
-
-// Safe path for execSync to satisfy Sonar S4036
-// Include current Node.js bin to ensure npm/node are reachable (Satisfies Codex review)
-const NODE_BIN = path.dirname(process.execPath);
-const SAFE_PATH = `${NODE_BIN}:/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin:/bin:/sbin`;
 
 /**
  * Safe execution helper to satisfy Sonar S4036 and S4721
@@ -29,25 +24,7 @@ const SAFE_PATH = `${NODE_BIN}:/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin
  */
 function execSync(command, options = {}) {
   // Parse command arguments respecting double quotes
-  const args = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (const char of command) {
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ' ' && !inQuotes) {
-      if (current) {
-        args.push(current);
-        current = '';
-      }
-    } else {
-      current += char;
-    }
-  }
-  if (current) {
-    args.push(current);
-  }
+  const args = parseCommandArguments(command);
 
   const cmd = args.shift();
 
@@ -55,11 +32,7 @@ function execSync(command, options = {}) {
     encoding: 'utf8',
     shell: false, // Explicitly disable shell to satisfy S4721
     ...options,
-    env: {
-      ...process.env,
-      ...(options.env || {}),
-      PATH: SAFE_PATH // Apply PATH last to prevent overrides
-    }
+    env: buildMergedEnv(options.env)
   };
 
   const result = spawnSync(cmd, args, mergedOptions);
@@ -174,8 +147,10 @@ if (hostInfo.isAppleSilicon) {
   console.log(`  Architecture: ${hostInfo.arch} - will select optimal configuration`);
 }
 
-test('Hardware detection works', 'Platform detection must work for configuration selection', () =>
-  Boolean(hostInfo?.arch && hostInfo?.platform)
+test(
+  'Hardware detection works',
+  'Platform detection must work for configuration selection',
+  () => !!(hostInfo?.arch && hostInfo?.platform)
 );
 
 test(
@@ -259,7 +234,7 @@ test('Configuration selection', 'Must choose optimal SQL Server setup for your h
     console.log = () => {};
 
     selectedConfig = chooseBestConfiguration(hostInfo, dockerInfo);
-    return Boolean(selectedConfig?.config?.image);
+    return !!selectedConfig?.config?.image;
   } catch (error) {
     console.log(`     Configuration error: ${error.message}`);
     return false;

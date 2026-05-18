@@ -1,6 +1,6 @@
 import mssql from 'mssql';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import dotenv from 'dotenv';
 
 // Load Docker env
@@ -10,10 +10,11 @@ if (fs.existsSync(envPath)) {
 }
 
 const config = {
-  user: process.env.DB_USER || 'sa',
-  password: process.env.DB_PASSWORD || 'WarpMCP123!',
-  server: process.env.DB_SERVER || 'localhost',
-  port: parseInt(process.env.DB_PORT || '1433'),
+  user: process.env.DB_USER || process.env.SQL_SERVER_USER || 'sa',
+  // Intentionally required from env; validated before connect rather than defaulted.
+  password: process.env.DB_PASSWORD || process.env.SQL_SERVER_PASSWORD,
+  server: process.env.DB_SERVER || process.env.SQL_SERVER_HOST || 'localhost',
+  port: Number(process.env.DB_PORT || process.env.SQL_SERVER_PORT || '1433'),
   database: 'master',
   options: {
     encrypt: false,
@@ -33,7 +34,7 @@ const config = {
  */
 function splitSqlBatches(sqlScript) {
   // Standardize line endings to \n
-  const lines = sqlScript.replace(/\r\n/g, '\n').split('\n');
+  const lines = sqlScript.replaceAll('\r\n', '\n').split('\n');
   const batches = [];
   let currentBatch = [];
 
@@ -63,6 +64,12 @@ function splitSqlBatches(sqlScript) {
 }
 
 async function initDb() {
+  if (!config.password) {
+    throw new Error(
+      'DB_PASSWORD or SQL_SERVER_PASSWORD must be set before initializing the Docker database'
+    );
+  }
+
   console.log(`🔌 Connecting to ${config.server}:${config.port}...`);
   let pool;
   try {
@@ -89,4 +96,4 @@ async function initDb() {
   }
 }
 
-initDb();
+await initDb();

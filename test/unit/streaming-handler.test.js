@@ -1,5 +1,16 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
+const ESCAPED_NEWLINE = String.raw`\n`;
+const CSV_BATCH_OUTPUT = String.raw`1,John\n2,Jane\n`;
+const CSV_HEADER_OUTPUT = String.raw`id,name,age\n`;
+const CSV_FIRST_ROW_OUTPUT = String.raw`1,John,30\n`;
+const CSV_SECOND_ROW_OUTPUT = String.raw`2,Jane,25\n`;
+const CSV_THIRD_ROW_OUTPUT = String.raw`3,Bob,35\n`;
+const CSV_NULL_VALUES_OUTPUT = String.raw`1,,,true\n`;
+const RECONSTRUCTED_CSV_PART_ONE = String.raw`id,name\n1,John\n2,Jane\n`;
+const RECONSTRUCTED_CSV_PART_TWO = String.raw`3,Bob\n4,Alice\n`;
+const RECONSTRUCTED_CSV_OUTPUT = String.raw`id,name\n1,John\n2,Jane\n3,Bob\n4,Alice\n`;
+
 // Define hoisted mocks
 const mocks = vi.hoisted(() => {
   const mockSqlRequest = {
@@ -11,11 +22,12 @@ const mocks = vi.hoisted(() => {
 
   // Mock the Request class constructor specifically
   // Vitest mock constructors must be newable
-  class MockRequestClass {
-    constructor() {
-      // In ES6 classes, returning an object from constructor overrides 'this'
+  function MockRequestClass() {
+    if (!new.target) {
       return mockSqlRequest;
     }
+
+    return mockSqlRequest;
   }
 
   // Return the class directly wrapped in vi.fn() to make it spyable
@@ -438,12 +450,12 @@ describe('StreamingHandler', () => {
       const context = { outputFormat: 'csv' };
 
       // Mock batchToCsv method
-      const csvSpy = vi.spyOn(handler, 'batchToCsv').mockReturnValue('1,John\\n2,Jane\\n');
+      const csvSpy = vi.spyOn(handler, 'batchToCsv').mockReturnValue(CSV_BATCH_OUTPUT);
 
       handler.processBatch(batch, chunks, 1, context);
 
       expect(csvSpy).toHaveBeenCalledWith(batch, context);
-      expect(chunks[0].data).toBe('1,John\\n2,Jane\\n');
+      expect(chunks[0].data).toBe(CSV_BATCH_OUTPUT);
     });
 
     it('should process batch in JSON format', () => {
@@ -471,9 +483,9 @@ describe('StreamingHandler', () => {
 
       const csvData = handler.batchToCsv(batch, context);
 
-      expect(csvData).toContain('id,name,age\\n');
-      expect(csvData).toContain('1,John,30\\n');
-      expect(csvData).toContain('2,Jane,25\\n');
+      expect(csvData).toContain(CSV_HEADER_OUTPUT);
+      expect(csvData).toContain(CSV_FIRST_ROW_OUTPUT);
+      expect(csvData).toContain(CSV_SECOND_ROW_OUTPUT);
       expect(context.csvHeaderAdded).toBe(true);
     });
 
@@ -484,7 +496,7 @@ describe('StreamingHandler', () => {
       const csvData = handler.batchToCsv(batch, context);
 
       expect(csvData).not.toContain('id,name,age');
-      expect(csvData).toBe('3,Bob,35\\n');
+      expect(csvData).toBe(CSV_THIRD_ROW_OUTPUT);
     });
 
     it('should handle null and undefined values', () => {
@@ -493,7 +505,7 @@ describe('StreamingHandler', () => {
 
       const csvData = handler.batchToCsv(batch, context);
 
-      expect(csvData).toContain('1,,,true\\n');
+      expect(csvData).toContain(CSV_NULL_VALUES_OUTPUT);
     });
 
     it('should escape CSV special characters', () => {
@@ -531,7 +543,7 @@ describe('StreamingHandler', () => {
       const jsonData = handler.batchToJson(batch, context);
 
       expect(jsonData).toBe('[{"id":1,"name":"John"},{"id":2,"name":"Jane"}]');
-      expect(jsonData).not.toContain('\\n'); // No pretty printing
+      expect(jsonData).not.toContain(ESCAPED_NEWLINE); // No pretty printing
     });
 
     it('should convert batch to pretty JSON when requested', () => {
@@ -676,11 +688,11 @@ describe('StreamingHandler', () => {
     });
 
     it('should reconstruct CSV data from chunks', () => {
-      const chunks = [{ data: 'id,name\\n1,John\\n2,Jane\\n' }, { data: '3,Bob\\n4,Alice\\n' }];
+      const chunks = [{ data: RECONSTRUCTED_CSV_PART_ONE }, { data: RECONSTRUCTED_CSV_PART_TWO }];
 
       const reconstructed = handler.reconstructFromChunks(chunks, 'csv');
 
-      expect(reconstructed).toBe('id,name\\n1,John\\n2,Jane\\n3,Bob\\n4,Alice\\n');
+      expect(reconstructed).toBe(RECONSTRUCTED_CSV_OUTPUT);
     });
 
     it('should reconstruct raw data from chunks', () => {
