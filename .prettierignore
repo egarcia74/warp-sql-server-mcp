@@ -25,3 +25,6 @@ yarn.lock
 
 # Vitest
 .vitest/
+
+# Session memory files
+.remember/
