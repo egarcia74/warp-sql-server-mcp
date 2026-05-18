@@ -11,6 +11,7 @@ if (fs.existsSync(envPath)) {
 
 const config = {
   user: process.env.DB_USER || process.env.SQL_SERVER_USER || 'sa',
+  // Intentionally required from env; validated before connect rather than defaulted.
   password: process.env.DB_PASSWORD || process.env.SQL_SERVER_PASSWORD,
   server: process.env.DB_SERVER || process.env.SQL_SERVER_HOST || 'localhost',
   port: Number(process.env.DB_PORT || process.env.SQL_SERVER_PORT || '1433'),
