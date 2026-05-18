@@ -14,7 +14,22 @@ import {
   chooseBestConfiguration,
   checkDockerCapabilities
 } from './detect-platform.js';
-import { execSync } from 'child_process';
+import { execFileSync } from 'node:child_process';
+
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+function runCommand(command, args, options = {}) {
+  return execFileSync(command, args, {
+    encoding: 'utf8',
+    ...options
+  });
+}
+
+function ensureDockerComposeConfig() {
+  runCommand(npmCommand, ['run', 'docker:ensure-config'], {
+    env: { ...process.env, TESTING_MODE: 'true' }
+  });
+}
 
 console.log('🔍 Platform Detection Verification for MCP Docker Setup\n');
 
@@ -49,8 +64,7 @@ console.log(`   Reason: ${selectedConfig.reason}`);
 // Step 3: Does it generate the right Docker config?
 console.log('\n3️⃣ Docker Configuration Generation:');
 try {
-  execSync('npm run docker:detect', {
-    stdio: 'ignore',
+  runCommand(npmCommand, ['run', 'docker:detect'], {
     env: { ...process.env, TESTING_MODE: 'true' }
   });
   console.log('   ✅ Docker Compose configuration generated successfully');
@@ -65,11 +79,17 @@ console.log('   Starting container to check for platform mismatch warnings...');
 
 let containerStarted = false;
 try {
+  ensureDockerComposeConfig();
+
   // Clean state
-  execSync('docker-compose -f test/docker/docker-compose.yml down -v', { stdio: 'ignore' });
+  runCommand('docker-compose', ['-f', 'test/docker/docker-compose.yml', 'down', '-v'], {
+    stdio: 'ignore'
+  });
 
   // Start container
-  execSync('docker-compose -f test/docker/docker-compose.yml up -d', { stdio: 'ignore' });
+  runCommand('docker-compose', ['-f', 'test/docker/docker-compose.yml', 'up', '-d'], {
+    stdio: 'ignore'
+  });
   containerStarted = true;
 
   // Wait a moment for startup logs
@@ -77,7 +97,7 @@ try {
   setTimeout(() => {}, 3000);
 
   // Check logs for the platform warning
-  const logs = execSync('docker logs warp-mcp-sqlserver 2>&1', { encoding: 'utf8' });
+  const logs = runCommand('docker', ['logs', 'warp-mcp-sqlserver']);
   const hasWarning = logs.includes('platform') && logs.includes('does not match');
 
   if (hasWarning) {
@@ -97,7 +117,9 @@ try {
   if (containerStarted) {
     console.log('   Cleaning up container...');
     try {
-      execSync('docker-compose -f test/docker/docker-compose.yml down', { stdio: 'ignore' });
+      runCommand('docker-compose', ['-f', 'test/docker/docker-compose.yml', 'down'], {
+        stdio: 'ignore'
+      });
     } catch {
       /* ignore cleanup errors */
     }
@@ -121,7 +143,7 @@ if (hostInfo.isAppleSilicon) {
     console.log(`   - Got: ${selectedConfig.config.platform || 'none'}`);
   }
 } else if (hostInfo.isIntelMac) {
-  if (!selectedConfig.config.platform) {
+  if (selectedConfig.config.platform === undefined) {
     console.log('✅ SUCCESS: Intel Mac correctly configured for SQL Server');
     console.log('   - Detected AMD64 architecture');
     console.log('   - Selected native SQL Server 2022');

@@ -113,6 +113,8 @@ Optimized Docker Compose configuration with:
 - Health checks configured for the selected SQL Server variant
 - Performance-tuned settings
 
+This file is generated on demand by `npm run docker:detect` and the docker npm scripts. It is intended to remain untracked in Git so local platform-specific regeneration does not create commit noise.
+
 ### `.platform-config.json`
 
 Configuration metadata including:

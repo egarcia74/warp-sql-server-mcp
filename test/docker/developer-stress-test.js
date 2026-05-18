@@ -12,9 +12,9 @@ import {
   checkDockerCapabilities,
   chooseBestConfiguration
 } from './detect-platform.js';
-import { spawnSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Safe path for execSync to satisfy Sonar S4036
 // Include current Node.js bin to ensure npm/node are reachable (Satisfies Codex review)
@@ -33,8 +33,7 @@ function execSync(command, options = {}) {
   let current = '';
   let inQuotes = false;
 
-  for (let i = 0; i < command.length; i++) {
-    const char = command[i];
+  for (const char of command) {
     if (char === '"') {
       inQuotes = !inQuotes;
     } else if (char === ' ' && !inQuotes) {
@@ -79,6 +78,15 @@ function execSync(command, options = {}) {
   return result.stdout ? result.stdout.toString() : '';
 }
 
+function ensureDockerComposeConfig(options = {}) {
+  execSync('npm run docker:ensure-config', {
+    stdio: 'ignore',
+    cwd: process.cwd(),
+    env: { ...process.env, TESTING_MODE: 'true' },
+    ...options
+  });
+}
+
 console.log('🧪 Platform Detection Developer Test\n');
 
 let totalTests = 0;
@@ -101,6 +109,35 @@ function showProgress(step, total = testSteps.length) {
   console.log(`\n[${bar}] ${percentage}% - Testing: ${testSteps[step - 1]}`);
 }
 
+function logTestSuccess(duration, silent) {
+  passedTests++;
+  if (!silent) {
+    const durationText = duration > 100 ? `(${duration}ms)` : '';
+    console.log(`✅ ${durationText}`);
+  }
+  return true;
+}
+
+function logTestFailure(description, silent) {
+  if (!silent) {
+    console.log('❌ FAILED');
+    if (description) {
+      console.log(`     ${description}`);
+    }
+  }
+  return false;
+}
+
+function logTestError(error, silent, required) {
+  if (!silent) {
+    console.log(`❌ ERROR: ${error.message}`);
+    if (required) {
+      console.log('     This is a critical failure that may prevent Docker testing');
+    }
+  }
+  return false;
+}
+
 function test(name, description, testFn, { silent = false, required = true } = {}) {
   totalTests++;
 
@@ -114,28 +151,12 @@ function test(name, description, testFn, { silent = false, required = true } = {
     const duration = Date.now() - start;
 
     if (result) {
-      passedTests++;
-      if (!silent) {
-        console.log(`✅ ${duration > 100 ? `(${duration}ms)` : ''}`);
-      }
-      return true;
+      return logTestSuccess(duration, silent);
     } else {
-      if (!silent) {
-        console.log('❌ FAILED');
-        if (description) {
-          console.log(`     ${description}`);
-        }
-      }
-      return false;
+      return logTestFailure(description, silent);
     }
   } catch (error) {
-    if (!silent) {
-      console.log(`❌ ERROR: ${error.message}`);
-      if (required) {
-        console.log('     This is a critical failure that may prevent Docker testing');
-      }
-    }
-    return false;
+    return logTestError(error, silent, required);
   }
 }
 
@@ -153,10 +174,8 @@ if (hostInfo.isAppleSilicon) {
   console.log(`  Architecture: ${hostInfo.arch} - will select optimal configuration`);
 }
 
-test(
-  'Hardware detection works',
-  'Platform detection must work for configuration selection',
-  () => hostInfo && hostInfo.arch && hostInfo.platform
+test('Hardware detection works', 'Platform detection must work for configuration selection', () =>
+  Boolean(hostInfo?.arch && hostInfo?.platform)
 );
 
 test(
@@ -234,20 +253,18 @@ showProgress(++currentStep);
 
 let selectedConfig = null;
 test('Configuration selection', 'Must choose optimal SQL Server setup for your hardware', () => {
+  const originalLog = console.log;
   try {
     // Temporarily suppress console.log during config selection
-    const originalLog = console.log;
     console.log = () => {};
 
     selectedConfig = chooseBestConfiguration(hostInfo, dockerInfo);
-
-    // Restore console.log
-    console.log = originalLog;
-
-    return selectedConfig.config.image;
+    return Boolean(selectedConfig?.config?.image);
   } catch (error) {
     console.log(`     Configuration error: ${error.message}`);
     return false;
+  } finally {
+    console.log = originalLog;
   }
 });
 
@@ -281,6 +298,7 @@ test('Config file generation', 'Must create Docker Compose and config files', ()
 
 test('Docker Compose syntax', 'Generated configuration must be valid', () => {
   try {
+    ensureDockerComposeConfig();
     execSync('docker-compose -f test/docker/docker-compose.yml config', { stdio: 'ignore' });
     return true;
   } catch {
@@ -300,6 +318,8 @@ if (dockerAvailable && selectedConfig) {
     'Must start SQL Server without platform warnings',
     () => {
       try {
+        ensureDockerComposeConfig();
+
         // Ensure clean state
         try {
           execSync('docker-compose -f test/docker/docker-compose.yml down -v', { stdio: 'ignore' });

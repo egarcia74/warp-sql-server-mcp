@@ -47,7 +47,7 @@ export default [
       'no-trailing-spaces': 'error',
       'no-multiple-empty-lines': ['error', { max: 2, maxEOF: 1 }]
     },
-    ignores: ['node_modules/**', 'coverage/**', '.git/**', 'dist/**', 'build/**']
+    ignores: ['node_modules/**', 'coverage/**', '.git/**', '.codacy/**', 'dist/**', 'build/**']
   },
   {
     files: ['**/*.test.js', '**/*.spec.js', 'tests/**/*.js'],
