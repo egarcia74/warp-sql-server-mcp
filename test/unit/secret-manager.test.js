@@ -3,8 +3,7 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 // Define hoisted mocks for SDKs
 const mocks = vi.hoisted(() => {
   const mockAWSSecretsClient = {
-    getSecretValue: vi.fn(),
-    listSecrets: vi.fn()
+    send: vi.fn()
   };
 
   const mockAzureSecretClient = {
@@ -21,13 +20,17 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-// Mock AWS SDK
-vi.mock('aws-sdk', () => ({
-  default: {
-    SecretsManager: vi.fn().mockImplementation(function () {
-      return mocks.mockAWSSecretsClient;
-    })
-  }
+// Mock AWS SDK v3
+vi.mock('@aws-sdk/client-secrets-manager', () => ({
+  SecretsManagerClient: vi.fn().mockImplementation(function () {
+    return mocks.mockAWSSecretsClient;
+  }),
+  GetSecretValueCommand: vi.fn(function (params) {
+    return params;
+  }),
+  ListSecretsCommand: vi.fn(function (params) {
+    return params;
+  })
 }));
 
 // Mock Azure SDK
@@ -44,7 +47,7 @@ vi.mock('@azure/identity', () => ({
 }));
 
 import { SecretManager } from '../../lib/config/secret-manager.js';
-import AWS from 'aws-sdk';
+import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { SecretClient } from '@azure/keyvault-secrets';
 
 describe('SecretManager', () => {
@@ -104,10 +107,9 @@ describe('SecretManager', () => {
 
       secretManager = new SecretManager({ secretSource: 'aws' });
 
-      expect(AWS.SecretsManager).toHaveBeenCalledWith({
+      expect(SecretsManagerClient).toHaveBeenCalledWith({
         region: 'us-west-2',
-        accessKeyId: 'test-key',
-        secretAccessKey: 'test-secret'
+        credentials: { accessKeyId: 'test-key', secretAccessKey: 'test-secret' }
       });
       expect(secretManager.awsSecretsClient).toBeDefined();
     });
@@ -119,10 +121,9 @@ describe('SecretManager', () => {
 
       secretManager = new SecretManager({ secretSource: 'aws' });
 
-      expect(AWS.SecretsManager).toHaveBeenCalledWith({
+      expect(SecretsManagerClient).toHaveBeenCalledWith({
         region: 'us-iso-east-1',
-        accessKeyId: 'test-key',
-        secretAccessKey: 'test-secret'
+        credentials: { accessKeyId: 'test-key', secretAccessKey: 'test-secret' }
       });
     });
 
@@ -134,10 +135,9 @@ describe('SecretManager', () => {
       secretManager = new SecretManager({ secretSource: 'aws' });
 
       expect(console.warn).toHaveBeenCalled();
-      expect(AWS.SecretsManager).toHaveBeenCalledWith({
+      expect(SecretsManagerClient).toHaveBeenCalledWith({
         region: 'us-east-1',
-        accessKeyId: 'test-key',
-        secretAccessKey: 'test-secret'
+        credentials: { accessKeyId: 'test-key', secretAccessKey: 'test-secret' }
       });
     });
 
@@ -154,9 +154,9 @@ describe('SecretManager', () => {
     });
 
     test('should throw error when Azure URL is missing', () => {
-      expect(() => {
-        new SecretManager({ secretSource: 'azure' });
-      }).toThrow('Azure Key Vault URL is required for Azure secret management');
+      expect(() => new SecretManager({ secretSource: 'azure' })).toThrow(
+        'Azure Key Vault URL is required for Azure secret management'
+      );
     });
 
     test('should use custom Azure URL from config', () => {
@@ -248,16 +248,13 @@ describe('SecretManager', () => {
     });
 
     test('should retrieve plain string secret from AWS', async () => {
-      mockAWSSecretsClient.getSecretValue.mockReturnValue({
-        promise: () =>
-          Promise.resolve({
-            SecretString: 'plain-secret-value'
-          })
+      mockAWSSecretsClient.send.mockResolvedValue({
+        SecretString: 'plain-secret-value'
       });
 
       const result = await secretManager.getSecret('test-secret');
 
-      expect(mockAWSSecretsClient.getSecretValue).toHaveBeenCalledWith({
+      expect(mockAWSSecretsClient.send).toHaveBeenCalledWith({
         SecretId: 'test-secret',
         VersionStage: 'AWSCURRENT'
       });
@@ -266,11 +263,8 @@ describe('SecretManager', () => {
 
     test('should retrieve JSON secret from AWS', async () => {
       const jsonSecret = { username: 'admin', password: 'secret123' };
-      mockAWSSecretsClient.getSecretValue.mockReturnValue({
-        promise: () =>
-          Promise.resolve({
-            SecretString: JSON.stringify(jsonSecret)
-          })
+      mockAWSSecretsClient.send.mockResolvedValue({
+        SecretString: JSON.stringify(jsonSecret)
       });
 
       const result = await secretManager.getSecret('json-secret');
@@ -292,9 +286,7 @@ describe('SecretManager', () => {
 
     test('should handle AWS API errors with fallback to environment', async () => {
       process.env.FALLBACK_SECRET = 'fallback-value';
-      mockAWSSecretsClient.getSecretValue.mockReturnValue({
-        promise: () => Promise.reject(new Error('ResourceNotFoundException'))
-      });
+      mockAWSSecretsClient.send.mockRejectedValue(new Error('ResourceNotFoundException'));
 
       const result = await secretManager.getSecret('FALLBACK_SECRET');
 
@@ -309,9 +301,7 @@ describe('SecretManager', () => {
     });
 
     test('should return null when secret not found in AWS and no fallback', async () => {
-      mockAWSSecretsClient.getSecretValue.mockReturnValue({
-        promise: () => Promise.resolve({})
-      });
+      mockAWSSecretsClient.send.mockResolvedValue({});
 
       const result = await secretManager.getSecret('missing-secret');
 
@@ -319,11 +309,8 @@ describe('SecretManager', () => {
     });
 
     test('should cache AWS secret values', async () => {
-      mockAWSSecretsClient.getSecretValue.mockReturnValue({
-        promise: () =>
-          Promise.resolve({
-            SecretString: 'cached-aws-value'
-          })
+      mockAWSSecretsClient.send.mockResolvedValue({
+        SecretString: 'cached-aws-value'
       });
 
       // First call
@@ -333,7 +320,7 @@ describe('SecretManager', () => {
 
       expect(result1).toBe('cached-aws-value');
       expect(result2).toBe('cached-aws-value');
-      expect(mockAWSSecretsClient.getSecretValue).toHaveBeenCalledTimes(1);
+      expect(mockAWSSecretsClient.send).toHaveBeenCalledTimes(1);
       expect(secretManager.cache.has('aws:cached-aws-secret')).toBe(true);
     });
   });
@@ -613,9 +600,7 @@ describe('SecretManager', () => {
       process.env.AWS_REGION = 'us-east-1';
       secretManager = new SecretManager({ secretSource: 'aws' });
 
-      mockAWSSecretsClient.listSecrets.mockReturnValue({
-        promise: () => Promise.resolve({ SecretList: [] })
-      });
+      mockAWSSecretsClient.send.mockResolvedValue({ SecretList: [] });
 
       const health = await secretManager.healthCheck();
 
@@ -626,16 +611,14 @@ describe('SecretManager', () => {
           aws: 'authenticated'
         }
       });
-      expect(mockAWSSecretsClient.listSecrets).toHaveBeenCalledWith({ MaxResults: 1 });
+      expect(mockAWSSecretsClient.send).toHaveBeenCalledWith({ MaxResults: 1 });
     });
 
     test('should report unhealthy status for AWS when authentication fails', async () => {
       process.env.AWS_REGION = 'us-east-1';
       secretManager = new SecretManager({ secretSource: 'aws' });
 
-      mockAWSSecretsClient.listSecrets.mockReturnValue({
-        promise: () => Promise.reject(new Error('InvalidAccessKeyId'))
-      });
+      mockAWSSecretsClient.send.mockRejectedValue(new Error('InvalidAccessKeyId'));
 
       const health = await secretManager.healthCheck();
 
@@ -824,10 +807,8 @@ describe('SecretManager', () => {
         awsRegion: 'us-east-2'
       });
 
-      expect(AWS.SecretsManager).toHaveBeenCalledWith({
-        region: 'us-east-2', // config takes precedence
-        accessKeyId: undefined,
-        secretAccessKey: undefined
+      expect(SecretsManagerClient).toHaveBeenCalledWith({
+        region: 'us-east-2' // config takes precedence, no credentials when env vars absent
       });
     });
 
@@ -875,9 +856,7 @@ describe('SecretManager', () => {
       secretManager = new SecretManager({ secretSource: 'env' });
 
       // Make multiple concurrent requests
-      const promises = Array(10)
-        .fill()
-        .map(() => secretManager.getSecret('CONCURRENT_SECRET'));
+      const promises = new Array(10).fill().map(() => secretManager.getSecret('CONCURRENT_SECRET'));
 
       const results = await Promise.all(promises);
 
