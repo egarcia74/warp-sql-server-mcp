@@ -23,10 +23,6 @@ const mocks = vi.hoisted(() => {
   // Mock the Request class constructor specifically
   // Vitest mock constructors must be newable
   function MockRequestClass() {
-    if (!new.target) {
-      return mockSqlRequest;
-    }
-
     return mockSqlRequest;
   }
 

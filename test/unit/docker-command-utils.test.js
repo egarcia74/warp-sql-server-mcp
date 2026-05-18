@@ -15,6 +15,12 @@ describe('Docker command utils', () => {
     expect(args).toEqual(['docker', 'ps', '--format', '{{.Names}} {{.Status}}']);
   });
 
+  it('preserves empty quoted arguments', () => {
+    const args = parseCommandArguments('cmd "" arg');
+
+    expect(args).toEqual(['cmd', '', 'arg']);
+  });
+
   it('merges process env when no custom env is provided and forces SAFE_PATH', () => {
     process.env = {
       ...ORIGINAL_ENV,
