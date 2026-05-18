@@ -20,13 +20,28 @@ import {
   checkDockerCapabilities,
   chooseBestConfiguration
 } from './detect-platform.js';
-import { execSync } from 'child_process';
+import { execFileSync } from 'node:child_process';
 
 console.log('⚡ Quick Platform Detection Stress Test');
 console.log('========================================\n');
 
 let passed = 0;
 let total = 0;
+
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+function runCommand(command, args, options = {}) {
+  return execFileSync(command, args, {
+    encoding: 'utf8',
+    ...options
+  });
+}
+
+function ensureDockerComposeConfig() {
+  runCommand(npmCommand, ['run', 'docker:ensure-config'], {
+    env: { ...process.env, TESTING_MODE: 'true' }
+  });
+}
 
 function test(name, testFn) {
   total++;
@@ -69,7 +84,7 @@ test('Configuration Selection', () => {
 // Test 4: Docker is available (developer environment check)
 test('Docker Environment', () => {
   try {
-    execSync('docker --version', { stdio: 'ignore' });
+    runCommand('docker', ['--version'], { stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -89,7 +104,10 @@ test('Detection Consistency', () => {
 // Test 6: File generation works
 test('File Generation', () => {
   try {
-    execSync('npm run docker:detect', { stdio: 'ignore' });
+    runCommand(npmCommand, ['run', 'docker:detect'], {
+      stdio: 'ignore',
+      env: { ...process.env, TESTING_MODE: 'true' }
+    });
     return true;
   } catch {
     return false;
@@ -99,7 +117,10 @@ test('File Generation', () => {
 // Test 7: Generated Docker Compose is valid
 test('Docker Compose Validation', () => {
   try {
-    execSync('docker-compose -f test/docker/docker-compose.yml config', { stdio: 'ignore' });
+    ensureDockerComposeConfig();
+    runCommand('docker-compose', ['-f', 'test/docker/docker-compose.yml', 'config'], {
+      stdio: 'ignore'
+    });
     return true;
   } catch {
     return false;
@@ -109,18 +130,28 @@ test('Docker Compose Validation', () => {
 // Test 8: Container can start (quick test)
 test('Container Startup Test', () => {
   try {
+    ensureDockerComposeConfig();
+
     // Start container
-    execSync('docker-compose -f test/docker/docker-compose.yml up -d', { stdio: 'ignore' });
+    runCommand('docker-compose', ['-f', 'test/docker/docker-compose.yml', 'up', '-d'], {
+      stdio: 'ignore'
+    });
 
     // Check if it's running
-    const output = execSync('docker ps --filter name=warp-mcp-sqlserver --format "{{.Names}}"', {
-      encoding: 'utf8'
-    });
+    const output = runCommand('docker', [
+      'ps',
+      '--filter',
+      'name=warp-mcp-sqlserver',
+      '--format',
+      '{{.Names}}'
+    ]);
     const isRunning = output.includes('warp-mcp-sqlserver');
 
     // Clean up immediately
     try {
-      execSync('docker-compose -f test/docker/docker-compose.yml down', { stdio: 'ignore' });
+      runCommand('docker-compose', ['-f', 'test/docker/docker-compose.yml', 'down'], {
+        stdio: 'ignore'
+      });
     } catch {
       // Ignore cleanup errors
     }

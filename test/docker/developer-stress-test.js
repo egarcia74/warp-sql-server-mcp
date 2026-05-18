@@ -79,6 +79,15 @@ function execSync(command, options = {}) {
   return result.stdout ? result.stdout.toString() : '';
 }
 
+function ensureDockerComposeConfig(options = {}) {
+  execSync('npm run docker:ensure-config', {
+    stdio: 'ignore',
+    cwd: process.cwd(),
+    env: { ...process.env, TESTING_MODE: 'true' },
+    ...options
+  });
+}
+
 console.log('🧪 Platform Detection Developer Test\n');
 
 let totalTests = 0;
@@ -281,6 +290,7 @@ test('Config file generation', 'Must create Docker Compose and config files', ()
 
 test('Docker Compose syntax', 'Generated configuration must be valid', () => {
   try {
+    ensureDockerComposeConfig();
     execSync('docker-compose -f test/docker/docker-compose.yml config', { stdio: 'ignore' });
     return true;
   } catch {
@@ -300,6 +310,8 @@ if (dockerAvailable && selectedConfig) {
     'Must start SQL Server without platform warnings',
     () => {
       try {
+        ensureDockerComposeConfig();
+
         // Ensure clean state
         try {
           execSync('docker-compose -f test/docker/docker-compose.yml down -v', { stdio: 'ignore' });
