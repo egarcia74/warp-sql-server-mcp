@@ -50,16 +50,21 @@ function execSync(command, options = {}) {
   }
 
   const cmd = args.shift();
+  const mergedEnv = {
+    ...process.env,
+    PATH: SAFE_PATH
+  };
+
+  if (options.env) {
+    Object.assign(mergedEnv, options.env);
+    mergedEnv.PATH = SAFE_PATH;
+  }
 
   const mergedOptions = {
     encoding: 'utf8',
     shell: false, // Explicitly disable shell to satisfy S4721
     ...options,
-    env: {
-      ...process.env,
-      ...(options.env || {}),
-      PATH: SAFE_PATH // Apply PATH last to prevent overrides
-    }
+    env: mergedEnv
   };
 
   const result = spawnSync(cmd, args, mergedOptions);

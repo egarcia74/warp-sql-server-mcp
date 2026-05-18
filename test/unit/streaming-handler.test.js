@@ -11,11 +11,8 @@ const mocks = vi.hoisted(() => {
 
   // Mock the Request class constructor specifically
   // Vitest mock constructors must be newable
-  class MockRequestClass {
-    constructor() {
-      // In ES6 classes, returning an object from constructor overrides 'this'
-      return mockSqlRequest;
-    }
+  function MockRequestClass() {
+    return mockSqlRequest;
   }
 
   // Return the class directly wrapped in vi.fn() to make it spyable
