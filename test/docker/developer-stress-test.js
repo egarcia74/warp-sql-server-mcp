@@ -60,6 +60,10 @@ function ensureDockerComposeConfig(options = {}) {
   });
 }
 
+function sleep(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
 console.log('🧪 Platform Detection Developer Test\n');
 
 let totalTests = 0;
@@ -327,7 +331,7 @@ if (dockerAvailable && selectedConfig) {
       () => {
         try {
           // Give container a moment to log startup messages
-          setTimeout(() => {}, 2000);
+          sleep(2000);
 
           const logs = execSync('docker logs warp-mcp-sqlserver', {
             encoding: 'utf8',

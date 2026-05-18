@@ -76,7 +76,3 @@ test/temp/
 # Generated Docker platform detection files
 test/docker/.platform-config.json
 test/docker/docker-compose.yml
-
-
-#Ignore vscode AI rules
-.github/instructions/codacy.instructions.md
