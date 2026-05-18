@@ -13,7 +13,7 @@ const config = {
   user: process.env.DB_USER || process.env.SQL_SERVER_USER || 'sa',
   password: process.env.DB_PASSWORD || process.env.SQL_SERVER_PASSWORD,
   server: process.env.DB_SERVER || process.env.SQL_SERVER_HOST || 'localhost',
-  port: Number.parseInt(process.env.DB_PORT || process.env.SQL_SERVER_PORT || '1433', 10),
+  port: Number(process.env.DB_PORT || process.env.SQL_SERVER_PORT || '1433'),
   database: 'master',
   options: {
     encrypt: false,

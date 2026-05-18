@@ -147,8 +147,10 @@ if (hostInfo.isAppleSilicon) {
   console.log(`  Architecture: ${hostInfo.arch} - will select optimal configuration`);
 }
 
-test('Hardware detection works', 'Platform detection must work for configuration selection', () =>
-  Boolean(hostInfo?.arch && hostInfo?.platform)
+test(
+  'Hardware detection works',
+  'Platform detection must work for configuration selection',
+  () => hostInfo?.arch != null && hostInfo?.platform != null
 );
 
 test(
@@ -232,7 +234,7 @@ test('Configuration selection', 'Must choose optimal SQL Server setup for your h
     console.log = () => {};
 
     selectedConfig = chooseBestConfiguration(hostInfo, dockerInfo);
-    return Boolean(selectedConfig?.config?.image);
+    return selectedConfig?.config?.image != null;
   } catch (error) {
     console.log(`     Configuration error: ${error.message}`);
     return false;
