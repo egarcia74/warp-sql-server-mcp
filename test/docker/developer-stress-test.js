@@ -27,8 +27,7 @@ const SAFE_PATH = `${NODE_BIN}:/usr/bin:/usr/local/bin:/usr/sbin:/usr/local/sbin
  * - Uses spawnSync with shell: false to prevent command injection
  * - Handles quoted arguments correctly
  */
-function execSync(command, options = {}) {
-  // Parse command arguments respecting double quotes
+function parseCommandArguments(command) {
   const args = [];
   let current = '';
   let inQuotes = false;
@@ -49,22 +48,34 @@ function execSync(command, options = {}) {
     args.push(current);
   }
 
-  const cmd = args.shift();
+  return args;
+}
+
+function buildMergedEnv(customEnv) {
   const mergedEnv = {
-    ...process.env,
-    PATH: SAFE_PATH
+    ...process.env
   };
 
-  if (options.env) {
-    Object.assign(mergedEnv, options.env);
-    mergedEnv.PATH = SAFE_PATH;
+  if (customEnv) {
+    Object.assign(mergedEnv, customEnv);
   }
+
+  mergedEnv.PATH = SAFE_PATH;
+
+  return mergedEnv;
+}
+
+function execSync(command, options = {}) {
+  // Parse command arguments respecting double quotes
+  const args = parseCommandArguments(command);
+
+  const cmd = args.shift();
 
   const mergedOptions = {
     encoding: 'utf8',
     shell: false, // Explicitly disable shell to satisfy S4721
     ...options,
-    env: mergedEnv
+    env: buildMergedEnv(options.env)
   };
 
   const result = spawnSync(cmd, args, mergedOptions);
