@@ -22,28 +22,63 @@ const mocks = vi.hoisted(() => {
 
 // Mock AWS SDK v3
 vi.mock('@aws-sdk/client-secrets-manager', () => ({
-  SecretsManagerClient: vi.fn().mockImplementation(function () {
-    return mocks.mockAWSSecretsClient;
-  }),
-  GetSecretValueCommand: vi.fn(function (params) {
-    return params;
-  }),
-  ListSecretsCommand: vi.fn(function (params) {
-    return params;
-  })
+  SecretsManagerClient: vi.fn().mockImplementation(
+    class {
+      constructor() {
+        Object.assign(this, mocks.mockAWSSecretsClient);
+      }
+      toString() {
+        return '[MockSecretsManagerClient]';
+      }
+    }
+  ),
+  GetSecretValueCommand: vi.fn().mockImplementation(
+    class {
+      constructor(params) {
+        Object.assign(this, params);
+      }
+      toString() {
+        return '[MockGetSecretValueCommand]';
+      }
+    }
+  ),
+  ListSecretsCommand: vi.fn().mockImplementation(
+    class {
+      constructor(params) {
+        Object.assign(this, params);
+      }
+      toString() {
+        return '[MockListSecretsCommand]';
+      }
+    }
+  )
 }));
 
 // Mock Azure SDK
 vi.mock('@azure/keyvault-secrets', () => ({
-  SecretClient: vi.fn().mockImplementation(function () {
-    return mocks.mockAzureSecretClient;
-  })
+  SecretClient: vi.fn().mockImplementation(
+    class {
+      constructor() {
+        Object.assign(this, mocks.mockAzureSecretClient);
+      }
+      toString() {
+        return '[MockSecretClient]';
+      }
+    }
+  )
 }));
 
 vi.mock('@azure/identity', () => ({
-  DefaultAzureCredential: vi.fn().mockImplementation(function () {
-    return mocks.mockDefaultAzureCredential;
-  })
+  DefaultAzureCredential: vi.fn().mockImplementation(
+    class {
+      constructor() {
+        Object.assign(this, mocks.mockDefaultAzureCredential);
+      }
+      toString() {
+        return '[MockDefaultAzureCredential]';
+      }
+    }
+  )
 }));
 
 import { SecretManager } from '../../lib/config/secret-manager.js';
