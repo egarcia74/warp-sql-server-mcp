@@ -10,6 +10,7 @@ const mockPool = {
 
 const mockRequest = {
   query: vi.fn(),
+  batch: vi.fn(),
   input: vi.fn(),
   execute: vi.fn()
 };
@@ -17,6 +18,11 @@ const mockRequest = {
 // Default mock implementation
 mockPool.request.mockReturnValue(mockRequest);
 mockRequest.query.mockResolvedValue({
+  recordset: [],
+  recordsets: [[]],
+  rowsAffected: [0]
+});
+mockRequest.batch.mockResolvedValue({
   recordset: [],
   recordsets: [[]],
   rowsAffected: [0]

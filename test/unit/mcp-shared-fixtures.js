@@ -9,6 +9,7 @@ import { vi } from 'vitest';
 const hoistedMocks = vi.hoisted(() => {
   const mockRequest = {
     query: vi.fn(),
+    batch: vi.fn(),
     timeout: 30000,
     on: vi.fn(),
     stream: false

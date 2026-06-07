@@ -743,8 +743,8 @@ describe('DatabaseToolsHandler', () => {
   describe('explainQuery (execution plan)', () => {
     test('returns estimated plan XML and toggles SHOWPLAN_XML when include_actual_plan is false', async () => {
       const planXml = '<ShowPlanXML>estimated</ShowPlanXML>';
-      mockRequest.query.mockReset();
-      mockRequest.query
+      mockRequest.batch.mockReset();
+      mockRequest.batch
         .mockResolvedValueOnce({ recordset: [] }) // SET SHOWPLAN_XML ON
         .mockResolvedValueOnce({
           recordset: [{ 'Microsoft SQL Server 2005 XML Showplan': planXml }]
@@ -753,33 +753,42 @@ describe('DatabaseToolsHandler', () => {
 
       const result = await handler.explainQuery('SELECT 1', null, false);
 
-      expect(mockRequest.query).toHaveBeenCalledWith('SET SHOWPLAN_XML ON');
-      expect(mockRequest.query).toHaveBeenCalledWith('SET SHOWPLAN_XML OFF');
+      expect(mockRequest.batch).toHaveBeenCalledWith('SET SHOWPLAN_XML ON');
+      expect(mockRequest.batch).toHaveBeenCalledWith('SET SHOWPLAN_XML OFF');
       expect(result[0].text).toContain(planXml);
     });
 
-    test('uses STATISTICS XML when include_actual_plan is true', async () => {
-      mockRequest.query.mockReset();
-      mockRequest.query.mockResolvedValue({ recordset: [] });
+    test('uses STATISTICS XML and extracts the plan from a later recordset when include_actual_plan is true', async () => {
+      const planXml = '<ShowPlanXML>actual</ShowPlanXML>';
+      mockRequest.batch.mockReset();
+      mockRequest.batch
+        .mockResolvedValueOnce({ recordset: [] }) // SET STATISTICS XML ON
+        .mockResolvedValueOnce({
+          // STATISTICS XML returns data rows AND the plan in separate recordsets
+          recordset: [{ id: 1 }],
+          recordsets: [[{ id: 1 }], [{ 'Microsoft SQL Server 2005 XML Showplan': planXml }]]
+        }) // the analyzed query
+        .mockResolvedValueOnce({ recordset: [] }); // SET STATISTICS XML OFF
 
-      await handler.explainQuery('SELECT 1', null, true);
+      const result = await handler.explainQuery('SELECT 1', null, true);
 
-      expect(mockRequest.query).toHaveBeenCalledWith('SET STATISTICS XML ON');
-      expect(mockRequest.query).toHaveBeenCalledWith('SET STATISTICS XML OFF');
+      expect(mockRequest.batch).toHaveBeenCalledWith('SET STATISTICS XML ON');
+      expect(mockRequest.batch).toHaveBeenCalledWith('SET STATISTICS XML OFF');
+      expect(result[0].text).toContain(planXml);
     });
 
     test('scopes to a database with USE inside the pinned transaction', async () => {
-      mockRequest.query.mockReset();
-      mockRequest.query.mockResolvedValue({ recordset: [] });
+      mockRequest.batch.mockReset();
+      mockRequest.batch.mockResolvedValue({ recordset: [] });
 
       await handler.explainQuery('SELECT 1', 'McpToolingTestDb', false);
 
-      expect(mockRequest.query).toHaveBeenCalledWith('USE [McpToolingTestDb]');
+      expect(mockRequest.batch).toHaveBeenCalledWith('USE [McpToolingTestDb]');
     });
 
     test('rolls back and rethrows on query error', async () => {
-      mockRequest.query.mockReset();
-      mockRequest.query
+      mockRequest.batch.mockReset();
+      mockRequest.batch
         .mockResolvedValueOnce({ recordset: [] }) // SET ON
         .mockRejectedValueOnce(new Error('boom')); // query fails
 
