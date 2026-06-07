@@ -22,9 +22,9 @@ import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
 
 // Read package.json for version info
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
@@ -194,11 +194,13 @@ class SqlServerMCP {
 
     if (statements.length > 1) {
       // For multi-statement, find the most restrictive type
-      const types = statements.map(stmt => this._getSingleQueryType(stmt, securityConfig));
+      const types = new Set(
+        statements.map(stmt => this._getSingleQueryType(stmt, securityConfig))
+      );
 
-      if (types.includes('schema')) return 'schema';
-      if (types.includes('destructive')) return 'destructive';
-      if (types.includes('select')) return 'select';
+      if (types.has('schema')) return 'schema';
+      if (types.has('destructive')) return 'destructive';
+      if (types.has('select')) return 'select';
       return 'unknown';
     }
 
@@ -683,7 +685,7 @@ class SqlServerMCP {
   }
 
   async analyzeQueryPerformance(query, database) {
-    const analysis = await this.queryOptimizer.analyzeQuery(query, database);
+    const analysis = this.queryOptimizer.analyzeQuery(query, database);
     return [
       {
         type: 'text',
@@ -751,6 +753,17 @@ class SqlServerMCP {
     const performanceStats = this.performanceMonitor.getStats();
     const connectionHealth = this.getConnectionHealth();
 
+    let securityLevel;
+    if (this.readOnlyMode) {
+      securityLevel = 'MAXIMUM (Read-Only)';
+    } else if (this.allowSchemaChanges) {
+      securityLevel = 'MINIMAL (Full Access)';
+    } else if (this.allowDestructiveOperations) {
+      securityLevel = 'MEDIUM (DML Allowed)';
+    } else {
+      securityLevel = 'HIGH (DDL Blocked)';
+    }
+
     const serverInfo = {
       server: {
         name: 'warp-sql-server-mcp',
@@ -773,13 +786,7 @@ class SqlServerMCP {
           readOnlyMode: this.readOnlyMode,
           allowDestructiveOperations: this.allowDestructiveOperations,
           allowSchemaChanges: this.allowSchemaChanges,
-          securityLevel: this.readOnlyMode
-            ? 'MAXIMUM (Read-Only)'
-            : this.allowSchemaChanges
-              ? 'MINIMAL (Full Access)'
-              : this.allowDestructiveOperations
-                ? 'MEDIUM (DML Allowed)'
-                : 'HIGH (DDL Blocked)'
+          securityLevel
         },
         performance: {
           enabled: this.config.performanceMonitoring.enabled,
