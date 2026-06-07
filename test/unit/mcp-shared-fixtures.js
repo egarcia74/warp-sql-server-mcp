@@ -9,6 +9,7 @@ import { vi } from 'vitest';
 const hoistedMocks = vi.hoisted(() => {
   const mockRequest = {
     query: vi.fn(),
+    batch: vi.fn(),
     timeout: 30000,
     on: vi.fn(),
     stream: false
@@ -111,20 +112,31 @@ export const {
 } = hoistedMocks;
 
 // Mock the mssql module first (must be hoisted)
-vi.mock('mssql', () => ({
-  default: {
+vi.mock('mssql', () => {
+  const TransactionMock = vi.fn(function (pool) {
+    return {
+      begin: vi.fn().mockResolvedValue(undefined),
+      commit: vi.fn().mockResolvedValue(undefined),
+      rollback: vi.fn().mockResolvedValue(undefined),
+      request: vi.fn(() => (pool?.request ? pool.request() : mocks.mockRequest))
+    };
+  });
+  const RequestMock = vi.fn(function () {
+    return mocks.mockRequest;
+  });
+  return {
+    default: {
+      connect: vi.fn(),
+      ConnectionPool: vi.fn(),
+      Request: RequestMock,
+      Transaction: TransactionMock
+    },
     connect: vi.fn(),
     ConnectionPool: vi.fn(),
-    Request: vi.fn(function () {
-      return mocks.mockRequest;
-    })
-  },
-  connect: vi.fn(),
-  ConnectionPool: vi.fn(),
-  Request: vi.fn(function () {
-    return mocks.mockRequest;
-  })
-}));
+    Request: RequestMock,
+    Transaction: TransactionMock
+  };
+});
 
 export const setupMssqlMock = () => {
   // Deprecated: Mocks are now applied at module level
