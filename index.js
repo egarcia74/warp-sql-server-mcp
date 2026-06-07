@@ -194,9 +194,7 @@ class SqlServerMCP {
 
     if (statements.length > 1) {
       // For multi-statement, find the most restrictive type
-      const types = new Set(
-        statements.map(stmt => this._getSingleQueryType(stmt, securityConfig))
-      );
+      const types = new Set(statements.map(stmt => this._getSingleQueryType(stmt, securityConfig)));
 
       if (types.has('schema')) return 'schema';
       if (types.has('destructive')) return 'destructive';
