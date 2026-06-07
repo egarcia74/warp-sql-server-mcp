@@ -95,6 +95,10 @@ describe('SecretManager', () => {
     // Save original environment
     originalEnv = { ...process.env };
 
+    // Ensure a stray session token in the ambient environment doesn't leak
+    // into tests that assert static-only AWS credentials.
+    delete process.env.AWS_SESSION_TOKEN;
+
     // Reset all mocks
     vi.clearAllMocks();
 
@@ -147,6 +151,24 @@ describe('SecretManager', () => {
         credentials: { accessKeyId: 'test-key', secretAccessKey: 'test-secret' }
       });
       expect(secretManager.awsSecretsClient).toBeDefined();
+    });
+
+    test('should include session token in credentials when AWS_SESSION_TOKEN is set', () => {
+      process.env.AWS_REGION = 'us-west-2';
+      process.env.AWS_ACCESS_KEY_ID = 'test-key';
+      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.AWS_SESSION_TOKEN = 'test-session-token';
+
+      secretManager = new SecretManager({ secretSource: 'aws' });
+
+      expect(SecretsManagerClient).toHaveBeenCalledWith({
+        region: 'us-west-2',
+        credentials: {
+          accessKeyId: 'test-key',
+          secretAccessKey: 'test-secret',
+          sessionToken: 'test-session-token'
+        }
+      });
     });
 
     test('should accept ISO AWS regions like us-iso-east-1', () => {
