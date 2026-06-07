@@ -118,7 +118,7 @@ vi.mock('mssql', () => {
       begin: vi.fn().mockResolvedValue(undefined),
       commit: vi.fn().mockResolvedValue(undefined),
       rollback: vi.fn().mockResolvedValue(undefined),
-      request: vi.fn(() => (pool && pool.request ? pool.request() : mocks.mockRequest))
+      request: vi.fn(() => (pool?.request ? pool.request() : mocks.mockRequest))
     };
   });
   const RequestMock = vi.fn(function () {

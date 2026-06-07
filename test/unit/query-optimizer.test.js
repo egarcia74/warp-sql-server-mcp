@@ -422,7 +422,7 @@ describe('QueryOptimizer', () => {
             user_seeks: 120,
             user_scans: 5,
             avg_user_impact: 92.5,
-            impact_score: 11100.0
+            impact_score: 11100
           }
         ]
       });
@@ -441,7 +441,7 @@ describe('QueryOptimizer', () => {
         columns: ['CustomerId'],
         includedColumns: ['OrderStatus']
       });
-      expect(out.recommendations[0].impactScore).toBeCloseTo(11100.0);
+      expect(out.recommendations[0].impactScore).toBeCloseTo(11100);
     });
 
     test('filters by impactThreshold and clamps limit', async () => {
@@ -462,6 +462,77 @@ describe('QueryOptimizer', () => {
       await expect(dbOptimizer.analyzeIndexUsage('bad]name')).rejects.toThrow(
         /invalid database name/i
       );
+    });
+
+    test('maps avg_user_impact to priority at the 75/40 boundaries', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: [
+          { table_name: 'A', equality_columns: '[a]', avg_user_impact: 75 },
+          { table_name: 'B', equality_columns: '[b]', avg_user_impact: 74 },
+          { table_name: 'C', equality_columns: '[c]', avg_user_impact: 40 },
+          { table_name: 'D', equality_columns: '[d]', avg_user_impact: 39 }
+        ]
+      });
+
+      const out = await dbOptimizer.analyzeIndexUsage('Db');
+
+      expect(out.recommendations.map(r => r.priority)).toEqual(['high', 'medium', 'medium', 'low']);
+    });
+
+    test('parses multi-column equality/inequality/included and builds an INCLUDE clause', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: [
+          {
+            table_name: 'Orders',
+            equality_columns: '[A], [B]',
+            inequality_columns: '[C]',
+            included_columns: '[D]',
+            avg_user_impact: 50
+          }
+        ]
+      });
+
+      const out = await dbOptimizer.analyzeIndexUsage('Db');
+      const rec = out.recommendations[0];
+
+      expect(rec.columns).toEqual(['A', 'B', 'C']);
+      expect(rec.includedColumns).toEqual(['D']);
+      expect(rec.suggestion).toContain('(A, B, C)');
+      expect(rec.suggestion).toContain('INCLUDE (D)');
+    });
+
+    test('omits INCLUDE when there are no included columns', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: [{ table_name: 'T', equality_columns: '[x]', avg_user_impact: 50 }]
+      });
+
+      const out = await dbOptimizer.analyzeIndexUsage('Db');
+
+      expect(out.recommendations[0].suggestion).not.toContain('INCLUDE');
+    });
+
+    test('returns empty recommendations when the DMV result has no recordset', async () => {
+      mockRequest.query.mockResolvedValue({});
+      const out = await dbOptimizer.analyzeIndexUsage('Db');
+      expect(out.recommendations).toEqual([]);
+    });
+
+    test('embeds the sanitized database name in DB_ID (injection defense wired)', async () => {
+      mockRequest.query.mockResolvedValue({ recordset: [] });
+      await dbOptimizer.analyzeIndexUsage("My'Db");
+      expect(mockRequest.query.mock.calls[0][0]).toContain("DB_ID(N'My''Db')");
+    });
+
+    test('lazily connects when no pool is open yet', async () => {
+      const lazyRequest = { query: vi.fn().mockResolvedValue({ recordset: [] }) };
+      const lazyPool = { request: () => lazyRequest, connected: true };
+      const connect = vi.fn().mockResolvedValue(lazyPool);
+      const lazy = new QueryOptimizer({ getPool: () => null, connect });
+
+      await lazy.analyzeIndexUsage('Db');
+
+      expect(connect).toHaveBeenCalled();
+      expect(lazyRequest.query).toHaveBeenCalled();
     });
   });
 
