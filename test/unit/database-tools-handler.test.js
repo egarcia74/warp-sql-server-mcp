@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import sql from 'mssql';
 import {
   mockData,
   createMockConnectionManager,
@@ -737,6 +738,100 @@ describe('DatabaseToolsHandler', () => {
       // Verify timing is reasonable (should be >= 8ms due to our delay, allowing some variance)
       const [queryParams] = mockPerformanceMonitor.recordQuery.mock.calls[0];
       expect(queryParams.executionTime).toBeGreaterThanOrEqual(8);
+    });
+  });
+
+  describe('explainQuery (execution plan)', () => {
+    test('returns estimated plan XML in correct SET/query/SET order and rolls back (never commits)', async () => {
+      const planXml = '<ShowPlanXML>estimated</ShowPlanXML>';
+      sql.Transaction.mockClear();
+      mockRequest.batch.mockReset();
+      mockRequest.batch
+        .mockResolvedValueOnce({ recordset: [] }) // SET SHOWPLAN_XML ON
+        .mockResolvedValueOnce({
+          recordset: [{ 'Microsoft SQL Server 2005 XML Showplan': planXml }]
+        }) // the analyzed query
+        .mockResolvedValueOnce({ recordset: [] }); // SET SHOWPLAN_XML OFF
+
+      const result = await handler.explainQuery('SELECT 1', null, false);
+
+      // Exact order matters: the SET must precede the query and be toggled off after.
+      expect(mockRequest.batch.mock.calls.map(c => c[0])).toEqual([
+        'SET SHOWPLAN_XML ON',
+        'SELECT 1',
+        'SET SHOWPLAN_XML OFF'
+      ]);
+      expect(result[0].text).toContain(planXml);
+
+      // Plan capture must never persist: rollback, not commit.
+      const tx = sql.Transaction.mock.results.at(-1).value;
+      expect(tx.rollback).toHaveBeenCalled();
+      expect(tx.commit).not.toHaveBeenCalled();
+    });
+
+    test('uses STATISTICS XML and extracts the plan from a later recordset when include_actual_plan is true', async () => {
+      const planXml = '<ShowPlanXML>actual</ShowPlanXML>';
+      mockRequest.batch.mockReset();
+      mockRequest.batch
+        .mockResolvedValueOnce({ recordset: [] }) // SET STATISTICS XML ON
+        .mockResolvedValueOnce({
+          // STATISTICS XML returns data rows AND the plan in separate recordsets
+          recordset: [{ id: 1 }],
+          recordsets: [[{ id: 1 }], [{ 'Microsoft SQL Server 2005 XML Showplan': planXml }]]
+        }) // the analyzed query
+        .mockResolvedValueOnce({ recordset: [] }); // SET STATISTICS XML OFF
+
+      const result = await handler.explainQuery('SELECT 1', null, true);
+
+      expect(mockRequest.batch).toHaveBeenCalledWith('SET STATISTICS XML ON');
+      expect(mockRequest.batch).toHaveBeenCalledWith('SET STATISTICS XML OFF');
+      expect(result[0].text).toContain(planXml);
+    });
+
+    test('scopes to a database with an escaped USE inside the pinned transaction', async () => {
+      const planXml = '<ShowPlanXML/>';
+      mockRequest.batch.mockReset();
+      mockRequest.batch.mockResolvedValue({
+        recordset: [{ 'Microsoft SQL Server 2005 XML Showplan': planXml }]
+      });
+
+      await handler.explainQuery('SELECT 1', 'McpToolingTestDb', false);
+
+      expect(mockRequest.batch).toHaveBeenCalledWith('USE [McpToolingTestDb]');
+    });
+
+    test('escapes a closing bracket in the database name for USE', async () => {
+      const planXml = '<ShowPlanXML/>';
+      mockRequest.batch.mockReset();
+      mockRequest.batch.mockResolvedValue({
+        recordset: [{ 'Microsoft SQL Server 2005 XML Showplan': planXml }]
+      });
+
+      await handler.explainQuery('SELECT 1', 'we]rd', false);
+
+      expect(mockRequest.batch).toHaveBeenCalledWith('USE [we]]rd]');
+    });
+
+    test('throws when no execution plan column is returned (SET did not engage)', async () => {
+      mockRequest.batch.mockReset();
+      mockRequest.batch.mockResolvedValue({ recordset: [{ id: 1, name: 'data row' }] });
+
+      await expect(handler.explainQuery('SELECT 1', null, false)).rejects.toThrow(
+        /No execution plan was returned/
+      );
+    });
+
+    test('rolls back and rethrows on query error', async () => {
+      sql.Transaction.mockClear();
+      mockRequest.batch.mockReset();
+      mockRequest.batch
+        .mockResolvedValueOnce({ recordset: [] }) // SET ON
+        .mockRejectedValueOnce(new Error('boom')); // query fails
+
+      await expect(handler.explainQuery('SELECT 1', null, false)).rejects.toThrow('boom');
+
+      const tx = sql.Transaction.mock.results.at(-1).value;
+      expect(tx.rollback).toHaveBeenCalled();
     });
   });
 });
