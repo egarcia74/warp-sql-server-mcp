@@ -28,7 +28,7 @@ describe('SqlServerMCP Index', () => {
     sandbox.stub(DatabaseToolsHandler.prototype, 'explainQuery').throws(connectionError);
     sandbox.stub(DatabaseToolsHandler.prototype, 'executeQuery').throws(connectionError);
 
-    sandbox.stub(QueryOptimizer.prototype, 'getIndexRecommendations').throws(connectionError);
+    sandbox.stub(QueryOptimizer.prototype, 'analyzeIndexUsage').throws(connectionError);
     sandbox.stub(QueryOptimizer.prototype, 'getOptimizationInsights').throws(connectionError);
 
     sandbox.stub(BottleneckDetector.prototype, 'detectBottlenecks').throws(connectionError);

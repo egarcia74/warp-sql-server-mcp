@@ -26,6 +26,17 @@ const sqlMock = {
   connect: vi.fn().mockResolvedValue(mockPool),
   ConnectionPool: vi.fn().mockImplementation(() => mockPool),
   Request: vi.fn().mockImplementation(() => mockRequest),
+  // Transaction pins a single connection; its request() delegates to the
+  // pool so tests control query() via the pool's request mock.
+  // Use a function expression so it is constructable with `new`.
+  Transaction: vi.fn(function (pool) {
+    return {
+      begin: vi.fn().mockResolvedValue(undefined),
+      commit: vi.fn().mockResolvedValue(undefined),
+      rollback: vi.fn().mockResolvedValue(undefined),
+      request: vi.fn(() => (pool && pool.request ? pool.request() : mockRequest))
+    };
+  }),
   TYPES: {
     VarChar: 'VarChar',
     Int: 'Int',

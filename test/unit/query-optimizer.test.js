@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { QueryOptimizer } from '../../lib/analysis/query-optimizer.js';
 
 describe('QueryOptimizer', () => {
@@ -387,6 +387,124 @@ describe('QueryOptimizer', () => {
         'SELECT COUNT(*) OVER() FROM a JOIN b ON a.id = b.id JOIN c ON b.id = c.id WITH cte AS (SELECT * FROM d) SELECT * FROM cte UNION SELECT * FROM e';
       const score = optimizer.calculateComplexityScore(veryComplexQuery);
       expect(score).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('analyzeIndexUsage (missing-index DMVs)', () => {
+    let dbOptimizer;
+    let mockRequest;
+
+    beforeEach(() => {
+      mockRequest = { query: vi.fn() };
+      const mockPool = { request: () => mockRequest, connected: true };
+      const mockConnectionManager = {
+        getPool: () => mockPool,
+        connect: async () => mockPool
+      };
+      dbOptimizer = new QueryOptimizer(mockConnectionManager);
+    });
+
+    test('throws when not connected', async () => {
+      const offline = new QueryOptimizer({ getPool: () => null });
+      await expect(offline.analyzeIndexUsage('McpToolingTestDb')).rejects.toThrow(
+        'Not connected to any server'
+      );
+    });
+
+    test('queries missing-index DMVs scoped by DB_ID and maps rows', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: [
+          {
+            table_name: 'Orders',
+            equality_columns: '[CustomerId]',
+            inequality_columns: null,
+            included_columns: '[OrderStatus]',
+            user_seeks: 120,
+            user_scans: 5,
+            avg_user_impact: 92.5,
+            impact_score: 11100.0
+          }
+        ]
+      });
+
+      const out = await dbOptimizer.analyzeIndexUsage('McpToolingTestDb', { limit: 5 });
+
+      const sqlText = mockRequest.query.mock.calls[0][0];
+      expect(sqlText).toContain('sys.dm_db_missing_index_group_stats');
+      expect(sqlText).toContain("DB_ID(N'McpToolingTestDb')");
+      expect(sqlText).toContain('TOP (5)');
+      expect(out.database).toBe('McpToolingTestDb');
+      expect(out.recommendations).toHaveLength(1);
+      expect(out.recommendations[0]).toMatchObject({
+        type: 'missing_index',
+        table: 'Orders',
+        columns: ['CustomerId'],
+        includedColumns: ['OrderStatus']
+      });
+      expect(out.recommendations[0].impactScore).toBeCloseTo(11100.0);
+    });
+
+    test('filters by impactThreshold and clamps limit', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: [
+          { table_name: 'A', equality_columns: '[x]', avg_user_impact: 10, impact_score: 5 },
+          { table_name: 'B', equality_columns: '[y]', avg_user_impact: 90, impact_score: 900 }
+        ]
+      });
+
+      const out = await dbOptimizer.analyzeIndexUsage('Db', { limit: 99999, impactThreshold: 50 });
+
+      expect(mockRequest.query.mock.calls[0][0]).toContain('TOP (100)'); // clamped
+      expect(out.recommendations.map(r => r.table)).toEqual(['B']);
+    });
+
+    test('rejects malformed database names', async () => {
+      await expect(dbOptimizer.analyzeIndexUsage('bad]name')).rejects.toThrow(
+        /invalid database name/i
+      );
+    });
+  });
+
+  describe('getOptimizationInsights (aggregate)', () => {
+    let dbOptimizer;
+    let mockRequest;
+
+    beforeEach(() => {
+      mockRequest = { query: vi.fn() };
+      const mockPool = { request: () => mockRequest, connected: true };
+      dbOptimizer = new QueryOptimizer({ getPool: () => mockPool, connect: async () => mockPool });
+    });
+
+    test('throws when not connected', async () => {
+      const offline = new QueryOptimizer({ getPool: () => null });
+      await expect(offline.getOptimizationInsights('Db')).rejects.toThrow(
+        'Not connected to any server'
+      );
+    });
+
+    test('summarizes missing indexes and expensive queries with a roadmap', async () => {
+      // First call = missing-index DMV (via analyzeIndexUsage); second = expensive-query count.
+      mockRequest.query
+        .mockResolvedValueOnce({
+          recordset: [
+            {
+              table_name: 'Orders',
+              equality_columns: '[CustomerId]',
+              avg_user_impact: 90,
+              impact_score: 900
+            }
+          ]
+        })
+        .mockResolvedValueOnce({ recordset: [{ expensive_query_count: 4 }] });
+
+      const out = await dbOptimizer.getOptimizationInsights('McpToolingTestDb');
+
+      expect(out.database).toBe('McpToolingTestDb');
+      expect(out.summary.missingIndexCount).toBe(1);
+      expect(out.summary.highImpactIndexCount).toBe(1);
+      expect(out.summary.expensiveQueryCount).toBe(4);
+      expect(Array.isArray(out.recommendations)).toBe(true);
+      expect(out.roadmap.length).toBeGreaterThan(0);
     });
   });
 });

@@ -307,7 +307,11 @@ class SqlServerMCP {
 
           case 'explain_query':
             return {
-              content: await this.databaseTools.explainQuery(args.query, args.database)
+              content: await this.databaseTools.explainQuery(
+                args.query,
+                args.database,
+                args.include_actual_plan
+              )
             };
 
           case 'get_performance_stats':
@@ -327,7 +331,10 @@ class SqlServerMCP {
 
           case 'get_index_recommendations':
             return {
-              content: await this.getIndexRecommendations(args.database)
+              content: await this.getIndexRecommendations(args.database, {
+                limit: args.limit,
+                impactThreshold: args.impact_threshold
+              })
             };
 
           case 'analyze_query_performance':
@@ -337,7 +344,10 @@ class SqlServerMCP {
 
           case 'detect_query_bottlenecks':
             return {
-              content: await this.detectQueryBottlenecks(args.database)
+              content: await this.detectQueryBottlenecks(args.database, {
+                limit: args.limit,
+                severityFilter: args.severity_filter
+              })
             };
 
           case 'get_optimization_insights':
@@ -634,9 +644,9 @@ class SqlServerMCP {
   }
 
   // Query optimization methods
-  async getIndexRecommendations(database) {
+  async getIndexRecommendations(database, options = {}) {
     try {
-      const recommendations = await this.queryOptimizer.analyzeIndexUsage(database);
+      const recommendations = await this.queryOptimizer.analyzeIndexUsage(database, options);
       return [
         {
           type: 'text',
@@ -672,9 +682,9 @@ class SqlServerMCP {
     ];
   }
 
-  async detectQueryBottlenecks(database) {
+  async detectQueryBottlenecks(database, options = {}) {
     try {
-      const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database);
+      const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database, options);
       return [
         {
           type: 'text',
