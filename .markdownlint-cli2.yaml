@@ -9,5 +9,6 @@ ignores:
   - ".gitignore"
   - "**/.gitignore"
   - "**/.remember/**"
+  - "**/docs/superpowers/**"
 config:
   extends: ".markdownlint.json"

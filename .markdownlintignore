@@ -5,3 +5,4 @@ dist/
 build/
 *.log
 .remember/
+docs/superpowers/

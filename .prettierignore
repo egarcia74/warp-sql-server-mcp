@@ -26,5 +26,6 @@ yarn.lock
 # Vitest
 .vitest/
 
-# Session memory files
+# Session buffers and agent working docs
 .remember/
+docs/superpowers/
