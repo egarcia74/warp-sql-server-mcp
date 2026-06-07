@@ -85,6 +85,11 @@ export const createMockRequest = () => ({
     recordsets: [[]],
     rowsAffected: [0]
   }),
+  batch: vi.fn().mockResolvedValue({
+    recordset: [],
+    recordsets: [[]],
+    rowsAffected: [0]
+  }),
   timeout: 30000
 });
 
