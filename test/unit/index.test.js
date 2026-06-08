@@ -28,7 +28,7 @@ describe('SqlServerMCP Index', () => {
     sandbox.stub(DatabaseToolsHandler.prototype, 'explainQuery').throws(connectionError);
     sandbox.stub(DatabaseToolsHandler.prototype, 'executeQuery').throws(connectionError);
 
-    sandbox.stub(QueryOptimizer.prototype, 'getIndexRecommendations').throws(connectionError);
+    sandbox.stub(QueryOptimizer.prototype, 'analyzeIndexUsage').throws(connectionError);
     sandbox.stub(QueryOptimizer.prototype, 'getOptimizationInsights').throws(connectionError);
 
     sandbox.stub(BottleneckDetector.prototype, 'detectBottlenecks').throws(connectionError);
@@ -113,6 +113,28 @@ describe('SqlServerMCP Index', () => {
         expect(error).to.be.instanceOf(McpError);
         expect(error.code).to.equal(ErrorCode.MethodNotFound);
         expect(error.message).to.include('Unknown tool: unknownTool');
+      }
+    });
+
+    it('routes explain_query through validateQuery and blocks disallowed SQL (no actual-plan bypass)', async () => {
+      // include_actual_plan executes the statement, so explain_query must honor
+      // the same safety policy as execute_query.
+      sandbox
+        .stub(server, 'validateQuery')
+        .returns({ allowed: false, reason: 'Read-only mode: only SELECT allowed' });
+
+      try {
+        await server.handleCallToolRequest({
+          params: {
+            name: 'explain_query',
+            arguments: { query: 'DELETE FROM Orders', include_actual_plan: true }
+          }
+        });
+        expect.fail('explain_query should have been blocked by the safety policy');
+      } catch (error) {
+        expect(error).to.be.instanceOf(McpError);
+        expect(error.message).to.match(/blocked by safety policy/i);
+        expect(server.validateQuery.calledWith('DELETE FROM Orders')).to.equal(true);
       }
     });
   });
