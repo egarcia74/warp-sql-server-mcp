@@ -1,3 +1,6 @@
+# Graphify knowledge graph (local dev tool, regenerate with /graphify .)
+graphify-out/
+
 # Dependencies
 node_modules/
 npm-debug.log*
