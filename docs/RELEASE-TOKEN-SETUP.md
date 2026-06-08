@@ -150,6 +150,56 @@ PRs created by GITHUB_TOKEN may leave required checks in an
 
 - Create a new fine‑grained token before the old one expires, update the `DOCS_PAT` secret, then revoke the old token.
 
+## Version-Bump PR Token (RELEASE_PR_TOKEN)
+
+The release workflow creates a `chore/release/vX.Y.Z` branch and PR to bump
+`package.json` after each release. Without a PAT, this push uses `GITHUB_TOKEN`,
+and GitHub's recursion guard blocks CI from running — leaving the PR permanently
+blocked on required checks (`Tests (20)`, `Tests (22)`, `CodeQL`).
+
+### Purpose
+
+The release workflow creates a version-bump PR to `main` after each release. Your
+branch protection requires CI/CodeQL checks to run on pull requests.
+
+### Create RELEASE_PR_TOKEN
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens → Generate new token
+2. Settings:
+   - Token name: `RELEASE_PR_TOKEN — warp-sql-server-mcp`
+   - Repository access: This repository only
+   - Repository permissions: Contents (read/write), Pull requests (read/write),
+     Metadata (read — required)
+   - Expiration: per your policy (1 year recommended)
+3. Copy the token value
+
+### Add token as repository secret
+
+1. Repo → Settings → Secrets and variables → Actions → New repository secret
+2. Name: `RELEASE_PR_TOKEN`
+3. Value: paste the token
+
+### How it works in the release workflow
+
+- `release.yml` (`version-pr` job) uses `RELEASE_PR_TOKEN` to push the
+  version-bump branch and open the PR. Because it is a PAT push (not a
+  `GITHUB_TOKEN` push), GitHub fires the PR's CI checks normally.
+- Falls back to `GITHUB_TOKEN` if the secret is missing — in that case, CI
+  will not trigger automatically. Workaround: push an empty commit to the
+  version-bump branch to trigger checks manually:
+  ```bash
+  git fetch origin chore/release/vX.Y.Z
+  git checkout chore/release/vX.Y.Z
+  git commit --allow-empty -m "ci: trigger CI checks"
+  git push
+  ```
+
+### Token rotation
+
+Create a new fine-grained token before the old one expires, update the
+`RELEASE_PR_TOKEN` secret, then revoke the old token.
+
 ## Support
 
 If you encounter issues:
