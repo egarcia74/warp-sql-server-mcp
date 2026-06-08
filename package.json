@@ -7,6 +7,16 @@
   "bin": {
     "warp-sql-server-mcp": "cli.js"
   },
+  "files": [
+    "index.js",
+    "cli.js",
+    "lib/",
+    "docs/*.md",
+    "docs/*.html",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",

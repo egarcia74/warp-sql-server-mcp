@@ -148,4 +148,22 @@ describe('CLI Security Tests', () => {
     expect(stdout).toContain('Usage:');
     expect(stdout).toContain('Commands:');
   });
+
+  test('should print the package version with --version', async () => {
+    const proc = spawn('node', [CLI_PATH, '--version'], { stdio: 'pipe' });
+
+    let stdout = '';
+    proc.stdout.on('data', data => {
+      stdout += data.toString();
+    });
+
+    const exitCode = await new Promise(resolve => {
+      proc.on('close', resolve);
+    });
+
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'));
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(pkg.version);
+    expect(stdout).toContain('@egarcia74/warp-sql-server-mcp');
+  });
 });
