@@ -40,6 +40,7 @@ Commands:
   start              Start the MCP server
   init               Initialize configuration file
   config             Show current configuration
+  version, --version, -v   Show the installed version
   help, --help, -h   Show this help message
 
 Examples:
@@ -53,6 +54,18 @@ Configuration:
   After running 'init', edit the config file with your SQL Server details.
   The server will use environment variables first, then fall back to config file.
 `);
+}
+
+function showVersion() {
+  // Read the version from this package's package.json (resolved relative to
+  // this file so it works regardless of the install location).
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+    console.log(`${pkg.name} v${pkg.version}`);
+  } catch (error) {
+    console.error(`❌ Failed to read version: ${error.message}`);
+    process.exit(1);
+  }
 }
 
 function initConfig() {
@@ -191,6 +204,11 @@ switch (command) {
     break;
   case 'config':
     showConfig();
+    break;
+  case 'version':
+  case '--version':
+  case '-v':
+    showVersion();
     break;
   case 'help':
   case '--help':

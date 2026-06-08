@@ -79,3 +79,6 @@ test/temp/
 # Generated Docker platform detection files
 test/docker/.platform-config.json
 test/docker/docker-compose.yml
+
+# Superpowers agent working docs (plans) — kept locally, not in repo
+docs/superpowers/

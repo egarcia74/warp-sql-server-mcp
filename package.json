@@ -1,12 +1,22 @@
 {
   "name": "@egarcia74/warp-sql-server-mcp",
-  "version": "1.7.13",
+  "version": "1.7.15",
   "description": "Secure MCP server for connecting Warp to SQL Server with graduated safety levels and comprehensive database operations",
   "main": "index.js",
   "type": "module",
   "bin": {
     "warp-sql-server-mcp": "cli.js"
   },
+  "files": [
+    "index.js",
+    "cli.js",
+    "lib/",
+    "docs/*.md",
+    "docs/*.html",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
@@ -90,10 +100,10 @@
   "author": "Eduardo Garcia-Prieto",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1049.0",
     "@azure/identity": "^4.11.1",
     "@azure/keyvault-secrets": "^4.10.0",
     "@modelcontextprotocol/sdk": "^1.17.5",
-    "aws-sdk": "^2.1692.0",
     "dotenv": "^17.2.1",
     "mssql": "^11.0.1",
     "node-sql-parser": "^5.3.11",
@@ -114,7 +124,7 @@
     "markdown-link-check": "^3.13.7",
     "markdownlint-cli2": "^0.22.0",
     "prettier": "^3.3.3",
-    "sinon": "^21.0.0",
+    "sinon": "^22.0.0",
     "vitest": "^4.1.2"
   },
   "overrides": {

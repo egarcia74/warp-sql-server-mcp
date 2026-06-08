@@ -22,9 +22,9 @@ import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
 
 // Read package.json for version info
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
@@ -194,11 +194,11 @@ class SqlServerMCP {
 
     if (statements.length > 1) {
       // For multi-statement, find the most restrictive type
-      const types = statements.map(stmt => this._getSingleQueryType(stmt, securityConfig));
+      const types = new Set(statements.map(stmt => this._getSingleQueryType(stmt, securityConfig)));
 
-      if (types.includes('schema')) return 'schema';
-      if (types.includes('destructive')) return 'destructive';
-      if (types.includes('select')) return 'select';
+      if (types.has('schema')) return 'schema';
+      if (types.has('destructive')) return 'destructive';
+      if (types.has('select')) return 'select';
       return 'unknown';
     }
 
@@ -305,10 +305,31 @@ class SqlServerMCP {
               )
             };
 
-          case 'explain_query':
+          case 'explain_query': {
+            // include_actual_plan executes the statement (STATISTICS XML), so
+            // gate explain_query through the same safety policy as execute_query
+            // to prevent it being used to run DML/DDL in read-only mode.
+            const explainValidation = this.validateQuery(args.query);
+            if (!explainValidation.allowed) {
+              this.logger.security('QUERY_BLOCKED', 'Query blocked by safety policy', {
+                query: args.query?.substring(0, 200),
+                reason: explainValidation.reason,
+                queryType: explainValidation.queryType,
+                tool: 'explain_query'
+              });
+              throw new McpError(
+                ErrorCode.InvalidRequest,
+                `Query blocked by safety policy: ${explainValidation.reason}`
+              );
+            }
             return {
-              content: await this.databaseTools.explainQuery(args.query, args.database)
+              content: await this.databaseTools.explainQuery(
+                args.query,
+                args.database,
+                args.include_actual_plan
+              )
             };
+          }
 
           case 'get_performance_stats':
             return {
@@ -327,7 +348,10 @@ class SqlServerMCP {
 
           case 'get_index_recommendations':
             return {
-              content: await this.getIndexRecommendations(args.database)
+              content: await this.getIndexRecommendations(args.database, {
+                limit: args.limit,
+                impactThreshold: args.impact_threshold
+              })
             };
 
           case 'analyze_query_performance':
@@ -337,7 +361,10 @@ class SqlServerMCP {
 
           case 'detect_query_bottlenecks':
             return {
-              content: await this.detectQueryBottlenecks(args.database)
+              content: await this.detectQueryBottlenecks(args.database, {
+                limit: args.limit,
+                severityFilter: args.severity_filter
+              })
             };
 
           case 'get_optimization_insights':
@@ -634,9 +661,9 @@ class SqlServerMCP {
   }
 
   // Query optimization methods
-  async getIndexRecommendations(database) {
+  async getIndexRecommendations(database, options = {}) {
     try {
-      const recommendations = await this.queryOptimizer.analyzeIndexUsage(database);
+      const recommendations = await this.queryOptimizer.analyzeIndexUsage(database, options);
       return [
         {
           type: 'text',
@@ -656,7 +683,7 @@ class SqlServerMCP {
   }
 
   async analyzeQueryPerformance(query, database) {
-    const analysis = await this.queryOptimizer.analyzeQuery(query, database);
+    const analysis = this.queryOptimizer.analyzeQuery(query, database);
     return [
       {
         type: 'text',
@@ -672,9 +699,9 @@ class SqlServerMCP {
     ];
   }
 
-  async detectQueryBottlenecks(database) {
+  async detectQueryBottlenecks(database, options = {}) {
     try {
-      const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database);
+      const bottlenecks = await this.bottleneckDetector.detectBottlenecks(database, options);
       return [
         {
           type: 'text',
@@ -724,6 +751,17 @@ class SqlServerMCP {
     const performanceStats = this.performanceMonitor.getStats();
     const connectionHealth = this.getConnectionHealth();
 
+    let securityLevel;
+    if (this.readOnlyMode) {
+      securityLevel = 'MAXIMUM (Read-Only)';
+    } else if (this.allowSchemaChanges) {
+      securityLevel = 'MINIMAL (Full Access)';
+    } else if (this.allowDestructiveOperations) {
+      securityLevel = 'MEDIUM (DML Allowed)';
+    } else {
+      securityLevel = 'HIGH (DDL Blocked)';
+    }
+
     const serverInfo = {
       server: {
         name: 'warp-sql-server-mcp',
@@ -746,13 +784,7 @@ class SqlServerMCP {
           readOnlyMode: this.readOnlyMode,
           allowDestructiveOperations: this.allowDestructiveOperations,
           allowSchemaChanges: this.allowSchemaChanges,
-          securityLevel: this.readOnlyMode
-            ? 'MAXIMUM (Read-Only)'
-            : this.allowSchemaChanges
-              ? 'MINIMAL (Full Access)'
-              : this.allowDestructiveOperations
-                ? 'MEDIUM (DML Allowed)'
-                : 'HIGH (DDL Blocked)'
+          securityLevel
         },
         performance: {
           enabled: this.config.performanceMonitoring.enabled,
