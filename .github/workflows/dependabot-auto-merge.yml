@@ -21,26 +21,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v5
 
-      - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test
-
       - name: Analyze Dependabot PR
         id: analyze
         env:
           GH_TOKEN: ${{ github.token }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Get PR details (safely)
-          pr_number=${{ github.event.pull_request.number }}
+          pr_number=$PR_NUMBER
           pr_labels=$(gh pr view $pr_number --json labels --jq '.labels[].name' | tr '\n' ' ')
           
           echo "PR: #$pr_number"
@@ -128,38 +117,22 @@ jobs:
             gh pr edit $pr_number --add-label "manual-review-required" || echo "Warning: Could not add label (may not exist yet)"
           fi
 
-      - name: Add auto-merge comment and enable auto-merge
+      - name: Enable auto-merge
         if: steps.analyze.outputs.auto_merge == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          pr_number=${{ github.event.pull_request.number }}
-          
-          # Add explanatory comment
-          gh pr comment $pr_number --body "🤖 **Auto-merge Enabled**
-
-          ✅ This Dependabot update has been queued for auto-merge because:
-          - All tests pass
-          - Update type is eligible for auto-merge
-          - No breaking changes detected
-          - Security/development dependency classification
-
-          🔍 **Auto-merge criteria met:**
-          - Tests: ✅ Passed
-          - Type: ✅ Low-risk update
-          - Security: ✅ No concerns identified
-          
-          🚀 **Auto-merge enabled** - will merge automatically once all required checks pass."
-          
-          # Enable auto-merge with squash strategy
-          gh pr merge $pr_number --auto --squash --delete-branch
+          pr_number=$PR_NUMBER
+          gh pr merge "$pr_number" --auto --squash --delete-branch
 
       - name: Add security notice for critical updates
-        if: contains(github.event.pull_request.title, 'security') || contains(github.event.pull_request.title, 'vulnerability')
+        if: steps.analyze.outputs.auto_merge == 'true' && (contains(github.event.pull_request.title, 'security') || contains(github.event.pull_request.title, 'vulnerability'))
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          pr_number=${{ github.event.pull_request.number }}
+          pr_number=$PR_NUMBER
           
           gh pr comment $pr_number --body "🚨 **Security Update Notice**
 
@@ -185,8 +158,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          pr_number=${{ github.event.pull_request.number }}
+          pr_number=$PR_NUMBER
           
           # Check if this is a major version update or security-critical dependency
           if echo "$PR_TITLE" | grep -qi "major\|mssql\|tedious\|azure.*identity\|aws-sdk"; then
