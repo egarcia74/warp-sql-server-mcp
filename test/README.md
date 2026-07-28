@@ -623,18 +623,10 @@ Structured test data provides realistic scenarios:
 
 ```javascript
 const testData = {
-  sampleDatabases: [
-    /* User databases with metadata */
-  ],
-  sampleTables: [
-    /* Table definitions */
-  ],
-  sampleTableSchema: [
-    /* Column definitions with types */
-  ],
-  sampleTableData: [
-    /* Sample rows for testing */
-  ]
+  sampleDatabases: [/* User databases with metadata */],
+  sampleTables: [/* Table definitions */],
+  sampleTableSchema: [/* Column definitions with types */],
+  sampleTableData: [/* Sample rows for testing */]
 };
 ```
 
