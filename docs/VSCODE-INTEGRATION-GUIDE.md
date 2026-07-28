@@ -574,7 +574,9 @@ Write minimal code to make tests pass:
 ```javascript
 // Example: Adding new MCP tool
 test('should handle new_tool operation', async () => {
-  const result = await mcpServer.handleTool('new_tool', {/* params */});
+  const result = await mcpServer.handleTool('new_tool', {
+    /* params */
+  });
   expect(result).toBeDefined();
   expect(result.content).toContain('expected_output');
 });
