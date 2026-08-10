@@ -24,7 +24,8 @@ Configuration for AI behavior when interacting with Codacy's MCP Server
 ## When you tried to run the `codacy_cli_analyze` tool and the Codacy CLI is not installed
 
 - Ask the user, "Codacy CLI is not installed. Would you like me to install it now?"
-- If the user responds with "yes", run the `codacy_cli_install` tool and then continue with the original task.
+- If the user responds with "yes", run the `codacy_cli_install` tool. After installation succeeds,
+  retry the interrupted `codacy_cli_analyze` call with the original arguments, then continue with the original task.
 - If the user responds with "no", explain that automatic analysis can be disabled in the extension settings.
 - Wait for the user to respond before proceeding with any other actions.
 
