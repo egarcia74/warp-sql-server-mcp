@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
@@ -26,17 +26,17 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run ESLint
-        run: npx eslint .
+        run: npm run lint
         continue-on-error: false
 
       - name: Check code formatting with Prettier
-        run: npx prettier --check "**/*.{js,mjs,cjs,json,md}"
+        run: npm run format:check
 
       - name: Lint markdown files
-        run: npx markdownlint-cli2 "**/*.md"
+        run: npm run markdown:lint
 
   test:
     name: Tests
@@ -55,7 +55,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run tests
         run: npm test
@@ -75,7 +75,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run test coverage
         run: npm run test:coverage
@@ -108,7 +108,7 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Check for known vulnerabilities
-        run: npx audit-ci --config .audit-ci.json || echo "audit-ci not configured, skipping"
+        run: npx --ignore-scripts audit-ci@7.1.0 --config .audit-ci.json || echo "audit-ci not configured, skipping"
         continue-on-error: true
 
   integration:
@@ -127,7 +127,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run integration tests
         run: npm run test:integration || echo "No integration tests configured"
@@ -148,7 +148,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build project
         run: npm run build || echo "No build script configured"
