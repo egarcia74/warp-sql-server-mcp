@@ -125,7 +125,7 @@ updates:
       # 🔒 Security-focused actions (require manual review)
       security-actions:
         patterns:
-          - "github/codeql-action"
+          - "github/codeql-action/*"
           - "ossf/scorecard-action"
           - "step-security/*"
         update-types:
