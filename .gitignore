@@ -82,3 +82,6 @@ test/docker/docker-compose.yml
 
 # Superpowers agent working docs (plans) — kept locally, not in repo
 docs/superpowers/
+
+# Local Git worktrees
+.worktrees/
