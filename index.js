@@ -20,6 +20,7 @@ import { PerformanceMonitor } from './lib/utils/performance-monitor.js';
 import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
+import { findForbiddenWhereClauseSyntax } from './lib/security/where-clause-guard.js';
 
 // Read package.json for version info
 import { readFileSync } from 'node:fs';
@@ -111,6 +112,50 @@ class SqlServerMCP {
     this.setupToolHandlers();
 
     // Configuration logging will happen after MCP server connects
+  }
+
+  /**
+   * Validates a caller-supplied WHERE clause for table-scoped tools.
+   *
+   * The clause is concatenated into a SELECT, so it must pass the same safety
+   * policy as execute_query — otherwise a filter such as "1=1; DELETE FROM t"
+   * would bypass read-only mode. Throws McpError when the assembled statement
+   * is not allowed; no-op when no clause is supplied.
+   */
+  validateWhereClause(where, tableName, schema = 'dbo', tool = 'get_table_data') {
+    if (typeof where !== 'string' || !where.trim()) {
+      return;
+    }
+
+    const clause = where.trim();
+    const probe = `SELECT * FROM [${schema || 'dbo'}].[${tableName}] WHERE ${clause}`;
+
+    const block = reason => {
+      this.logger.security('QUERY_BLOCKED', 'WHERE clause blocked by safety policy', {
+        query: probe.substring(0, 200),
+        reason,
+        tool
+      });
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `WHERE clause blocked by safety policy: ${reason}`
+      );
+    };
+
+    // Layer 1 — lexical guard. validateQuery() below is regex-based and treats
+    // anything that starts with SELECT as read-only, and T-SQL needs no ';'
+    // between statements, so a second statement smuggled into the clause would
+    // otherwise pass. This check must not rely on parsing the SQL.
+    const lexicalReason = findForbiddenWhereClauseSyntax(clause);
+    if (lexicalReason) {
+      block(lexicalReason);
+    }
+
+    // Layer 2 — the same safety policy applied to execute_query.
+    const validation = this.validateQuery(probe);
+    if (!validation.allowed) {
+      block(validation.reason);
+    }
   }
 
   /**
@@ -285,23 +330,27 @@ class SqlServerMCP {
           }
 
           case 'get_table_data':
+            this.validateWhereClause(args.where, args.table_name, args.schema, 'get_table_data');
             return {
               content: await this.databaseTools.getTableData(
                 args.table_name,
                 args.database,
                 args.schema,
                 args.limit,
-                args.offset
+                args.offset,
+                args.where
               )
             };
 
           case 'export_table_csv':
+            this.validateWhereClause(args.where, args.table_name, args.schema, 'export_table_csv');
             return {
               content: await this.databaseTools.exportTableCsv(
                 args.table_name,
                 args.database,
                 args.schema,
-                args.limit
+                args.limit,
+                args.where
               )
             };
 
