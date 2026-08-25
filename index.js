@@ -142,14 +142,16 @@ class SqlServerMCP {
       );
     };
 
-    // Layer 1 — lexical guard. The AST parser falls back to a permissive regex
-    // on anything it cannot parse, so this check must not rely on parsing.
+    // Layer 1 — lexical guard. validateQuery() below is regex-based and treats
+    // anything that starts with SELECT as read-only, and T-SQL needs no ';'
+    // between statements, so a second statement smuggled into the clause would
+    // otherwise pass. This check must not rely on parsing the SQL.
     const lexicalReason = findForbiddenWhereClauseSyntax(clause);
     if (lexicalReason) {
       block(lexicalReason);
     }
 
-    // Layer 2 — the same AST/regex safety policy applied to execute_query.
+    // Layer 2 — the same safety policy applied to execute_query.
     const validation = this.validateQuery(probe);
     if (!validation.allowed) {
       block(validation.reason);

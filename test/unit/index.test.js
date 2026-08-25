@@ -167,7 +167,9 @@ describe('SqlServerMCP Index', () => {
         [
           'UNION hidden by unbalanced parens',
           '1=1) UNION ALL SELECT name, NULL FROM sys.tables WHERE (1=1'
-        ]
+        ],
+        ['unterminated bracket hiding a statement', '1=1 [ DROP TABLE Users --'],
+        ['unterminated string literal hiding a statement', "id > 1 AND 'x OR 1=1; DROP TABLE Users"]
       ];
 
       blocked.forEach(([label, where]) => {
