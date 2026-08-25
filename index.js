@@ -61,6 +61,120 @@ if (isMcpEnvironment) {
   dotenv.config();
 }
 
+// Statement-starting keywords that can never legitimately appear in a WHERE
+// predicate. T-SQL does not require ';' between statements, so any of these
+// following a predicate would start a second statement.
+const WHERE_CLAUSE_FORBIDDEN_KEYWORDS = new Set([
+  'exec',
+  'execute',
+  'delete',
+  'insert',
+  'update',
+  'merge',
+  'drop',
+  'alter',
+  'create',
+  'truncate',
+  'grant',
+  'revoke',
+  'deny',
+  'waitfor',
+  'declare',
+  'backup',
+  'restore',
+  'shutdown',
+  'kill',
+  'dbcc',
+  'bulk',
+  'openrowset',
+  'openquery',
+  'opendatasource',
+  'use',
+  'go',
+  'set',
+  'print',
+  'raiserror',
+  'throw',
+  'while',
+  'if',
+  'goto',
+  'return',
+  'begin',
+  'commit',
+  'rollback',
+  'into'
+]);
+
+const WHERE_CLAUSE_FORBIDDEN_TOKENS = [';', '--', '/*', '*/'];
+
+/**
+ * Removes string literals ('...', with '' escapes) and bracketed identifiers
+ * ([...]) from a WHERE clause so that values like 'a;b' or columns like [Set]
+ * are not mistaken for SQL syntax. A linear single-pass scan — no regex
+ * backtracking on untrusted input.
+ */
+function stripWhereClauseLiterals(clause) {
+  let out = '';
+  let i = 0;
+  while (i < clause.length) {
+    const ch = clause[i];
+    if (ch === "'") {
+      i = indexOfLiteralEnd(clause, i);
+      out += "''";
+    } else if (ch === '[') {
+      const close = clause.indexOf(']', i + 1);
+      i = close === -1 ? clause.length - 1 : close;
+      out += '[]';
+    } else {
+      out += ch;
+    }
+    i++;
+  }
+  return out;
+}
+
+/**
+ * Given the index of an opening single quote, returns the index of the closing
+ * quote, treating '' as an escaped quote. An unterminated literal runs to the
+ * end of the clause.
+ */
+function indexOfLiteralEnd(clause, openIndex) {
+  let i = openIndex + 1;
+  while (i < clause.length) {
+    if (clause[i] !== "'") {
+      i++;
+    } else if (clause[i + 1] === "'") {
+      i += 2; // escaped quote inside literal
+    } else {
+      return i;
+    }
+  }
+  return clause.length - 1;
+}
+
+/**
+ * Returns a human-readable reason if the clause contains a batch separator,
+ * comment, or statement keyword; null when it looks like a plain predicate.
+ */
+function findForbiddenWhereClauseSyntax(clause) {
+  const lexical = stripWhereClauseLiterals(clause);
+
+  const token = WHERE_CLAUSE_FORBIDDEN_TOKENS.find(t => lexical.includes(t));
+  if (token) {
+    return `batch separators and comments are not allowed in a WHERE clause (found '${token}'). Use execute_query for full statements.`;
+  }
+
+  const words = lexical.toLowerCase().split(/[^a-z0-9_]+/);
+  const keyword = words.find(
+    w => WHERE_CLAUSE_FORBIDDEN_KEYWORDS.has(w) || w.startsWith('xp_') || w.startsWith('sp_')
+  );
+  if (keyword) {
+    return `statement keyword '${keyword.toUpperCase()}' is not allowed in a WHERE clause; it must be a single predicate. Bracket identifiers that collide with keywords, or use execute_query for full statements.`;
+  }
+
+  return null;
+}
+
 class SqlServerMCP {
   constructor() {
     this.server = new Server(
@@ -111,6 +225,48 @@ class SqlServerMCP {
     this.setupToolHandlers();
 
     // Configuration logging will happen after MCP server connects
+  }
+
+  /**
+   * Validates a caller-supplied WHERE clause for table-scoped tools.
+   *
+   * The clause is concatenated into a SELECT, so it must pass the same safety
+   * policy as execute_query — otherwise a filter such as "1=1; DELETE FROM t"
+   * would bypass read-only mode. Throws McpError when the assembled statement
+   * is not allowed; no-op when no clause is supplied.
+   */
+  validateWhereClause(where, tableName, schema = 'dbo', tool = 'get_table_data') {
+    if (typeof where !== 'string' || !where.trim()) {
+      return;
+    }
+
+    const clause = where.trim();
+    const probe = `SELECT * FROM [${schema || 'dbo'}].[${tableName}] WHERE ${clause}`;
+
+    const block = reason => {
+      this.logger.security('QUERY_BLOCKED', 'WHERE clause blocked by safety policy', {
+        query: probe.substring(0, 200),
+        reason,
+        tool
+      });
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `WHERE clause blocked by safety policy: ${reason}`
+      );
+    };
+
+    // Layer 1 — lexical guard. The AST parser falls back to a permissive regex
+    // on anything it cannot parse, so this check must not rely on parsing.
+    const lexicalReason = findForbiddenWhereClauseSyntax(clause);
+    if (lexicalReason) {
+      block(lexicalReason);
+    }
+
+    // Layer 2 — the same AST/regex safety policy applied to execute_query.
+    const validation = this.validateQuery(probe);
+    if (!validation.allowed) {
+      block(validation.reason);
+    }
   }
 
   /**
@@ -285,23 +441,27 @@ class SqlServerMCP {
           }
 
           case 'get_table_data':
+            this.validateWhereClause(args.where, args.table_name, args.schema, 'get_table_data');
             return {
               content: await this.databaseTools.getTableData(
                 args.table_name,
                 args.database,
                 args.schema,
                 args.limit,
-                args.offset
+                args.offset,
+                args.where
               )
             };
 
           case 'export_table_csv':
+            this.validateWhereClause(args.where, args.table_name, args.schema, 'export_table_csv');
             return {
               content: await this.databaseTools.exportTableCsv(
                 args.table_name,
                 args.database,
                 args.schema,
-                args.limit
+                args.limit,
+                args.where
               )
             };
 

@@ -353,6 +353,48 @@ describe('DatabaseToolsHandler', () => {
         }
       ]);
     });
+
+    test('should apply WHERE clause before pagination when provided (regression: where was silently dropped)', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: mockData.tableData.slice(0, 1)
+      });
+
+      await handler.getTableData('Users', null, 'dbo', 100, 0, "status = 'active'");
+
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).toMatch(
+        /FROM \[dbo\]\.\[Users\]\s+WHERE status = 'active'\s+ORDER BY \(SELECT NULL\)/
+      );
+    });
+
+    test('should apply WHERE clause with database-qualified table name', async () => {
+      mockRequest.query.mockResolvedValue({ recordset: [] });
+
+      await handler.getTableData('Users', 'TestDB', 'custom', 10, 5, 'id > 10');
+
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).toMatch(
+        /FROM \[TestDB\]\.\[custom\]\.\[Users\]\s+WHERE id > 10\s+ORDER BY \(SELECT NULL\)\s+OFFSET 5 ROWS\s+FETCH NEXT 10 ROWS ONLY/
+      );
+    });
+
+    test('should not emit a WHERE clause when none is provided', async () => {
+      mockRequest.query.mockResolvedValue({ recordset: mockData.tableData });
+
+      await handler.getTableData('Users');
+
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).not.toMatch(/WHERE/i);
+    });
+
+    test('should treat empty/whitespace WHERE clause as no filter', async () => {
+      mockRequest.query.mockResolvedValue({ recordset: mockData.tableData });
+
+      await handler.getTableData('Users', null, 'dbo', 100, 0, '   ');
+
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).not.toMatch(/WHERE/i);
+    });
   });
 
   describe('error handling', () => {
@@ -398,6 +440,29 @@ describe('DatabaseToolsHandler', () => {
   });
 
   describe('exportTableCsv', () => {
+    test('should forward WHERE clause to the streaming exporter (regression: where was silently dropped)', async () => {
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        recordset: [{ id: 1 }],
+        totalRows: 1,
+        performance: { duration: 1, rowCount: 1, memoryEfficient: false }
+      });
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 1
+      });
+
+      await handler.exportTableCsv('Users', null, 'dbo', 50, "status = 'active'");
+
+      expect(handler.streamingHandler.streamTableExport).toHaveBeenCalledWith(
+        expect.any(Object),
+        'Users',
+        expect.objectContaining({ limit: 50, whereClause: "status = 'active'" })
+      );
+    });
+
     test('should export small table data as CSV without streaming', async () => {
       const mockData = [
         { id: 1, name: 'John Doe', email: 'john@example.com' },
@@ -433,6 +498,7 @@ describe('DatabaseToolsHandler', () => {
           schema: 'dbo',
           database: null,
           limit: null,
+          whereClause: null,
           outputFormat: 'csv'
         }
       );
@@ -505,6 +571,7 @@ describe('DatabaseToolsHandler', () => {
           schema: 'dbo',
           database: 'TestDB',
           limit: null,
+          whereClause: null,
           outputFormat: 'csv'
         }
       );
@@ -611,6 +678,7 @@ describe('DatabaseToolsHandler', () => {
           schema: 'custom',
           database: 'TestDB',
           limit: null,
+          whereClause: null,
           outputFormat: 'csv'
         }
       );
@@ -640,6 +708,7 @@ describe('DatabaseToolsHandler', () => {
           schema: 'dbo',
           database: null,
           limit: 100,
+          whereClause: null,
           outputFormat: 'csv'
         }
       );
