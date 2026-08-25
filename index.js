@@ -20,6 +20,7 @@ import { PerformanceMonitor } from './lib/utils/performance-monitor.js';
 import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
+import { findForbiddenWhereClauseSyntax } from './lib/security/where-clause-guard.js';
 
 // Read package.json for version info
 import { readFileSync } from 'node:fs';
@@ -59,120 +60,6 @@ if (isMcpEnvironment) {
   }
 } else {
   dotenv.config();
-}
-
-// Statement-starting keywords that can never legitimately appear in a WHERE
-// predicate. T-SQL does not require ';' between statements, so any of these
-// following a predicate would start a second statement.
-const WHERE_CLAUSE_FORBIDDEN_KEYWORDS = new Set([
-  'exec',
-  'execute',
-  'delete',
-  'insert',
-  'update',
-  'merge',
-  'drop',
-  'alter',
-  'create',
-  'truncate',
-  'grant',
-  'revoke',
-  'deny',
-  'waitfor',
-  'declare',
-  'backup',
-  'restore',
-  'shutdown',
-  'kill',
-  'dbcc',
-  'bulk',
-  'openrowset',
-  'openquery',
-  'opendatasource',
-  'use',
-  'go',
-  'set',
-  'print',
-  'raiserror',
-  'throw',
-  'while',
-  'if',
-  'goto',
-  'return',
-  'begin',
-  'commit',
-  'rollback',
-  'into'
-]);
-
-const WHERE_CLAUSE_FORBIDDEN_TOKENS = [';', '--', '/*', '*/'];
-
-/**
- * Removes string literals ('...', with '' escapes) and bracketed identifiers
- * ([...]) from a WHERE clause so that values like 'a;b' or columns like [Set]
- * are not mistaken for SQL syntax. A linear single-pass scan — no regex
- * backtracking on untrusted input.
- */
-function stripWhereClauseLiterals(clause) {
-  let out = '';
-  let i = 0;
-  while (i < clause.length) {
-    const ch = clause[i];
-    if (ch === "'") {
-      i = indexOfLiteralEnd(clause, i);
-      out += "''";
-    } else if (ch === '[') {
-      const close = clause.indexOf(']', i + 1);
-      i = close === -1 ? clause.length - 1 : close;
-      out += '[]';
-    } else {
-      out += ch;
-    }
-    i++;
-  }
-  return out;
-}
-
-/**
- * Given the index of an opening single quote, returns the index of the closing
- * quote, treating '' as an escaped quote. An unterminated literal runs to the
- * end of the clause.
- */
-function indexOfLiteralEnd(clause, openIndex) {
-  let i = openIndex + 1;
-  while (i < clause.length) {
-    if (clause[i] !== "'") {
-      i++;
-    } else if (clause[i + 1] === "'") {
-      i += 2; // escaped quote inside literal
-    } else {
-      return i;
-    }
-  }
-  return clause.length - 1;
-}
-
-/**
- * Returns a human-readable reason if the clause contains a batch separator,
- * comment, or statement keyword; null when it looks like a plain predicate.
- */
-function findForbiddenWhereClauseSyntax(clause) {
-  const lexical = stripWhereClauseLiterals(clause);
-
-  const token = WHERE_CLAUSE_FORBIDDEN_TOKENS.find(t => lexical.includes(t));
-  if (token) {
-    return `batch separators and comments are not allowed in a WHERE clause (found '${token}'). Use execute_query for full statements.`;
-  }
-
-  const words = lexical.toLowerCase().split(/[^a-z0-9_]+/);
-  const keyword = words.find(
-    w => WHERE_CLAUSE_FORBIDDEN_KEYWORDS.has(w) || w.startsWith('xp_') || w.startsWith('sp_')
-  );
-  if (keyword) {
-    return `statement keyword '${keyword.toUpperCase()}' is not allowed in a WHERE clause; it must be a single predicate. Bracket identifiers that collide with keywords, or use execute_query for full statements.`;
-  }
-
-  return null;
 }
 
 class SqlServerMCP {

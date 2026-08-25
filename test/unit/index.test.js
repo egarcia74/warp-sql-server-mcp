@@ -155,7 +155,19 @@ describe('SqlServerMCP Index', () => {
         ['line comment', '1=1 -- hide the rest'],
         ['block comment', '1=1 /*x*/ DROP TABLE Users'],
         ['OPENROWSET inside predicate', "1=1 OR 1=(SELECT COUNT(*) FROM OPENROWSET('a','b','c'))"],
-        ['SHUTDOWN', '1=1 SHUTDOWN']
+        ['SHUTDOWN', '1=1 SHUTDOWN'],
+        [
+          'top-level UNION (rows from another table)',
+          '1=0 UNION ALL SELECT name, NULL FROM sys.tables'
+        ],
+        ['top-level EXCEPT', '1=1 EXCEPT SELECT * FROM Other'],
+        ['top-level INTERSECT', '1=1 INTERSECT SELECT * FROM Other'],
+        ['bare SELECT as whitespace batch', '1=1 SELECT 1'],
+        ['top-level ORDER BY / FOR XML', '1=1 ORDER BY 1 FOR XML PATH'],
+        [
+          'UNION hidden by unbalanced parens',
+          '1=1) UNION ALL SELECT name, NULL FROM sys.tables WHERE (1=1'
+        ]
       ];
 
       blocked.forEach(([label, where]) => {
@@ -179,7 +191,10 @@ describe('SqlServerMCP Index', () => {
         ['T-SQL functions the AST parser cannot parse', 'created >= DATEADD(day, -7, GETDATE())'],
         ['forbidden tokens inside a string literal', "note = 'a;b -- delete'"],
         ['keyword-like bracketed identifier', '[Set] = 1 AND [If] IS NULL'],
-        ['subquery', 'id IN (SELECT TOP 5 id FROM Other ORDER BY id)']
+        ['subquery', 'id IN (SELECT TOP 5 id FROM Other ORDER BY id)'],
+        ['EXISTS subquery', 'EXISTS (SELECT 1 FROM Other o WHERE o.userId = Users.id)'],
+        ['UNION inside a subquery', 'id IN (SELECT id FROM A UNION SELECT id FROM B)'],
+        ['bracketed identifiers named like clause keywords', '[Order] = 1 AND [Select] IS NULL']
       ];
 
       allowed.forEach(([label, where]) => {
