@@ -150,11 +150,12 @@ accidental certificate trust in cloud production environments using private IP a
 ### `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS`
 
 - **Default**: `false`
-- **Description**: Allow data modification operations (INSERT, UPDATE, DELETE, TRUNCATE)
+- **Description**: Allow data modification operations (INSERT, UPDATE, DELETE, MERGE, TRUNCATE), procedure execution (EXEC) and administrative operations (SHUTDOWN, KILL,
+  BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*` procedures, OPENQUERY/OPENDATASOURCE and the provider form of OPENROWSET)
 - **Prerequisites**: `SQL_SERVER_READ_ONLY=false`
 - **Values**:
-  - `true` (enable data modification)
-  - `false` (block data modification)
+  - `true` (enable data modification and administrative operations)
+  - `false` (block data modification and administrative operations; batches must open with a recognised T-SQL statement keyword)
 
 ### `SQL_SERVER_ALLOW_SCHEMA_CHANGES`
 

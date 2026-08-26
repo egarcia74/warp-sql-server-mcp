@@ -234,7 +234,9 @@ class SqlServerMCP {
    * _getQueryType only looks at how each ';'-separated statement *starts*, but
    * T-SQL does not require ';' between statements, so "SELECT 1 DELETE FROM t"
    * classifies as 'select'. Scan the whole batch for statements the active
-   * safety tier forbids before allowing it (GHSA-qhf4-jmhq-73c8).
+   * safety tier forbids before allowing it (GHSA-qhf4-jmhq-73c8). The guard is
+   * also what rejects a batch that opens with an unrecognised statement, since
+   * _getQueryType classifies "<unknown>; SELECT 1" as 'select'.
    * @private
    */
   _allowUnlessBatchViolation(query, queryType, modes) {

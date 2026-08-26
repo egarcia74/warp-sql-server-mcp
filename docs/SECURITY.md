@@ -19,11 +19,11 @@ Both guides get the server running with secure defaults, then return here for de
 
 The MCP server implements three independent security layers:
 
-| Security Level                | Environment Variable                      | Default | Controls                         |
-| ----------------------------- | ----------------------------------------- | ------- | -------------------------------- |
-| **🔒 Read-Only Mode**         | `SQL_SERVER_READ_ONLY`                    | `true`  | Restricts to SELECT queries only |
-| **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE    |
-| **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER       |
+| Security Level                | Environment Variable                      | Default | Controls                                                                                                                                                                                                                                                                               |
+| ----------------------------- | ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **🔒 Read-Only Mode**         | `SQL_SERVER_READ_ONLY`                    | `true`  | Restricts to SELECT queries only                                                                                                                                                                                                                                                       |
+| **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC and administrative operations (SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*`, OPENQUERY/OPENDATASOURCE and the provider form of OPENROWSET; `OPENROWSET(BULK ...)` file reads stay allowed) |
+| **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER                                                                                                                                                                                                                                                             |
 
 ### Security by Default
 
@@ -34,6 +34,9 @@ The MCP server implements three independent security layers:
 - ❌ No schema changes (CREATE/DROP/ALTER)
 - ❌ No stored procedure execution
 - ❌ No administrative operations
+
+Every statement in a batch is checked — T-SQL does not require `;` between statements — and a batch must open with a recognised T-SQL statement keyword (use `EXEC` for procedures).
+Batches with unterminated string literals or comments are rejected.
 
 ## 📋 Security Configurations
 

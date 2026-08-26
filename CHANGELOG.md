@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.17] - 2026-08-26
+
+### Security
+
+- **Administrative operations are now gated by the destructive-operations tier**
+  ([GHSA-crw3-hmxc-f53p](https://github.com/egarcia74/warp-sql-server-mcp/security/advisories/GHSA-crw3-hmxc-f53p)).
+  `SHUTDOWN`, `KILL`, `BACKUP`/`RESTORE`, `DBCC`, `RECONFIGURE`, `CHECKPOINT`, `SETUSER`, `xp_*`/`sp_*` procedures, `OPENQUERY`, `OPENDATASOURCE` and
+  the provider form of `OPENROWSET` were only blocked in read-only mode; with `SQL_SERVER_READ_ONLY=false` and
+  `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=false` they ran. They are now rejected unless destructive operations are enabled.
+  `OPENROWSET(BULK ...)` (a file read) remains allowed outside read-only mode. `DBCC` is blocked wholesale, including its read-only subcommands.
+- **Batches must open with a recognised T-SQL statement keyword.** In restricted modes a batch whose first statement is not a recognised
+  statement (for example a procedure invoked without `EXEC`, or one that opens with a quoted identifier) is now rejected with an explicit
+  reason.
+- `ENABLE`/`DISABLE TRIGGER` are classified as schema changes; `WRITETEXT`/`UPDATETEXT` and the Service Broker `RECEIVE` statement as
+  destructive. Only reserved words are matched on their own, so columns named `Enable`, `Disable` or `Receive` stay usable unbracketed.
+
 ## [1.7.16] - 2026-08-26
 
 ### Security

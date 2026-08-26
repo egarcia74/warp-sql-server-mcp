@@ -169,7 +169,16 @@ describe('SqlServerMCP Index', () => {
           '1=1) UNION ALL SELECT name, NULL FROM sys.tables WHERE (1=1'
         ],
         ['unterminated bracket hiding a statement', '1=1 [ DROP TABLE Users --'],
-        ['unterminated string literal hiding a statement', "id > 1 AND 'x OR 1=1; DROP TABLE Users"]
+        [
+          'unterminated string literal hiding a statement',
+          "id > 1 AND 'x OR 1=1; DROP TABLE Users"
+        ],
+        ['CHECKPOINT smuggled into a filter', '1=1 CHECKPOINT'],
+        ['DISABLE TRIGGER smuggled into a filter', '1=1 DISABLE TRIGGER ALL ON Users'],
+        ['RECONFIGURE smuggled into a filter', '1=1 RECONFIGURE'],
+        ['SETUSER smuggled into a filter', "1=1 SETUSER 'guest'"],
+        ['RECEIVE smuggled into a filter', '1=1 RECEIVE TOP (1) * FROM dbo.Q'],
+        ['top-level FROM (second table)', '1=1 FROM Other']
       ];
 
       blocked.forEach(([label, where]) => {
@@ -192,6 +201,10 @@ describe('SqlServerMCP Index', () => {
         ['simple predicate', "Status = 'Migrated' AND ErrorCount = 0"],
         ['T-SQL functions the AST parser cannot parse', 'created >= DATEADD(day, -7, GETDATE())'],
         ['forbidden tokens inside a string literal', "note = 'a;b -- delete'"],
+        [
+          'columns named like non-reserved statement words',
+          'Enable = 1 AND Disable = 0 AND Receive IS NULL'
+        ],
         ['keyword-like bracketed identifier', '[Set] = 1 AND [If] IS NULL'],
         ['subquery', 'id IN (SELECT TOP 5 id FROM Other ORDER BY id)'],
         ['EXISTS subquery', 'EXISTS (SELECT 1 FROM Other o WHERE o.userId = Users.id)'],
@@ -268,7 +281,22 @@ describe('SqlServerMCP Index', () => {
           [
             'OPENQUERY (can run arbitrary SQL on a linked server)',
             "SELECT * FROM OPENQUERY(Linked, 'DELETE FROM T')"
-          ]
+          ],
+          ['SHUTDOWN', 'SHUTDOWN'],
+          ['KILL', 'KILL 53'],
+          ['DISABLE TRIGGER after SELECT', 'SELECT 1 DISABLE TRIGGER ALL ON Users'],
+          ['SETUSER after SELECT', "SELECT 1 SETUSER 'guest'"],
+          ['RECEIVE as the leading statement', 'RECEIVE TOP (1) * FROM dbo.Q'],
+          ['RECEIVE * after SELECT', 'SELECT 1 RECEIVE * FROM dbo.Q'],
+          ['RECEIVE inside WAITFOR', 'WAITFOR (RECEIVE * FROM dbo.Q)'],
+          ['bare procedure call', 'dbo.PurgeUsers'],
+          ['bare procedure call followed by SELECT', 'dbo.PurgeUsers; SELECT 1'],
+          ['bare sp_executesql followed by SELECT', "sp_executesql N'DELETE FROM Users'; SELECT 1"],
+          [
+            'bare bracketed xp_cmdshell followed by SELECT',
+            "master.dbo.[xp_cmdshell] 'dir'; SELECT 1"
+          ],
+          ['bracketed xp_cmdshell followed by SELECT', "[xp_cmdshell] 'dir'; SELECT 1"]
         ];
         blocked.forEach(([label, query]) => {
           it(`blocks ${label}`, () => {
@@ -281,6 +309,11 @@ describe('SqlServerMCP Index', () => {
         const allowed = [
           ['plain SELECT', 'SELECT 1'],
           ['semicolon-separated SELECTs', 'SELECT 1; SELECT 2'],
+          [
+            'non-reserved statement words used as identifiers',
+            'SELECT Enable, Disable, Receive FROM dbo.Config'
+          ],
+          ['alias named like a non-reserved statement word', 'SELECT 1 AS Disable'],
           ['keyword inside a string literal', "SELECT * FROM Users WHERE note = 'DELETE FROM x'"],
           ['keyword as bracketed identifier', 'SELECT [delete], [into] FROM Users'],
           ['keyword inside a line comment', 'SELECT 1 -- DROP TABLE Users'],
@@ -313,6 +346,21 @@ describe('SqlServerMCP Index', () => {
             'MERGE TOP (10) INTO Users AS t USING Staging AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.a = s.a;';
           expect(server.validateQuery(q).allowed).to.equal(true);
         });
+        const adminAllowed = [
+          ['SHUTDOWN', 'SHUTDOWN'],
+          ['BACKUP DATABASE', "BACKUP DATABASE Users TO DISK = 'x.bak'"],
+          ['DBCC', 'DBCC DROPCLEANBUFFERS'],
+          ['bare procedure call', 'dbo.PurgeUsers'],
+          ['BULK INSERT', "BULK INSERT Users FROM 'x.csv'"],
+          ['UPDATE STATISTICS', 'UPDATE STATISTICS Users']
+        ];
+        adminAllowed.forEach(([label, query]) => {
+          it(`allows ${label} (the gate is the destructive flag)`, () => {
+            const result = server.validateQuery(query);
+            expect(result.allowed, result.reason).to.equal(true);
+          });
+        });
+
         it('allows a CTE feeding INSERT INTO', () => {
           const q = 'WITH s AS (SELECT * FROM Staging) INSERT INTO Users SELECT * FROM s';
           expect(server.validateQuery(q).allowed).to.equal(true);
@@ -336,6 +384,90 @@ describe('SqlServerMCP Index', () => {
 
       describe('DML disabled, DDL disabled (not read-only)', () => {
         beforeEach(() => setModes({ readOnly: false, destructive: false, schema: false }));
+
+        const administrative = [
+          ['SHUTDOWN', 'SHUTDOWN'],
+          ['KILL', 'KILL 53'],
+          ['BACKUP DATABASE', "BACKUP DATABASE Users TO DISK = 'x.bak'"],
+          ['RESTORE DATABASE', "RESTORE DATABASE Users FROM DISK = 'x.bak'"],
+          ['RECONFIGURE', 'RECONFIGURE'],
+          ['DBCC', 'DBCC DROPCLEANBUFFERS'],
+          ['CHECKPOINT', 'CHECKPOINT'],
+          ['SETUSER', "SETUSER 'guest'"],
+          ['bare xp_cmdshell', "xp_cmdshell 'dir'"],
+          ['bare sp_configure', "sp_configure 'show advanced options', 1"],
+          ['bare sp_executesql', "sp_executesql N'DELETE FROM Users'"],
+          ['OPENQUERY', "SELECT * FROM OPENQUERY(Linked, 'DELETE FROM T')"],
+          ['OPENDATASOURCE', "SELECT * FROM OPENDATASOURCE('SQLNCLI', 'Data Source=x;').db.dbo.t"],
+          [
+            'OPENROWSET provider form',
+            "SELECT * FROM OPENROWSET('SQLNCLI', 'Server=x;', 'DELETE FROM t')"
+          ]
+        ];
+        administrative.forEach(([label, query]) => {
+          it(`blocks ${label} as an administrative operation`, () => {
+            const result = server.validateQuery(query);
+            expect(result.allowed).to.equal(false);
+            expect(result.queryType).to.equal('destructive');
+            expect(result.reason).to.match(/Administrative operations/);
+          });
+        });
+
+        const unrecognised = [
+          ['bare user procedure', 'dbo.PurgeUsers'],
+          ['bare bracketed xp_cmdshell', "master.dbo.[xp_cmdshell] 'dir'"],
+          ['bracketed xp_cmdshell', "[xp_cmdshell] 'dir'"],
+          ['double-quoted xp_cmdshell', '"dbo"."xp_cmdshell" \'dir\''],
+          ['comment-only batch', '-- only a comment']
+        ];
+        unrecognised.forEach(([label, query]) => {
+          it(`blocks ${label} as an unrecognised leading statement`, () => {
+            const result = server.validateQuery(query);
+            expect(result.allowed).to.equal(false);
+            expect(result.queryType).to.equal('destructive');
+            expect(result.reason).to.match(/Unrecognised leading statement/);
+          });
+        });
+
+        it('blocks DISABLE TRIGGER smuggled after a SELECT as a schema change', () => {
+          const result = server.validateQuery('SELECT 1 DISABLE TRIGGER ALL ON Users');
+          expect(result.allowed).to.equal(false);
+          expect(result.queryType).to.equal('schema');
+        });
+        it('blocks WRITETEXT as destructive', () => {
+          const result = server.validateQuery("WRITETEXT Users.note 0x00 'x'");
+          expect(result.allowed).to.equal(false);
+          expect(result.queryType).to.equal('destructive');
+        });
+
+        const stillAllowed = [
+          ['DECLARE then SELECT', 'DECLARE @x INT SELECT @x'],
+          ['SET option then SELECT', 'SET NOCOUNT ON SELECT 1'],
+          ['IF then SELECT', 'IF 1=1 SELECT 1'],
+          ['BEGIN ... END block', 'BEGIN SELECT 1 END'],
+          ['leading semicolon CTE', ';WITH c AS (SELECT 1 AS a) SELECT * FROM c'],
+          ['leading block comment', '/* lead */ SELECT 1'],
+          [
+            'bracketed identifiers named like admin keywords',
+            'SELECT [shutdown], [dbcc] FROM Users'
+          ],
+          ['admin keyword inside a literal', "SELECT * FROM Users WHERE note = 'SHUTDOWN'"],
+          [
+            'non-reserved statement words used as identifiers',
+            'SELECT Enable, Disable, Receive FROM dbo.Config WHERE Enable = 1'
+          ],
+          ['WAITFOR is not an administrative operation', "WAITFOR DELAY '00:00:01' SELECT 1"],
+          [
+            'SHOW is classified read-only by server-config (SQL Server rejects it itself)',
+            'SHOW TABLES'
+          ]
+        ];
+        stillAllowed.forEach(([label, query]) => {
+          it(`allows ${label}`, () => {
+            const result = server.validateQuery(query);
+            expect(result.allowed, result.reason).to.equal(true);
+          });
+        });
 
         it('blocks DELETE smuggled after a SELECT as destructive', () => {
           const result = server.validateQuery('SELECT 1 DELETE FROM Users');

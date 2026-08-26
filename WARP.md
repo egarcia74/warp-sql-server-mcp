@@ -180,7 +180,8 @@ SECRET_MANAGER_TYPE=env
 
 - **SQL Parser Integration**: Uses `node-sql-parser` for comprehensive AST analysis
 - **Multi-Statement Validation**: Validates each statement in complex queries
-- **Dangerous Function Detection**: Blocks `xp_cmdshell`, `openrowset`, `sp_configure`, etc.
+- **Dangerous Function Detection**: `lib/security/sql-batch-guard.js` blocks `xp_*`/`sp_*` procedures, `openrowset`/`openquery`/`opendatasource` and server-administration statements
+  unless the destructive-operations tier is enabled (read-only mode blocks them outright)
 - **SQL Injection Protection**: Advanced pattern detection in string literals
 - **Graceful Fallback**: Regex validation for edge cases where parsing fails
 

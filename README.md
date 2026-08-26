@@ -59,11 +59,11 @@ Ideal for terminal-based workflows and command-line database interactions.
 
 ## 🔒 Security Levels (Quick Reference)
 
-| Security Level                | Environment Variable                      | Default | Impact                        |
-| ----------------------------- | ----------------------------------------- | ------- | ----------------------------- |
-| **🔒 Read-Only Mode**         | `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed   |
-| **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE |
-| **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER    |
+| Security Level                | Environment Variable                      | Default | Impact                                                                                                                                                                                                    |
+| ----------------------------- | ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **🔒 Read-Only Mode**         | `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed                                                                                                                                                                               |
+| **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, and administrative operations (SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*`, linked-server rowset functions) |
+| **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER                                                                                                                                                                                |
 
 **🔒 Maximum Security (Default - Production Recommended):**
 
