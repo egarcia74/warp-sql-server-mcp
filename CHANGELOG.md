@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.16] - 2026-08-26
+
+### Security
+
+- **Read-only mode bypass fixed** ([GHSA-qhf4-jmhq-73c8](https://github.com/egarcia74/warp-sql-server-mcp/security/advisories/GHSA-qhf4-jmhq-73c8)). `execute_query` and
+  `explain_query` classified a batch by how each `;`-separated statement _starts_; T-SQL does not require `;` between statements, so a batch such as `SELECT 1 DELETE FROM t` was
+  treated as a `SELECT` and executed in read-only mode (and with DML/DDL disabled). `validateQuery` now scans the whole batch — with string literals, quoted/bracketed identifiers and
+  comments removed — for statements the active safety tier forbids, and fails closed on unterminated literals or comments. Affects all versions `<= 1.7.15`; upgrade.
+- Read-only mode now also rejects `OPENROWSET`, `OPENQUERY` and `OPENDATASOURCE`, which can run arbitrary SQL against a linked server or read server-side files from inside a
+  `SELECT`. Linked-server reads under read-only mode will need `SQL_SERVER_READ_ONLY=false`.
+
+### Fixed
+
+- `get_table_data` and `export_table_csv` silently ignored their `where` parameter ([#1075](https://github.com/egarcia74/warp-sql-server-mcp/issues/1075),
+  [#1076](https://github.com/egarcia74/warp-sql-server-mcp/pull/1076)). The filter is now applied, and is validated as a single predicate on the requested table (no batch separators,
+  comments, statement keywords, top-level set operators or unbalanced parentheses) before the SQL is assembled.
+
 ## [1.7.11] - 2025-09-11
 
 ### Changed
