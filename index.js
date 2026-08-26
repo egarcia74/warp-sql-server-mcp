@@ -21,6 +21,7 @@ import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
 import { findForbiddenWhereClauseSyntax } from './lib/security/where-clause-guard.js';
+import { findForbiddenBatchStatement } from './lib/security/sql-batch-guard.js';
 
 // Read package.json for version info
 import { readFileSync } from 'node:fs';
@@ -142,10 +143,10 @@ class SqlServerMCP {
       );
     };
 
-    // Layer 1 — lexical guard. validateQuery() below is regex-based and treats
-    // anything that starts with SELECT as read-only, and T-SQL needs no ';'
-    // between statements, so a second statement smuggled into the clause would
-    // otherwise pass. This check must not rely on parsing the SQL.
+    // Layer 1 — lexical guard. A filter must be a single predicate on the
+    // requested table, which is stricter than validateQuery()'s statement-level
+    // policy (e.g. a top-level UNION is a valid read-only query but not a valid
+    // filter). This check must not rely on parsing the SQL.
     const lexicalReason = findForbiddenWhereClauseSyntax(clause);
     if (lexicalReason) {
       block(lexicalReason);
@@ -187,6 +188,7 @@ class SqlServerMCP {
 
     // First, determine the query type
     const queryType = this._getQueryType(trimmedQuery, securityConfig);
+    const modes = { readOnlyMode, allowDestructiveOperations, allowSchemaChanges };
 
     // Check read-only mode first (most restrictive)
     if (readOnlyMode) {
@@ -198,7 +200,7 @@ class SqlServerMCP {
           queryType: queryType === 'select' ? 'select' : 'non-select' // Keep original type for read-only violations
         };
       }
-      return { allowed: true, reason: 'Query validation passed', queryType };
+      return this._allowUnlessBatchViolation(trimmedQuery, queryType, modes);
     }
 
     // If not in read-only mode, check specific operation restrictions
@@ -223,6 +225,28 @@ class SqlServerMCP {
       };
     }
 
+    return this._allowUnlessBatchViolation(trimmedQuery, queryType, modes);
+  }
+
+  /**
+   * Final backstop for a query the regex classification would allow.
+   *
+   * _getQueryType only looks at how each ';'-separated statement *starts*, but
+   * T-SQL does not require ';' between statements, so "SELECT 1 DELETE FROM t"
+   * classifies as 'select'. Scan the whole batch for statements the active
+   * safety tier forbids before allowing it (GHSA-qhf4-jmhq-73c8).
+   * @private
+   */
+  _allowUnlessBatchViolation(query, queryType, modes) {
+    const violation = findForbiddenBatchStatement(query, modes);
+    if (violation) {
+      return {
+        allowed: false,
+        reason: violation.reason,
+        queryType: violation.queryType,
+        keyword: violation.keyword
+      };
+    }
     return { allowed: true, reason: 'Query validation passed', queryType };
   }
 

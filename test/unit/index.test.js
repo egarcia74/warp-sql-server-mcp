@@ -236,6 +236,132 @@ describe('SqlServerMCP Index', () => {
       }
     });
 
+    describe('validateQuery batch statement guard (GHSA-qhf4-jmhq-73c8)', () => {
+      // T-SQL does not require ';' between statements, so a batch such as
+      // "SELECT 1 DELETE FROM t" must not be classified by its SELECT prefix alone.
+      const setModes = ({ readOnly, destructive, schema }) => {
+        Object.defineProperty(server, 'readOnlyMode', { get: () => readOnly, configurable: true });
+        Object.defineProperty(server, 'allowDestructiveOperations', {
+          get: () => destructive,
+          configurable: true
+        });
+        Object.defineProperty(server, 'allowSchemaChanges', {
+          get: () => schema,
+          configurable: true
+        });
+      };
+
+      describe('read-only mode', () => {
+        beforeEach(() => setModes({ readOnly: true, destructive: false, schema: false }));
+
+        const blocked = [
+          ['whitespace-separated DELETE', 'SELECT 1 DELETE FROM Users'],
+          ['newline-separated EXEC xp_cmdshell', "SELECT 1\nEXEC xp_cmdshell 'dir'"],
+          ['whitespace-separated DROP', 'SELECT 1 DROP TABLE Users'],
+          ['WAITFOR after SELECT', "SELECT 1 WAITFOR DELAY '00:00:05'"],
+          ['TRUNCATE hidden behind a block comment', 'SELECT 1 /* */ TRUNCATE TABLE Users'],
+          ['CTE followed by DELETE', 'WITH x AS (SELECT 1 a) SELECT * FROM x DELETE FROM Users'],
+          ['SELECT INTO creates a table', 'SELECT * INTO Users_copy FROM Users'],
+          ['INSERT after SELECT', 'SELECT 1 INSERT INTO Users VALUES (1)'],
+          ['unterminated string literal', "SELECT 'abc"],
+          ['unterminated block comment', 'SELECT 1 /* DELETE FROM Users'],
+          [
+            'OPENQUERY (can run arbitrary SQL on a linked server)',
+            "SELECT * FROM OPENQUERY(Linked, 'DELETE FROM T')"
+          ]
+        ];
+        blocked.forEach(([label, query]) => {
+          it(`blocks ${label}`, () => {
+            const result = server.validateQuery(query);
+            expect(result.allowed).to.equal(false);
+            expect(result.queryType).to.equal('non-select');
+          });
+        });
+
+        const allowed = [
+          ['plain SELECT', 'SELECT 1'],
+          ['semicolon-separated SELECTs', 'SELECT 1; SELECT 2'],
+          ['keyword inside a string literal', "SELECT * FROM Users WHERE note = 'DELETE FROM x'"],
+          ['keyword as bracketed identifier', 'SELECT [delete], [into] FROM Users'],
+          ['keyword inside a line comment', 'SELECT 1 -- DROP TABLE Users'],
+          ['keyword inside a block comment', 'SELECT 1 /* DROP TABLE Users */'],
+          ['keyword inside nested block comments', 'SELECT 1 /* a /* DELETE */ b */'],
+          ['CTE', 'WITH x AS (SELECT 1 AS a) SELECT * FROM x'],
+          ['variable named like a keyword', 'SELECT @delete'],
+          ['temp table named like a keyword', 'SELECT * FROM #update']
+        ];
+        allowed.forEach(([label, query]) => {
+          it(`allows ${label}`, () => {
+            const result = server.validateQuery(query);
+            expect(result.allowed, result.reason).to.equal(true);
+          });
+        });
+      });
+
+      describe('DML allowed, DDL disabled', () => {
+        beforeEach(() => setModes({ readOnly: false, destructive: true, schema: false }));
+
+        it('allows INSERT INTO (INTO is part of the INSERT, not SELECT INTO)', () => {
+          expect(server.validateQuery('INSERT INTO Users VALUES (1)').allowed).to.equal(true);
+        });
+        it('allows INSERT TOP (n) INTO (TOP sits between the verb and INTO)', () => {
+          const q = 'INSERT TOP (10) INTO Users SELECT * FROM Staging';
+          expect(server.validateQuery(q).allowed).to.equal(true);
+        });
+        it('allows MERGE TOP (n) INTO', () => {
+          const q =
+            'MERGE TOP (10) INTO Users AS t USING Staging AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.a = s.a;';
+          expect(server.validateQuery(q).allowed).to.equal(true);
+        });
+        it('allows a CTE feeding INSERT INTO', () => {
+          const q = 'WITH s AS (SELECT * FROM Staging) INSERT INTO Users SELECT * FROM s';
+          expect(server.validateQuery(q).allowed).to.equal(true);
+        });
+        it('allows MERGE INTO', () => {
+          const q =
+            'MERGE INTO Users AS t USING Staging AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.a = s.a;';
+          expect(server.validateQuery(q).allowed).to.equal(true);
+        });
+        it('blocks CREATE TABLE smuggled after a SELECT as a schema change', () => {
+          const result = server.validateQuery('SELECT 1 CREATE TABLE T (a int)');
+          expect(result.allowed).to.equal(false);
+          expect(result.queryType).to.equal('schema');
+        });
+        it('blocks SELECT INTO as a schema change', () => {
+          const result = server.validateQuery('SELECT * INTO Users_copy FROM Users');
+          expect(result.allowed).to.equal(false);
+          expect(result.queryType).to.equal('schema');
+        });
+      });
+
+      describe('DML disabled, DDL disabled (not read-only)', () => {
+        beforeEach(() => setModes({ readOnly: false, destructive: false, schema: false }));
+
+        it('blocks DELETE smuggled after a SELECT as destructive', () => {
+          const result = server.validateQuery('SELECT 1 DELETE FROM Users');
+          expect(result.allowed).to.equal(false);
+          expect(result.queryType).to.equal('destructive');
+        });
+        it('allows a file read via OPENROWSET(BULK ...) — BULK alone is not destructive', () => {
+          const q = "SELECT * FROM OPENROWSET(BULK 'C:\\data.csv', SINGLE_CLOB) AS x";
+          expect(server.validateQuery(q).allowed, 'BULK read').to.equal(true);
+        });
+        it('blocks INSERT smuggled after a SELECT as destructive (not misreported as schema)', () => {
+          const result = server.validateQuery('SELECT 1 INSERT INTO Users VALUES (1)');
+          expect(result.allowed).to.equal(false);
+          expect(result.queryType).to.equal('destructive');
+        });
+      });
+
+      describe('full destruction mode', () => {
+        beforeEach(() => setModes({ readOnly: false, destructive: true, schema: true }));
+
+        it('does not apply the batch guard when all restrictions are disabled', () => {
+          expect(server.validateQuery('SELECT 1 DROP TABLE Users').allowed).to.equal(true);
+        });
+      });
+    });
+
     it('routes explain_query through validateQuery and blocks disallowed SQL (no actual-plan bypass)', async () => {
       // include_actual_plan executes the statement, so explain_query must honor
       // the same safety policy as execute_query.
