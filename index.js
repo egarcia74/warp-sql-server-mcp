@@ -21,7 +21,11 @@ import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
 import { findForbiddenWhereClauseSyntax } from './lib/security/where-clause-guard.js';
-import { findForbiddenBatchStatement } from './lib/security/sql-batch-guard.js';
+import { validateQuery as evaluateQuerySafety } from './lib/security/query-policy.js';
+import {
+  formatQueryResults as formatQueryResultsImpl,
+  createTextTable as createTextTableImpl
+} from './lib/utils/result-formatter.js';
 import { escapeBracketIdentifier } from './lib/utils/sql-identifier.js';
 
 // Read package.json for version info
@@ -161,151 +165,22 @@ class SqlServerMCP {
   }
 
   /**
-   * Validates a SQL query against safety policies
+   * Validates a SQL query against safety policies.
+   *
+   * Thin delegator: reads the active safety-mode flags from the instance
+   * getters (which tests override) and the security patterns from config
+   * (which tests spy on), then applies the pure policy in
+   * lib/security/query-policy.js. The return shape is unchanged.
    */
   validateQuery(query) {
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
-      return { allowed: true, reason: 'Empty query' };
-    }
-
     // Use direct property access for tests that override properties
-    const readOnlyMode = this.readOnlyMode;
-    const allowDestructiveOperations = this.allowDestructiveOperations;
-    const allowSchemaChanges = this.allowSchemaChanges;
+    const modes = {
+      readOnlyMode: this.readOnlyMode,
+      allowDestructiveOperations: this.allowDestructiveOperations,
+      allowSchemaChanges: this.allowSchemaChanges
+    };
 
-    // 🚀 OPTIMIZATION: Skip all parsing when in "full destruction mode"
-    // When all safety restrictions are disabled, bypass expensive parsing
-    if (!readOnlyMode && allowDestructiveOperations && allowSchemaChanges) {
-      return {
-        allowed: true,
-        reason: 'Full destruction mode - all restrictions disabled, query validation bypassed',
-        queryType: 'unrestricted',
-        optimized: true
-      };
-    }
-
-    const securityConfig = this.config.getSecurityConfig();
-
-    // First, determine the query type
-    const queryType = this._getQueryType(trimmedQuery, securityConfig);
-    const modes = { readOnlyMode, allowDestructiveOperations, allowSchemaChanges };
-
-    // Check read-only mode first (most restrictive)
-    if (readOnlyMode) {
-      if (queryType !== 'select') {
-        return {
-          allowed: false,
-          reason:
-            'Read-only mode is enabled. Only SELECT queries are allowed. Set SQL_SERVER_READ_ONLY=false to disable.',
-          queryType: queryType === 'select' ? 'select' : 'non-select' // Keep original type for read-only violations
-        };
-      }
-      return this._allowUnlessBatchViolation(trimmedQuery, queryType, modes);
-    }
-
-    // If not in read-only mode, check specific operation restrictions
-
-    // Check for destructive operations
-    if (queryType === 'destructive' && !allowDestructiveOperations) {
-      return {
-        allowed: false,
-        reason:
-          'Destructive operations (INSERT/UPDATE/DELETE) are disabled. Set SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true to enable.',
-        queryType: 'destructive'
-      };
-    }
-
-    // Check for schema changes
-    if (queryType === 'schema' && !allowSchemaChanges) {
-      return {
-        allowed: false,
-        reason:
-          'Schema changes (CREATE/DROP/ALTER) are disabled. Set SQL_SERVER_ALLOW_SCHEMA_CHANGES=true to enable.',
-        queryType: 'schema'
-      };
-    }
-
-    return this._allowUnlessBatchViolation(trimmedQuery, queryType, modes);
-  }
-
-  /**
-   * Final backstop for a query the regex classification would allow.
-   *
-   * _getQueryType only looks at how each ';'-separated statement *starts*, but
-   * T-SQL does not require ';' between statements, so "SELECT 1 DELETE FROM t"
-   * classifies as 'select'. Scan the whole batch for statements the active
-   * safety tier forbids before allowing it (GHSA-qhf4-jmhq-73c8). The guard is
-   * also what rejects a batch that opens with an unrecognised statement, since
-   * _getQueryType classifies "<unknown>; SELECT 1" as 'select'.
-   * @private
-   */
-  _allowUnlessBatchViolation(query, queryType, modes) {
-    const violation = findForbiddenBatchStatement(query, modes);
-    if (violation) {
-      return {
-        allowed: false,
-        reason: violation.reason,
-        queryType: violation.queryType,
-        keyword: violation.keyword
-      };
-    }
-    return { allowed: true, reason: 'Query validation passed', queryType };
-  }
-
-  /**
-   * Determine the type of SQL query
-   * @private
-   */
-  _getQueryType(query, securityConfig) {
-    // Check for multi-statement queries first (semicolon separated)
-    const statements = query
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-
-    if (statements.length > 1) {
-      // For multi-statement, find the most restrictive type
-      const types = new Set(statements.map(stmt => this._getSingleQueryType(stmt, securityConfig)));
-
-      if (types.has('schema')) return 'schema';
-      if (types.has('destructive')) return 'destructive';
-      if (types.has('select')) return 'select';
-      return 'unknown';
-    }
-
-    return this._getSingleQueryType(query, securityConfig);
-  }
-
-  /**
-   * Determine the type of a single SQL statement
-   * @private
-   */
-  _getSingleQueryType(query, securityConfig) {
-    const trimmedQuery = query.trim();
-
-    // Safety check for corrupted security patterns
-    if (!securityConfig?.patterns) {
-      this.logger.warn('Security patterns are corrupted, falling back to default behavior');
-      return 'unknown';
-    }
-
-    // Check for read-only queries
-    if (securityConfig.patterns.readOnly?.some?.(pattern => pattern.test(trimmedQuery))) {
-      return 'select';
-    }
-
-    // Check for schema changes
-    if (securityConfig.patterns.schemaChanges?.some?.(pattern => pattern.test(trimmedQuery))) {
-      return 'schema';
-    }
-
-    // Check for destructive operations
-    if (securityConfig.patterns.destructive?.some?.(pattern => pattern.test(trimmedQuery))) {
-      return 'destructive';
-    }
-
-    return 'unknown';
+    return evaluateQuerySafety(query, modes, this.config.getSecurityConfig(), this.logger);
   }
 
   setupToolHandlers() {
@@ -576,41 +451,24 @@ class SqlServerMCP {
   }
 
   /**
-   * Format query results for display
+   * Format query results for display.
+   *
+   * Thin delegator to lib/utils/result-formatter.js. Kept as an instance method
+   * because SqlServerMCP is the package's public export: external callers and
+   * subclasses rely on this being callable/overridable on the instance.
    */
   formatQueryResults(data) {
-    if (data.length === 0) {
-      return { content: [{ type: 'text', text: 'No data returned' }] };
-    }
-
-    const headers = Object.keys(data[0]);
-    const rows = data.map(row => headers.map(header => String(row[header] || '')));
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: this.createTextTable(headers, rows)
-        }
-      ]
-    };
+    return formatQueryResultsImpl(data);
   }
 
   /**
-   * Create a text-based table
+   * Create a text-based table.
+   *
+   * Thin delegator to lib/utils/result-formatter.js (see formatQueryResults for
+   * why this stays an instance method).
    */
   createTextTable(headers, rows) {
-    const colWidths = headers.map((header, i) =>
-      Math.max(header.length, ...rows.map(row => String(row[i]).length))
-    );
-
-    const separator = colWidths.map(width => '-'.repeat(width)).join(' | ');
-    const headerRow = headers.map((header, i) => header.padEnd(colWidths[i])).join(' | ');
-    const dataRows = rows.map(row =>
-      row.map((cell, i) => String(cell).padEnd(colWidths[i])).join(' | ')
-    );
-
-    return [headerRow, separator, ...dataRows].join('\n');
+    return createTextTableImpl(headers, rows);
   }
 
   // Connection management methods for test compatibility
