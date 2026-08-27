@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented the query-optimization tools — `explain_query`, index recommendations, bottleneck detection and optimization insights — which previously returned placeholder data
   ([#695](https://github.com/egarcia74/warp-sql-server-mcp/pull/695)).
 - Migrated the AWS secret management integration from `aws-sdk` v2 to `@aws-sdk/client-secrets-manager` v3 ([#663](https://github.com/egarcia74/warp-sql-server-mcp/pull/663)).
+- Validate the AWS region before constructing the aws-sdk v2 client ([#382](https://github.com/egarcia74/warp-sql-server-mcp/pull/382)).
 
 ### Changed
 
