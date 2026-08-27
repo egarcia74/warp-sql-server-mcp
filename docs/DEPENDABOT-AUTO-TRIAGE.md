@@ -14,7 +14,6 @@ Dependencies are automatically classified into security risk categories:
 
 - **Database Libraries**: `mssql`, `tedious`
 - **Authentication**: `@azure/identity`, `@azure/keyvault-secrets`, `aws-sdk`, `@aws-sdk/*`
-- **SQL Processing**: `node-sql-parser`
 - **Impact**: Core functionality, potential breaking changes
 - **SLA**: Review within 24-48 hours
 

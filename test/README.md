@@ -18,7 +18,6 @@ test/
 │   ├── mcp-data-tools.test.js         # Data manipulation tools tests (36 tests)
 │   ├── mcp-performance-tools.test.js  # Performance monitoring tests (22 tests)
 │   ├── mcp-server-lifecycle.test.js   # Server lifecycle tests (15 tests)
-│   ├── query-validator-simple.test.js # Query validator unit tests
 │   ├── logger.test.js                 # Logger utility tests
 │   ├── performance-monitor.test.js    # Performance monitor tests
 │   ├── response-formatter.test.js     # Response formatting tests
