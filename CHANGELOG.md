@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed the unused AST-based `QueryValidator` and its `node-sql-parser` dependency; the live query-safety policy is `validateQuery` + `sql-batch-guard` + `where-clause-guard` ([#1080](https://github.com/egarcia74/warp-sql-server-mcp/issues/1080)).
 - Removed the redundant `.npmignore`; the `package.json` `files` allowlist is the single source of truth for the published tarball ([#1083](https://github.com/egarcia74/warp-sql-server-mcp/issues/1083)).
+- Removed the stale, unreferenced `coverage-report.json` build artifact and gitignored it.
 
 ### Fixed
 
