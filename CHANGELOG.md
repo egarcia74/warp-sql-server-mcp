@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Extracted the query-safety policy and result formatting out of `index.js` into `lib/security/query-policy.js`
+  and `lib/utils/result-formatter.js`; added dedicated unit tests for the batch and where-clause guards
+  ([#1082](https://github.com/egarcia74/warp-sql-server-mcp/issues/1082)).
+
 ### Removed
 
 - Removed the unused AST-based `QueryValidator` and its `node-sql-parser` dependency; the live query-safety policy is `validateQuery` + `sql-batch-guard` + `where-clause-guard` ([#1080](https://github.com/egarcia74/warp-sql-server-mcp/issues/1080)).
