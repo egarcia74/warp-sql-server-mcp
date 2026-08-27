@@ -51,6 +51,15 @@ import { dirname, join, relative, sep } from 'node:path';
  *     `/'[^']*'/` (query-optimizer.js) and silently skipped the missing-index
  *     query at ~line 778. A dedicated test asserts that query IS scanned.
  *   - The floor is PER-FILE, so a per-file blind spot fails loudly.
+ *
+ * Known best-effort limitation (documented, NOT enforced here): pagination
+ * provenance is file-wide, not data-flow — a single `<name> = … parseRowCount(…)`
+ * assignment anywhere in a file permits every bare `${limit}`/`${offset}`
+ * interpolation in that file. Proving each interpolated value actually came from
+ * that coercion would need scope/data-flow analysis. The behavioral battery's
+ * numeric-rejection cases (non-integer `limit`/`offset` throw) are the
+ * AUTHORITATIVE check for pagination; this lint only sanity-checks that some
+ * coercion exists.
  */
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -62,10 +71,6 @@ const SQL_SOURCE_FILES = [
   'lib/analysis/query-optimizer.js',
   'lib/analysis/bottleneck-detector.js'
 ];
-
-// Approved escaping/coercion helpers from lib/utils/sql-identifier.js.
-const ESCAPER =
-  /^(escapeBracketIdentifier|escapeSqlStringLiteral|sanitizeDbName|parseRowCount)\s*\(/;
 
 // Caller-controlled identifier args that MUST be escaped before reaching SQL.
 // `table_name` (snake_case) is intentionally absent: the dispatcher maps it to
@@ -312,13 +317,57 @@ function coercesPagination(fileText, name) {
   return new RegExp(`\\b${name}\\s*=\\s*[^;\\n]*parseRowCount\\(`).test(fileText);
 }
 
+// Leading function-name patterns whose whole `name(...)` span is "safe" and can
+// be blanked out before scanning an expression for a BARE caller arg:
+//   INTERP_SAFE_CALL   — the four approved escapers (interpolation context).
+//   CONSTRUCT_SAFE_CALL — escapers plus numeric coercion (assignment context,
+//                          e.g. `safeLimit = Math.max(…, Number.parseInt(limit,…))`).
+const INTERP_SAFE_CALL =
+  /\b(escapeBracketIdentifier|escapeSqlStringLiteral|sanitizeDbName|parseRowCount)\s*\(/;
+const CONSTRUCT_SAFE_CALL =
+  /\b(escapeBracketIdentifier|escapeSqlStringLiteral|sanitizeDbName|parseRowCount|Number\.parseInt|Number|parseInt|Math\.[A-Za-z]+)\s*\(/;
+
+/** Blank out every `name(...)` span (balanced parens) whose name matches `nameRe`. */
+function stripCallSpans(expr, nameRe) {
+  let s = expr;
+  for (let guard = 0; guard < 100; guard++) {
+    const m = nameRe.exec(s);
+    if (!m) break;
+    let depth = 0;
+    let end = s.length;
+    for (let j = m.index + m[0].length - 1; j < s.length; j++) {
+      if (s[j] === '(') depth++;
+      else if (s[j] === ')' && --depth === 0) {
+        end = j;
+        break;
+      }
+    }
+    s = `${s.slice(0, m.index)} ${s.slice(end + 1)}`;
+  }
+  return s;
+}
+
+const stripStrings = s => s.replace(/'[^']*'/g, ' ').replace(/"[^"]*"/g, ' ');
+
+/**
+ * After blanking approved `name(...)` spans and string literals, does a bare
+ * caller-controlled identifier (`database`/`schema`/`tableName`) or `where`
+ * still appear? This catches helper-plus-raw shapes such as
+ * `escapeBracketIdentifier(database) + database` and a ternary branch whose
+ * value is a raw caller arg — cases an "escaper appears somewhere" check misses.
+ */
+function hasBareCallerArg(expr, nameRe) {
+  const remainder = stripStrings(stripCallSpans(expr, nameRe));
+  if (CALLER_IDENTIFIER_ARGS.test(remainder)) return 'caller identifier arg';
+  if (CALLER_WHERE_ARG.test(remainder)) return 'raw where arg';
+  return null;
+}
+
 /** Classify one interpolation expression; returns a reason string if unsafe. */
 function violationReason(expr, fileText) {
   const trimmed = expr.trim();
-  if (ESCAPER.test(trimmed)) return null;
-  if (CALLER_IDENTIFIER_ARGS.test(trimmed))
-    return `caller identifier arg not escaped: \${${trimmed}}`;
-  if (CALLER_WHERE_ARG.test(trimmed)) return `raw where arg not gated: \${${trimmed}}`;
+  const bare = hasBareCallerArg(trimmed, INTERP_SAFE_CALL);
+  if (bare) return `${bare} not escaped: \${${trimmed}}`;
   if (trimmed === 'limit' || trimmed === 'offset') {
     return coercesPagination(fileText, trimmed)
       ? null
@@ -338,11 +387,13 @@ function escaperLocalViolations(fileText, name) {
     /(escapeBracketIdentifier|escapeSqlStringLiteral|sanitizeDbName|parseRowCount|Math\.|Number\.parseInt)\s*\(/;
   const trivialConst = /^(null|''|""|'[^']*'|"[^"]*")$/;
   for (const rhs of assignments) {
-    if (escaperCall.test(rhs)) {
-      escapedCount++;
-    } else if (!trivialConst.test(rhs)) {
+    if (escaperCall.test(rhs)) escapedCount++;
+    else if (!trivialConst.test(rhs))
       problems.push(`${name} assignment drops its escaper: \`${rhs}\``);
-    }
+    // A ternary/compound RHS may pass the "escaper appears" check yet still leave
+    // a raw caller arg in a branch or fallback (e.g. `cond ? escaper(x) : x`).
+    const bare = hasBareCallerArg(rhs, CONSTRUCT_SAFE_CALL);
+    if (bare) problems.push(`${name} assignment leaves a bare ${bare}: \`${rhs}\``);
   }
   if (escapedCount === 0) problems.push(`${name} is never constructed via an approved escaper`);
   return problems;
@@ -467,5 +518,52 @@ describe('SQL construction static lint (#1093)', () => {
       found,
       'The missing-index DMV query must be in the scanned set; a tokenizer regex-desync previously skipped it.'
     ).toBe(true);
+  });
+
+  // Rule-tightening regressions: the earlier lint returned null the moment an
+  // approved escaper appeared, so a helper-plus-raw concat or a ternary with a
+  // raw fallback slipped through. These lock in the fix.
+  describe('interpolation rule rejects helper-plus-raw shapes', () => {
+    test.each([
+      'escapeBracketIdentifier(database) + database',
+      'escapeSqlStringLiteral(schema) + schema',
+      'escapeBracketIdentifier(schema) + tableName',
+      "escapeBracketIdentifier(database) + '.' + where"
+    ])('flags %j', expr => {
+      expect(violationReason(expr, '')).toBeTruthy();
+    });
+
+    test.each([
+      'escapeBracketIdentifier(database)',
+      'escapeSqlStringLiteral(schema)',
+      'sanitizeDbName(database)',
+      'dbPredicate',
+      'schemaPredicate',
+      'source',
+      'safeSchema',
+      'safeTableName'
+    ])('still allows legit interpolation %j', expr => {
+      expect(violationReason(expr, '')).toBeNull();
+    });
+  });
+
+  describe('escaper-local rule rejects a raw ternary branch/fallback', () => {
+    test.each([
+      'const safeDb = cond ? sanitizeDbName(database) : database;',
+      'const safeSchema = flag ? escapeBracketIdentifier(schema) : schema;'
+    ])('flags %j', src => {
+      const name = /const (\w+)/.exec(src)[1];
+      expect(escaperLocalViolations(src, name).length).toBeGreaterThan(0);
+    });
+
+    test.each([
+      'const safeDb = escapeBracketIdentifier(database);',
+      'const safeSchema = sanitizeDbName(schema);',
+      "const safeLimit = limit ? parseRowCount(limit, { name: 'limit', min: 1, fallback: null }) : null;",
+      'const safeLimit = Math.max(1, Math.min(100, Number.parseInt(limit, 10) || 10));'
+    ])('still allows legit construction %j', src => {
+      const name = /const (\w+)/.exec(src)[1];
+      expect(escaperLocalViolations(src, name)).toEqual([]);
+    });
   });
 });

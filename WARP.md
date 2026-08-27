@@ -232,7 +232,15 @@ This convention is enforced by two complementary tests (#1093):
   pool, feeds injection payloads into each caller-controlled argument in isolation, and
   asserts the emitted SQL neutralizes them (quotes doubled, `]` doubled, non-integer
   pagination rejected). Because it checks the security property on real output, it is
-  immune to source-scanning blind spots.
+  immune to source-scanning blind spots. Its scope is precisely the inputs neutralized by
+  **escaping/coercion**: `database`, `schema`, `table_name`, `limit`, and `offset` across
+  those tools. It does **not** cover `where` — see below.
+- **The `where` clause is caller-controlled but protected by a DIFFERENT model, by
+  design.** On the `execute_query` / `get_table_data` path (`index.js`) the raw `where`
+  string is validated as a single predicate by `validateWhereClause` +
+  `lib/security/where-clause-guard.js`; it is **not** escaped, so it is intentionally out
+  of the escaping-oriented battery's scope. "Full coverage" therefore means the escaped
+  inputs above plus the separately-guarded `where` — not that the battery escapes `where`.
 - **`test/unit/sql-construction-guard.test.js` — a best-effort static lint (secondary).**
   A regex/tokenizer scan of the SQL-building sources that fails if a SQL template literal
   interpolates a bare caller argument without an approved escaper. Its file list is
@@ -245,8 +253,13 @@ This convention is enforced by two complementary tests (#1093):
   without a `[${…}]`/`'${…}'` template shape, is not auto-detected and is covered only by
   the behavioral battery. It is a tripwire, not a proof — the battery is the real guarantee.
 
-When adding a new SQL-building site, route the value through the helper above and add the
-tool to the behavioral battery; do not add its raw variable name to any allow-list.
+When adding a new SQL-building site, route the value through the helper above; do not add
+its raw variable name to any allow-list. If it is a **new file** that both builds
+identifier SQL and executes it, the registration test will fail until you add it to both
+`SQL_SOURCE_FILES` and `MIN_SCANNED` in the static lint — and you must **also** add a
+behavioral-battery case for each caller-controlled input it accepts. Both steps are
+required: registration gets the file scanned; the battery is what actually proves the
+inputs are neutralized.
 
 ### 📊 Enhanced Response Formatting
 
