@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `get_table_data` now declares `offset` in its tool schema so schema-validating MCP clients can page through tables (#1081).
+
 ## [1.7.17] - 2026-08-26
 
 ### Security

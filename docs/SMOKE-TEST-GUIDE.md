@@ -147,13 +147,16 @@ npm run test:integration:protocol
 
 - ✅ Properly formatted tabular data returned
 - ✅ CSV export with correct headers and formatting
-- ✅ Filtering and limiting work correctly
+- ✅ Filtering, limiting and paging (`limit` + `offset`) work correctly
 
 **Sample Commands**:
 
 ```json
 // Get sample data
 {"name": "get_table_data", "input": {"database": "WarpMcpTest", "table_name": "Categories", "limit": 5}}
+
+// Page through a table: skip the first 5 rows, then return the next 5
+{"name": "get_table_data", "input": {"database": "WarpMcpTest", "table_name": "Categories", "limit": 5, "offset": 5}}
 
 // Export as CSV
 {"name": "export_table_csv", "input": {"database": "WarpMcpTest", "table_name": "Products", "limit": 3}}
