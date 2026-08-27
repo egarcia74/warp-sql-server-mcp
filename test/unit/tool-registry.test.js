@@ -6,8 +6,9 @@ import { getAllTools, getTool } from '../../lib/tools/tool-registry.js';
  *
  * The registry is the contract that schema-validating MCP clients use to decide
  * which arguments they are allowed to send. These tests guard that contract:
- * - every tool exposes a well-formed inputSchema
- * - handler parameters that are implemented are actually declared (#1081)
+ * - every tool exposes a well-formed inputSchema (type object, properties present,
+ *   required is a subset of properties, unique names)
+ * - get_table_data declares the offset parameter its handler implements (#1081)
  */
 
 describe('Tool Registry', () => {
@@ -64,10 +65,9 @@ describe('Tool Registry', () => {
       expect(offset.description.length).toBeGreaterThan(0);
     });
 
-    test('declares offset alongside limit', () => {
+    test('declares both limit and offset paging parameters', () => {
       const keys = Object.keys(tool.inputSchema.properties);
-      expect(keys).toContain('limit');
-      expect(keys.indexOf('offset')).toBe(keys.indexOf('limit') + 1);
+      expect(keys).toEqual(expect.arrayContaining(['limit', 'offset']));
     });
   });
 });

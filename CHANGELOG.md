@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `get_table_data` now declares `offset` in its tool schema so schema-validating MCP clients can page through tables (#1081).
+- `get_table_data` now declares `offset` in its tool schema so schema-validating MCP clients can page through tables ([#1081](https://github.com/egarcia74/warp-sql-server-mcp/issues/1081)).
 
 ## [1.7.17] - 2026-08-26
 
