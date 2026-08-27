@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 
 /**
  * SQL-construction static lint (#1093) — SECONDARY, best-effort tripwire
@@ -14,6 +14,21 @@ import { dirname, join } from 'node:path';
  * cover: a brand-new SQL-building site nobody wired into the battery. It scans
  * the SQL-building sources and fails if a SQL template literal interpolates a
  * bare caller-controlled argument without an approved escaper.
+ *
+ * Registration is SELF-VERIFYING (not a hand-maintained list on trust): the
+ * `every SQL-building+executing source is registered` test below recursively
+ * discovers production sources that BOTH interpolate an identifier into a SQL
+ * template (`[${…}]` / `'${…}'`) AND execute SQL in-file (`.query(`/`.batch(`),
+ * and fails if any such file is missing from `SQL_SOURCE_FILES`. So the concrete
+ * guarantee is: a NEW source that both builds identifier SQL and executes it is
+ * auto-detected and must be registered — after which it is scanned for
+ * unescaped interpolation.
+ *
+ * Honest residual (still best-effort): a source that builds identifier SQL in
+ * file A but executes it in file B is NOT auto-detected (neither half is a sink
+ * on its own), and SQL assembled without a `[${…}]`/`'${…}'` template shape is
+ * likewise outside this heuristic. Those remain covered only if wired into the
+ * behavioral battery.
  *
  * It is best-effort by nature (a source scan, not execution). Its scope is
  * therefore honest and narrow:
@@ -375,8 +390,57 @@ const MIN_SCANNED = {
   'lib/analysis/bottleneck-detector.js': 1
 };
 
+// Execution call: the file sends SQL to the driver in-file.
+const EXECUTES_SQL = /\.(query|batch)\s*\(/;
+
+/** Recursively collect `*.js` under a directory, as repo-relative POSIX paths. */
+function collectJsFiles(absDir) {
+  const found = [];
+  for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+    const abs = join(absDir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...collectJsFiles(abs));
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      found.push(relative(repoRoot, abs).split(sep).join('/'));
+    }
+  }
+  return found;
+}
+
+/**
+ * Enumerate production sources and return those that are SQL-building SINKS:
+ * they BOTH interpolate an identifier into a SQL template AND execute SQL
+ * in-file. `SQL_SOURCE_FILES` must contain exactly these.
+ */
+function discoverSqlSinks() {
+  const candidates = ['index.js', ...collectJsFiles(join(repoRoot, 'lib'))];
+  const sinks = [];
+  for (const relPath of candidates) {
+    const fileText = readFileSync(join(repoRoot, relPath), 'utf8');
+    if (!EXECUTES_SQL.test(fileText)) continue;
+    const buildsIdentifierSql = scanTemplateLiterals(fileText).some(lit =>
+      IDENTIFIER_INTERP.test(lit.raw)
+    );
+    if (buildsIdentifierSql) sinks.push(relPath);
+  }
+  return sinks.sort();
+}
+
 describe('SQL construction static lint (#1093)', () => {
   const findings = SQL_SOURCE_FILES.map(analyzeFile);
+
+  test('every SQL-building+executing source is registered in SQL_SOURCE_FILES', () => {
+    const registered = new Set(SQL_SOURCE_FILES);
+    const unregistered = discoverSqlSinks().filter(f => !registered.has(f));
+    expect(
+      unregistered,
+      unregistered.length
+        ? `Unregistered SQL-building+executing source(s) — add to SQL_SOURCE_FILES so they are scanned:\n  ${unregistered.join(
+            '\n  '
+          )}`
+        : undefined
+    ).toEqual([]);
+  });
 
   test.each(findings)('$relPath has no unescaped caller-arg interpolation', ({ violations }) => {
     expect(

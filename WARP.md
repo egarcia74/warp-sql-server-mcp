@@ -235,9 +235,15 @@ This convention is enforced by two complementary tests (#1093):
   immune to source-scanning blind spots.
 - **`test/unit/sql-construction-guard.test.js` — a best-effort static lint (secondary).**
   A regex/tokenizer scan of the SQL-building sources that fails if a SQL template literal
-  interpolates a bare caller argument without an approved escaper. It backstops the one
-  thing the battery cannot: a brand-new SQL-building site nobody wired into the battery.
-  It is a tripwire, not a proof — the battery is the real guarantee.
+  interpolates a bare caller argument without an approved escaper. Its file list is
+  self-verifying: the lint recursively discovers any production source that BOTH
+  interpolates an identifier into a SQL template (`[${…}]` / `'${…}'`) AND executes SQL
+  in-file (`.query(`/`.batch(`), and fails if such a file is not registered for scanning.
+  So the concrete guarantee is: a new source that both builds identifier SQL and executes
+  it is auto-detected and must be registered, after which it is scanned. The honest
+  residual (still best-effort): SQL built in one file but executed in another, or assembled
+  without a `[${…}]`/`'${…}'` template shape, is not auto-detected and is covered only by
+  the behavioral battery. It is a tripwire, not a proof — the battery is the real guarantee.
 
 When adding a new SQL-building site, route the value through the helper above and add the
 tool to the behavioral battery; do not add its raw variable name to any allow-list.
