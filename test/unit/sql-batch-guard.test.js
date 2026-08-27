@@ -168,13 +168,42 @@ describe('findForbiddenBatchStatement', () => {
       expect(result.reason).toMatch(/Administrative operations/);
     });
 
-    it('classifyReceive: RECEIVE in statement position is destructive', () => {
-      expect(findForbiddenBatchStatement('RECEIVE TOP (1) * FROM dbo.Q', DENY_ALL)).not.toBeNull();
-      expect(findForbiddenBatchStatement('SELECT 1 RECEIVE * FROM dbo.Q', DENY_ALL)).not.toBeNull();
+    it('classifyReceive: RECEIVE in statement position (i===0, next===top) is destructive', () => {
+      const result = findForbiddenBatchStatement('RECEIVE TOP (1) * FROM dbo.Q', DENY_ALL);
+      expect(result.keyword).toBe('RECEIVE');
+      expect(result.queryType).toBe('destructive');
+    });
+
+    it('classifyReceive: RECEIVE in statement position (next===*) is destructive', () => {
+      const result = findForbiddenBatchStatement('SELECT 1 RECEIVE * FROM dbo.Q', DENY_ALL);
+      expect(result.keyword).toBe('RECEIVE');
+      expect(result.queryType).toBe('destructive');
+    });
+
+    it('classifyReceive: the WAITFOR-preceding branch alone marks RECEIVE as a statement', () => {
+      // Isolates the `words.at(i - 1) === 'waitfor'` disjunct: the RECEIVE is
+      // mid-batch (i !== 0) and is followed by an explicit column list, so
+      // neither next==='top' nor next==='*' fires — only the preceding WAITFOR
+      // makes it a statement. DENY_ALL is required so WAITFOR itself (a
+      // non-read-only keyword) is permitted while RECEIVE-as-destructive is
+      // still blocked; under READ_ONLY the leading WAITFOR would be caught
+      // first, and under any DML-allowing tier RECEIVE would not be blocked.
+      const result = findForbiddenBatchStatement(
+        'WAITFOR (RECEIVE col1, col2 FROM dbo.Queue)',
+        DENY_ALL
+      );
+      expect(result.keyword).toBe('RECEIVE');
+      expect(result.queryType).toBe('destructive');
+      expect(result.reason).toMatch(/Destructive operations/);
     });
 
     it('classifyReceive: RECEIVE used as an ordinary identifier is allowed', () => {
       expect(findForbiddenBatchStatement('SELECT Receive FROM dbo.Config', READ_ONLY)).toBeNull();
+      // Mid-batch RECEIVE with a column list and no preceding WAITFOR is
+      // lexically a SELECT of a column named "receive" — deliberately allowed.
+      expect(
+        findForbiddenBatchStatement('SELECT receive, col2 FROM dbo.Queue', READ_ONLY)
+      ).toBeNull();
     });
   });
 

@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   findForbiddenWhereClauseSyntax,
   stripWhereClauseLiterals,
-  tokenizeWhereClause
+  tokenizeWhereClause,
+  WHERE_CLAUSE_FORBIDDEN_KEYWORDS,
+  WHERE_CLAUSE_TOP_LEVEL_FORBIDDEN_KEYWORDS
 } from '../../lib/security/where-clause-guard.js';
 
 /**
@@ -66,6 +68,20 @@ describe('findForbiddenWhereClauseSyntax', () => {
     expect(findForbiddenWhereClauseSyntax('id IN (SELECT id FROM other)')).toBeNull();
   });
 
+  describe('bracketed identifiers that collide with keywords are allowed (not false-positives)', () => {
+    // stripWhereClauseLiterals removes [..] before the keyword/depth scan, so a
+    // column whose name collides with a keyword must not trip the guard. This
+    // is the most likely real-world false positive.
+    it.each([
+      ['top-level-only keyword as identifier', '[Select] = 1'],
+      ['top-level-only keyword as identifier', '[Order] = 1'],
+      ['any-depth forbidden keyword as identifier', '[Delete] = 1'],
+      ['bracketed keyword combined with a real predicate', 'id = 1 AND [Union] = 2']
+    ])('allows %s (%s)', (_label, clause) => {
+      expect(findForbiddenWhereClauseSyntax(clause)).toBeNull();
+    });
+  });
+
   it('fails closed on an unterminated literal', () => {
     expect(findForbiddenWhereClauseSyntax("name = 'abc")).toMatch(/unterminated string literal/);
   });
@@ -76,8 +92,10 @@ describe('findForbiddenWhereClauseSyntax', () => {
       ['--', '1=1 -- comment'],
       ['/*', '1=1 /* c */'],
       ['*/', '1=1 */']
-    ])('rejects %s', (token, clause) => {
-      expect(findForbiddenWhereClauseSyntax(clause)).toMatch(/batch separators and comments/);
+    ])('rejects %s and names the token', (token, clause) => {
+      const reason = findForbiddenWhereClauseSyntax(clause);
+      expect(reason).toMatch(/batch separators and comments/);
+      expect(reason).toContain(`found '${token}'`);
     });
   });
 
@@ -96,6 +114,14 @@ describe('findForbiddenWhereClauseSyntax', () => {
 
     it('rejects INTO', () => {
       expect(findForbiddenWhereClauseSyntax('1=1 INTO dumped')).toMatch(/statement keyword 'INTO'/);
+    });
+
+    // Data-driven guard against an accidental drop from the Set: every member
+    // must be rejected wherever it appears in a clause.
+    it.each([...WHERE_CLAUSE_FORBIDDEN_KEYWORDS])('rejects the forbidden keyword %s', keyword => {
+      expect(findForbiddenWhereClauseSyntax(`1 = 1 ${keyword}`)).toMatch(
+        new RegExp(`statement keyword '${keyword.toUpperCase()}'`)
+      );
     });
   });
 
@@ -117,6 +143,16 @@ describe('findForbiddenWhereClauseSyntax', () => {
         findForbiddenWhereClauseSyntax('id IN (SELECT id FROM a UNION SELECT id FROM b)')
       ).toBeNull();
     });
+
+    // Data-driven guard against an accidental drop from the Set.
+    it.each([...WHERE_CLAUSE_TOP_LEVEL_FORBIDDEN_KEYWORDS])(
+      'rejects the top-level-only keyword %s at depth 0',
+      keyword => {
+        expect(findForbiddenWhereClauseSyntax(`1 = 1 ${keyword}`)).toMatch(
+          /only allowed inside a parenthesised subquery/
+        );
+      }
+    );
   });
 
   it('rejects unbalanced parentheses', () => {
