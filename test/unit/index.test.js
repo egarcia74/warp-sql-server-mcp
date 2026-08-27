@@ -583,4 +583,33 @@ describe('SqlServerMCP Index', () => {
       }
     });
   });
+
+  describe('executeQuery database switching (GHSA-p8gx-89fp-x73j)', () => {
+    it('bracket-escapes the database argument in the emitted USE statement', async () => {
+      const request = { query: sinon.stub().resolves({ recordset: [], rowsAffected: [0] }) };
+      const pool = { request: () => request };
+      // Override the instance-level connect (the prototype stub rejects by default).
+      server.connectionManager.connect = async () => pool;
+      sandbox.stub(server, 'validateQuery').returns({ allowed: true, queryType: 'SELECT' });
+
+      await server.executeQuery('SELECT 1', 'we]rd');
+
+      // A crafted `]` must be doubled so it cannot break out of the [...] quoting.
+      expect(request.query.calledWith('USE [we]]rd]')).to.equal(true);
+      // The USE must run before the actual query.
+      expect(request.query.firstCall.args[0]).to.equal('USE [we]]rd]');
+      expect(request.query.calledWith('SELECT 1')).to.equal(true);
+    });
+
+    it('passes a normal database name through unchanged', async () => {
+      const request = { query: sinon.stub().resolves({ recordset: [], rowsAffected: [0] }) };
+      const pool = { request: () => request };
+      server.connectionManager.connect = async () => pool;
+      sandbox.stub(server, 'validateQuery').returns({ allowed: true, queryType: 'SELECT' });
+
+      await server.executeQuery('SELECT 1', 'McpToolingTestDb');
+
+      expect(request.query.calledWith('USE [McpToolingTestDb]')).to.equal(true);
+    });
+  });
 });

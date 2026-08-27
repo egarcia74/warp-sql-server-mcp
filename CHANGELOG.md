@@ -33,6 +33,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `index.js` CallTool dispatcher never reads, preventing this class of "dead parameter" from recurring
   ([#1058](https://github.com/egarcia74/warp-sql-server-mcp/issues/1058)).
 
+## [1.7.18] - 2026-08-27
+
+### Security
+
+- Identifier arguments (`table_name`, `schema`, `database`) and pagination arguments (`limit`, `offset`) in the
+  data and exploration tools (`list_tables`, `describe_table`, `list_foreign_keys`, `get_table_data`,
+  `export_table_csv`) are now escaped and validated before use in queries: identifiers are escaped for their exact
+  bracket or string-literal context, and pagination arguments are validated as integers within their allowed range
+  (rejected otherwise) before use. See advisory
+  [GHSA-p8gx-89fp-x73j](https://github.com/egarcia74/warp-sql-server-mcp/security/advisories/GHSA-p8gx-89fp-x73j).
+
 ## [1.7.17] - 2026-08-26
 
 ### Security

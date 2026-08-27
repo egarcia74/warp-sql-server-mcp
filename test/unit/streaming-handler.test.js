@@ -161,6 +161,19 @@ describe('StreamingHandler', () => {
       expect(req.query).toHaveBeenCalledWith(expect.stringContaining('sys.tables'));
     });
 
+    it('escapes tableName/schema in the size probe (defense-in-depth, GHSA-p8gx-89fp-x73j)', async () => {
+      const context = { tableName: "t'--", schema: "s' OR '1'='1" };
+      req.query.mockResolvedValue({
+        recordset: [{ estimated_rows: 1, estimated_size_mb: 1 }]
+      });
+
+      await handler.shouldStreamQuery(req, 'SELECT * FROM x', context);
+
+      const sizeQuery = req.query.mock.calls[0][0];
+      expect(sizeQuery).toContain("t.name = 't''--'");
+      expect(sizeQuery).toContain("s.name = 's'' OR ''1''=''1'");
+    });
+
     it('should not stream for small tables', async () => {
       const context = { tableName: 'small_table', schema: 'dbo' };
 
@@ -619,6 +632,58 @@ describe('StreamingHandler', () => {
       expect(executeStreamingSpy).toHaveBeenCalledWith(
         mockSqlRequest,
         'SELECT * FROM [sales].[orders]',
+        expect.any(Object)
+      );
+    });
+
+    it('escapes crafted schema and tableName in the bracket context (GHSA-p8gx-89fp-x73j)', async () => {
+      const mockSqlRequest = { query: vi.fn(), parent: {} };
+      const executeStreamingSpy = vi
+        .spyOn(handler, 'executeQueryWithStreaming')
+        .mockResolvedValue({ success: true });
+
+      await handler.streamTableExport(mockSqlRequest, 't]t', { schema: 's]s' });
+
+      expect(executeStreamingSpy).toHaveBeenCalledWith(
+        mockSqlRequest,
+        'SELECT * FROM [s]]s].[t]]t]',
+        expect.any(Object)
+      );
+    });
+
+    it('coerces a valid string limit to an integer TOP', async () => {
+      const mockSqlRequest = { query: vi.fn(), parent: {} };
+      const executeStreamingSpy = vi
+        .spyOn(handler, 'executeQueryWithStreaming')
+        .mockResolvedValue({ success: true });
+
+      await handler.streamTableExport(mockSqlRequest, 'users', { limit: '10' });
+
+      expect(executeStreamingSpy).toHaveBeenCalledWith(
+        mockSqlRequest,
+        'SELECT TOP 10 * FROM [dbo].[users]',
+        expect.any(Object)
+      );
+    });
+
+    it('rejects a non-integer limit with a TypeError', async () => {
+      const mockSqlRequest = { query: vi.fn(), parent: {} };
+      await expect(
+        handler.streamTableExport(mockSqlRequest, 'users', { limit: '1; DROP' })
+      ).rejects.toThrow(/invalid limit/i);
+    });
+
+    it('treats limit:0 as unbounded (no TOP clause), not an error', async () => {
+      const mockSqlRequest = { query: vi.fn(), parent: {} };
+      const executeStreamingSpy = vi
+        .spyOn(handler, 'executeQueryWithStreaming')
+        .mockResolvedValue({ success: true });
+
+      await handler.streamTableExport(mockSqlRequest, 'users', { limit: 0 });
+
+      expect(executeStreamingSpy).toHaveBeenCalledWith(
+        mockSqlRequest,
+        'SELECT * FROM [dbo].[users]',
         expect.any(Object)
       );
     });

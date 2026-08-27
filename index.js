@@ -22,6 +22,7 @@ import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
 import { findForbiddenWhereClauseSyntax } from './lib/security/where-clause-guard.js';
 import { findForbiddenBatchStatement } from './lib/security/sql-batch-guard.js';
+import { escapeBracketIdentifier } from './lib/utils/sql-identifier.js';
 
 // Read package.json for version info
 import { readFileSync } from 'node:fs';
@@ -501,7 +502,7 @@ class SqlServerMCP {
 
       // Switch database if specified
       if (database) {
-        await request.query(`USE [${database}]`);
+        await request.query(`USE [${escapeBracketIdentifier(database)}]`);
       }
 
       const result = await request.query(query);

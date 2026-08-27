@@ -764,6 +764,152 @@ describe('DatabaseToolsHandler', () => {
     });
   });
 
+  describe('identifier escaping and pagination coercion (GHSA-p8gx-89fp-x73j)', () => {
+    beforeEach(() => {
+      mockRequest.query.mockResolvedValue({ recordset: [] });
+    });
+
+    test('listTables neutralizes a crafted schema in the string-literal context', async () => {
+      await handler.listTables(null, "x' OR '1'='1");
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).toContain("WHERE t.TABLE_SCHEMA = 'x'' OR ''1''=''1'");
+    });
+
+    test('listTables neutralizes a crafted database in the bracket context', async () => {
+      await handler.listTables('a]; DROP TABLE Users--', 'dbo');
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).toContain('[a]]; DROP TABLE Users--].INFORMATION_SCHEMA.TABLES');
+    });
+
+    test('describeTable neutralizes crafted tableName and schema in literal context', async () => {
+      await handler.describeTable("t'--", null, "s' OR '1'='1");
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).toContain("c.TABLE_NAME = 't''--'");
+      expect(executed).toContain("c.TABLE_SCHEMA = 's'' OR ''1''=''1'");
+    });
+
+    test('describeTable neutralizes a crafted database in every bracket occurrence', async () => {
+      await handler.describeTable('Users', 'd]b', 'dbo');
+      const executed = mockRequest.query.mock.calls[0][0];
+      // Every [${database}]. prefix must be escaped; none may contain a lone `]b].`
+      expect(executed).not.toMatch(/\[d\]b\]\./);
+      expect(executed).toContain('[d]]b].INFORMATION_SCHEMA.COLUMNS');
+      expect(executed).toContain('[d]]b].INFORMATION_SCHEMA.TABLE_CONSTRAINTS');
+      expect(executed).toContain('[d]]b].INFORMATION_SCHEMA.KEY_COLUMN_USAGE');
+    });
+
+    test('listForeignKeys neutralizes crafted schema and database', async () => {
+      await handler.listForeignKeys('d]b', "s'--");
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).toContain("WHERE s.name = 's''--'");
+      expect(executed).toContain('[d]]b].sys.foreign_keys');
+      expect(executed).not.toMatch(/\[d\]b\]\./);
+    });
+
+    test('getTableData neutralizes crafted identifiers in bracket context', async () => {
+      await handler.getTableData('t]t', 'd]b', 's]s', 10, 0);
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).toContain('[d]]b].[s]]s].[t]]t]');
+    });
+
+    test('getTableData coerces valid pagination and passes it through', async () => {
+      await handler.getTableData('Users', null, 'dbo', '25', '5');
+      const executed = mockRequest.query.mock.calls[0][0];
+      expect(executed).toContain('OFFSET 5 ROWS');
+      expect(executed).toContain('FETCH NEXT 25 ROWS ONLY');
+    });
+
+    test('getTableData rejects non-integer limit with a TypeError naming the param', async () => {
+      await expect(handler.getTableData('Users', null, 'dbo', '1; DROP', 0)).rejects.toThrow(
+        /invalid limit/i
+      );
+      await expect(handler.getTableData('Users', null, 'dbo', 1.5, 0)).rejects.toThrow(TypeError);
+    });
+
+    test('getTableData rejects non-integer/negative offset with a TypeError', async () => {
+      await expect(handler.getTableData('Users', null, 'dbo', 100, -1)).rejects.toThrow(
+        /invalid offset/i
+      );
+      await expect(handler.getTableData('Users', null, 'dbo', 100, {})).rejects.toThrow(
+        /invalid offset/i
+      );
+    });
+
+    test('exportTableCsv escapes schema/tableName in the recorded description', async () => {
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        recordset: [{ id: 1 }],
+        totalRows: 1,
+        performance: { duration: 1, rowCount: 1, memoryEfficient: false }
+      });
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 1
+      });
+
+      await handler.exportTableCsv('t]t', null, 's]s', 5);
+
+      const recorded = mockPerformanceMonitor.recordQuery.mock.calls.at(-1)[0];
+      expect(recorded.query).toContain('[s]]s].[t]]t]');
+    });
+
+    test('exportTableCsv coerces limit and forwards the coerced value to streaming', async () => {
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        recordset: [{ id: 1 }],
+        totalRows: 1,
+        performance: { duration: 1, rowCount: 1, memoryEfficient: false }
+      });
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 1
+      });
+
+      await handler.exportTableCsv('Users', null, 'dbo', '15');
+
+      expect(handler.streamingHandler.streamTableExport).toHaveBeenCalledWith(
+        expect.any(Object),
+        'Users',
+        expect.objectContaining({ limit: 15 })
+      );
+    });
+
+    test('exportTableCsv rejects a non-integer limit with a TypeError', async () => {
+      await expect(handler.exportTableCsv('Users', null, 'dbo', '1; DROP')).rejects.toThrow(
+        /invalid limit/i
+      );
+    });
+
+    test('exportTableCsv treats limit:0 as unbounded (no TOP clause), not an error', async () => {
+      handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+        success: true,
+        streaming: false,
+        recordset: [{ id: 1 }],
+        totalRows: 1,
+        performance: { duration: 1, rowCount: 1, memoryEfficient: false }
+      });
+      handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+        streaming: false,
+        memoryEfficient: false,
+        totalRows: 1
+      });
+
+      await handler.exportTableCsv('Users', null, 'dbo', 0);
+
+      const recorded = mockPerformanceMonitor.recordQuery.mock.calls.at(-1)[0];
+      expect(recorded.query).not.toMatch(/TOP/);
+      expect(handler.streamingHandler.streamTableExport).toHaveBeenCalledWith(
+        expect.any(Object),
+        'Users',
+        expect.objectContaining({ limit: null })
+      );
+    });
+  });
+
   describe('performance monitoring integration', () => {
     test('should record query metrics for successful operations', async () => {
       mockRequest.query.mockResolvedValue({ recordset: [] });
