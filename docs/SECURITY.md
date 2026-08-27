@@ -153,8 +153,12 @@ The MCP server includes a comprehensive query validation engine that:
 ```
 
 The blocking decisions in the tier checks above are enforced by the whole-batch keyword scan:
-every statement in the batch is checked — T-SQL does not require `;` between statements — and a
-batch must open with a recognised T-SQL statement keyword (use `EXEC` for procedures).
+every statement in the batch is checked — T-SQL does not require `;` between statements. Whenever a
+tier restriction is in force, a batch must also open with a recognised T-SQL statement keyword: an
+unrecognised leading statement (for example a bare procedure call invoked without `EXEC`) is treated
+as destructive, so it is rejected in read-only mode or when destructive operations are disabled, and
+permitted only once destructive operations are enabled. With all three tiers open (full development
+mode) the whole-batch guard is bypassed entirely.
 
 ### WHERE Clause Validation (`get_table_data` / `export_table_csv`)
 

@@ -300,6 +300,7 @@
     "TOCTOU",
     "Northwind",
     "recognised",
+    "unrecognised",
     "WRITETEXT",
     "UPDATETEXT",
     "DBCC",
