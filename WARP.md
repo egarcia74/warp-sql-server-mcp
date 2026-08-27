@@ -200,6 +200,38 @@ single-pass scanners with no regex backtracking on untrusted input:
   statement keywords, top-level set operators/`SELECT` and unbalanced parentheses, and
   fails closed on unterminated literals or identifiers.
 
+### 🔒 Constructing SQL Safely
+
+The safety policy above governs the _statement_ a caller submits. Beneath it is a
+separate rule for the SQL this server _assembles itself_ from caller arguments
+(`database`/`schema`/`table_name`/`limit`/`offset`/`where`):
+
+**A caller-controlled value may reach an executed SQL string only through an approved
+escaper/coercion helper from `lib/utils/sql-identifier.js`, applied for its exact
+context:**
+
+- **`escapeBracketIdentifier(id)`** — a value used inside `[ … ]` bracket quoting
+  (database/schema/table identifiers). Doubles `]`.
+- **`escapeSqlStringLiteral(v)`** — a value used inside a single-quoted `'…'` literal
+  (e.g. `WHERE name = '…'`). Doubles `'`.
+- **`sanitizeDbName(db)`** — a database/schema name used inside `DB_ID(N'…')` /
+  `OBJECT_SCHEMA_NAME(…) = N'…'`. Doubles `'`, rejects brackets.
+- **`parseRowCount(v, …)`** — a `limit`/`offset`/`TOP` value coerced to a bounded
+  integer (rejected otherwise).
+
+The caller-supplied `where` clause is the one deliberate exception: it is interpolated
+raw but is gated by the `where-clause-guard` policy layer (`validateWhereClause`) before
+the statement runs.
+
+This convention is **enforced by a static guard test**
+(`test/unit/sql-construction-guard.test.js`, #1093): it scans the SQL-building sources
+and fails CI if an executed template literal interpolates a value that is neither an
+approved-escaper call nor an allow-listed post-escape local. It is the structural
+tripwire for the 1.7.16 → 1.7.18 advisory series — add a new interpolation site with a
+bare caller argument and the test names the file, line and expression. When adding a
+new SQL-building site, route the value through the helper above; do not add its raw
+variable name to the test's allow-list.
+
 ### 📊 Enhanced Response Formatting
 
 **Configurable Output Formats**: Supports different integration patterns:
