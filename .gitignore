@@ -36,6 +36,7 @@ codex-mcp-config.json
 *.pfx
 # Coverage directory used by tools like istanbul
 coverage/
+coverage-report.json
 *.lcov
 
 # Credential removal script (temporary)
