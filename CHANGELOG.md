@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `index.js` CallTool dispatcher never reads, preventing this class of "dead parameter" from recurring
   ([#1058](https://github.com/egarcia74/warp-sql-server-mcp/issues/1058)).
 
+### Security
+
+- Added a behavioral SQL-injection battery (the authoritative guard) plus a best-effort static construction lint,
+  enforcing that caller-controlled values reach SQL only through approved escapers and preventing the injection
+  class fixed in 1.7.16–1.7.18 from recurring
+  ([#1093](https://github.com/egarcia74/warp-sql-server-mcp/issues/1093)).
+
 ## [1.7.18] - 2026-08-27
 
 ### Security

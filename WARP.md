@@ -200,6 +200,67 @@ single-pass scanners with no regex backtracking on untrusted input:
   statement keywords, top-level set operators/`SELECT` and unbalanced parentheses, and
   fails closed on unterminated literals or identifiers.
 
+### 🔒 Constructing SQL Safely
+
+The safety policy above governs the _statement_ a caller submits. Beneath it is a
+separate rule for the SQL this server _assembles itself_ from caller arguments
+(`database`/`schema`/`table_name`/`limit`/`offset`/`where`):
+
+**A caller-controlled value may reach an executed SQL string only through an approved
+escaper/coercion helper from `lib/utils/sql-identifier.js`, applied for its exact
+context:**
+
+- **`escapeBracketIdentifier(id)`** — a value used inside `[ … ]` bracket quoting
+  (database/schema/table identifiers). Doubles `]`.
+- **`escapeSqlStringLiteral(v)`** — a value used inside a single-quoted `'…'` literal
+  (e.g. `WHERE name = '…'`). Doubles `'`.
+- **`sanitizeDbName(db)`** — a database/schema name used inside `DB_ID(N'…')` /
+  `OBJECT_SCHEMA_NAME(…) = N'…'`. Doubles `'`, rejects brackets.
+- **`parseRowCount(v, …)`** — a `limit`/`offset`/`TOP` value coerced to a bounded
+  integer (rejected otherwise).
+
+The caller-supplied `where` clause is the one deliberate exception: it is interpolated
+raw but is gated by the `where-clause-guard` policy layer (`validateWhereClause`) before
+the statement runs.
+
+This convention is enforced by two complementary tests (#1093):
+
+- **`test/unit/sql-injection-battery.test.js` — the authoritative guard.** It drives the
+  real handlers/methods (`list_tables`, `describe_table`, `list_foreign_keys`,
+  `get_table_data`, `export_table_csv`, the streaming query + size-probe,
+  `get_index_recommendations`, and `execute_query`'s database `USE` switch) with a mocked
+  pool, feeds injection payloads into each caller-controlled argument in isolation, and
+  asserts the emitted SQL neutralizes them (quotes doubled, `]` doubled, non-integer
+  pagination rejected). Because it checks the security property on real output, it is
+  immune to source-scanning blind spots. Its scope is precisely the inputs neutralized by
+  **escaping/coercion**: `database`, `schema`, `table_name`, `limit`, and `offset` across
+  those tools. It does **not** cover `where` — see below.
+- **The `where` clause is caller-controlled but protected by a DIFFERENT model, by
+  design.** On the `execute_query` / `get_table_data` path (`index.js`) the raw `where`
+  string is validated as a single predicate by `validateWhereClause` +
+  `lib/security/where-clause-guard.js`; it is **not** escaped, so it is intentionally out
+  of the escaping-oriented battery's scope. "Full coverage" therefore means the escaped
+  inputs above plus the separately-guarded `where` — not that the battery escapes `where`.
+- **`test/unit/sql-construction-guard.test.js` — a best-effort static lint (secondary).**
+  A regex/tokenizer scan of the SQL-building sources that fails if a SQL template literal
+  interpolates a bare caller argument without an approved escaper. Its file list is
+  self-verifying: the lint recursively discovers any production source that BOTH
+  interpolates an identifier into a SQL template (`[${…}]` / `'${…}'`) AND executes SQL
+  in-file (`.query(`/`.batch(`), and fails if such a file is not registered for scanning.
+  So the concrete guarantee is: a new source that both builds identifier SQL and executes
+  it is auto-detected and must be registered, after which it is scanned. The honest
+  residual (still best-effort): SQL built in one file but executed in another, or assembled
+  without a `[${…}]`/`'${…}'` template shape, is not auto-detected and is covered only by
+  the behavioral battery. It is a tripwire, not a proof — the battery is the real guarantee.
+
+When adding a new SQL-building site, route the value through the helper above; do not add
+its raw variable name to any allow-list. If it is a **new file** that both builds
+identifier SQL and executes it, the registration test will fail until you add it to both
+`SQL_SOURCE_FILES` and `MIN_SCANNED` in the static lint — and you must **also** add a
+behavioral-battery case for each caller-controlled input it accepts. Both steps are
+required: registration gets the file scanned; the battery is what actually proves the
+inputs are neutralized.
+
 ### 📊 Enhanced Response Formatting
 
 **Configurable Output Formats**: Supports different integration patterns:
