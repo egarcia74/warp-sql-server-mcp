@@ -143,9 +143,10 @@ accidental certificate trust in cloud production environments using private IP a
 
 - **Default**: `true`
 - **Description**: Enable read-only mode (only SELECT queries allowed). In read-only mode the whole batch is scanned — T-SQL does not require `;` between statements — and everything the
-  other two tiers block is rejected, plus WAITFOR, the linked-server rowset functions OPENQUERY/OPENDATASOURCE and the provider form of OPENROWSET (so linked-server reads need
-  `SQL_SERVER_READ_ONLY=false`), `OPENROWSET(BULK ...)` file reads, and any batch that does not open with a recognised T-SQL statement keyword (e.g. a bare procedure call). Batches with
-  unterminated string literals, identifiers or comments are rejected in every restricted mode.
+  other two tiers block is rejected, plus WAITFOR, `OPENROWSET(BULK ...)` file reads, and any batch that does not open with a recognised T-SQL statement keyword (e.g. a bare procedure
+  call). The linked-server rowset functions OPENQUERY/OPENDATASOURCE and the provider form of OPENROWSET are administrative, so running them needs **both** `SQL_SERVER_READ_ONLY=false`
+  **and** `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true`; `OPENROWSET(BULK ...)` file reads are not administrative and need only `SQL_SERVER_READ_ONLY=false`. Batches with unterminated
+  string literals, identifiers or comments are rejected in every restricted mode.
 - **Values**:
   - `true` (maximum security - only SELECT queries)
   - `false` (enable write operations)

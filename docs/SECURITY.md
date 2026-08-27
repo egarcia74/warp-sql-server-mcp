@@ -115,35 +115,29 @@ The MCP server includes a comprehensive query validation engine that:
          │
          ▼
 ┌─────────────────┐      ┌─────────────────────────────────┐
+│ All three tiers │─Yes──▶│ Full development mode: the      │
+│ open? (read-    │      │ whole-batch scan is bypassed —  │
+│ only off, DML   │      │ allow the batch                 │
+│ on, DDL on)     │      │                                 │
+└─────────────────┘      └─────────────────────────────────┘
+         │ No — at least one restriction is in force
+         ▼
+┌─────────────────┐      ┌─────────────────────────────────┐
 │ Literals, ids & │─No───▶│ Fail closed: unterminated       │
 │ comments        │      │ string literal, identifier or   │
 │ terminated?     │      │ block comment — reject batch    │
 └─────────────────┘      └─────────────────────────────────┘
          │ Yes
          ▼
-┌─────────────────┐      ┌─────────────────┐
-│ Read-Only Mode? │─Yes──▶│ Allow SELECT    │
-│     Enabled     │      │ Block All Else  │
-└─────────────────┘      └─────────────────┘
-         │ No
-         ▼
-┌─────────────────┐      ┌─────────────────┐
-│ Destructive     │─No───▶│ Block DML       │
-│ Ops Allowed?    │      │ Operations      │
-└─────────────────┘      └─────────────────┘
-         │ Yes
-         ▼
-┌─────────────────┐      ┌─────────────────┐
-│ Schema Changes  │─No───▶│ Block DDL       │
-│    Allowed?     │      │ Operations      │
-└─────────────────┘      └─────────────────┘
-         │ Yes
-         ▼
-┌─────────────────┐      ┌─────────────────────────────────┐
-│ Whole-batch     │─Hit──▶│ Block: batch contains a         │
-│ keyword scan    │      │ statement keyword the active    │
-│ (every stmt)    │      │ tier forbids                    │
-└─────────────────┘      └─────────────────────────────────┘
+┌───────────────────────────────┐      ┌─────────────────────────────────┐
+│ Whole-batch keyword scan      │      │ Block whatever the active tier  │
+│ (every statement), enforcing  │─Hit─▶│ forbids:                        │
+│ every active tier's rules:    │      │  • read-only  → any non-SELECT  │
+│  • read-only → only SELECT    │      │  • DML off    → DML/EXEC/admin  │
+│  • DML off   → no DML/EXEC/   │      │  • DDL off    → DDL             │
+│    admin ops                  │      │                                 │
+│  • DDL off   → no DDL         │      │                                 │
+└───────────────────────────────┘      └─────────────────────────────────┘
          │ Clean
          ▼
 ┌─────────────────┐
