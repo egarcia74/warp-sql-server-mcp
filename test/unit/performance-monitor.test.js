@@ -577,6 +577,72 @@ describe('PerformanceMonitor', () => {
 
       expect(queryStats).toEqual({ enabled: false });
     });
+
+    // Regression coverage for get_query_performance honoring tool_filter/slow_only (#1058)
+    test('toolFilter narrows the breakdown to a single tool before limiting', () => {
+      const queryStats = monitor.getQueryStats(10, { toolFilter: 'list_tables' });
+
+      expect(queryStats.queries.every(q => q.tool === 'list_tables')).toBe(true);
+      expect(Object.keys(queryStats.byTool)).toEqual(['list_tables']);
+      expect(queryStats.byTool.list_tables.count).toBe(1);
+      // execute_query queries from the shared fixture are excluded
+      expect(queryStats.byTool.execute_query).toBeUndefined();
+    });
+
+    test('slowOnly returns only queries over the slow threshold', () => {
+      monitor = new PerformanceMonitor({ slowQueryThreshold: 1200 });
+
+      Date.now.mockReturnValue(2000);
+      const fast = monitor.startQuery('execute_query', 'SELECT 1');
+      Date.now.mockReturnValue(2500); // 500ms - under threshold
+      monitor.endQuery(fast, { recordset: [1] });
+
+      Date.now.mockReturnValue(3000);
+      const slow = monitor.startQuery('export_table_csv', 'SELECT * FROM big');
+      Date.now.mockReturnValue(6000); // 3000ms - over threshold
+      monitor.endQuery(slow, { recordset: [1] });
+
+      const queryStats = monitor.getQueryStats(10, { slowOnly: true });
+
+      expect(queryStats.queries).toHaveLength(1);
+      expect(queryStats.queries[0].tool).toBe('export_table_csv');
+      expect(queryStats.queries.every(q => q.duration > 1200)).toBe(true);
+    });
+
+    test('slowOnly + toolFilter compose, and filtering happens before the limit', () => {
+      monitor = new PerformanceMonitor({ slowQueryThreshold: 1000 });
+
+      // Two slow execute_query rows plus one fast one and an unrelated tool.
+      Date.now.mockReturnValue(1000);
+      const slowA = monitor.startQuery('execute_query', 'A');
+      Date.now.mockReturnValue(3000); // 2000ms slow
+      monitor.endQuery(slowA, { recordset: [1] });
+
+      Date.now.mockReturnValue(3500);
+      const fast = monitor.startQuery('execute_query', 'B');
+      Date.now.mockReturnValue(3600); // 100ms fast
+      monitor.endQuery(fast, { recordset: [1] });
+
+      Date.now.mockReturnValue(4000);
+      const other = monitor.startQuery('list_tables', 'C');
+      Date.now.mockReturnValue(6000); // 2000ms slow but wrong tool
+      monitor.endQuery(other, { recordset: [1] });
+
+      Date.now.mockReturnValue(7000);
+      const slowB = monitor.startQuery('execute_query', 'D');
+      Date.now.mockReturnValue(9000); // 2000ms slow
+      monitor.endQuery(slowB, { recordset: [1] });
+
+      // limit 1 applied AFTER filtering => the single most-recent matching row
+      const queryStats = monitor.getQueryStats(1, {
+        slowOnly: true,
+        toolFilter: 'execute_query'
+      });
+
+      expect(queryStats.queries).toHaveLength(1);
+      expect(queryStats.queries[0].tool).toBe('execute_query');
+      expect(queryStats.queries[0].duration).toBe(2000);
+    });
   });
 
   describe('Pool Health Assessment', () => {

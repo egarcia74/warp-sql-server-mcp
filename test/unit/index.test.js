@@ -102,6 +102,73 @@ describe('SqlServerMCP Index', () => {
     });
   });
 
+  // #1058: these tools declared parameters the dispatcher used to drop. Verify
+  // the handlers now change their output/behavior in response to those params.
+  describe('Declared parameter handling (#1058)', () => {
+    const fullStats = {
+      enabled: true,
+      uptime: 1000,
+      overall: { totalQueries: 150, avgDuration: 300 },
+      recent: { count: 12, avgDuration: 120 },
+      pool: {},
+      monitoring: {}
+    };
+
+    it('getPerformanceStats("recent") scopes to the recent window', () => {
+      sandbox.stub(server.performanceMonitor, 'getStats').returns(fullStats);
+
+      const parsed = JSON.parse(server.getPerformanceStats('recent')[0].text);
+
+      expect(parsed.data.timeframe).to.equal('recent');
+      expect(parsed.data.scoped).to.deep.equal(fullStats.recent);
+    });
+
+    it('getPerformanceStats("session") scopes to the since-startup window', () => {
+      sandbox.stub(server.performanceMonitor, 'getStats').returns(fullStats);
+
+      const parsed = JSON.parse(server.getPerformanceStats('session')[0].text);
+
+      expect(parsed.data.timeframe).to.equal('session');
+      expect(parsed.data.scoped).to.deep.equal(fullStats.overall);
+    });
+
+    it('getPerformanceStats() defaults to the overall window', () => {
+      sandbox.stub(server.performanceMonitor, 'getStats').returns(fullStats);
+
+      const parsed = JSON.parse(server.getPerformanceStats()[0].text);
+
+      expect(parsed.data.timeframe).to.equal('all');
+      expect(parsed.data.scoped).to.deep.equal(fullStats.overall);
+    });
+
+    it('getQueryPerformance forwards slowOnly and toolFilter to the monitor', () => {
+      const spy = sandbox
+        .stub(server.performanceMonitor, 'getQueryStats')
+        .returns({ enabled: true, queries: [] });
+
+      const parsed = JSON.parse(
+        server.getQueryPerformance(25, { slowOnly: true, toolFilter: 'execute_query' })[0].text
+      );
+
+      expect(spy.calledOnceWith(25, { slowOnly: true, toolFilter: 'execute_query' })).to.be.true;
+      expect(parsed.filters).to.deep.equal({ slowOnly: true, toolFilter: 'execute_query' });
+    });
+
+    it('getIndexRecommendations forwards the schema option to the optimizer', async () => {
+      // analyzeIndexUsage is already stubbed on the prototype in beforeEach;
+      // reconfigure that stub to resolve so we can inspect the forwarded args.
+      const spy = server.queryOptimizer.analyzeIndexUsage;
+      spy.resetHistory();
+      spy.resolves({ database: 'Db', schema: 'sales', recommendations: [] });
+
+      await server.getIndexRecommendations('Db', { limit: 5, schema: 'sales' });
+
+      expect(spy.calledOnce).to.be.true;
+      expect(spy.firstCall.args[0]).to.equal('Db');
+      expect(spy.firstCall.args[1]).to.include({ schema: 'sales' });
+    });
+  });
+
   describe('Tool Call Handler', () => {
     it('should return error for unknown tool', async () => {
       try {

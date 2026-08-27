@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `get_table_data` now declares `offset` in its tool schema so schema-validating MCP clients can page through tables ([#1081](https://github.com/egarcia74/warp-sql-server-mcp/issues/1081)).
+- Performance and optimization tools now honor input-schema parameters the dispatcher previously declared but
+  silently dropped, so schema-driven MCP clients that send them get the expected filtered results instead of
+  unchanged output ([#1058](https://github.com/egarcia74/warp-sql-server-mcp/issues/1058)):
+  - `get_performance_stats` honors `timeframe` (`recent` = last 5 minutes, `session`/`all` = since startup),
+    scoping the reported statistics to the selected window.
+  - `get_query_performance` honors `tool_filter` (restrict the breakdown to one MCP tool) and `slow_only`
+    (only queries over the slow-query threshold), applied before `limit`.
+  - `get_index_recommendations` honors `schema`, filtering missing-index recommendations to a single schema via
+    `OBJECT_SCHEMA_NAME`, and each recommendation now reports its schema.
+  - `get_optimization_insights`'s `analysis_period` is intentionally not yet honored: the underlying missing-index DMVs are
+    cumulative, cache-resident aggregates with no retained per-event history, so genuine 24h/7d/30d windowing cannot
+    be computed honestly from the available data. It is documented as reserved rather than a silent no-op.
+- Added a static dispatch-coverage regression test that fails if any tool declares an input-schema property the
+  `index.js` CallTool dispatcher never reads, preventing this class of "dead parameter" from recurring
+  ([#1058](https://github.com/egarcia74/warp-sql-server-mcp/issues/1058)).
 
 ## [1.7.17] - 2026-08-26
 
