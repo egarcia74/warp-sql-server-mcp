@@ -106,7 +106,6 @@
     "@modelcontextprotocol/sdk": "^1.17.5",
     "dotenv": "^17.2.1",
     "mssql": "^11.0.1",
-    "node-sql-parser": "^5.3.11",
     "winston": "^3.11.0"
   },
   "devDependencies": {

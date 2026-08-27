@@ -49,7 +49,6 @@ updates:
           - "@azure/keyvault-secrets"
           - "aws-sdk"
           - "@aws-sdk/*"
-          - "node-sql-parser"
         update-types:
           - "minor"
           - "patch"
