@@ -151,7 +151,7 @@ npm run test:integration:protocol
 
 **Sample Commands**:
 
-```json
+```jsonc
 // Get sample data
 {"name": "get_table_data", "input": {"database": "WarpMcpTest", "table_name": "Categories", "limit": 5}}
 

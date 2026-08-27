@@ -60,9 +60,16 @@ describe('Tool Registry', () => {
     test('declares offset so schema-validating clients can page through tables (#1081)', () => {
       const { offset } = tool.inputSchema.properties;
       expect(offset).toBeDefined();
-      expect(offset.type).toBe('number');
+      expect(offset.type).toBe('integer');
+      expect(offset.minimum).toBe(0);
       expect(typeof offset.description).toBe('string');
       expect(offset.description.length).toBeGreaterThan(0);
+    });
+
+    test('constrains limit to a positive integer', () => {
+      const { limit } = tool.inputSchema.properties;
+      expect(limit.type).toBe('integer');
+      expect(limit.minimum).toBe(1);
     });
 
     test('declares both limit and offset paging parameters', () => {
