@@ -22,7 +22,10 @@ import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
 import { findForbiddenWhereClauseSyntax } from './lib/security/where-clause-guard.js';
 import { validateQuery as evaluateQuerySafety } from './lib/security/query-policy.js';
-import { formatQueryResults } from './lib/utils/result-formatter.js';
+import {
+  formatQueryResults as formatQueryResultsImpl,
+  createTextTable as createTextTableImpl
+} from './lib/utils/result-formatter.js';
 import { escapeBracketIdentifier } from './lib/utils/sql-identifier.js';
 
 // Read package.json for version info
@@ -414,7 +417,7 @@ class SqlServerMCP {
         };
       }
 
-      return formatQueryResults(result.recordset);
+      return this.formatQueryResults(result.recordset);
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
@@ -445,6 +448,27 @@ class SqlServerMCP {
 
       throw new McpError(ErrorCode.InternalError, `Query execution failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Format query results for display.
+   *
+   * Thin delegator to lib/utils/result-formatter.js. Kept as an instance method
+   * because SqlServerMCP is the package's public export: external callers and
+   * subclasses rely on this being callable/overridable on the instance.
+   */
+  formatQueryResults(data) {
+    return formatQueryResultsImpl(data);
+  }
+
+  /**
+   * Create a text-based table.
+   *
+   * Thin delegator to lib/utils/result-formatter.js (see formatQueryResults for
+   * why this stays an instance method).
+   */
+  createTextTable(headers, rows) {
+    return createTextTableImpl(headers, rows);
   }
 
   // Connection management methods for test compatibility
