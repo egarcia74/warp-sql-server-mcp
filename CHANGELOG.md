@@ -44,6 +44,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [#1076](https://github.com/egarcia74/warp-sql-server-mcp/pull/1076)). The filter is now applied, and is validated as a single predicate on the requested table (no batch separators,
   comments, statement keywords, top-level set operators or unbalanced parentheses) before the SQL is assembled.
 
+## [1.7.15] - 2026-06-08
+
+### Added
+
+- npm `files` allowlist and a CLI `--version` command ([#700](https://github.com/egarcia74/warp-sql-server-mcp/pull/700)).
+
+## [1.7.14] - 2026-06-08
+
+### Fixed
+
+- Implemented the query-optimization tools — `explain_query`, index recommendations, bottleneck detection and optimization insights — which previously returned placeholder data
+  ([#695](https://github.com/egarcia74/warp-sql-server-mcp/pull/695)).
+- Migrated the AWS secret management integration from `aws-sdk` v2 to `@aws-sdk/client-secrets-manager` v3 ([#663](https://github.com/egarcia74/warp-sql-server-mcp/pull/663)).
+- Validate the AWS region before constructing the aws-sdk v2 client ([#382](https://github.com/egarcia74/warp-sql-server-mcp/pull/382)).
+
+### Changed
+
+- Migrated to ESLint 10 with error chain preservation ([#398](https://github.com/egarcia74/warp-sql-server-mcp/pull/398)).
+- Cleared pre-existing SonarCloud findings in source files ([#696](https://github.com/egarcia74/warp-sql-server-mcp/pull/696)).
+- Routine dependency and CI updates (Dependabot).
+
+## [1.7.13] - 2025-09-15
+
+### Fixed
+
+- Cross-platform CLI entry detection on Windows, with MCP configuration logging routed to stderr so stdout stays pure JSON-RPC
+  ([#140](https://github.com/egarcia74/warp-sql-server-mcp/pull/140)).
+- Docker test SQL Server container scripts and compose aligned with the MCP setup ([#139](https://github.com/egarcia74/warp-sql-server-mcp/pull/139)).
+
+### Changed
+
+- Documentation automation prefers `DOCS_PAT` so CI/CodeQL run on docs auto-PRs ([#128](https://github.com/egarcia74/warp-sql-server-mcp/pull/128),
+  [#129](https://github.com/egarcia74/warp-sql-server-mcp/pull/129)).
+- Dependency updates, including `@modelcontextprotocol/sdk` 1.18.0 and Azure SDK components.
+
+## [1.7.12] - 2025-09-12
+
+### Fixed
+
+- CLI startup banners are routed to stderr in MCP/stdio environments — detected via `VSCODE_MCP`, `MCP_TRANSPORT=stdio`, or non-TTY stdio — to prevent JSON handshake pollution on
+  Windows (VS Code/Warp) ([#125](https://github.com/egarcia74/warp-sql-server-mcp/pull/125)). No behavior change for normal terminal usage.
+
 ## [1.7.11] - 2025-09-11
 
 ### Changed
@@ -939,11 +981,3 @@ This release represents a significant architectural evolution with enterprise-gr
   - Prominent Quick Start links in README.md, SECURITY.md, CONTRIBUTING.md, WARP.md
   - Improved navigation for new users
   - Better documentation discoverability
-
-## [1.7.12] - 2025-09-12
-
-### Fixed
-
-- CLI: Route startup banners to stderr in MCP/stdio environments to prevent JSON handshake pollution on Windows (VS Code/Warp).
-  - Detect MCP via `VSCODE_MCP`, `MCP_TRANSPORT=stdio`, or non‑TTY stdio.
-  - No behavior change for normal terminal usage.

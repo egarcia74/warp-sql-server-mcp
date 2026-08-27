@@ -79,9 +79,9 @@ Your SQL Server is now connected to Warp's AI! 🤖
 - **list_databases** - List all databases
 - **list_tables** - List tables in database
 - **describe_table** - Get table schema
-- **get_table_data** - Get sample data
+- **get_table_data** - Get sample data (optional `where` single-predicate filter, `limit`, `offset`)
 - **list_foreign_keys** - Show relationships
-- **export_table_csv** - Export data as CSV
+- **export_table_csv** - Export data as CSV (optional `where` single-predicate filter, `limit`)
 - **explain_query** - Analyze query plans
 
 **⚡ Performance & Monitoring:**

@@ -142,7 +142,11 @@ accidental certificate trust in cloud production environments using private IP a
 ### `SQL_SERVER_READ_ONLY`
 
 - **Default**: `true`
-- **Description**: Enable read-only mode (only SELECT queries allowed)
+- **Description**: Enable read-only mode (only SELECT queries allowed). In read-only mode the whole batch is scanned — T-SQL does not require `;` between statements — and everything the
+  other two tiers block is rejected, plus WAITFOR, `OPENROWSET(BULK ...)` file reads, and any batch that does not open with a recognised T-SQL statement keyword (e.g. a bare procedure
+  call). The linked-server rowset functions OPENQUERY/OPENDATASOURCE and the provider form of OPENROWSET are administrative, so running them needs **both** `SQL_SERVER_READ_ONLY=false`
+  **and** `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true`; `OPENROWSET(BULK ...)` file reads are not administrative and need only `SQL_SERVER_READ_ONLY=false`. Batches with unterminated
+  string literals, identifiers or comments are rejected in every restricted mode.
 - **Values**:
   - `true` (maximum security - only SELECT queries)
   - `false` (enable write operations)
@@ -150,8 +154,9 @@ accidental certificate trust in cloud production environments using private IP a
 ### `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS`
 
 - **Default**: `false`
-- **Description**: Allow data modification operations (INSERT, UPDATE, DELETE, MERGE, TRUNCATE), procedure execution (EXEC) and administrative operations (SHUTDOWN, KILL,
-  BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*` procedures, OPENQUERY/OPENDATASOURCE and the provider form of OPENROWSET)
+- **Description**: Allow data modification operations (INSERT, UPDATE, DELETE, MERGE, TRUNCATE, WRITETEXT, UPDATETEXT, the Service Broker RECEIVE statement), procedure execution
+  (EXEC/EXECUTE) and administrative operations (SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*` procedures, OPENQUERY/OPENDATASOURCE and the
+  provider form of OPENROWSET; `OPENROWSET(BULK ...)` file reads are not gated by this tier)
 - **Prerequisites**: `SQL_SERVER_READ_ONLY=false`
 - **Values**:
   - `true` (enable data modification and administrative operations)
@@ -160,7 +165,7 @@ accidental certificate trust in cloud production environments using private IP a
 ### `SQL_SERVER_ALLOW_SCHEMA_CHANGES`
 
 - **Default**: `false`
-- **Description**: Allow database schema operations (CREATE, DROP, ALTER, GRANT, REVOKE)
+- **Description**: Allow database schema and permission operations (CREATE, DROP, ALTER, GRANT, REVOKE, DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`, which creates a table)
 - **Prerequisites**: `SQL_SERVER_READ_ONLY=false`
 - **Values**:
   - `true` (enable schema changes)

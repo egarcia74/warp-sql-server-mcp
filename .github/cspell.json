@@ -298,7 +298,16 @@
     "GETDATE",
     "openrowset",
     "TOCTOU",
-    "Northwind"
+    "Northwind",
+    "recognised",
+    "unrecognised",
+    "WRITETEXT",
+    "UPDATETEXT",
+    "DBCC",
+    "SETUSER",
+    "OPENQUERY",
+    "OPENDATASOURCE",
+    "rowset"
   ],
   "flagWords": [],
   "ignorePaths": [
