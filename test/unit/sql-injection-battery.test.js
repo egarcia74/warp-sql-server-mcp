@@ -63,7 +63,9 @@ function makeHandler() {
     close: vi.fn()
   };
   const handler = new DatabaseToolsHandler(connectionManager, { recordQuery: vi.fn() });
-  return { handler, queries };
+  // Returned as a tuple (not an object pattern) so PMD's JS parser does not
+  // misread `const { … } = makeHandler()` as an unnecessary block at call sites.
+  return [handler, queries];
 }
 
 const joinQueries = queries => queries.join('\n;;;\n');
@@ -118,7 +120,7 @@ const HANDLER_POINTS = [
 describe('SQL injection battery (#1093)', () => {
   describe.each(HANDLER_POINTS)('$name', ({ ctx, run }) => {
     test.each(PAYLOADS)('neutralizes %j', async payload => {
-      const { handler, queries } = makeHandler();
+      const [handler, queries] = makeHandler();
       await run(handler, payload);
       const sql = joinQueries(queries);
       if (ctx === 'bracket') expectBracketSafe(sql, payload);
@@ -128,19 +130,19 @@ describe('SQL injection battery (#1093)', () => {
 
   describe('get_table_data · numeric pagination', () => {
     test.each(NON_INTEGER_PAYLOADS)('rejects limit=%j', async payload => {
-      const { handler } = makeHandler();
+      const [handler] = makeHandler();
       await expect(handler.getTableData('t', null, 'dbo', payload, 0)).rejects.toThrow(
         /Invalid limit/
       );
     });
     test.each(NON_INTEGER_PAYLOADS)('rejects offset=%j', async payload => {
-      const { handler } = makeHandler();
+      const [handler] = makeHandler();
       await expect(handler.getTableData('t', null, 'dbo', 100, payload)).rejects.toThrow(
         /Invalid offset/
       );
     });
     test('coerces valid pagination into the emitted SQL', async () => {
-      const { handler, queries } = makeHandler();
+      const [handler, queries] = makeHandler();
       await handler.getTableData('t', null, 'dbo', 25, 50);
       const sql = joinQueries(queries);
       expect(sql).toContain('OFFSET 50 ROWS');
@@ -150,7 +152,7 @@ describe('SQL injection battery (#1093)', () => {
 
   describe('export_table_csv · database USE switch (bracket)', () => {
     test.each(PAYLOADS)('neutralizes %j', async payload => {
-      const { handler, queries } = makeHandler();
+      const [handler, queries] = makeHandler();
       handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({ totalRows: 0 });
       handler.streamingHandler.getStreamingStats = vi
         .fn()
@@ -220,31 +222,29 @@ describe('SQL injection battery (#1093)', () => {
         })
       };
       const pool = { request: () => request };
-      return {
-        optimizer: new QueryOptimizer({ getPool: () => pool, connect: async () => pool }),
-        queries
-      };
+      const optimizer = new QueryOptimizer({ getPool: () => pool, connect: async () => pool });
+      return [optimizer, queries];
     }
     const quotePayloads = PAYLOADS.filter(p => !p.includes(']'));
     const bracketPayloads = PAYLOADS.filter(p => p.includes(']'));
 
     // sanitizeDbName doubles single quotes and REJECTS brackets.
     test.each(quotePayloads)('doubles quotes for database=%j', async payload => {
-      const { optimizer, queries } = makeOptimizer();
+      const [optimizer, queries] = makeOptimizer();
       await optimizer.analyzeIndexUsage(payload);
       expectLiteralSafe(joinQueries(queries), payload);
     });
     test.each(quotePayloads)('doubles quotes for schema=%j', async payload => {
-      const { optimizer, queries } = makeOptimizer();
+      const [optimizer, queries] = makeOptimizer();
       await optimizer.analyzeIndexUsage(null, { schema: payload });
       expectLiteralSafe(joinQueries(queries), payload);
     });
     test.each(bracketPayloads)('rejects bracket database=%j', async payload => {
-      const { optimizer } = makeOptimizer();
+      const [optimizer] = makeOptimizer();
       await expect(optimizer.analyzeIndexUsage(payload)).rejects.toThrow(/Invalid/);
     });
     test.each(bracketPayloads)('rejects bracket schema=%j', async payload => {
-      const { optimizer } = makeOptimizer();
+      const [optimizer] = makeOptimizer();
       await expect(optimizer.analyzeIndexUsage(null, { schema: payload })).rejects.toThrow(
         /Invalid schema/
       );
@@ -253,7 +253,7 @@ describe('SQL injection battery (#1093)', () => {
 
   describe('execute_query · database USE switch (bracket)', () => {
     async function makeServer() {
-      const { SqlServerMCP } = await import('../../index.js');
+      const SqlServerMCP = (await import('../../index.js')).SqlServerMCP;
       vi.spyOn(SqlServerMCP.prototype, 'setupToolHandlers').mockImplementation(() => {});
       const server = new SqlServerMCP();
       const queries = [];
@@ -265,10 +265,10 @@ describe('SQL injection battery (#1093)', () => {
       };
       server.connectionManager.connect = async () => ({ request: () => request });
       vi.spyOn(server, 'validateQuery').mockReturnValue({ allowed: true, queryType: 'SELECT' });
-      return { server, queries };
+      return [server, queries];
     }
     test.each(PAYLOADS)('neutralizes %j', async payload => {
-      const { server, queries } = await makeServer();
+      const [server, queries] = await makeServer();
       await server.executeQuery('SELECT 1', payload);
       expectBracketSafe(joinQueries(queries), payload);
     });

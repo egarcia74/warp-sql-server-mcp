@@ -352,7 +352,16 @@ function analyzeFile(relPath) {
       violations.push(`${relPath} — ${problem}`);
     }
   }
-  return { relPath, scannedCount: scanned.length, interpolations, violations, scanned };
+  // Assigned to a local before returning (object literal in `=` position) so
+  // PMD's JS parser does not misread `return { … }` as an unnecessary block.
+  const finding = {
+    relPath: relPath,
+    scannedCount: scanned.length,
+    interpolations: interpolations,
+    violations: violations,
+    scanned: scanned
+  };
+  return finding;
 }
 
 // Per-file floor of SQL-ish templates that MUST be found. A per-file blind spot
