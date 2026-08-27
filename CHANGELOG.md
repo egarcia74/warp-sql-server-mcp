@@ -19,9 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (only queries over the slow-query threshold), applied before `limit`.
   - `get_index_recommendations` honors `schema`, filtering missing-index recommendations to a single schema via
     `OBJECT_SCHEMA_NAME`, and each recommendation now reports its schema.
-  - `get_optimization_insights`'s `analysis_period` is intentionally not yet honored: the underlying missing-index DMVs are
-    cumulative, cache-resident aggregates with no retained per-event history, so genuine 24h/7d/30d windowing cannot
-    be computed honestly from the available data. It is documented as reserved rather than a silent no-op.
+  - `get_optimization_insights`'s `analysis_period` is intentionally not yet honored: the insight combines missing-index
+    DMVs (cumulative, no per-event history, cannot be windowed) with an expensive-query count from `dm_exec_query_stats`
+    (which does carry `last_execution_time`). Windowing only the query half while the missing-index half stayed all-time
+    would be inconsistent and misleading, so it is documented as reserved pending a consistent time-windowed source
+    rather than partially applied as a no-op.
 - Added a static dispatch-coverage regression test that fails if any tool declares an input-schema property the
   `index.js` CallTool dispatcher never reads, preventing this class of "dead parameter" from recurring
   ([#1058](https://github.com/egarcia74/warp-sql-server-mcp/issues/1058)).

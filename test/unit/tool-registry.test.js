@@ -36,11 +36,15 @@ import { getAllTools, getTool } from '../../lib/tools/tool-registry.js';
 // consumed by the dispatcher, with the reason. Keeping them here (rather than
 // deleting the assertion) makes the honesty gap explicit and auditable.
 //
-// get_optimization_insights.analysis_period: the insight is built from the
-// missing-index DMVs (sys.dm_db_missing_index_group_stats), which are cumulative
-// cache-resident aggregates with no retained per-event history, so a genuine
-// 24h/7d/30d window cannot be computed from the data actually available. Deferred
-// pending a real time-windowed data source rather than faked as a silent no-op.
+// get_optimization_insights.analysis_period: the insight combines two DMV
+// sources with different time semantics. The missing-index half
+// (sys.dm_db_missing_index_group_stats) is a cumulative, cache-resident
+// aggregate with no retained per-event history, so it cannot be windowed; the
+// expensive-query half (sys.dm_exec_query_stats) does carry last_execution_time
+// and could be. Honoring analysis_period on only the query half while the
+// missing-index half stayed all-time would produce an inconsistent, misleading
+// result, so the parameter is deferred pending a consistent time-windowed
+// source rather than partially applied as a misleading no-op.
 const DEFERRED_PROPS = {
   get_optimization_insights: new Set(['analysis_period'])
 };

@@ -481,7 +481,7 @@ describe('QueryOptimizer', () => {
 
     test('rejects malformed schema names', async () => {
       await expect(dbOptimizer.analyzeIndexUsage('Db', { schema: 'bad]schema' })).rejects.toThrow(
-        /invalid database name/i
+        /invalid schema name/i
       );
     });
 
