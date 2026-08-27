@@ -496,6 +496,28 @@ describe('PerformanceMonitor', () => {
       const stats = monitor.getStats();
       expect(stats.recent.count).toBe(0); // Old query should be filtered out
     });
+
+    // #1058: recent window must count failed queries so its errorRate is
+    // accurate, matching getQueryStats and the overall aggregates.
+    test('recent window reflects error-status queries (count + errorRate)', () => {
+      monitor = new PerformanceMonitor();
+
+      Date.now.mockReturnValue(2000);
+      const okId = monitor.startQuery('execute_query', 'SELECT 1');
+      Date.now.mockReturnValue(2100); // 100ms completed
+      monitor.endQuery(okId, { recordset: [1] });
+
+      Date.now.mockReturnValue(3000);
+      const errId = monitor.startQuery('execute_query', 'BAD SQL');
+      Date.now.mockReturnValue(3200); // 200ms error
+      monitor.endQuery(errId, {}, new Error('boom'));
+
+      Date.now.mockReturnValue(4000); // still within the 5-minute window
+      const stats = monitor.getStats();
+
+      expect(stats.recent.count).toBe(2); // both completed and error counted
+      expect(stats.recent.errorRate).toBe(50); // 1 of 2 failed
+    });
   });
 
   describe('Query Statistics', () => {

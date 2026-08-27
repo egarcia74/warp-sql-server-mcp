@@ -469,6 +469,31 @@ describe('QueryOptimizer', () => {
       expect(out.recommendations[0].table).toBe('Orders');
     });
 
+    test('generates schema-qualified CREATE INDEX DDL for a non-dbo recommendation (#1058)', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: [
+          {
+            schema_name: 'sales',
+            table_name: 'Orders',
+            equality_columns: '[CustomerId]',
+            included_columns: '[OrderStatus]',
+            avg_user_impact: 80,
+            impact_score: 900
+          }
+        ]
+      });
+
+      const out = await dbOptimizer.analyzeIndexUsage('Db', { schema: 'sales' });
+      const { suggestion } = out.recommendations[0];
+
+      // ON-target is schema-qualified so the DDL creates the index on
+      // sales.Orders, not dbo.Orders; index name carries the schema too.
+      expect(suggestion).toContain('ON [sales].[Orders]');
+      expect(suggestion).toContain('IX_sales_Orders_missing');
+      expect(suggestion).toContain('INCLUDE (OrderStatus)');
+      expect(suggestion).not.toContain('ON [Orders]');
+    });
+
     test('omits the schema predicate when no schema is requested', async () => {
       mockRequest.query.mockResolvedValue({ recordset: [] });
 
