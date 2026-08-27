@@ -336,10 +336,14 @@ function stripCallSpans(expr, nameRe) {
     let depth = 0;
     let end = s.length;
     for (let j = m.index + m[0].length - 1; j < s.length; j++) {
-      if (s[j] === '(') depth++;
-      else if (s[j] === ')' && --depth === 0) {
-        end = j;
-        break;
+      if (s[j] === '(') {
+        depth++;
+      } else if (s[j] === ')') {
+        depth--;
+        if (depth === 0) {
+          end = j;
+          break;
+        }
       }
     }
     s = `${s.slice(0, m.index)} ${s.slice(end + 1)}`;
