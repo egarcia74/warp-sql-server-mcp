@@ -444,6 +444,72 @@ describe('QueryOptimizer', () => {
       expect(out.recommendations[0].impactScore).toBeCloseTo(11100);
     });
 
+    test('honors the schema option: filters the DMV query and echoes the schema (#1058)', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: [
+          {
+            schema_name: 'sales',
+            table_name: 'Orders',
+            equality_columns: '[CustomerId]',
+            avg_user_impact: 80,
+            impact_score: 900
+          }
+        ]
+      });
+
+      const out = await dbOptimizer.analyzeIndexUsage('Db', { schema: 'sales' });
+
+      const sqlText = mockRequest.query.mock.calls[0][0];
+      // Schema filter is pushed into the DMV query (applied before TOP)
+      expect(sqlText).toContain('OBJECT_SCHEMA_NAME(mid.object_id, mid.database_id)');
+      expect(sqlText).toContain("= N'sales'");
+      // Result echoes the requested schema and each recommendation carries it
+      expect(out.schema).toBe('sales');
+      expect(out.recommendations[0].schema).toBe('sales');
+      expect(out.recommendations[0].table).toBe('Orders');
+    });
+
+    test('generates schema-qualified CREATE INDEX DDL for a non-dbo recommendation (#1058)', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: [
+          {
+            schema_name: 'sales',
+            table_name: 'Orders',
+            equality_columns: '[CustomerId]',
+            included_columns: '[OrderStatus]',
+            avg_user_impact: 80,
+            impact_score: 900
+          }
+        ]
+      });
+
+      const out = await dbOptimizer.analyzeIndexUsage('Db', { schema: 'sales' });
+      const { suggestion } = out.recommendations[0];
+
+      // ON-target is schema-qualified so the DDL creates the index on
+      // sales.Orders, not dbo.Orders; index name carries the schema too.
+      expect(suggestion).toContain('ON [sales].[Orders]');
+      expect(suggestion).toContain('IX_sales_Orders_missing');
+      expect(suggestion).toContain('INCLUDE (OrderStatus)');
+      expect(suggestion).not.toContain('ON [Orders]');
+    });
+
+    test('omits the schema predicate when no schema is requested', async () => {
+      mockRequest.query.mockResolvedValue({ recordset: [] });
+
+      const out = await dbOptimizer.analyzeIndexUsage('Db');
+
+      const sqlText = mockRequest.query.mock.calls[0][0];
+      expect(sqlText).not.toContain('OBJECT_SCHEMA_NAME(mid.object_id, mid.database_id) =');
+      expect(out.schema).toBeNull();
+    });
+
+    test('rejects malformed schema names', async () => {
+      await expect(dbOptimizer.analyzeIndexUsage('Db', { schema: 'bad]schema' })).rejects.toThrow(
+        /invalid schema name/i
+      );
+    });
+
     test('filters by impactThreshold and clamps limit', async () => {
       mockRequest.query.mockResolvedValue({
         recordset: [

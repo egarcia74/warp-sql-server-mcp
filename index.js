@@ -408,12 +408,15 @@ class SqlServerMCP {
 
           case 'get_performance_stats':
             return {
-              content: this.getPerformanceStats()
+              content: this.getPerformanceStats(args.timeframe)
             };
 
           case 'get_query_performance':
             return {
-              content: this.getQueryPerformance(args.limit)
+              content: this.getQueryPerformance(args.limit, {
+                slowOnly: args.slow_only,
+                toolFilter: args.tool_filter
+              })
             };
 
           case 'get_connection_health':
@@ -425,7 +428,8 @@ class SqlServerMCP {
             return {
               content: await this.getIndexRecommendations(args.database, {
                 limit: args.limit,
-                impactThreshold: args.impact_threshold
+                impactThreshold: args.impact_threshold,
+                schema: args.schema
               })
             };
 
@@ -677,15 +681,39 @@ class SqlServerMCP {
   }
 
   // Performance monitoring methods
-  getPerformanceStats() {
+  getPerformanceStats(timeframe = 'all') {
     const stats = this.performanceMonitor.getStats();
+
+    // Scope the reported statistics to the requested window. The performance
+    // monitor already maintains two windows: `recent` (last 5 minutes) and
+    // `overall` (cumulative since server startup). We surface the block that
+    // matches `timeframe` rather than inventing new tracking:
+    //   - 'recent'            -> the last-5-minute block
+    //   - 'session' / 'all'   -> the since-startup block (default)
+    // The full stats object is still returned so existing consumers that read
+    // `data.overall` / `data.recent` keep working; `data.timeframe` and
+    // `data.scoped` make the selected window explicit for schema-driven clients.
+    const normalizedTimeframe = ['recent', 'session', 'all'].includes(timeframe)
+      ? timeframe
+      : 'all';
+
+    let data = stats;
+    if (stats && stats.enabled) {
+      const scoped = normalizedTimeframe === 'recent' ? stats.recent : stats.overall;
+      data = {
+        ...stats,
+        timeframe: normalizedTimeframe,
+        scoped
+      };
+    }
+
     return [
       {
         type: 'text',
         text: JSON.stringify(
           {
             success: true,
-            data: stats
+            data
           },
           null,
           2
@@ -694,15 +722,19 @@ class SqlServerMCP {
     ];
   }
 
-  getQueryPerformance(limit = 50) {
-    const queryStats = this.performanceMonitor.getQueryStats(limit);
+  getQueryPerformance(limit = 50, { slowOnly = false, toolFilter = null } = {}) {
+    const queryStats = this.performanceMonitor.getQueryStats(limit, { slowOnly, toolFilter });
     return [
       {
         type: 'text',
         text: JSON.stringify(
           {
             success: true,
-            data: queryStats
+            data: queryStats,
+            filters: {
+              slowOnly: Boolean(slowOnly),
+              toolFilter: toolFilter || null
+            }
           },
           null,
           2
