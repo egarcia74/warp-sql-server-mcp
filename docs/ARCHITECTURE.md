@@ -197,23 +197,33 @@ class PerformanceMonitor {
 - **Strategy Pattern**: Configurable output formats
 - **Template Method**: Standardized logging procedures
 
-### 6. QueryValidator (Validation Layer)
+### 6. Query Safety Guards (Validation Layer)
 
-**Purpose**: Validates and sanitizes SQL queries to prevent security vulnerabilities.
+**Purpose**: Enforce the graduated safety tiers on SQL queries to prevent security
+vulnerabilities. Enforcement is lexical and fail-closed — not AST/SQL parsing, whose
+T-SQL dialect coverage is partial.
 
-**Key Responsibilities**:
+**Layers**:
 
-- SQL injection prevention
-- Dangerous operation detection
-- Query complexity analysis
-- Syntax validation with fallback
+- **`validateQuery` (`index.js`)**: Classifies a statement by its anchored prefix
+  (`^\s*SELECT`, `^\s*DELETE`, …) and applies the active tier (read-only →
+  destructive-operations → schema-changes). Delegates the whole batch to the batch
+  guard whenever any restriction is active.
+- **`sql-batch-guard.js` (`findForbiddenBatchStatement`)**: Scans the entire batch —
+  after stripping string literals, quoted/bracketed identifiers and comments — for
+  statement keywords the active tier forbids, wherever they appear, then requires the
+  batch to open with a recognised T-SQL statement keyword. Fails closed on an
+  unterminated literal, identifier or block comment (closes `GHSA-qhf4-jmhq-73c8`).
+- **`where-clause-guard.js` (`findForbiddenWhereClauseSyntax`)**: Validates the
+  caller-supplied WHERE clause for `get_table_data`/`export_table_csv`, requiring a
+  single predicate on the requested table and rejecting batch separators, comments,
+  statement keywords, top-level set operators/`SELECT` and unbalanced parentheses.
 
-**Design Patterns**:
+**Design Approach**:
 
-- **Chain of Responsibility**: Sequential validation rules
-- **Strategy Pattern**: Multiple validation approaches
-- **Template Method**: Standardized validation process
-- **Visitor Pattern**: AST-based query analysis
+- **Single-pass lexical scanning**: No regex backtracking on untrusted input
+- **Fail-closed**: Malformed or unterminated input is rejected, never approved
+- **Tiered enforcement**: Each guard consults the active read-only/destructive/schema tier
 
 ## Data Flow Architecture
 

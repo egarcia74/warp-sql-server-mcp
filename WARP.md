@@ -93,7 +93,8 @@ lib/
 ├── database/
 │   └── connection-manager.js # 🗄️ Database connection pooling & management
 ├── security/
-│   └── query-validator.js    # 🔒 Enhanced SQL validation
+│   ├── sql-batch-guard.js    # 🔒 Whole-batch keyword scan (fail-closed)
+│   └── where-clause-guard.js # 🔒 Single-predicate WHERE-clause validation
 ├── tools/
 │   ├── tool-registry.js      # 📋 MCP tool definitions & registration
 │   └── handlers/
@@ -174,27 +175,30 @@ SECRET_MANAGER_TYPE=env
 - **Azure Key Vault**: [Azure Secrets Configuration Guide](docs/AZURE-SECRETS-GUIDE.md) - Complete setup with authentication, secret naming, and troubleshooting
 - **AWS Secrets Manager**: [AWS Secrets Configuration Guide](docs/AWS-SECRETS-GUIDE.md) - Comprehensive guide with IAM roles, JSON secrets, and multi-environment deployment
 
-### 🔒 Advanced Query Validation
+### 🔒 Query Safety Policy
 
-**AST-Based SQL Analysis**: Replaces regex-based validation with proper SQL parsing:
+Query safety is enforced by three fail-closed lexical layers — not by AST/SQL parsing.
+A parser's T-SQL dialect coverage is partial, so both security guards are deliberate
+single-pass scanners with no regex backtracking on untrusted input:
 
-- **SQL Parser Integration**: Uses `node-sql-parser` for comprehensive AST analysis
-- **Multi-Statement Validation**: Validates each statement in complex queries
-- **Dangerous Function Detection**: `lib/security/sql-batch-guard.js` blocks `xp_*`/`sp_*` procedures, `openrowset`/`openquery`/`opendatasource` and server-administration statements
-  unless the destructive-operations tier is enabled (read-only mode blocks them outright)
-- **SQL Injection Protection**: Advanced pattern detection in string literals
-- **Graceful Fallback**: Regex validation for edge cases where parsing fails
-
-#### New Security Features
-
-```javascript
-// Enhanced validation detects:
-- SQL injection patterns in AST nodes
-- Multi-statement queries with mixed permissions
-- Complex CTE and subquery security boundaries
-// Dangerous system functions (xp_cmdshell, openrowset, sp_configure) are
-// blocked by the batch guard (lib/security/sql-batch-guard.js), not the AST validator
-```
+- **`validateQuery` (`index.js`)**: Classifies the statement by its anchored prefix
+  (`^\s*SELECT`, `^\s*DELETE`, …) and applies the active safety tier (read-only →
+  destructive-operations → schema-changes). When any restriction is active it delegates
+  the whole batch to the batch guard.
+- **`sql-batch-guard.js` (`findForbiddenBatchStatement`)**: Scans the _entire_ batch —
+  after stripping string literals, quoted/bracketed identifiers and comments — for
+  statement keywords the active tier forbids, wherever they appear (T-SQL does not
+  require `;` between statements), and requires the batch to open with a recognised
+  T-SQL statement keyword. It **fails closed** on an unterminated literal, identifier or
+  block comment. This blocks `xp_*`/`sp_*` procedures, `openrowset`/`openquery`/`opendatasource`
+  and server-administration statements unless the destructive-operations tier is enabled
+  (read-only mode blocks them outright), and closes the multi-statement bypass in
+  `GHSA-qhf4-jmhq-73c8`.
+- **`where-clause-guard.js` (`findForbiddenWhereClauseSyntax`)**: Validates the
+  caller-supplied WHERE clause for `get_table_data`/`export_table_csv`, requiring a
+  single predicate on the requested table. It rejects batch separators, comments,
+  statement keywords, top-level set operators/`SELECT` and unbalanced parentheses, and
+  fails closed on unterminated literals or identifiers.
 
 ### 📊 Enhanced Response Formatting
 
@@ -774,7 +778,7 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=true           # Allow schema changes
 
 **Performance Benefits:**
 
-- **⚡ Zero Query Validation Overhead**: Completely bypasses expensive AST parsing with `node-sql-parser`
+- **⚡ Zero Query Validation Overhead**: When all restrictions are disabled, `validateQuery` approves immediately and skips the batch-guard keyword scan
 - **🚀 Immediate Query Approval**: Direct execution without security analysis
 - **📊 Monitoring Flag**: Adds `optimized: true` flag to validation responses for tracking
 - **🔒 Preserved Security**: Validation still applies when any restriction is enabled
@@ -910,7 +914,6 @@ test/
 │   ├── mcp-server-lifecycle.test.js   # Server lifecycle tests
 │   ├── performance-monitor.test.js     # Performance monitor unit tests
 │   ├── secret-manager.test.js          # Secret management tests
-│   ├── query-validator-simple.test.js  # Query validation tests
 │   ├── streaming-handler.test.js       # Streaming functionality tests
 │   ├── response-formatter.test.js      # Response formatting tests
 │   ├── logger.test.js                  # Logging system tests
