@@ -4,50 +4,42 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 /**
- * SQL-construction guard (#1093)
- * ==============================
+ * SQL-construction static lint (#1093) — SECONDARY, best-effort tripwire
+ * ======================================================================
  *
- * The 1.7.16 → 1.7.18 advisory series (GHSA-qhf4-jmhq-73c8, -crw3-hmxc-f53p,
- * -p8gx-89fp-x73j) was one class of bug repeated: a caller-controlled value
- * (`database`/`schema`/`table_name`/`limit`/`offset`/`where`) reached an
- * *executed* SQL string without first passing through the right escaper. Each
- * was fixed at its own site; nothing structurally prevented the next new
- * interpolation site from reopening the class.
+ * The AUTHORITATIVE guard for the 1.7.16 → 1.7.18 injection class is the
+ * behavioral battery in sql-injection-battery.test.js, which drives the real
+ * handlers with injection payloads and asserts the emitted SQL is neutralized.
+ * This static lint is a cheap backstop for the one thing the battery cannot
+ * cover: a brand-new SQL-building site nobody wired into the battery. It scans
+ * the SQL-building sources and fails if a SQL template literal interpolates a
+ * bare caller-controlled argument without an approved escaper.
  *
- * This test is that structural tripwire. It statically inspects the files that
- * build SQL and FAILS if an *executed* SQL template literal interpolates a
- * value that is not provably safe — i.e. neither a call to an approved escaper
- * nor an allow-listed post-escape/validated local. It is a source scan (cheap,
- * no DB) that complements — never replaces — the runtime safety-tier policy
- * (`validateQuery`/`sql-batch-guard`/`where-clause-guard`).
+ * It is best-effort by nature (a source scan, not execution). Its scope is
+ * therefore honest and narrow:
+ *   - It inspects EVERY template literal that looks like SQL (contains a SQL
+ *     keyword, or a `[${…}]` / `'${…}'` identifier interpolation), regardless
+ *     of the variable it is assigned to — so a SQL string built in any local
+ *     name is in scope. Two non-executed, SQL-shaped strings are excluded by
+ *     their SPECIFIC context (not by name coincidence): the `validateWhereClause`
+ *     `probe` (validation only) and optimizer `suggestion:` advisory DDL.
+ *   - An interpolation fails if it references a caller-arg identifier
+ *     (`database`/`schema`/`tableName`/`where`) outside an approved escaper, or
+ *     is a bare `limit`/`offset` in a file that does not coerce it via
+ *     `parseRowCount`. Composite/derived locals are trusted because their OWN
+ *     construction templates are scanned by this same pass; the non-template
+ *     escaper locals (`safeDb`/`safeSchema`/`safeTableName`/`safeLimit`) are
+ *     additionally checked to ensure their construction keeps its escaper.
  *
- * Approach (deliberately narrow, to keep false positives at zero)
- * ---------------------------------------------------------------
- * 1. Tokenize each source file (comment- and quote-aware) to find every
- *    backtick template literal together with the code token that precedes it.
- * 2. Treat a literal as *executed SQL* only when it is either:
- *      (a) the direct argument of `.query(` / `.batch(`, or
- *      (b) assigned/appended to a local named `query` or `sizeQuery`
- *          (the only local names that hold a run statement across these files).
- *    Non-executed SQL-shaped strings — the `validateWhereClause` `probe`,
- *    `export_table_csv`'s `queryDescription`, the optimizer's advisory
- *    `suggestion:` DDL, and fragment locals like `dbPredicate` — are therefore
- *    ignored: they are never sent to the driver. The fragments are re-checked
- *    where they ARE interpolated into an executed literal (see SAFE_LOCALS).
- * 3. For each top-level `${…}` in an executed literal, require the expression
- *    to be an approved-escaper call or an allow-listed safe local; anything
- *    else (a bare `${database}`/`${tableName}`/`${limit}`/…) fails loudly with
- *    the file and expression named.
- *
- * Proven to bite: temporarily rewriting `get_table_data`'s FROM to
- * `FROM [${tableName}]` (bare, unescaped) makes this test fail with
- * "unescaped interpolation `${tableName}`"; restoring the escaped `${source}`
- * makes it pass again.
+ * Regression history baked in as assertions:
+ *   - The tokenizer understands JS regex literals; a prior version desynced on
+ *     `/'[^']*'/` (query-optimizer.js) and silently skipped the missing-index
+ *     query at ~line 778. A dedicated test asserts that query IS scanned.
+ *   - The floor is PER-FILE, so a per-file blind spot fails loudly.
  */
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
-// Files that assemble SQL from (potentially) caller-controlled values.
 const SQL_SOURCE_FILES = [
   'index.js',
   'lib/tools/handlers/database-tools.js',
@@ -56,168 +48,218 @@ const SQL_SOURCE_FILES = [
   'lib/analysis/bottleneck-detector.js'
 ];
 
-// Approved escaping/coercion helpers from lib/utils/sql-identifier.js. An
-// interpolation that is a direct call to one of these neutralizes its value for
-// the documented context (bracket identifier, single-quoted literal, numeric).
-const APPROVED_ESCAPERS = [
-  'escapeBracketIdentifier',
-  'escapeSqlStringLiteral',
-  'sanitizeDbName',
-  'parseRowCount'
-];
+// Approved escaping/coercion helpers from lib/utils/sql-identifier.js.
+const ESCAPER =
+  /^(escapeBracketIdentifier|escapeSqlStringLiteral|sanitizeDbName|parseRowCount)\s*\(/;
 
-// Allow-listed *post-escape / validated / controlled* locals that appear inside
-// executed templates. Each name is documented so the deferral is auditable; a
-// bare caller argument (`database`, `schema`, `tableName`, `limit`, `offset`,
-// `where`) is deliberately NOT here and therefore fails the guard.
-//
-//   safeDb / safeSchema / safeTableName  – results of escapeBracketIdentifier /
-//                                          escapeSqlStringLiteral
-//   safeLimit                            – Math clamp of Number.parseInt, or
-//                                          parseRowCount result
-//   source                               – built entirely from
-//                                          escapeBracketIdentifier calls
-//   offset / limit                       – reassigned via parseRowCount before
-//                                          interpolation (get_table_data)
-//   whereClause / whereSql               – caller WHERE, gated by the
-//                                          where-clause-guard safety layer
-//                                          (validateWhereClause) before execution
-//   topClause                            – ` TOP <n>` built from a validated int
-//   planMode                             – controlled constant
-//                                          ('SHOWPLAN_XML' | 'STATISTICS XML')
-//   dbPredicate / schemaPredicate        – DB_ID(N'…') / OBJECT_SCHEMA_NAME(…)=N'…'
-//                                          fragments built from sanitizeDbName
-const SAFE_LOCALS = new Set([
-  'safeDb',
-  'safeSchema',
-  'safeTableName',
-  'safeLimit',
-  'source',
-  'offset',
-  'limit',
-  'whereClause',
-  'whereSql',
-  'topClause',
-  'planMode',
-  'dbPredicate',
-  'schemaPredicate'
+// Caller-controlled identifier args that MUST be escaped before reaching SQL.
+// `table_name` (snake_case) is intentionally absent: the dispatcher maps it to
+// `tableName` before any handler runs, and `table_name` only ever appears as a
+// trusted catalog column reference (`r.table_name`). `where` is included, but
+// its derived, runtime-gated locals `whereClause`/`whereSql` are not (word
+// boundaries: `\bwhere\b` does not match `whereClause`).
+const CALLER_IDENTIFIER_ARGS = /\b(database|schema|tableName)\b/;
+const CALLER_WHERE_ARG = /\bwhere\b/;
+
+// Non-template escaper locals whose construction this lint verifies (their
+// escaper cannot be silently dropped). Template-built locals (source,
+// dbPredicate, …) need no entry here: their construction templates are scanned
+// directly by the main pass.
+const VERIFIED_ESCAPER_LOCALS = ['safeDb', 'safeSchema', 'safeTableName', 'safeLimit'];
+
+// A SQL-shaped template literal: contains a SQL statement keyword, OR embeds an
+// interpolation directly in a bracket/quote identifier context.
+const SQL_KEYWORD =
+  /\b(SELECT|FROM|WHERE|USE|OFFSET|FETCH|TOP|JOIN|INSERT|UPDATE|DELETE|ORDER\s+BY|GROUP\s+BY|DB_ID|OBJECT_SCHEMA_NAME)\b/i;
+const IDENTIFIER_INTERP = /\[\s*\$\{|N?'\s*\$\{/;
+
+const KEYWORDS_EXPECTING_REGEX = new Set([
+  'return',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'delete',
+  'void',
+  'new',
+  'do',
+  'else',
+  'yield',
+  'case',
+  'throw',
+  'await'
 ]);
 
-// SQL keywords used only as a sanity filter: an "executed" literal that somehow
-// contains none of these is skipped (there are none today).
-const SQL_KEYWORDS =
-  /\b(SELECT|FROM|WHERE|USE|OFFSET|FETCH|TOP|JOIN|INSERT|UPDATE|DELETE|SET|ORDER\s+BY|GROUP\s+BY)\b/i;
+const isWordChar = c => c != null && /[A-Za-z0-9_$]/.test(c);
 
 /**
- * Tokenize `source` and return every backtick template literal with the code
- * that immediately precedes it. Comment- and quote-aware so that backticks or
- * `.query(` text inside comments/strings are ignored.
- * @param {string} source
- * @returns {Array<{raw: string, preceding: string, line: number}>}
+ * Tokenize `source` and return every template literal (raw text + a slice of
+ * the preceding source + line). Comment-, string- AND regex-aware so that
+ * backticks/quotes inside comments, strings or regex literals never desync the
+ * scan. Handles `${…}` interpolations (including nested strings/regex/templates)
+ * by brace-tracking.
  */
-function findTemplateLiterals(source) {
+function scanTemplateLiterals(source) {
   const literals = [];
-  let code = ''; // recent NORMAL-state code, used to classify the next backtick
-  let i = 0;
   const n = source.length;
+  let i = 0;
+  let lastSig = null; // last non-whitespace significant char
+  let lastWord = ''; // most recently completed identifier
+  let curWord = '';
 
   const lineAt = idx => source.slice(0, idx).split('\n').length;
 
-  while (i < n) {
-    const ch = source[i];
-    const next = source[i + 1];
+  const finishWord = () => {
+    if (curWord) {
+      lastWord = curWord;
+      curWord = '';
+    }
+  };
+  const setSig = c => {
+    finishWord();
+    lastSig = c;
+  };
+  const advanceCode = c => {
+    if (/\s/.test(c)) {
+      finishWord();
+      return;
+    }
+    if (isWordChar(c)) curWord += c;
+    else finishWord();
+    lastSig = c;
+  };
+  const regexAllowed = () => {
+    if (lastSig === null) return true;
+    if ('=(,;{[<>!&|+-*%^~?:'.includes(lastSig)) return true;
+    if (lastSig === '}') return true;
+    return isWordChar(lastSig) && KEYWORDS_EXPECTING_REGEX.has(lastWord);
+  };
 
-    // Line comment
-    if (ch === '/' && next === '/') {
+  const skipString = quote => {
+    i++;
+    while (i < n) {
+      if (source[i] === '\\') {
+        i += 2;
+        continue;
+      }
+      if (source[i] === quote) {
+        i++;
+        return;
+      }
+      i++;
+    }
+  };
+  const skipRegex = () => {
+    i++;
+    let inClass = false;
+    while (i < n) {
+      const c = source[i];
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      if (c === '[') inClass = true;
+      else if (c === ']') inClass = false;
+      else if (c === '/' && !inClass) {
+        i++;
+        while (i < n && /[a-z]/i.test(source[i])) i++;
+        return;
+      }
+      i++;
+    }
+  };
+  const skipComment = () => {
+    if (source[i + 1] === '/') {
       i += 2;
       while (i < n && source[i] !== '\n') i++;
-      continue;
+      return true;
     }
-    // Block comment
-    if (ch === '/' && next === '*') {
+    if (source[i + 1] === '*') {
       i += 2;
       while (i < n && !(source[i] === '*' && source[i + 1] === '/')) i++;
       i += 2;
-      continue;
+      return true;
     }
-    // Single/double quoted string (skip its contents)
-    if (ch === "'" || ch === '"') {
-      const quote = ch;
-      i++;
-      while (i < n && source[i] !== quote) {
-        if (source[i] === '\\') i++;
-        i++;
-      }
-      i++;
-      code = '';
-      continue;
-    }
-    // Template literal
-    if (ch === '`') {
-      const start = i;
-      const preceding = code;
-      i++;
-      let depth = 0; // ${ } nesting depth
-      while (i < n) {
-        const c = source[i];
-        if (c === '\\') {
-          i += 2;
-          continue;
-        }
-        if (depth === 0 && c === '`') {
-          i++;
-          break;
-        }
-        if (c === '$' && source[i + 1] === '{') {
-          depth++;
-          i += 2;
-          continue;
-        }
-        if (depth > 0 && c === '{') {
-          depth++;
-        } else if (depth > 0 && c === '}') {
-          depth--;
-        }
-        i++;
-      }
-      literals.push({
-        raw: source.slice(start, i),
-        preceding,
-        line: lineAt(start)
-      });
-      code = '';
-      continue;
-    }
+    return false;
+  };
 
-    // NORMAL code: keep a bounded tail for preceding-context classification.
-    code = (code + ch).slice(-80);
+  const isCommentStart = c => c === '/' && (source[i + 1] === '/' || source[i + 1] === '*');
+  const isQuote = c => c === "'" || c === '"';
+  const isRegexStart = c => c === '/' && regexAllowed();
+
+  // Consume a comment / string / template / regex token starting at `i`, if any.
+  const consumeSpecial = () => {
+    const c = source[i];
+    if (isCommentStart(c)) return skipComment();
+    if (isQuote(c)) {
+      skipString(c);
+      setSig(c);
+      return true;
+    }
+    if (c === '`') {
+      readTemplate();
+      return true;
+    }
+    if (isRegexStart(c)) {
+      skipRegex();
+      setSig('/');
+      return true;
+    }
+    return false;
+  };
+
+  // Consume characters until the `}` that closes the current `${` (depth 0).
+  const skipInterpolation = () => {
+    let depth = 1;
+    while (i < n && depth > 0) {
+      if (consumeSpecial()) continue;
+      const c = source[i];
+      if (c === '{') depth++;
+      else if (c === '}') depth--;
+      advanceCode(c);
+      i++;
+    }
+  };
+
+  function readTemplate() {
+    const start = i;
+    const preceding = source.slice(Math.max(0, start - 80), start);
+    i++; // opening backtick
+    while (i < n) {
+      const c = source[i];
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      if (c === '`') {
+        i++;
+        break;
+      }
+      if (c === '$' && source[i + 1] === '{') {
+        i += 2;
+        skipInterpolation();
+        continue;
+      }
+      i++;
+    }
+    literals.push({ raw: source.slice(start, i), preceding, line: lineAt(start) });
+    setSig('`');
+  }
+
+  while (i < n) {
+    if (consumeSpecial()) continue;
+    advanceCode(source[i]);
     i++;
   }
 
   return literals;
 }
 
-/**
- * A template literal is "executed SQL" when it is the direct argument of
- * `.query(`/`.batch(`, or is assigned/appended to a `query`/`sizeQuery` local.
- * @param {string} preceding - code immediately before the opening backtick
- */
-function isExecutedSql(preceding) {
-  return (
-    /(?:\.query|\.batch)\(\s*$/.test(preceding) ||
-    /\b(?:query|sizeQuery)\s*\+?=\s*$/.test(preceding)
-  );
-}
-
-/**
- * Extract the top-level `${…}` expressions from a template literal's raw text.
- * @param {string} raw - full backtick literal including the backticks
- * @returns {string[]} interpolated expressions (without the `${`/`}` delimiters)
- */
+/** Top-level `${…}` expressions inside a template literal's raw text. */
 function extractInterpolations(raw) {
   const exprs = [];
-  let i = 0;
   const n = raw.length;
+  let i = 0;
   while (i < n) {
     if (raw[i] === '\\') {
       i += 2;
@@ -226,14 +268,14 @@ function extractInterpolations(raw) {
     if (raw[i] === '$' && raw[i + 1] === '{') {
       let depth = 1;
       let j = i + 2;
-      const startExpr = j;
+      const start = j;
       while (j < n && depth > 0) {
         if (raw[j] === '{') depth++;
         else if (raw[j] === '}') depth--;
         if (depth === 0) break;
         j++;
       }
-      exprs.push(raw.slice(startExpr, j));
+      exprs.push(raw.slice(start, j));
       i = j + 1;
       continue;
     }
@@ -242,61 +284,115 @@ function extractInterpolations(raw) {
   return exprs;
 }
 
-/**
- * @param {string} expr - an interpolated expression
- * @returns {boolean} whether it is a provably-safe interpolation
- */
-function isSafeInterpolation(expr) {
-  const trimmed = expr.trim();
-  if (APPROVED_ESCAPERS.some(fn => new RegExp(`^${fn}\\s*\\(`).test(trimmed))) {
-    return true;
-  }
-  return SAFE_LOCALS.has(trimmed);
+const isSqlish = raw => SQL_KEYWORD.test(raw) || IDENTIFIER_INTERP.test(raw);
+
+// Excluded by SPECIFIC context (never sent to the driver):
+//   probe:      `const probe = ` in validateWhereClause — lexically validated only.
+//   suggestion: `suggestion: ` advisory DDL text returned to the user.
+const isExcludedContext = preceding =>
+  /\bprobe\s*=\s*$/.test(preceding) || /\bsuggestion\s*:\s*$/.test(preceding);
+
+/** Does the file coerce `name` (limit/offset) through parseRowCount? */
+function coercesPagination(fileText, name) {
+  return new RegExp(`\\b${name}\\s*=\\s*[^;\\n]*parseRowCount\\(`).test(fileText);
 }
 
-describe('SQL construction guard (#1093)', () => {
-  const fileFindings = SQL_SOURCE_FILES.map(relPath => {
-    const source = readFileSync(join(repoRoot, relPath), 'utf8');
-    const executed = findTemplateLiterals(source).filter(
-      lit => isExecutedSql(lit.preceding) && SQL_KEYWORDS.test(lit.raw)
-    );
-    const violations = [];
-    let interpolationsChecked = 0;
-    for (const lit of executed) {
-      for (const expr of extractInterpolations(lit.raw)) {
-        interpolationsChecked++;
-        if (!isSafeInterpolation(expr)) {
-          violations.push({ line: lit.line, expr: expr.trim() });
-        }
-      }
+/** Classify one interpolation expression; returns a reason string if unsafe. */
+function violationReason(expr, fileText) {
+  const trimmed = expr.trim();
+  if (ESCAPER.test(trimmed)) return null;
+  if (CALLER_IDENTIFIER_ARGS.test(trimmed))
+    return `caller identifier arg not escaped: \${${trimmed}}`;
+  if (CALLER_WHERE_ARG.test(trimmed)) return `raw where arg not gated: \${${trimmed}}`;
+  if (trimmed === 'limit' || trimmed === 'offset') {
+    return coercesPagination(fileText, trimmed)
+      ? null
+      : `pagination arg not coerced via parseRowCount: \${${trimmed}}`;
+  }
+  return null;
+}
+
+/** Verify a non-template escaper local keeps its escaper across all assignments. */
+function escaperLocalViolations(fileText, name) {
+  const problems = [];
+  const re = new RegExp(`\\b${name}\\s*=\\s*([^;]+);`, 'g');
+  const assignments = [...fileText.matchAll(re)].map(m => m[1].trim());
+  if (assignments.length === 0) return problems; // name not used in this file
+  let escapedCount = 0;
+  const escaperCall =
+    /(escapeBracketIdentifier|escapeSqlStringLiteral|sanitizeDbName|parseRowCount|Math\.|Number\.parseInt)\s*\(/;
+  const trivialConst = /^(null|''|""|'[^']*'|"[^"]*")$/;
+  for (const rhs of assignments) {
+    if (escaperCall.test(rhs)) {
+      escapedCount++;
+    } else if (!trivialConst.test(rhs)) {
+      problems.push(`${name} assignment drops its escaper: \`${rhs}\``);
     }
-    return { relPath, executedCount: executed.length, interpolationsChecked, violations };
+  }
+  if (escapedCount === 0) problems.push(`${name} is never constructed via an approved escaper`);
+  return problems;
+}
+
+function analyzeFile(relPath) {
+  const fileText = readFileSync(join(repoRoot, relPath), 'utf8');
+  const scanned = scanTemplateLiterals(fileText).filter(
+    lit => isSqlish(lit.raw) && !isExcludedContext(lit.preceding)
+  );
+  const violations = [];
+  let interpolations = 0;
+  for (const lit of scanned) {
+    for (const expr of extractInterpolations(lit.raw)) {
+      interpolations++;
+      const reason = violationReason(expr, fileText);
+      if (reason) violations.push(`${relPath}:${lit.line} — ${reason}`);
+    }
+  }
+  for (const name of VERIFIED_ESCAPER_LOCALS) {
+    for (const problem of escaperLocalViolations(fileText, name)) {
+      violations.push(`${relPath} — ${problem}`);
+    }
+  }
+  return { relPath, scannedCount: scanned.length, interpolations, violations, scanned };
+}
+
+// Per-file floor of SQL-ish templates that MUST be found. A per-file blind spot
+// (e.g. the historical regex-desync that dropped query-optimizer's line-778
+// query) trips these before the lint can degrade into a green no-op.
+const MIN_SCANNED = {
+  'index.js': 1,
+  'lib/tools/handlers/database-tools.js': 8,
+  'lib/utils/streaming-handler.js': 3,
+  'lib/analysis/query-optimizer.js': 4,
+  'lib/analysis/bottleneck-detector.js': 1
+};
+
+describe('SQL construction static lint (#1093)', () => {
+  const findings = SQL_SOURCE_FILES.map(analyzeFile);
+
+  test.each(findings)('$relPath has no unescaped caller-arg interpolation', ({ violations }) => {
+    expect(
+      violations,
+      violations.length
+        ? `Caller-controlled value may reach SQL without an approved escaper:\n  ${violations.join(
+            '\n  '
+          )}`
+        : undefined
+    ).toEqual([]);
   });
 
-  test.each(fileFindings)(
-    'every executed SQL interpolation in $relPath is escaped or an allow-listed safe local',
-    ({ relPath, violations }) => {
-      const message = violations
-        .map(v => `  ${relPath}:${v.line} — unescaped interpolation \`\${${v.expr}}\``)
-        .join('\n');
-      expect(
-        violations,
-        violations.length
-          ? 'Caller-controlled value reaches SQL without an approved escaper ' +
-              '(escapeBracketIdentifier/escapeSqlStringLiteral/sanitizeDbName/parseRowCount) ' +
-              `or an allow-listed safe local:\n${message}`
-          : undefined
-      ).toEqual([]);
+  test.each(findings)(
+    '$relPath yields at least its expected SQL templates',
+    ({ relPath, scannedCount }) => {
+      expect(scannedCount).toBeGreaterThanOrEqual(MIN_SCANNED[relPath]);
     }
   );
 
-  test('the guard actually inspects executed SQL (it is not a no-op)', () => {
-    const totalExecuted = fileFindings.reduce((sum, f) => sum + f.executedCount, 0);
-    const totalInterps = fileFindings.reduce((sum, f) => sum + f.interpolationsChecked, 0);
-    // Sanity floor: the scanned files contain many executed statements with
-    // interpolations today. If tokenization silently stops matching, this trips
-    // before the guard degrades into a green no-op.
-    expect(totalExecuted).toBeGreaterThanOrEqual(10);
-    expect(totalInterps).toBeGreaterThanOrEqual(15);
+  test('the query-optimizer missing-index query (historical regex blind spot) IS scanned', () => {
+    const optimizer = findings.find(f => f.relPath === 'lib/analysis/query-optimizer.js');
+    const found = optimizer.scanned.some(lit => /dm_db_missing_index_group_stats/.test(lit.raw));
+    expect(
+      found,
+      'The missing-index DMV query must be in the scanned set; a tokenizer regex-desync previously skipped it.'
+    ).toBe(true);
   });
 });

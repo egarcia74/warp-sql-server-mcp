@@ -223,14 +223,24 @@ The caller-supplied `where` clause is the one deliberate exception: it is interp
 raw but is gated by the `where-clause-guard` policy layer (`validateWhereClause`) before
 the statement runs.
 
-This convention is **enforced by a static guard test**
-(`test/unit/sql-construction-guard.test.js`, #1093): it scans the SQL-building sources
-and fails CI if an executed template literal interpolates a value that is neither an
-approved-escaper call nor an allow-listed post-escape local. It is the structural
-tripwire for the 1.7.16 → 1.7.18 advisory series — add a new interpolation site with a
-bare caller argument and the test names the file, line and expression. When adding a
-new SQL-building site, route the value through the helper above; do not add its raw
-variable name to the test's allow-list.
+This convention is enforced by two complementary tests (#1093):
+
+- **`test/unit/sql-injection-battery.test.js` — the authoritative guard.** It drives the
+  real handlers/methods (`list_tables`, `describe_table`, `list_foreign_keys`,
+  `get_table_data`, `export_table_csv`, the streaming query + size-probe,
+  `get_index_recommendations`, and `execute_query`'s database `USE` switch) with a mocked
+  pool, feeds injection payloads into each caller-controlled argument in isolation, and
+  asserts the emitted SQL neutralizes them (quotes doubled, `]` doubled, non-integer
+  pagination rejected). Because it checks the security property on real output, it is
+  immune to source-scanning blind spots.
+- **`test/unit/sql-construction-guard.test.js` — a best-effort static lint (secondary).**
+  A regex/tokenizer scan of the SQL-building sources that fails if a SQL template literal
+  interpolates a bare caller argument without an approved escaper. It backstops the one
+  thing the battery cannot: a brand-new SQL-building site nobody wired into the battery.
+  It is a tripwire, not a proof — the battery is the real guarantee.
+
+When adding a new SQL-building site, route the value through the helper above and add the
+tool to the behavioral battery; do not add its raw variable name to any allow-list.
 
 ### 📊 Enhanced Response Formatting
 
