@@ -189,10 +189,11 @@ SECRET_MANAGER_TYPE=env
 
 ```javascript
 // Enhanced validation detects:
-- Dangerous system functions (xp_cmdshell, openrowset)
 - SQL injection patterns in AST nodes
 - Multi-statement queries with mixed permissions
 - Complex CTE and subquery security boundaries
+// Dangerous system functions (xp_cmdshell, openrowset, sp_configure) are
+// blocked by the batch guard (lib/security/sql-batch-guard.js), not the AST validator
 ```
 
 ### 📊 Enhanced Response Formatting
@@ -628,11 +629,18 @@ cp .env.example .env
 
 **Quick Security Levels:**
 
-| Variable                                  | Default | Impact                      |
-| ----------------------------------------- | ------- | --------------------------- |
-| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed |
-| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Blocks INSERT/UPDATE/DELETE |
-| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER    |
+| Variable                                  | Default | Impact                                                                          |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed                                                     |
+| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Blocks INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, and administrative operations |
+| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER, GRANT/REVOKE/DENY, and `SELECT ... INTO`              |
+
+Administrative operations — SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER,
+`xp_*`/`sp_*` procedures, and the linked-server rowset functions OPENQUERY/OPENDATASOURCE/OPENROWSET
+(except `OPENROWSET(BULK ...)` file reads) — are gated by the destructive-operations tier, and
+ENABLE/DISABLE TRIGGER counts as a schema change. Every statement in a batch is checked against
+these tiers — T-SQL does not require `;` between statements — and batches with unterminated string
+literals, identifiers, or comments are rejected.
 
 **Common Configurations:**
 

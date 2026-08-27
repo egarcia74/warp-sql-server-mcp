@@ -19,11 +19,11 @@ Both guides get the server running with secure defaults, then return here for de
 
 The MCP server implements three independent security layers:
 
-| Security Level                | Environment Variable                      | Default | Controls                                                                                                                                                                                                                                                                               |
-| ----------------------------- | ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **🔒 Read-Only Mode**         | `SQL_SERVER_READ_ONLY`                    | `true`  | Restricts to SELECT queries only                                                                                                                                                                                                                                                       |
-| **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC and administrative operations (SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*`, OPENQUERY/OPENDATASOURCE and the provider form of OPENROWSET; `OPENROWSET(BULK ...)` file reads stay allowed) |
-| **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER                                                                                                                                                                                                                                                             |
+| Security Level                | Environment Variable                      | Default | Controls                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------- | ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **🔒 Read-Only Mode**         | `SQL_SERVER_READ_ONLY`                    | `true`  | Restricts to SELECT queries only; additionally rejects WAITFOR, `OPENROWSET(BULK ...)` file reads, and any batch that does not open with a recognised T-SQL statement keyword                                                                                                                                                                       |
+| **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, WRITETEXT/UPDATETEXT, the Service Broker RECEIVE statement, and administrative operations (SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*`, OPENQUERY/OPENDATASOURCE and the provider form of OPENROWSET; `OPENROWSET(BULK ...)` file reads stay allowed) |
+| **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER, GRANT/REVOKE/DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`                                                                                                                                                                                                                                                        |
 
 ### Security by Default
 
@@ -100,9 +100,11 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
 The MCP server includes a comprehensive query validation engine that:
 
 1. **Parses SQL statements** using regex patterns to identify operation types
-2. **Enforces security policies** before query execution
-3. **Provides clear error messages** when operations are blocked
-4. **Logs security decisions** for audit purposes
+2. **Scans the whole batch** (`lib/security/sql-batch-guard.js`) for statement keywords the
+   active safety tier forbids, wherever they appear — T-SQL does not require `;` between statements
+3. **Enforces security policies** before query execution
+4. **Provides clear error messages** when operations are blocked
+5. **Logs security decisions** for audit purposes
 
 ### Validation Logic
 
@@ -111,6 +113,13 @@ The MCP server includes a comprehensive query validation engine that:
 │   SQL Query     │
 └─────────────────┘
          │
+         ▼
+┌─────────────────┐      ┌─────────────────────────────────┐
+│ Literals, ids & │─No───▶│ Fail closed: unterminated       │
+│ comments        │      │ string literal, identifier or   │
+│ terminated?     │      │ block comment — reject batch    │
+└─────────────────┘      └─────────────────────────────────┘
+         │ Yes
          ▼
 ┌─────────────────┐      ┌─────────────────┐
 │ Read-Only Mode? │─Yes──▶│ Allow SELECT    │
@@ -130,11 +139,39 @@ The MCP server includes a comprehensive query validation engine that:
 └─────────────────┘      └─────────────────┘
          │ Yes
          ▼
+┌─────────────────┐      ┌─────────────────────────────────┐
+│ Whole-batch     │─Hit──▶│ Block: batch contains a         │
+│ keyword scan    │      │ statement keyword the active    │
+│ (every stmt)    │      │ tier forbids                    │
+└─────────────────┘      └─────────────────────────────────┘
+         │ Clean
+         ▼
 ┌─────────────────┐
-│ Allow All       │
-│ Operations      │
+│ Allow the       │
+│ Batch           │
 └─────────────────┘
 ```
+
+The blocking decisions in the tier checks above are enforced by the whole-batch keyword scan:
+every statement in the batch is checked — T-SQL does not require `;` between statements — and a
+batch must open with a recognised T-SQL statement keyword (use `EXEC` for procedures).
+
+### WHERE Clause Validation (`get_table_data` / `export_table_csv`)
+
+The optional `where` parameter of `get_table_data` and `export_table_csv` is concatenated into
+`SELECT * FROM [schema].[table] WHERE <clause>`, so it must be a **single predicate on the
+requested table** (`lib/security/where-clause-guard.js`). The clause is rejected if it contains:
+
+- Batch separators (`;`) or comments (`--`, `/* */`)
+- Statement keywords (e.g. `EXEC`, `DELETE`, `WAITFOR`, `OPENROWSET`, `xp_*`/`sp_*`) at any depth
+- `SELECT`, set operators (`UNION`/`EXCEPT`/`INTERSECT`) or trailing clauses (`ORDER`/`GROUP`/
+  `HAVING`/`OPTION`/`FOR`/`FROM`) outside a parenthesized subquery such as `IN (...)`/`EXISTS (...)`
+- Unbalanced parentheses, or unterminated string literals/bracketed identifiers
+
+Use `execute_query` for anything beyond a plain filter. `get_table_data` also accepts an `offset`
+parameter (integer, minimum `0`, defaults to `0`) paired with `limit` (defaults to `100`); row
+order is not guaranteed, so use `execute_query` with an `ORDER BY` when pagination must be
+deterministic.
 
 ## 🚨 Threat Model
 
@@ -418,6 +455,10 @@ SELECT * FROM Users LIMIT 10;
 INSERT INTO Users (name) VALUES ('test');
 UPDATE Users SET name = 'test' WHERE id = 1;
 DELETE FROM Users WHERE id = 1;
+
+-- Also blocked: T-SQL does not require ';' between statements,
+-- so the whole batch is scanned, not just its first statement
+SELECT 1 DELETE FROM Users
 ```
 
 #### Test DML Protection
