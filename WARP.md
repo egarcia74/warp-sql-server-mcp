@@ -65,7 +65,8 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 1. **get_index_recommendations**: Recommend missing indexes from `sys.dm_db_missing_index_*` DMVs (params: `database`, `schema` — restrict to one schema, `limit`, `impact_threshold`)
 2. **analyze_query_performance**: Deep static (AST-based) analysis of specific queries with optimization suggestions
 3. **detect_query_bottlenecks**: Identify and categorize expensive queries from `sys.dm_exec_query_stats` (params: `database`, `limit`, `severity_filter`)
-4. **get_optimization_insights**: Aggregate health summary (missing-index + expensive-query counts) with a prioritized roadmap (`analysis_period` is reserved; DMVs reflect plan-cache lifetime)
+4. **get_optimization_insights**: Aggregate health summary (missing-index + expensive-query counts) with a prioritized roadmap
+   (`analysis_period` is accepted but reserved/not applied; the response's `analysisPeriod` field echoes it with `applied: false`)
 
 #### Server Diagnostics (NEW)
 

@@ -178,7 +178,8 @@ export const createMockMcpServer = async (envOverrides = {}, mocks = {}) => {
     ConnectionManager: vi.fn().mockImplementation(() => mockConnectionManager)
   }));
 
-  vi.doMock('../../lib/utils/performance-monitor.js', () => ({
+  vi.doMock('../../lib/utils/performance-monitor.js', async importOriginal => ({
+    ...(await importOriginal()),
     PerformanceMonitor: vi.fn().mockImplementation(() => mockPerformanceMonitor)
   }));
 

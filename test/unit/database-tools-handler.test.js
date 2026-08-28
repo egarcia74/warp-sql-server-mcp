@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import sql from 'mssql';
+import { PerformanceMonitor } from '../../lib/utils/performance-monitor.js';
 import {
   mockData,
   createMockConnectionManager,
@@ -1047,6 +1048,92 @@ describe('DatabaseToolsHandler', () => {
 
       const tx = sql.Transaction.mock.results.at(-1).value;
       expect(tx.rollback).toHaveBeenCalled();
+    });
+  });
+
+  describe('row-count telemetry (#1101)', () => {
+    test('getTableData reports the number of returned rows to the performance monitor', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: mockData.tableData,
+        rowsAffected: [mockData.tableData.length]
+      });
+
+      await handler.getTableData('Users');
+
+      expect(mockPerformanceMonitor.recordQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'get_table_data',
+          success: true,
+          rowCount: mockData.tableData.length,
+          rowsAffected: mockData.tableData.length
+        })
+      );
+    });
+
+    test('listTables and describeTable report their returned row counts', async () => {
+      mockRequest.query.mockResolvedValue({ recordset: [{ a: 1 }, { a: 2 }] });
+
+      await handler.listTables();
+      await handler.describeTable('Users');
+
+      const metrics = mockPerformanceMonitor.recordQuery.mock.calls.map(([m]) => m);
+      expect(metrics.find(m => m.tool === 'list_tables').rowCount).toBe(2);
+      expect(metrics.find(m => m.tool === 'describe_table').rowCount).toBe(2);
+    });
+
+    test('does not invent a row count when the driver result has no recordset', async () => {
+      mockRequest.query.mockResolvedValue({});
+
+      await handler.listTables();
+
+      const [metric] = mockPerformanceMonitor.recordQuery.mock.calls.at(-1);
+      expect(metric).not.toHaveProperty('rowCount');
+    });
+  });
+
+  describe('export_table_csv streamed row count (#1101 review)', () => {
+    test('records the streamed totalRows as rowCount end-to-end through the real streaming handler', async () => {
+      const rows = [
+        { id: 1, name: 'Alpha' },
+        { id: 2, name: 'Beta' },
+        { id: 3, name: 'Gamma' }
+      ];
+      // Real StreamingHandler and real PerformanceMonitor; only the mssql
+      // streaming Request is stubbed. This pins the whole telemetry path:
+      // streamTableExport (forceStreaming) -> executeStreamingQuery ->
+      // getStreamingStats().totalRows -> recordQuery -> rowCount, so a change
+      // to forceStreaming or to the non-streaming stats branch cannot silently
+      // zero the CSV export's row count.
+      const performanceMonitor = new PerformanceMonitor();
+      const { DatabaseToolsHandler } = await import('../../lib/tools/handlers/database-tools.js');
+      const realHandler = new DatabaseToolsHandler(mockConnectionManager, performanceMonitor);
+      const requestSpy = vi.spyOn(sql, 'Request').mockImplementation(function StreamRequest() {
+        const listeners = {};
+        return {
+          stream: false,
+          on: (event, listener) => {
+            listeners[event] = listener;
+          },
+          query: () => {
+            listeners.recordset({ id: { index: 0, name: 'id' }, name: { index: 1, name: 'name' } });
+            rows.forEach(row => listeners.row(row));
+            listeners.done({ rowsAffected: [rows.length] });
+          }
+        };
+      });
+
+      try {
+        const result = await realHandler.exportTableCsv('Users');
+        expect(result[0].text).toContain('Alpha');
+        expect(result[0].text).toContain('Gamma');
+      } finally {
+        requestSpy.mockRestore();
+      }
+
+      const [metric] = performanceMonitor.getQueryStats().queries;
+      expect(metric.tool).toBe('export_table_csv');
+      expect(metric.rowCount).toBe(3);
+      expect(metric.rowCount).not.toBe(0);
     });
   });
 });

@@ -1,6 +1,6 @@
 {
-  "version": "1.7.13",
-  "generatedAt": "2026-06-07T15:23:12.470Z",
+  "version": "1.7.19",
+  "generatedAt": "2026-08-28T06:55:49.144Z",
   "toolsCount": 16,
   "tools": [
     {
@@ -127,8 +127,12 @@
           "description": "Schema name (optional, defaults to dbo)"
         },
         "limit": {
-          "type": "number",
+          "type": "integer",
           "description": "Maximum number of rows to return (optional, defaults to 100)"
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Number of rows to skip before returning results (optional, defaults to 0). Pair with limit to page through a table. Row order is not guaranteed without an ORDER BY, so pages may overlap or skip rows on tables without a clustered index."
         },
         "where": {
           "type": "string",
@@ -144,7 +148,6 @@
           "table_name": "your_table_name",
           "database": "MyDatabase",
           "schema": "dbo",
-          "limit": 50,
           "where": "id > 100"
         }
       }
@@ -305,7 +308,7 @@
         },
         "schema": {
           "type": "string",
-          "description": "Schema name (optional, defaults to dbo)"
+          "description": "Schema name to restrict recommendations to (optional; omit to cover all schemas)"
         },
         "limit": {
           "type": "number",
@@ -364,7 +367,7 @@
         },
         "analysis_period": {
           "type": "string",
-          "description": "Analysis time period: 24_HOURS, 7_DAYS, 30_DAYS (optional, defaults to 7_DAYS)"
+          "description": "Analysis time period: 24_HOURS, 7_DAYS, 30_DAYS (optional). RESERVED: accepted but not yet applied. The two DMV sources have different lifetimes and cannot be windowed consistently: missing-index aggregates are cumulative (reset only by a server restart or index/database changes) while query-stats rows last only while their plan stays in cache, so results reflect the lifetime of each source regardless of the value sent; the response discloses this in its analysisPeriod field."
         }
       },
       "required": [],
