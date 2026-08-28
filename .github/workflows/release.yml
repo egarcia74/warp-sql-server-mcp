@@ -26,7 +26,7 @@ on:
         default: false
         type: boolean
       create_version_pr:
-        description: 'Create PR to bump package.json version'
+        description: 'Create PR to bump package.json and package-lock.json version'
         required: false
         default: true
         type: boolean
@@ -364,12 +364,13 @@ jobs:
             echo "Remote branch does not exist. Creating new branch: $BRANCH"
             git checkout -b "$BRANCH"
           fi
-          # Update package.json version to match released tag
-          node -e "const fs=require('fs'); const p=require('./package.json'); p.version='$VERSION'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n');"
+          # Update package.json AND package-lock.json (root + packages[""]) to the released tag.
+          # `npm version` rewrites both files consistently and needs no node_modules (#1112).
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
           # Only commit if there is a change
-          if ! git diff --quiet -- package.json; then
-            git add package.json
-            git commit -m "chore(release): bump package.json to v$VERSION"
+          if ! git diff --quiet -- package.json package-lock.json; then
+            git add package.json package-lock.json
+            git commit -m "chore(release): bump version to v$VERSION"
             # Try normal push first using token to ensure CI triggers
             if ! git push -u "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$BRANCH"; then
               echo "Non-fast-forward push rejected. Rebasing and retrying with force-with-lease..."
@@ -377,7 +378,7 @@ jobs:
               git push --force-with-lease "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$BRANCH"
             fi
           else
-            echo "No package.json version change needed"
+            echo "No version change needed in package.json/package-lock.json"
           fi
 
       - name: Open pull request
@@ -398,7 +399,7 @@ jobs:
             }
             
             const body = [
-              `This automated PR bumps package.json to v${version} to match the released tag.`,
+              `This automated PR bumps package.json and package-lock.json to v${version} to match the released tag.`,
               '',
               `- Version: v${version}`,
               `- Source workflow: Release Automation`,
@@ -407,7 +408,7 @@ jobs:
             const pr = await github.rest.pulls.create({
               owner,
               repo,
-              title: `chore(release): bump package.json to v${version}`,
+              title: `chore(release): bump version to v${version}`,
               head: branch,
               base: 'main',
               body
