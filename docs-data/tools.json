@@ -1,6 +1,6 @@
 {
   "version": "1.7.19",
-  "generatedAt": "2026-08-28T06:24:53.147Z",
+  "generatedAt": "2026-08-28T06:55:49.144Z",
   "toolsCount": 16,
   "tools": [
     {
@@ -367,7 +367,7 @@
         },
         "analysis_period": {
           "type": "string",
-          "description": "Analysis time period: 24_HOURS, 7_DAYS, 30_DAYS (optional). RESERVED: accepted but not yet applied. The missing-index DMVs are cumulative and cannot be windowed consistently, so results reflect the plan-cache lifetime regardless of the value sent; the response discloses this in its analysisPeriod field."
+          "description": "Analysis time period: 24_HOURS, 7_DAYS, 30_DAYS (optional). RESERVED: accepted but not yet applied. The two DMV sources have different lifetimes and cannot be windowed consistently: missing-index aggregates are cumulative (reset only by a server restart or index/database changes) while query-stats rows last only while their plan stays in cache, so results reflect the lifetime of each source regardless of the value sent; the response discloses this in its analysisPeriod field."
         }
       },
       "required": [],
