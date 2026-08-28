@@ -100,8 +100,13 @@ source (`lib/security/`):
   caller-supplied predicates in `get_table_data` / `export_table_csv`.
 - **Identifier and numeric validation** — `database`, `schema`, `table_name` are
   allow-list validated and bracket-escaped (`]` doubled); `limit`/`offset` must be
-  non-negative integers. Nothing from a tool argument is interpolated raw.
-- **Audit logging** — every allow/deny decision is logged (`npm run logs:audit`).
+  non-negative integers. Every caller value reaches SQL only through one of these
+  escaper/coercion helpers — with one deliberate exception: the `where` clause is
+  interpolated verbatim, and relies solely on the WHERE-clause guard above.
+- **Audit logging** — every **denied** operation (query or WHERE clause blocked by the
+  safety policy, connection failures) is written to the security audit log
+  (`npm run logs:audit`). Permitted queries are recorded in the ordinary application
+  log, not the audit trail.
 - **Connection security** — TLS with certificate verification on by default; see the
   Security Guide for the trust-server-certificate caveats.
 
