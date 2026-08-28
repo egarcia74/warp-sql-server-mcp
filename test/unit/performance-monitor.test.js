@@ -1111,4 +1111,72 @@ describe('PerformanceMonitor', () => {
       expect(id1).toMatch(/^e_\d+_[a-z0-9]+$/);
     });
   });
+
+  describe('recordQuery row-count propagation (#1101)', () => {
+    const base = { query: 'SELECT 1', executionTime: 5, success: true };
+
+    beforeEach(() => {
+      monitor = new PerformanceMonitor();
+    });
+
+    const recorded = () => monitor.getQueryStats().queries[0];
+
+    test('prefers an explicit rowCount over a recordset', () => {
+      monitor.recordQuery({ ...base, tool: 'get_table_data', rowCount: 7, recordset: [{ id: 1 }] });
+      expect(recorded().rowCount).toBe(7);
+    });
+
+    test('derives rowCount from the recordset when no explicit count is given', () => {
+      monitor.recordQuery({
+        ...base,
+        tool: 'describe_table',
+        recordset: [{ id: 1 }, { id: 2 }, { id: 3 }]
+      });
+      expect(recorded().rowCount).toBe(3);
+    });
+
+    test('maps totalRows (streaming/CSV path) to rowCount', () => {
+      monitor.recordQuery({ ...base, tool: 'export_table_csv', streaming: true, totalRows: 1000 });
+      expect(recorded().rowCount).toBe(1000);
+    });
+
+    test('omits rowCount instead of reporting a misleading 0 when no count is available', () => {
+      monitor.recordQuery({ ...base, tool: 'list_tables' });
+      expect(recorded()).not.toHaveProperty('rowCount');
+      expect(JSON.parse(JSON.stringify(recorded()))).not.toHaveProperty('rowCount');
+    });
+
+    test('normalizes the mssql rowsAffected array to a total and accepts an explicit integer', () => {
+      monitor.recordQuery({ ...base, tool: 'execute_query', rowsAffected: [2, 3] });
+      monitor.recordQuery({ ...base, tool: 'execute_query', rowsAffected: 4 });
+      expect(monitor.metrics.queries[0].rowsAffected).toBe(5);
+      expect(monitor.metrics.queries[1].rowsAffected).toBe(4);
+    });
+
+    test('omits rowsAffected when it is unavailable', () => {
+      monitor.recordQuery({ ...base, tool: 'list_tables' });
+      expect(monitor.metrics.queries[0]).not.toHaveProperty('rowsAffected');
+    });
+
+    test('keeps existing callers working when only the legacy fields are passed', () => {
+      monitor.recordQuery({
+        tool: 'list_databases',
+        query: 'SELECT name FROM sys.databases',
+        executionTime: 12,
+        success: false,
+        error: 'boom',
+        database: 'master',
+        timestamp: new Date(2000)
+      });
+      const q = monitor.metrics.queries[0];
+      expect(q).toMatchObject({
+        tool: 'list_databases',
+        database: 'master',
+        duration: 12,
+        status: 'error',
+        error: 'boom',
+        startTime: 2000
+      });
+    });
+  });
 });

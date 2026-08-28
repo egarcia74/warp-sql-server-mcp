@@ -1049,4 +1049,44 @@ describe('DatabaseToolsHandler', () => {
       expect(tx.rollback).toHaveBeenCalled();
     });
   });
+
+  describe('row-count telemetry (#1101)', () => {
+    test('getTableData reports the number of returned rows to the performance monitor', async () => {
+      mockRequest.query.mockResolvedValue({
+        recordset: mockData.tableData,
+        rowsAffected: [mockData.tableData.length]
+      });
+
+      await handler.getTableData('Users');
+
+      expect(mockPerformanceMonitor.recordQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'get_table_data',
+          success: true,
+          rowCount: mockData.tableData.length,
+          rowsAffected: mockData.tableData.length
+        })
+      );
+    });
+
+    test('listTables and describeTable report their returned row counts', async () => {
+      mockRequest.query.mockResolvedValue({ recordset: [{ a: 1 }, { a: 2 }] });
+
+      await handler.listTables();
+      await handler.describeTable('Users');
+
+      const metrics = mockPerformanceMonitor.recordQuery.mock.calls.map(([m]) => m);
+      expect(metrics.find(m => m.tool === 'list_tables').rowCount).toBe(2);
+      expect(metrics.find(m => m.tool === 'describe_table').rowCount).toBe(2);
+    });
+
+    test('does not invent a row count when the driver result has no recordset', async () => {
+      mockRequest.query.mockResolvedValue({});
+
+      await handler.listTables();
+
+      const [metric] = mockPerformanceMonitor.recordQuery.mock.calls.at(-1);
+      expect(metric).not.toHaveProperty('rowCount');
+    });
+  });
 });
