@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `get_query_performance` now reports the real returned-row count (`rowCount`) and `rowsAffected` for every tool
+  instead of a structural `0`: `recordQuery` accepts an explicit `rowCount`/`rowsAffected`, derives the count from
+  the driver `recordset`, or maps the streaming `totalRows` (`export_table_csv`), and every call site
+  (`execute_query`, the shared handler `executeQuery` used by `get_table_data`/`describe_table`/`list_tables`, and
+  `export_table_csv`) now passes the driver result through. When no count is available the field is omitted rather
+  than reported as `0` ([#1101](https://github.com/egarcia74/warp-sql-server-mcp/issues/1101)).
+- `analyze_query_performance` index suggestions are now executable T-SQL: the target table is resolved from the
+  query's `FROM` clause (schema-qualified and bracket-escaped) instead of a literal `[table]` placeholder, and a
+  suggestion whose table cannot be determined is labelled `conceptual: true`. The ORDER BY column extractor no longer
+  leaks a trailing `;` into the column list and now stops at `OFFSET`/`FETCH`/`FOR`/`OPTION`
+  ([#1102](https://github.com/egarcia74/warp-sql-server-mcp/issues/1102)).
+
 ## [1.7.19] - 2026-08-28
 
 ### Changed

@@ -644,4 +644,153 @@ describe('QueryOptimizer', () => {
       expect(out.roadmap.length).toBeGreaterThan(0);
     });
   });
+
+  describe('extractTargetTable (#1102)', () => {
+    test('resolves a schema-qualified bracketed table', () => {
+      const query =
+        'SELECT TOP (100) [AccountId] FROM [Imports].[PR_Debtors_P1DEBACCT] WHERE [AccountId] IS NOT NULL';
+      expect(optimizer.extractTargetTable(query)).toBe('[Imports].[PR_Debtors_P1DEBACCT]');
+    });
+
+    test('resolves a bare schema.table and ignores the alias', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.Users u WHERE u.id = 1')).toBe(
+        '[dbo].[Users]'
+      );
+    });
+
+    test('resolves an unqualified table', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM Users')).toBe('[Users]');
+    });
+
+    test('resolves a three-part name', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM Sales.dbo.Orders')).toBe(
+        '[Sales].[dbo].[Orders]'
+      );
+    });
+
+    test('resolves a temp table', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM #staging WHERE id = 1')).toBe(
+        '[#staging]'
+      );
+    });
+
+    test('escapes a closing bracket inside a bracketed identifier', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM [dbo].[we]]rd]')).toBe('[dbo].[we]]rd]');
+    });
+
+    test('returns null when the first FROM is a derived table', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM (SELECT id FROM Users) AS u')).toBeNull();
+    });
+
+    test('returns null when there is no FROM clause', () => {
+      expect(optimizer.extractTargetTable('SELECT 1')).toBeNull();
+    });
+
+    test('returns null for non-string or oversized input', () => {
+      expect(optimizer.extractTargetTable(null)).toBeNull();
+      expect(
+        optimizer.extractTargetTable(`SELECT * FROM Users WHERE x = '${'a'.repeat(10001)}'`)
+      ).toBeNull();
+    });
+  });
+
+  describe('clause terminator and stop-set handling (#1102)', () => {
+    test('strips a trailing statement terminator from the last ORDER BY column', () => {
+      const query =
+        'SELECT [AccountId], [SortOrder] FROM [Imports].[PR_Debtors_P1DEBACCT] ORDER BY [SortOrder];';
+      expect(optimizer.extractOrderByColumns(query)).toEqual(['[SortOrder]']);
+    });
+
+    test('strips a terminator that follows a sort direction', () => {
+      expect(optimizer.extractOrderByColumns('SELECT * FROM Users ORDER BY name DESC;')).toEqual([
+        'name'
+      ]);
+    });
+
+    test('stops at OFFSET ... FETCH pagination', () => {
+      const query = 'SELECT * FROM Users ORDER BY name OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY;';
+      expect(optimizer.extractOrderByColumns(query)).toEqual(['name']);
+    });
+
+    test('stops at FETCH', () => {
+      expect(
+        optimizer.extractOrderByColumns('SELECT * FROM Users ORDER BY name FETCH NEXT 10 ROWS ONLY')
+      ).toEqual(['name']);
+    });
+
+    test('stops at FOR (FOR XML / FOR JSON)', () => {
+      expect(
+        optimizer.extractOrderByColumns('SELECT * FROM Users ORDER BY name FOR JSON AUTO')
+      ).toEqual(['name']);
+    });
+
+    test('stops at OPTION query hints', () => {
+      expect(
+        optimizer.extractOrderByColumns(
+          'SELECT * FROM Users ORDER BY name, age DESC OPTION (MAXDOP 1)'
+        )
+      ).toEqual(['name', 'age']);
+    });
+
+    test('does not leak a trailing terminator into WHERE columns', () => {
+      expect(optimizer.extractWhereColumns('SELECT * FROM Users WHERE id = 5;')).toEqual(['id']);
+    });
+  });
+
+  describe('generateIndexRecommendations target table (#1102)', () => {
+    const repro =
+      'SELECT TOP (100) [AccountId], [SortOrder] FROM [Imports].[PR_Debtors_P1DEBACCT] WHERE [AccountId] IS NOT NULL ORDER BY [SortOrder];';
+
+    test('names the real schema-qualified table in the ORDER BY suggestion with no stray terminator', () => {
+      const suggestions = optimizer.generateIndexRecommendations(repro, {}, {});
+      const orderBy = suggestions.find(s => s.reason.includes('ORDER BY'));
+
+      expect(orderBy.suggestion).toBe(
+        'CREATE INDEX IX_OrderBy ON [Imports].[PR_Debtors_P1DEBACCT] ([SortOrder])'
+      );
+      expect(orderBy.table).toBe('[Imports].[PR_Debtors_P1DEBACCT]');
+      expect(orderBy.conceptual).toBeUndefined();
+      for (const s of suggestions) {
+        expect(s.suggestion).not.toContain('[table]');
+        expect(s.suggestion).not.toContain(';');
+      }
+    });
+
+    test('names the table in the WHERE-column suggestion', () => {
+      const suggestions = optimizer.generateIndexRecommendations(
+        'SELECT * FROM dbo.Users WHERE name = ? AND age > 5',
+        {},
+        {}
+      );
+      const where = suggestions.find(s => s.reason.includes('WHERE'));
+
+      expect(where.suggestion).toBe('CREATE INDEX IX_name_age ON [dbo].[Users] (name, age)');
+      expect(where.table).toBe('[dbo].[Users]');
+    });
+
+    test('marks CREATE INDEX suggestions conceptual when the table cannot be determined', () => {
+      const suggestions = optimizer.generateIndexRecommendations(
+        'SELECT * FROM (SELECT id, name FROM Users) AS u WHERE name = ? ORDER BY name',
+        {},
+        {}
+      );
+      const createIndex = suggestions.filter(s => /CREATE INDEX/.test(s.suggestion));
+
+      expect(createIndex.length).toBe(2);
+      for (const s of createIndex) {
+        expect(s.conceptual).toBe(true);
+        expect(s.suggestion).toMatch(/conceptual/i);
+        expect(s.suggestion).not.toContain('[table]');
+        expect(s).not.toHaveProperty('table');
+      }
+    });
+
+    test('the full analysis of the repro contains neither the placeholder nor a leaked terminator', () => {
+      const text = JSON.stringify(optimizer.analyzeQuery(repro).optimization_suggestions);
+
+      expect(text).toContain('[Imports].[PR_Debtors_P1DEBACCT]');
+      expect(text).not.toContain('[table]');
+      expect(text).not.toContain(';');
+    });
+  });
 });
