@@ -99,6 +99,14 @@
   ],
   "author": "Eduardo Garcia-Prieto",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egarcia74/warp-sql-server-mcp.git"
+  },
+  "homepage": "https://github.com/egarcia74/warp-sql-server-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/egarcia74/warp-sql-server-mcp/issues"
+  },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1049.0",
     "@azure/identity": "^4.11.1",

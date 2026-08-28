@@ -479,22 +479,32 @@ DROP TABLE TestTable;
 
 ## 📞 Security Issue Reporting
 
+The authoritative disclosure policy, supported-versions table and list of published
+advisories live in [`.github/SECURITY.md`](../.github/SECURITY.md). In short:
+
 ### Reporting Security Vulnerabilities
 
 If you discover a security vulnerability, please:
 
 1. **Do NOT create a public GitHub issue**
-2. **Email security concerns privately** to the maintainer
-3. **Provide detailed information** about the vulnerability
+2. **Use GitHub private vulnerability reporting**: go to the
+   [Security Advisories tab](https://github.com/egarcia74/warp-sql-server-mcp/security/advisories)
+   and click **Report a vulnerability** — the report is visible only to you and the maintainer
+3. **Provide detailed information** — affected version(s) and a reproduction (a SQL payload
+   and the tool/arguments it went through is ideal)
 4. **Allow reasonable time** for assessment and patching
+
+If you cannot use GitHub's form, open a plain issue that says only _"security report — please
+contact me"_ with no details, and the maintainer will open a private advisory and invite you to it.
 
 ### Security Response Process
 
 1. **Acknowledgment**: Security reports are acknowledged within 48 hours
-2. **Assessment**: Vulnerability is assessed and prioritized within 7 days
-3. **Patching**: Critical issues are patched within 14 days
-4. **Disclosure**: Coordinated disclosure after patch is available
-5. **Credit**: Security researchers are credited (if desired)
+2. **Assessment**: Vulnerability is triaged and assigned a severity within 7 days
+3. **Patching**: High/Critical issues are fixed within 7 days of confirmation; Medium/Low within 30 days
+4. **Disclosure**: Coordinated — the advisory is published alongside the fix, and affected npm
+   versions are deprecated with a pointer to the fixed release
+5. **Credit**: Security researchers are credited in the advisory and release notes (unless they ask not to be)
 
 ## 📚 Additional Resources
 
