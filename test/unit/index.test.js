@@ -167,6 +167,18 @@ describe('SqlServerMCP Index', () => {
       expect(spy.firstCall.args[0]).to.equal('Db');
       expect(spy.firstCall.args[1]).to.include({ schema: 'sales' });
     });
+
+    it('getOptimizationInsights forwards analysisPeriod to the optimizer (#1103)', async () => {
+      const spy = server.queryOptimizer.getOptimizationInsights;
+      spy.resetHistory();
+      spy.resolves({ database: 'Db', summary: {}, recommendations: [], roadmap: [] });
+
+      await server.getOptimizationInsights('Db', { analysisPeriod: '30_DAYS' });
+
+      expect(spy.calledOnce).to.be.true;
+      expect(spy.firstCall.args[0]).to.equal('Db');
+      expect(spy.firstCall.args[1]).to.include({ analysisPeriod: '30_DAYS' });
+    });
   });
 
   describe('Tool Call Handler', () => {
@@ -211,6 +223,23 @@ describe('SqlServerMCP Index', () => {
       const call = DatabaseToolsHandler.prototype.exportTableCsv.lastCall;
       expect(call, 'exportTableCsv was not called').to.not.equal(null);
       expect(call.args).to.include('id > 10');
+    });
+
+    it('threads analysis_period from get_optimization_insights through to the optimizer (#1103)', async () => {
+      const spy = server.queryOptimizer.getOptimizationInsights;
+      spy.resetHistory();
+      spy.resolves({ database: 'Db', summary: {}, recommendations: [], roadmap: [] });
+
+      await server.handleCallToolRequest({
+        params: {
+          name: 'get_optimization_insights',
+          arguments: { database: 'Db', analysis_period: '24_HOURS' }
+        }
+      });
+
+      expect(spy.calledOnce).to.be.true;
+      expect(spy.firstCall.args[0]).to.equal('Db');
+      expect(spy.firstCall.args[1]).to.include({ analysisPeriod: '24_HOURS' });
     });
 
     describe('where clause lexical guard (defense in depth, uses real validator)', () => {

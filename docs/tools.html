@@ -169,7 +169,7 @@
         <h1>🛠️ MCP Tools Documentation</h1>
         <p>Detailed reference for all available SQL Server MCP tools</p>
         <div>
-            <strong>Version 1.7.13 • 16 Tools Available</strong>
+            <strong>Version 1.7.19 • 16 Tools Available</strong>
         </div>
     </div>
 
@@ -469,9 +469,15 @@
                 </tr>
                 <tr>
                     <td><span class="param-name">limit</span></td>
-                    <td><span class="param-type">number</span></td>
+                    <td><span class="param-type">integer</span></td>
                     <td><span class="optional">OPTIONAL</span></td>
                     <td>Maximum number of rows to return (optional, defaults to 100)</td>
+                </tr>
+                <tr>
+                    <td><span class="param-name">offset</span></td>
+                    <td><span class="param-type">integer</span></td>
+                    <td><span class="optional">OPTIONAL</span></td>
+                    <td>Number of rows to skip before returning results (optional, defaults to 0). Pair with limit to page through a table. Row order is not guaranteed without an ORDER BY, so pages may overlap or skip rows on tables without a clustered index.</td>
                 </tr>
                 <tr>
                     <td><span class="param-name">where</span></td>
@@ -501,7 +507,6 @@
     "table_name": "your_table_name",
     "database": "MyDatabase",
     "schema": "dbo",
-    "limit": 50,
     "where": "id > 100"
   }
 }</div>
@@ -843,7 +848,7 @@
                     <td><span class="param-name">schema</span></td>
                     <td><span class="param-type">string</span></td>
                     <td><span class="optional">OPTIONAL</span></td>
-                    <td>Schema name (optional, defaults to dbo)</td>
+                    <td>Schema name to restrict recommendations to (optional; omit to cover all schemas)</td>
                 </tr>
                 <tr>
                     <td><span class="param-name">limit</span></td>
@@ -958,7 +963,7 @@
                     <td><span class="param-name">analysis_period</span></td>
                     <td><span class="param-type">string</span></td>
                     <td><span class="optional">OPTIONAL</span></td>
-                    <td>Analysis time period: 24_HOURS, 7_DAYS, 30_DAYS (optional, defaults to 7_DAYS)</td>
+                    <td>Analysis time period: 24_HOURS, 7_DAYS, 30_DAYS (optional). RESERVED: accepted but not yet applied. The missing-index DMVs are cumulative and cannot be windowed consistently, so results reflect the plan-cache lifetime regardless of the value sent; the response discloses this in its analysisPeriod field.</td>
                 </tr>
                 </tbody>
             </table>
@@ -1020,7 +1025,7 @@
     </div>
 
     <footer style="margin-top: 3rem; text-align: center; color: #6c757d; border-top: 1px solid #e9ecef; padding-top: 1rem;">
-        <p>Generated automatically from code • Last updated: 6/8/2026</p>
+        <p>Generated automatically from code • Last updated: 8/28/2026</p>
     </footer>
 </body>
 </html>
