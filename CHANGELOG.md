@@ -7,17 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.19] - 2026-08-28
+
 ### Changed
 
 - Extracted the query-safety policy and result formatting out of `index.js` into `lib/security/query-policy.js`
   and `lib/utils/result-formatter.js`; added dedicated unit tests for the batch and where-clause guards
-  ([#1082](https://github.com/egarcia74/warp-sql-server-mcp/issues/1082)).
+  ([#1082](https://github.com/egarcia74/warp-sql-server-mcp/issues/1082)). No functional change.
+
+### Security
+
+- Added a behavioral SQL-injection battery (the authoritative guard) plus a best-effort static construction lint,
+  enforcing that caller-controlled values reach SQL only through approved escapers and preventing the injection
+  class fixed in 1.7.16–1.7.18 from recurring
+  ([#1093](https://github.com/egarcia74/warp-sql-server-mcp/issues/1093)). Regression coverage only; no runtime change.
 
 ### Removed
 
-- Removed the unused AST-based `QueryValidator` and its `node-sql-parser` dependency; the live query-safety policy is `validateQuery` + `sql-batch-guard` + `where-clause-guard` ([#1080](https://github.com/egarcia74/warp-sql-server-mcp/issues/1080)).
-- Removed the redundant `.npmignore`; the `package.json` `files` allowlist is the single source of truth for the published tarball ([#1083](https://github.com/egarcia74/warp-sql-server-mcp/issues/1083)).
-- Removed the stale, unreferenced `coverage-report.json` build artifact and gitignored it.
+- Removed the stale, unreferenced `coverage-report.json` build artifact and gitignored it
+  ([#1094](https://github.com/egarcia74/warp-sql-server-mcp/issues/1094)).
+
+## [1.7.18] - 2026-08-27
+
+### Security
+
+- Identifier arguments (`table_name`, `schema`, `database`) and pagination arguments (`limit`, `offset`) in the
+  data and exploration tools (`list_tables`, `describe_table`, `list_foreign_keys`, `get_table_data`,
+  `export_table_csv`) are now escaped and validated before use in queries: identifiers are escaped for their exact
+  bracket or string-literal context, and pagination arguments are validated as integers within their allowed range
+  (rejected otherwise) before use. See advisory
+  [GHSA-p8gx-89fp-x73j](https://github.com/egarcia74/warp-sql-server-mcp/security/advisories/GHSA-p8gx-89fp-x73j).
 
 ### Fixed
 
@@ -40,23 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `index.js` CallTool dispatcher never reads, preventing this class of "dead parameter" from recurring
   ([#1058](https://github.com/egarcia74/warp-sql-server-mcp/issues/1058)).
 
-### Security
+### Removed
 
-- Added a behavioral SQL-injection battery (the authoritative guard) plus a best-effort static construction lint,
-  enforcing that caller-controlled values reach SQL only through approved escapers and preventing the injection
-  class fixed in 1.7.16–1.7.18 from recurring
-  ([#1093](https://github.com/egarcia74/warp-sql-server-mcp/issues/1093)).
-
-## [1.7.18] - 2026-08-27
-
-### Security
-
-- Identifier arguments (`table_name`, `schema`, `database`) and pagination arguments (`limit`, `offset`) in the
-  data and exploration tools (`list_tables`, `describe_table`, `list_foreign_keys`, `get_table_data`,
-  `export_table_csv`) are now escaped and validated before use in queries: identifiers are escaped for their exact
-  bracket or string-literal context, and pagination arguments are validated as integers within their allowed range
-  (rejected otherwise) before use. See advisory
-  [GHSA-p8gx-89fp-x73j](https://github.com/egarcia74/warp-sql-server-mcp/security/advisories/GHSA-p8gx-89fp-x73j).
+- Removed the unused AST-based `QueryValidator` and its `node-sql-parser` dependency; the live query-safety policy is `validateQuery` + `sql-batch-guard` + `where-clause-guard` ([#1080](https://github.com/egarcia74/warp-sql-server-mcp/issues/1080)).
+- Removed the redundant `.npmignore`; the `package.json` `files` allowlist is the single source of truth for the published tarball ([#1083](https://github.com/egarcia74/warp-sql-server-mcp/issues/1083)).
 
 ## [1.7.17] - 2026-08-26
 
