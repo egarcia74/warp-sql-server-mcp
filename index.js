@@ -324,7 +324,9 @@ class SqlServerMCP {
 
           case 'get_optimization_insights':
             return {
-              content: await this.getOptimizationInsights(args.database)
+              content: await this.getOptimizationInsights(args.database, {
+                analysisPeriod: args.analysis_period
+              })
             };
 
           case 'get_server_info':
@@ -686,9 +688,9 @@ class SqlServerMCP {
     }
   }
 
-  async getOptimizationInsights(database) {
+  async getOptimizationInsights(database, options = {}) {
     try {
-      const insights = await this.queryOptimizer.getOptimizationInsights(database);
+      const insights = await this.queryOptimizer.getOptimizationInsights(database, options);
       return [
         {
           type: 'text',

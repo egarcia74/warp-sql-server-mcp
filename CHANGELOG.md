@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `get_optimization_insights` now discloses that its `analysis_period` parameter is reserved and not applied:
+  the response includes an `analysisPeriod` object (`requested` echoes the caller's value or `null`,
+  `applied: false`, and a `reason`), and the input-schema description no longer claims a `7_DAYS` default is
+  applied. The deferral itself is unchanged (the missing-index DMVs are cumulative and cannot be windowed
+  consistently); callers passing `24_HOURS` vs `30_DAYS` previously got byte-identical output with no indication
+  the window was ignored ([#1103](https://github.com/egarcia74/warp-sql-server-mcp/issues/1103)).
+
 ## [1.7.19] - 2026-08-28
 
 ### Changed
