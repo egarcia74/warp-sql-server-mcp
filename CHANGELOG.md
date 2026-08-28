@@ -20,10 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (comments, string literals and quoted/bracketed identifiers blanked) so text inside comments, literals, aliases or
   subqueries can never be taken as the table, and emitted schema-qualified and bracket-escaped. A suggestion is
   labelled `conceptual: true` rather than guessing when the table cannot be determined unambiguously: derived tables,
-  table-valued/rowset functions, CTE names, multi-table `FROM` clauses (JOIN/APPLY/comma list), or key columns with
-  mixed qualifiers. Key columns drop their table qualifier (`t.name` -> `name`); ordinals and expressions are not
-  proposed as index keys. The ORDER BY column extractor no longer leaks a trailing `;` into the column list and
-  stops at `OFFSET`/`FETCH`/`FOR`/`OPTION` ([#1102](https://github.com/egarcia74/warp-sql-server-mcp/issues/1102)).
+  table-valued/rowset functions, CTE names, multi-table `FROM` clauses (JOIN/APPLY/comma list), an `ORDER BY` over a
+  set operation, or a key column whose qualifier is not the table's alias or name. WHERE and ORDER BY columns are read
+  from the top-level clause of the first query block on the same mask, so comments, literals, subqueries and other
+  `UNION` branches never contribute columns; Unicode identifiers are resolved in full or not at all. Key columns drop
+  their table qualifier (`t.name` -> `name`); ordinals and expressions are not proposed as index keys. The ORDER BY
+  column extractor no longer leaks a trailing `;` into the column list and stops at `OFFSET`/`FETCH`/`FOR`/`OPTION`
+  ([#1102](https://github.com/egarcia74/warp-sql-server-mcp/issues/1102)).
 
 ## [1.7.19] - 2026-08-28
 

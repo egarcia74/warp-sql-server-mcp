@@ -1031,4 +1031,148 @@ describe('QueryOptimizer', () => {
       ).toBe('[dbo].[Real]');
     });
   });
+
+  describe('Unicode identifiers and truncation guard (#1102 review 2)', () => {
+    test('resolves unbracketed identifiers with non-ASCII letters in full', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.Kunde_Ö WHERE id=1')).toBe(
+        '[dbo].[Kunde_Ö]'
+      );
+      expect(optimizer.extractTargetTable('SELECT * FROM Tabelle_Ü')).toBe('[Tabelle_Ü]');
+      expect(optimizer.extractTargetTable('SELECT * FROM [Tabelle Ü] WHERE id = 1')).toBe(
+        '[Tabelle Ü]'
+      );
+    });
+
+    test('refuses to guess when an unmodelled character would truncate the name', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T€ WHERE id = 1')).toBeNull();
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T€')).toBeNull();
+      expect(optimizer.extractTargetTable('SELECT * FROM [T]x WHERE id = 1')).toBeNull();
+    });
+
+    test('Unicode column names survive as key columns', () => {
+      const where = optimizer
+        .generateIndexRecommendations(
+          'SELECT * FROM dbo.Kunde_Ö WHERE Straße = ? AND Ort = ?',
+          {},
+          {}
+        )
+        .find(s => s.reason.includes('WHERE'));
+      expect(where.suggestion).toBe('CREATE INDEX IX_Straße_Ort ON [dbo].[Kunde_Ö] (Straße, Ort)');
+    });
+
+    test('a line comment terminated by a bare CR does not swallow the rest of the query', () => {
+      expect(optimizer.extractTargetTable('SELECT id -- note\rFROM dbo.T WHERE id = 1')).toBe(
+        '[dbo].[T]'
+      );
+      expect(optimizer.extractTargetTable('SELECT id -- note\r\nFROM dbo.T')).toBe('[dbo].[T]');
+    });
+
+    test('a legacy table-hint group is not mistaken for a function call', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T (NOLOCK) WHERE id = 1')).toBe(
+        '[dbo].[T]'
+      );
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T (NOLOCK, INDEX(1))')).toBe(
+        '[dbo].[T]'
+      );
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T (1)')).toBeNull();
+    });
+  });
+
+  describe('WHERE / ORDER BY extraction is lexical and attributed (#1102 review 2)', () => {
+    const whereSuggestion = q =>
+      optimizer.generateIndexRecommendations(q, {}, {}).find(s => s.reason.includes('WHERE'));
+    const orderBySuggestion = q =>
+      optimizer.generateIndexRecommendations(q, {}, {}).find(s => s.reason.includes('ORDER BY'));
+
+    test('ignores a column comparison inside a trailing line comment', () => {
+      const s = whereSuggestion(
+        "SELECT * FROM dbo.Orders WHERE status = 'open' -- TODO also filter customers.ssn = '123'"
+      );
+      expect(s.suggestion).toBe('CREATE INDEX IX_status ON [dbo].[Orders] (status)');
+    });
+
+    test('ignores an ORDER BY that exists only inside a block comment', () => {
+      const q =
+        'SELECT id, name FROM dbo.Customers /* consider ORDER BY ssn for sorted export */ WHERE active = 1';
+      expect(orderBySuggestion(q)).toBeUndefined();
+      expect(whereSuggestion(q).suggestion).toBe(
+        'CREATE INDEX IX_active ON [dbo].[Customers] (active)'
+      );
+    });
+
+    test('does not descend into EXISTS / IN subqueries', () => {
+      expect(
+        whereSuggestion(
+          'SELECT * FROM dbo.T t WHERE t.active = 1 AND EXISTS (SELECT 1 FROM dbo.OtherSecret u WHERE u.flag = 1)'
+        ).suggestion
+      ).toBe('CREATE INDEX IX_active ON [dbo].[T] (active)');
+      expect(
+        whereSuggestion(
+          'SELECT * FROM dbo.T WHERE id IN (SELECT id FROM dbo.U WHERE flag = 1) AND x = 1'
+        ).suggestion
+      ).toBe('CREATE INDEX IX_x ON [dbo].[T] (x)');
+    });
+
+    test('takes WHERE columns from the first query block only; ORDER BY over a set operation is conceptual', () => {
+      const union = 'SELECT * FROM dbo.T t WHERE t.a = 1 UNION SELECT * FROM dbo.U u WHERE u.b = 2';
+      expect(whereSuggestion(union).suggestion).toBe('CREATE INDEX IX_a ON [dbo].[T] (a)');
+
+      const ordered = orderBySuggestion(
+        'SELECT * FROM dbo.T t WHERE t.x = 1 UNION SELECT * FROM dbo.U u ORDER BY u.name'
+      );
+      expect(ordered.conceptual).toBe(true);
+      expect(ordered).not.toHaveProperty('table');
+      expect(ordered.suggestion).toContain('(u.name)');
+    });
+
+    test('extractWhereColumns never captures text inside a string literal', () => {
+      expect(
+        optimizer.extractWhereColumns("SELECT * FROM t WHERE note = 'contains = sign' AND id = 1")
+      ).toEqual(['note', 'id']);
+    });
+
+    test('extractOrderByColumns ignores ORDER BY inside OVER() and inside comments', () => {
+      expect(
+        optimizer.extractOrderByColumns('SELECT ROW_NUMBER() OVER (ORDER BY id) AS n FROM dbo.T')
+      ).toEqual([]);
+      expect(optimizer.extractOrderByColumns('SELECT * FROM dbo.T /* ORDER BY x */')).toEqual([]);
+    });
+
+    test('accepts qualifiers that name the alias or the table', () => {
+      expect(whereSuggestion('SELECT * FROM dbo.T t WHERE t.a = 1 AND t.b = 2').suggestion).toBe(
+        'CREATE INDEX IX_a_b ON [dbo].[T] (a, b)'
+      );
+      expect(
+        whereSuggestion('SELECT * FROM [Order Details] WHERE [Order Details].Qty > 1').suggestion
+      ).toBe('CREATE INDEX IX_Qty ON [Order Details] (Qty)');
+      expect(whereSuggestion("SELECT * FROM dbo.T WHERE T.name = 'x'").suggestion).toBe(
+        'CREATE INDEX IX_name ON [dbo].[T] (name)'
+      );
+      expect(whereSuggestion('SELECT * FROM dbo.T AS [t 1] WHERE [t 1].a = 1').suggestion).toBe(
+        'CREATE INDEX IX_a ON [dbo].[T] (a)'
+      );
+    });
+
+    test('a qualifier naming another source makes the suggestion conceptual', () => {
+      const s = whereSuggestion('SELECT * FROM dbo.T t WHERE u.a = 1');
+      expect(s.conceptual).toBe(true);
+      expect(s).not.toHaveProperty('table');
+      expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY x.name').conceptual).toBe(true);
+    });
+
+    test('repeated key columns are listed once (a key list may not repeat a column)', () => {
+      expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY a, t.a DESC, [A]').suggestion).toBe(
+        'CREATE INDEX IX_OrderBy ON [dbo].[T] (a)'
+      );
+      expect(whereSuggestion('SELECT * FROM dbo.T WHERE a = 1 OR a > 5').suggestion).toBe(
+        'CREATE INDEX IX_a ON [dbo].[T] (a)'
+      );
+    });
+
+    test('bracketed column names produce a valid index name', () => {
+      expect(whereSuggestion('SELECT * FROM dbo.T WHERE [Account Id] = 1').suggestion).toBe(
+        'CREATE INDEX IX_Account_Id ON [dbo].[T] ([Account Id])'
+      );
+    });
+  });
 });

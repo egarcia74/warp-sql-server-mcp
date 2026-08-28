@@ -1158,6 +1158,12 @@ describe('PerformanceMonitor', () => {
     test('omits rowsAffected when it is unavailable', () => {
       monitor.recordQuery({ ...base, tool: 'list_tables' });
       expect(monitor.metrics.queries[0]).not.toHaveProperty('rowsAffected');
+      expect(recorded()).not.toHaveProperty('rowsAffected');
+    });
+
+    test('surfaces a known rowsAffected in the getQueryStats summary', () => {
+      monitor.recordQuery({ ...base, tool: 'execute_query', rowsAffected: [3] });
+      expect(recorded().rowsAffected).toBe(3);
     });
 
     test('keeps existing callers working when only the legacy fields are passed', () => {

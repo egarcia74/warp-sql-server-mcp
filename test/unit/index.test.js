@@ -645,6 +645,8 @@ describe('SqlServerMCP Index', () => {
       );
       expect(parsed.data.queries).to.have.lengthOf(1);
       expect(parsed.data.queries[0].rowCount).to.equal(2);
+      // The normalized rowsAffected must surface too, not just be stored (#1101).
+      expect(parsed.data.queries[0].rowsAffected).to.equal(2);
     });
   });
 });
