@@ -41,7 +41,7 @@ What the workflow does
 - Runs tests/lint, generates changelog
 - Bumps version locally and resolves tag collisions (auto-increments patch if tag exists)
 - Pushes tag and creates GitHub Release
-- Opens a version-bump PR `chore/release/vX.Y.Z` to update `package.json` (branch-protection‑friendly)
+- Opens a version-bump PR `chore/release/vX.Y.Z` to update `package.json` and `package-lock.json` (branch-protection‑friendly)
 - Dry runs skip tag/Release but show version + changelog preview
 
 If checks are stuck on the version-bump PR
@@ -75,7 +75,7 @@ If checks are stuck on the version-bump PR
 ## 🔍 Post-Release
 
 - [ ] Verify Release page artifacts and notes
-- [ ] Merge `chore/release/vX.Y.Z` PR to sync `package.json`
+- [ ] Merge `chore/release/vX.Y.Z` PR to sync `package.json` and `package-lock.json`
 - [ ] Docs: confirm site updated, fix links if needed
 - [ ] Monitor errors/issues after release
 

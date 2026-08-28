@@ -153,9 +153,10 @@ PRs created by GITHUB_TOKEN may leave required checks in an
 ## Version-Bump PR Token (RELEASE_PR_TOKEN)
 
 The release workflow creates a `chore/release/vX.Y.Z` branch and PR to bump
-`package.json` after each release. Without a PAT, this push uses `GITHUB_TOKEN`,
-and GitHub's recursion guard blocks CI from running — leaving the PR permanently
-blocked on required checks (`Tests (20)`, `Tests (22)`, `CodeQL`).
+`package.json` and `package-lock.json` after each release. Without a PAT, this
+push uses `GITHUB_TOKEN`, and GitHub's recursion guard blocks CI from running —
+leaving the PR permanently blocked on required checks (`Tests (20)`,
+`Tests (22)`, `CodeQL`).
 
 ### Purpose
 
