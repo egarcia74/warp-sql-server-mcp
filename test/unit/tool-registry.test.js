@@ -36,18 +36,13 @@ import { getAllTools, getTool } from '../../lib/tools/tool-registry.js';
 // consumed by the dispatcher, with the reason. Keeping them here (rather than
 // deleting the assertion) makes the honesty gap explicit and auditable.
 //
-// get_optimization_insights.analysis_period: the insight combines two DMV
-// sources with different time semantics. The missing-index half
-// (sys.dm_db_missing_index_group_stats) is a cumulative, cache-resident
-// aggregate with no retained per-event history, so it cannot be windowed; the
-// expensive-query half (sys.dm_exec_query_stats) does carry last_execution_time
-// and could be. Honoring analysis_period on only the query half while the
-// missing-index half stayed all-time would produce an inconsistent, misleading
-// result, so the parameter is deferred pending a consistent time-windowed
-// source rather than partially applied as a misleading no-op.
-const DEFERRED_PROPS = {
-  get_optimization_insights: new Set(['analysis_period'])
-};
+// Currently empty. get_optimization_insights.analysis_period used to live here:
+// the insight combines two DMV sources with different time semantics (the
+// missing-index DMVs are cumulative aggregates that cannot be windowed), so the
+// period is still NOT applied — but since #1103 the dispatcher reads it and the
+// optimizer echoes it back in the response's `analysisPeriod` disclosure
+// (`applied: false`), so it is no longer an unread "dead" property.
+const DEFERRED_PROPS = {};
 
 const indexSource = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../../index.js'),
@@ -194,6 +189,25 @@ describe('Tool Registry', () => {
     test('declares both limit and offset paging parameters', () => {
       const keys = Object.keys(tool.inputSchema.properties);
       expect(keys).toEqual(expect.arrayContaining(['limit', 'offset']));
+    });
+  });
+
+  describe('get_optimization_insights', () => {
+    const tool = getTool('get_optimization_insights');
+    const period = tool.inputSchema.properties.analysis_period;
+
+    test('keeps the analysis_period enum so clients that already send it still validate (#1103)', () => {
+      expect(period.type).toBe('string');
+      expect(period.enum).toEqual(['24_HOURS', '7_DAYS', '30_DAYS']);
+    });
+
+    test('analysis_period description does not claim a default window is applied (#1103)', () => {
+      expect(period.description).not.toMatch(/defaults? to/i);
+    });
+
+    test('analysis_period description states the parameter is reserved / not applied (#1103)', () => {
+      expect(period.description).toMatch(/reserved/i);
+      expect(period.description).toMatch(/not (yet )?applied/i);
     });
   });
 });

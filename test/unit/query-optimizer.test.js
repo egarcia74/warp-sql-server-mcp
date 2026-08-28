@@ -643,6 +643,35 @@ describe('QueryOptimizer', () => {
       expect(Array.isArray(out.recommendations)).toBe(true);
       expect(out.roadmap.length).toBeGreaterThan(0);
     });
+
+    // #1103: analysis_period is accepted by the tool schema but intentionally
+    // not applied (the missing-index DMVs are cumulative and cannot be
+    // windowed). The response must say so explicitly instead of silently
+    // returning identical output for every period.
+    test('discloses that analysis_period is reserved and echoes the requested value (#1103)', async () => {
+      mockRequest.query
+        .mockResolvedValueOnce({ recordset: [] })
+        .mockResolvedValueOnce({ recordset: [{ expensive_query_count: 0 }] });
+
+      const out = await dbOptimizer.getOptimizationInsights('Db', { analysisPeriod: '24_HOURS' });
+
+      expect(out.analysisPeriod).toBeDefined();
+      expect(out.analysisPeriod.requested).toBe('24_HOURS');
+      expect(out.analysisPeriod.applied).toBe(false);
+      expect(typeof out.analysisPeriod.reason).toBe('string');
+      expect(out.analysisPeriod.reason).toMatch(/reserved/i);
+    });
+
+    test('reports requested: null when analysis_period is omitted (#1103)', async () => {
+      mockRequest.query
+        .mockResolvedValueOnce({ recordset: [] })
+        .mockResolvedValueOnce({ recordset: [{ expensive_query_count: 0 }] });
+
+      const out = await dbOptimizer.getOptimizationInsights('Db');
+
+      expect(out.analysisPeriod.requested).toBeNull();
+      expect(out.analysisPeriod.applied).toBe(false);
+    });
   });
 
   describe('extractTargetTable (#1102)', () => {
