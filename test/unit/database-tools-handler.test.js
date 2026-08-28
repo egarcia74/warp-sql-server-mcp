@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import sql from 'mssql';
+import { PerformanceMonitor } from '../../lib/utils/performance-monitor.js';
 import {
   mockData,
   createMockConnectionManager,
@@ -1087,6 +1088,52 @@ describe('DatabaseToolsHandler', () => {
 
       const [metric] = mockPerformanceMonitor.recordQuery.mock.calls.at(-1);
       expect(metric).not.toHaveProperty('rowCount');
+    });
+  });
+
+  describe('export_table_csv streamed row count (#1101 review)', () => {
+    test('records the streamed totalRows as rowCount end-to-end through the real streaming handler', async () => {
+      const rows = [
+        { id: 1, name: 'Alpha' },
+        { id: 2, name: 'Beta' },
+        { id: 3, name: 'Gamma' }
+      ];
+      // Real StreamingHandler and real PerformanceMonitor; only the mssql
+      // streaming Request is stubbed. This pins the whole telemetry path:
+      // streamTableExport (forceStreaming) -> executeStreamingQuery ->
+      // getStreamingStats().totalRows -> recordQuery -> rowCount, so a change
+      // to forceStreaming or to the non-streaming stats branch cannot silently
+      // zero the CSV export's row count.
+      const performanceMonitor = new PerformanceMonitor();
+      const { DatabaseToolsHandler } = await import('../../lib/tools/handlers/database-tools.js');
+      const realHandler = new DatabaseToolsHandler(mockConnectionManager, performanceMonitor);
+      const requestSpy = vi.spyOn(sql, 'Request').mockImplementation(function StreamRequest() {
+        const listeners = {};
+        return {
+          stream: false,
+          on: (event, listener) => {
+            listeners[event] = listener;
+          },
+          query: () => {
+            listeners.recordset({ id: { index: 0, name: 'id' }, name: { index: 1, name: 'name' } });
+            rows.forEach(row => listeners.row(row));
+            listeners.done({ rowsAffected: [rows.length] });
+          }
+        };
+      });
+
+      try {
+        const result = await realHandler.exportTableCsv('Users');
+        expect(result[0].text).toContain('Alpha');
+        expect(result[0].text).toContain('Gamma');
+      } finally {
+        requestSpy.mockRestore();
+      }
+
+      const [metric] = performanceMonitor.getQueryStats().queries;
+      expect(metric.tool).toBe('export_table_csv');
+      expect(metric.rowCount).toBe(3);
+      expect(metric.rowCount).not.toBe(0);
     });
   });
 });

@@ -192,7 +192,7 @@ describe('PerformanceMonitor', () => {
         endMemory: 100,
         memoryDelta: 0,
         error: null,
-        rowsAffected: [3],
+        rowsAffected: 3,
         rowCount: 3,
         streaming: false
       });
@@ -207,8 +207,9 @@ describe('PerformanceMonitor', () => {
       const queryMetric = monitor.metrics.queries[0];
       expect(queryMetric.status).toBe('error');
       expect(queryMetric.error).toBe('Syntax error near INVALID');
-      expect(queryMetric.rowsAffected).toBe(0);
-      expect(queryMetric.rowCount).toBe(0);
+      // Unknown counts are omitted rather than reported as 0 (#1101).
+      expect(queryMetric).not.toHaveProperty('rowsAffected');
+      expect(queryMetric).not.toHaveProperty('rowCount');
     });
 
     test('should handle streaming result', () => {
@@ -219,7 +220,8 @@ describe('PerformanceMonitor', () => {
 
       const queryMetric = monitor.metrics.queries[0];
       expect(queryMetric.streaming).toBe(true);
-      expect(queryMetric.rowsAffected).toEqual([10000]);
+      expect(queryMetric.rowsAffected).toBe(10000);
+      expect(queryMetric).not.toHaveProperty('rowCount');
     });
 
     test('should not complete query when disabled', () => {

@@ -15,11 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`execute_query`, the shared handler `executeQuery` used by `get_table_data`/`describe_table`/`list_tables`, and
   `export_table_csv`) now passes the driver result through. When no count is available the field is omitted rather
   than reported as `0` ([#1101](https://github.com/egarcia74/warp-sql-server-mcp/issues/1101)).
-- `analyze_query_performance` index suggestions are now executable T-SQL: the target table is resolved from the
-  query's `FROM` clause (schema-qualified and bracket-escaped) instead of a literal `[table]` placeholder, and a
-  suggestion whose table cannot be determined is labelled `conceptual: true`. The ORDER BY column extractor no longer
-  leaks a trailing `;` into the column list and now stops at `OFFSET`/`FETCH`/`FOR`/`OPTION`
-  ([#1102](https://github.com/egarcia74/warp-sql-server-mcp/issues/1102)).
+- `analyze_query_performance` index suggestions are now executable T-SQL instead of carrying a literal `[table]`
+  placeholder: the target table is resolved from the first top-level `FROM` of the query, located on a lexical mask
+  (comments, string literals and quoted/bracketed identifiers blanked) so text inside comments, literals, aliases or
+  subqueries can never be taken as the table, and emitted schema-qualified and bracket-escaped. A suggestion is
+  labelled `conceptual: true` rather than guessing when the table cannot be determined unambiguously: derived tables,
+  table-valued/rowset functions, CTE names, multi-table `FROM` clauses (JOIN/APPLY/comma list), or key columns with
+  mixed qualifiers. Key columns drop their table qualifier (`t.name` -> `name`); ordinals and expressions are not
+  proposed as index keys. The ORDER BY column extractor no longer leaks a trailing `;` into the column list and
+  stops at `OFFSET`/`FETCH`/`FOR`/`OPTION` ([#1102](https://github.com/egarcia74/warp-sql-server-mcp/issues/1102)).
 
 ## [1.7.19] - 2026-08-28
 
