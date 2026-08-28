@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `get_query_performance` now reports the real returned-row count (`rowCount`) and `rowsAffected` for every tool
+  instead of a structural `0`: `recordQuery` accepts an explicit `rowCount`/`rowsAffected`, derives the count from
+  the driver `recordset`, or maps the streaming `totalRows` (`export_table_csv`), and every call site
+  (`execute_query`, the shared handler `executeQuery` used by `get_table_data`/`describe_table`/`list_tables`, and
+  `export_table_csv`) now passes the driver result through. When no count is available the field is omitted rather
+  than reported as `0` ([#1101](https://github.com/egarcia74/warp-sql-server-mcp/issues/1101)).
+- `analyze_query_performance` index suggestions are now executable T-SQL instead of carrying a literal `[table]`
+  placeholder: the target table is resolved from the first top-level `FROM` of the query, located on a lexical mask
+  (comments, string literals and quoted/bracketed identifiers blanked) so text inside comments, literals, aliases or
+  subqueries can never be taken as the table, and emitted schema-qualified and bracket-escaped. A suggestion is
+  labelled `conceptual: true` rather than guessing when the table cannot be determined unambiguously: derived tables,
+  table-valued/rowset functions, CTE names, multi-table `FROM` clauses (JOIN/APPLY/comma list), an `ORDER BY` over a
+  set operation, or a key column whose qualifier is not the table's alias or name. WHERE and ORDER BY columns are read
+  from the top-level clause of the first query block on the same mask, so comments, literals, subqueries and other
+  `UNION` branches never contribute columns; Unicode identifiers are resolved in full or not at all. Key columns drop
+  their table qualifier (`t.name` -> `name`); ordinals and expressions are not proposed as index keys. The ORDER BY
+  column extractor no longer leaks a trailing `;` into the column list and stops at `OFFSET`/`FETCH`/`FOR`/`OPTION`
+  ([#1102](https://github.com/egarcia74/warp-sql-server-mcp/issues/1102)).
 - `get_optimization_insights` now discloses that its `analysis_period` parameter is reserved and not applied:
   the response includes an `analysisPeriod` object (`requested` echoes the caller's value or `null`,
   `applied: false`, and a `reason`), and the input-schema description no longer claims a `7_DAYS` default is

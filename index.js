@@ -16,7 +16,7 @@ import { getAllTools } from './lib/tools/tool-registry.js';
 import { ConnectionManager } from './lib/database/connection-manager.js';
 import { serverConfig } from './lib/config/server-config.js';
 import { DatabaseToolsHandler } from './lib/tools/handlers/database-tools.js';
-import { PerformanceMonitor } from './lib/utils/performance-monitor.js';
+import { PerformanceMonitor, extractRowCounts } from './lib/utils/performance-monitor.js';
 import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
@@ -401,7 +401,8 @@ class SqlServerMCP {
           executionTime,
           success: true,
           database,
-          timestamp: new Date(startTime)
+          timestamp: new Date(startTime),
+          ...extractRowCounts(result)
         });
       } catch (perfError) {
         this.logger.warn('Performance monitoring failed', { error: perfError.message });

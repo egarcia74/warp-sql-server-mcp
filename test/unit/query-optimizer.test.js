@@ -673,4 +673,535 @@ describe('QueryOptimizer', () => {
       expect(out.analysisPeriod.applied).toBe(false);
     });
   });
+
+  describe('extractTargetTable (#1102)', () => {
+    test('resolves a schema-qualified bracketed table', () => {
+      const query =
+        'SELECT TOP (100) [AccountId] FROM [Imports].[PR_Debtors_P1DEBACCT] WHERE [AccountId] IS NOT NULL';
+      expect(optimizer.extractTargetTable(query)).toBe('[Imports].[PR_Debtors_P1DEBACCT]');
+    });
+
+    test('resolves a bare schema.table and ignores the alias', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.Users u WHERE u.id = 1')).toBe(
+        '[dbo].[Users]'
+      );
+    });
+
+    test('resolves an unqualified table', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM Users')).toBe('[Users]');
+    });
+
+    test('resolves a three-part name', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM Sales.dbo.Orders')).toBe(
+        '[Sales].[dbo].[Orders]'
+      );
+    });
+
+    test('resolves a temp table', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM #staging WHERE id = 1')).toBe(
+        '[#staging]'
+      );
+    });
+
+    test('escapes a closing bracket inside a bracketed identifier', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM [dbo].[we]]rd]')).toBe('[dbo].[we]]rd]');
+    });
+
+    test('returns null when the first FROM is a derived table', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM (SELECT id FROM Users) AS u')).toBeNull();
+    });
+
+    test('returns null when there is no FROM clause', () => {
+      expect(optimizer.extractTargetTable('SELECT 1')).toBeNull();
+    });
+
+    test('returns null for non-string or oversized input', () => {
+      expect(optimizer.extractTargetTable(null)).toBeNull();
+      expect(
+        optimizer.extractTargetTable(`SELECT * FROM Users WHERE x = '${'a'.repeat(10001)}'`)
+      ).toBeNull();
+    });
+  });
+
+  describe('clause terminator and stop-set handling (#1102)', () => {
+    test('strips a trailing statement terminator from the last ORDER BY column', () => {
+      const query =
+        'SELECT [AccountId], [SortOrder] FROM [Imports].[PR_Debtors_P1DEBACCT] ORDER BY [SortOrder];';
+      expect(optimizer.extractOrderByColumns(query)).toEqual(['[SortOrder]']);
+    });
+
+    test('strips a terminator that follows a sort direction', () => {
+      expect(optimizer.extractOrderByColumns('SELECT * FROM Users ORDER BY name DESC;')).toEqual([
+        'name'
+      ]);
+    });
+
+    test('stops at OFFSET ... FETCH pagination', () => {
+      const query = 'SELECT * FROM Users ORDER BY name OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY;';
+      expect(optimizer.extractOrderByColumns(query)).toEqual(['name']);
+    });
+
+    test('stops at FETCH', () => {
+      expect(
+        optimizer.extractOrderByColumns('SELECT * FROM Users ORDER BY name FETCH NEXT 10 ROWS ONLY')
+      ).toEqual(['name']);
+    });
+
+    test('stops at FOR (FOR XML / FOR JSON)', () => {
+      expect(
+        optimizer.extractOrderByColumns('SELECT * FROM Users ORDER BY name FOR JSON AUTO')
+      ).toEqual(['name']);
+    });
+
+    test('stops at OPTION query hints', () => {
+      expect(
+        optimizer.extractOrderByColumns(
+          'SELECT * FROM Users ORDER BY name, age DESC OPTION (MAXDOP 1)'
+        )
+      ).toEqual(['name', 'age']);
+    });
+
+    test('does not leak a trailing terminator into WHERE columns', () => {
+      expect(optimizer.extractWhereColumns('SELECT * FROM Users WHERE id = 5;')).toEqual(['id']);
+    });
+  });
+
+  describe('generateIndexRecommendations target table (#1102)', () => {
+    const repro =
+      'SELECT TOP (100) [AccountId], [SortOrder] FROM [Imports].[PR_Debtors_P1DEBACCT] WHERE [AccountId] IS NOT NULL ORDER BY [SortOrder];';
+
+    test('names the real schema-qualified table in the ORDER BY suggestion with no stray terminator', () => {
+      const suggestions = optimizer.generateIndexRecommendations(repro, {}, {});
+      const orderBy = suggestions.find(s => s.reason.includes('ORDER BY'));
+
+      expect(orderBy.suggestion).toBe(
+        'CREATE INDEX IX_OrderBy ON [Imports].[PR_Debtors_P1DEBACCT] ([SortOrder])'
+      );
+      expect(orderBy.table).toBe('[Imports].[PR_Debtors_P1DEBACCT]');
+      expect(orderBy.conceptual).toBeUndefined();
+      for (const s of suggestions) {
+        expect(s.suggestion).not.toContain('[table]');
+        expect(s.suggestion).not.toContain(';');
+      }
+    });
+
+    test('names the table in the WHERE-column suggestion', () => {
+      const suggestions = optimizer.generateIndexRecommendations(
+        'SELECT * FROM dbo.Users WHERE name = ? AND age > 5',
+        {},
+        {}
+      );
+      const where = suggestions.find(s => s.reason.includes('WHERE'));
+
+      expect(where.suggestion).toBe('CREATE INDEX IX_name_age ON [dbo].[Users] (name, age)');
+      expect(where.table).toBe('[dbo].[Users]');
+    });
+
+    test('marks CREATE INDEX suggestions conceptual when the table cannot be determined', () => {
+      const suggestions = optimizer.generateIndexRecommendations(
+        'SELECT * FROM (SELECT id, name FROM Users) AS u WHERE name = ? ORDER BY name',
+        {},
+        {}
+      );
+      const createIndex = suggestions.filter(s => /CREATE INDEX/.test(s.suggestion));
+
+      expect(createIndex.length).toBe(2);
+      for (const s of createIndex) {
+        expect(s.conceptual).toBe(true);
+        expect(s.suggestion).toMatch(/conceptual/i);
+        expect(s.suggestion).not.toContain('[table]');
+        expect(s).not.toHaveProperty('table');
+      }
+    });
+
+    test('the full analysis of the repro contains neither the placeholder nor a leaked terminator', () => {
+      const text = JSON.stringify(optimizer.analyzeQuery(repro).optimization_suggestions);
+
+      expect(text).toContain('[Imports].[PR_Debtors_P1DEBACCT]');
+      expect(text).not.toContain('[table]');
+      expect(text).not.toContain(';');
+    });
+  });
+
+  describe('extractTargetTable lexical safety (#1102 review)', () => {
+    const repro =
+      'SELECT TOP (100) [AccountId], [SortOrder] FROM [Imports].[PR_Debtors_P1DEBACCT] WHERE [AccountId] IS NOT NULL ORDER BY [SortOrder];';
+
+    test('ignores a "from" inside a leading line comment (issue repro with header comment)', () => {
+      const query = `-- Report: pulls active accounts from the debtors table\n${repro}`;
+      expect(optimizer.extractTargetTable(query)).toBe('[Imports].[PR_Debtors_P1DEBACCT]');
+      const orderBy = optimizer
+        .generateIndexRecommendations(query, {}, {})
+        .find(s => s.reason.includes('ORDER BY'));
+      expect(orderBy.suggestion).toBe(
+        'CREATE INDEX IX_OrderBy ON [Imports].[PR_Debtors_P1DEBACCT] ([SortOrder])'
+      );
+    });
+
+    test('ignores FROM inside a trailing line comment', () => {
+      expect(
+        optimizer.extractTargetTable('SELECT id -- FROM CommentTable\nFROM dbo.Real WHERE id=1')
+      ).toBe('[dbo].[Real]');
+    });
+
+    test('ignores FROM inside a block comment', () => {
+      expect(
+        optimizer.extractTargetTable('SELECT id /* FROM CommentTable */ FROM dbo.Real WHERE id=1')
+      ).toBe('[dbo].[Real]');
+    });
+
+    test('ignores FROM inside a nested block comment', () => {
+      expect(
+        optimizer.extractTargetTable(
+          'SELECT id /* outer /* FROM Inner */ FROM Outer */ FROM dbo.Real WHERE id=1'
+        )
+      ).toBe('[dbo].[Real]');
+    });
+
+    test('ignores FROM inside a string literal', () => {
+      expect(
+        optimizer.extractTargetTable(
+          "SELECT '... FROM nowhere ...' AS note, id FROM dbo.Actual WHERE id = 1"
+        )
+      ).toBe('[dbo].[Actual]');
+    });
+
+    test('ignores FROM inside an escaped string literal', () => {
+      expect(
+        optimizer.extractTargetTable("SELECT 'it''s FROM nowhere' AS note, id FROM dbo.Actual")
+      ).toBe('[dbo].[Actual]');
+    });
+
+    test('ignores From inside a bracketed alias', () => {
+      expect(
+        optimizer.extractTargetTable('SELECT x AS [My From Value], id FROM dbo.T WHERE id=1')
+      ).toBe('[dbo].[T]');
+    });
+
+    test('ignores From inside a double-quoted alias', () => {
+      expect(
+        optimizer.extractTargetTable('SELECT x AS "My From Value", id FROM dbo.T WHERE id=1')
+      ).toBe('[dbo].[T]');
+    });
+
+    test('does not match identifiers that merely start with From', () => {
+      expect(optimizer.extractTargetTable('SELECT FromDate, from_id FROM dbo.T')).toBe('[dbo].[T]');
+    });
+
+    test('chooses the first FROM at parenthesis depth 0, not one inside a subquery', () => {
+      expect(
+        optimizer.extractTargetTable('SELECT (SELECT COUNT(*) FROM x) AS n, id FROM y WHERE id = 1')
+      ).toBe('[y]');
+    });
+
+    test('skips a comment between FROM and the table', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM /* hint */ dbo.T WHERE id = 1')).toBe(
+        '[dbo].[T]'
+      );
+    });
+
+    test('returns null for malformed input (unterminated literal or comment)', () => {
+      expect(optimizer.extractTargetTable("SELECT 'abc FROM dbo.T")).toBeNull();
+      expect(optimizer.extractTargetTable('SELECT id /* FROM dbo.T')).toBeNull();
+      expect(optimizer.extractTargetTable('SELECT [id FROM dbo.T')).toBeNull();
+    });
+
+    test('table hints and TABLESAMPLE do not count as additional table sources', () => {
+      expect(
+        optimizer.extractTargetTable('SELECT * FROM dbo.T t WITH (NOLOCK, INDEX(1)) WHERE id = 1')
+      ).toBe('[dbo].[T]');
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T TABLESAMPLE (10 PERCENT)')).toBe(
+        '[dbo].[T]'
+      );
+    });
+  });
+
+  describe('multi-table queries are conceptual (#1102 review)', () => {
+    const joinQuery =
+      'SELECT * FROM dbo.T1 t1 JOIN dbo.T2 t2 ON t1.id=t2.t1id WHERE t2.status = 1 ORDER BY t2.status';
+
+    test('extractTargetTable returns null for JOIN, comma lists and APPLY', () => {
+      expect(optimizer.extractTargetTable(joinQuery)).toBeNull();
+      expect(
+        optimizer.extractTargetTable('SELECT * FROM dbo.A a LEFT OUTER JOIN dbo.B b ON a.id = b.id')
+      ).toBeNull();
+      expect(
+        optimizer.extractTargetTable('SELECT * FROM dbo.A a, dbo.B b WHERE a.id = b.id')
+      ).toBeNull();
+      expect(
+        optimizer.extractTargetTable('SELECT * FROM dbo.A a CROSS APPLY dbo.fn(a.id) f')
+      ).toBeNull();
+    });
+
+    test('JOIN query yields only conceptual CREATE INDEX suggestions, never one on the first table', () => {
+      const createIndex = optimizer
+        .generateIndexRecommendations(joinQuery, {}, {})
+        .filter(s => /CREATE INDEX/.test(s.suggestion));
+
+      expect(createIndex.length).toBe(2);
+      for (const s of createIndex) {
+        expect(s.conceptual).toBe(true);
+        expect(s).not.toHaveProperty('table');
+        expect(s.suggestion).not.toContain('[dbo].[T1]');
+      }
+    });
+  });
+
+  describe('index key column shaping (#1102 review)', () => {
+    const orderBySuggestion = query =>
+      optimizer
+        .generateIndexRecommendations(query, {}, {})
+        .find(s => s.reason.includes('ORDER BY'));
+
+    test('strips the alias qualifier from ORDER BY columns on a single-table query', () => {
+      expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY t.name').suggestion).toBe(
+        'CREATE INDEX IX_OrderBy ON [dbo].[T] (name)'
+      );
+    });
+
+    test('strips a bracketed alias qualifier and keeps the column bracketed', () => {
+      expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY [t].[name] DESC').suggestion).toBe(
+        'CREATE INDEX IX_OrderBy ON [dbo].[T] ([name])'
+      );
+    });
+
+    test('marks the suggestion conceptual when ORDER BY columns carry mixed qualifiers', () => {
+      const s = orderBySuggestion('SELECT * FROM dbo.T t ORDER BY t.name, u.age');
+      expect(s.conceptual).toBe(true);
+      expect(s).not.toHaveProperty('table');
+      expect(s.suggestion).toContain('(t.name, u.age)');
+    });
+
+    test('emits no ORDER BY suggestion for ordinal positions', () => {
+      expect(orderBySuggestion('SELECT a, b FROM dbo.T ORDER BY 1, 2')).toBeUndefined();
+    });
+
+    test('emits no ORDER BY suggestion for expressions', () => {
+      expect(
+        orderBySuggestion(
+          'SELECT a FROM dbo.T ORDER BY LEN(name), CASE WHEN a = 1 THEN 0 ELSE 1 END'
+        )
+      ).toBeUndefined();
+    });
+
+    test('keeps only the plain columns when ORDER BY mixes expressions and columns', () => {
+      expect(orderBySuggestion('SELECT a FROM dbo.T ORDER BY LEN(name), id').suggestion).toBe(
+        'CREATE INDEX IX_OrderBy ON [dbo].[T] (id)'
+      );
+    });
+
+    test('the WHERE suggestion on a single-table aliased query names the table', () => {
+      const where = optimizer
+        .generateIndexRecommendations('SELECT * FROM dbo.T t WHERE t.name = ?', {}, {})
+        .find(s => s.reason.includes('WHERE'));
+      expect(where.suggestion).toBe('CREATE INDEX IX_name ON [dbo].[T] (name)');
+    });
+  });
+
+  describe('identifier grammar (#1102 review)', () => {
+    test('handles the default-schema form db..table', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM db..table1 WHERE id = 1')).toBe(
+        '[db]..[table1]'
+      );
+    });
+
+    test('returns null for a name ending in a dot', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo. WHERE id = 1')).toBeNull();
+    });
+
+    test('returns null for table-valued functions', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.fn(1)')).toBeNull();
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.fn (1) AS f')).toBeNull();
+    });
+
+    test('returns null for rowset functions', () => {
+      expect(
+        optimizer.extractTargetTable(
+          "SELECT * FROM OPENROWSET('SQLNCLI', 'Server=x;Trusted_Connection=yes;', 'SELECT 1')"
+        )
+      ).toBeNull();
+      expect(optimizer.extractTargetTable('SELECT * FROM OPENJSON(@j) WITH (id int)')).toBeNull();
+      expect(optimizer.extractTargetTable("SELECT * FROM STRING_SPLIT('a,b', ',')")).toBeNull();
+    });
+
+    test('returns null when the FROM names a CTE', () => {
+      const cte =
+        'WITH c AS (SELECT id, name FROM dbo.Base) SELECT * FROM c WHERE name = ? ORDER BY name';
+      expect(optimizer.extractTargetTable(cte)).toBeNull();
+      const createIndex = optimizer
+        .generateIndexRecommendations(cte, {}, {})
+        .filter(s => /CREATE INDEX/.test(s.suggestion));
+      expect(createIndex.length).toBe(2);
+      for (const s of createIndex) {
+        expect(s.conceptual).toBe(true);
+        expect(s.suggestion).not.toContain('[dbo].[Base]');
+        expect(s.suggestion).not.toContain('ON [c]');
+      }
+    });
+
+    test('recognises every CTE in a list, including column-list and bracketed forms', () => {
+      const query =
+        'WITH a AS (SELECT 1 AS x), [b] (y) AS (SELECT 2), c AS (SELECT 3) SELECT * FROM b ORDER BY y';
+      expect(optimizer.extractTargetTable(query)).toBeNull();
+      expect(optimizer.extractTargetTable(query.replace('FROM b', 'FROM c'))).toBeNull();
+    });
+
+    test('recognises a CTE introduced by ;WITH', () => {
+      expect(
+        optimizer.extractTargetTable(';WITH c AS (SELECT 1 AS x) SELECT * FROM c ORDER BY x')
+      ).toBeNull();
+    });
+
+    test('still resolves a real table when a CTE is only referenced in a subquery', () => {
+      expect(
+        optimizer.extractTargetTable(
+          'WITH c AS (SELECT 1 AS x) SELECT * FROM dbo.Real WHERE id IN (SELECT x FROM c)'
+        )
+      ).toBe('[dbo].[Real]');
+    });
+  });
+
+  describe('Unicode identifiers and truncation guard (#1102 review 2)', () => {
+    test('resolves unbracketed identifiers with non-ASCII letters in full', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.Kunde_Ö WHERE id=1')).toBe(
+        '[dbo].[Kunde_Ö]'
+      );
+      expect(optimizer.extractTargetTable('SELECT * FROM Tabelle_Ü')).toBe('[Tabelle_Ü]');
+      expect(optimizer.extractTargetTable('SELECT * FROM [Tabelle Ü] WHERE id = 1')).toBe(
+        '[Tabelle Ü]'
+      );
+    });
+
+    test('refuses to guess when an unmodelled character would truncate the name', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T€ WHERE id = 1')).toBeNull();
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T€')).toBeNull();
+      expect(optimizer.extractTargetTable('SELECT * FROM [T]x WHERE id = 1')).toBeNull();
+    });
+
+    test('Unicode column names survive as key columns', () => {
+      const where = optimizer
+        .generateIndexRecommendations(
+          'SELECT * FROM dbo.Kunde_Ö WHERE Straße = ? AND Ort = ?',
+          {},
+          {}
+        )
+        .find(s => s.reason.includes('WHERE'));
+      expect(where.suggestion).toBe('CREATE INDEX IX_Straße_Ort ON [dbo].[Kunde_Ö] (Straße, Ort)');
+    });
+
+    test('a line comment terminated by a bare CR does not swallow the rest of the query', () => {
+      expect(optimizer.extractTargetTable('SELECT id -- note\rFROM dbo.T WHERE id = 1')).toBe(
+        '[dbo].[T]'
+      );
+      expect(optimizer.extractTargetTable('SELECT id -- note\r\nFROM dbo.T')).toBe('[dbo].[T]');
+    });
+
+    test('a legacy table-hint group is not mistaken for a function call', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T (NOLOCK) WHERE id = 1')).toBe(
+        '[dbo].[T]'
+      );
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T (NOLOCK, INDEX(1))')).toBe(
+        '[dbo].[T]'
+      );
+      expect(optimizer.extractTargetTable('SELECT * FROM dbo.T (1)')).toBeNull();
+    });
+  });
+
+  describe('WHERE / ORDER BY extraction is lexical and attributed (#1102 review 2)', () => {
+    const whereSuggestion = q =>
+      optimizer.generateIndexRecommendations(q, {}, {}).find(s => s.reason.includes('WHERE'));
+    const orderBySuggestion = q =>
+      optimizer.generateIndexRecommendations(q, {}, {}).find(s => s.reason.includes('ORDER BY'));
+
+    test('ignores a column comparison inside a trailing line comment', () => {
+      const s = whereSuggestion(
+        "SELECT * FROM dbo.Orders WHERE status = 'open' -- TODO also filter customers.ssn = '123'"
+      );
+      expect(s.suggestion).toBe('CREATE INDEX IX_status ON [dbo].[Orders] (status)');
+    });
+
+    test('ignores an ORDER BY that exists only inside a block comment', () => {
+      const q =
+        'SELECT id, name FROM dbo.Customers /* consider ORDER BY ssn for sorted export */ WHERE active = 1';
+      expect(orderBySuggestion(q)).toBeUndefined();
+      expect(whereSuggestion(q).suggestion).toBe(
+        'CREATE INDEX IX_active ON [dbo].[Customers] (active)'
+      );
+    });
+
+    test('does not descend into EXISTS / IN subqueries', () => {
+      expect(
+        whereSuggestion(
+          'SELECT * FROM dbo.T t WHERE t.active = 1 AND EXISTS (SELECT 1 FROM dbo.OtherSecret u WHERE u.flag = 1)'
+        ).suggestion
+      ).toBe('CREATE INDEX IX_active ON [dbo].[T] (active)');
+      expect(
+        whereSuggestion(
+          'SELECT * FROM dbo.T WHERE id IN (SELECT id FROM dbo.U WHERE flag = 1) AND x = 1'
+        ).suggestion
+      ).toBe('CREATE INDEX IX_x ON [dbo].[T] (x)');
+    });
+
+    test('takes WHERE columns from the first query block only; ORDER BY over a set operation is conceptual', () => {
+      const union = 'SELECT * FROM dbo.T t WHERE t.a = 1 UNION SELECT * FROM dbo.U u WHERE u.b = 2';
+      expect(whereSuggestion(union).suggestion).toBe('CREATE INDEX IX_a ON [dbo].[T] (a)');
+
+      const ordered = orderBySuggestion(
+        'SELECT * FROM dbo.T t WHERE t.x = 1 UNION SELECT * FROM dbo.U u ORDER BY u.name'
+      );
+      expect(ordered.conceptual).toBe(true);
+      expect(ordered).not.toHaveProperty('table');
+      expect(ordered.suggestion).toContain('(u.name)');
+    });
+
+    test('extractWhereColumns never captures text inside a string literal', () => {
+      expect(
+        optimizer.extractWhereColumns("SELECT * FROM t WHERE note = 'contains = sign' AND id = 1")
+      ).toEqual(['note', 'id']);
+    });
+
+    test('extractOrderByColumns ignores ORDER BY inside OVER() and inside comments', () => {
+      expect(
+        optimizer.extractOrderByColumns('SELECT ROW_NUMBER() OVER (ORDER BY id) AS n FROM dbo.T')
+      ).toEqual([]);
+      expect(optimizer.extractOrderByColumns('SELECT * FROM dbo.T /* ORDER BY x */')).toEqual([]);
+    });
+
+    test('accepts qualifiers that name the alias or the table', () => {
+      expect(whereSuggestion('SELECT * FROM dbo.T t WHERE t.a = 1 AND t.b = 2').suggestion).toBe(
+        'CREATE INDEX IX_a_b ON [dbo].[T] (a, b)'
+      );
+      expect(
+        whereSuggestion('SELECT * FROM [Order Details] WHERE [Order Details].Qty > 1').suggestion
+      ).toBe('CREATE INDEX IX_Qty ON [Order Details] (Qty)');
+      expect(whereSuggestion("SELECT * FROM dbo.T WHERE T.name = 'x'").suggestion).toBe(
+        'CREATE INDEX IX_name ON [dbo].[T] (name)'
+      );
+      expect(whereSuggestion('SELECT * FROM dbo.T AS [t 1] WHERE [t 1].a = 1').suggestion).toBe(
+        'CREATE INDEX IX_a ON [dbo].[T] (a)'
+      );
+    });
+
+    test('a qualifier naming another source makes the suggestion conceptual', () => {
+      const s = whereSuggestion('SELECT * FROM dbo.T t WHERE u.a = 1');
+      expect(s.conceptual).toBe(true);
+      expect(s).not.toHaveProperty('table');
+      expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY x.name').conceptual).toBe(true);
+    });
+
+    test('repeated key columns are listed once (a key list may not repeat a column)', () => {
+      expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY a, t.a DESC, [A]').suggestion).toBe(
+        'CREATE INDEX IX_OrderBy ON [dbo].[T] (a)'
+      );
+      expect(whereSuggestion('SELECT * FROM dbo.T WHERE a = 1 OR a > 5').suggestion).toBe(
+        'CREATE INDEX IX_a ON [dbo].[T] (a)'
+      );
+    });
+
+    test('bracketed column names produce a valid index name', () => {
+      expect(whereSuggestion('SELECT * FROM dbo.T WHERE [Account Id] = 1').suggestion).toBe(
+        'CREATE INDEX IX_Account_Id ON [dbo].[T] ([Account Id])'
+      );
+    });
+  });
 });

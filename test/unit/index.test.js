@@ -641,4 +641,41 @@ describe('SqlServerMCP Index', () => {
       expect(request.query.calledWith('USE [McpToolingTestDb]')).to.equal(true);
     });
   });
+
+  describe('execute_query row-count telemetry (#1101)', () => {
+    const useResult = result => {
+      const request = { query: sinon.stub().resolves(result) };
+      server.connectionManager.connect = async () => ({ request: () => request });
+      sandbox.stub(server, 'validateQuery').returns({ allowed: true, queryType: 'SELECT' });
+    };
+
+    it('records the real returned-row count and rowsAffected from the driver result', async () => {
+      useResult({ recordset: [{ id: 1 }, { id: 2 }, { id: 3 }], rowsAffected: [3] });
+      const recordQuery = sandbox.stub(server.performanceMonitor, 'recordQuery');
+
+      await server.executeQuery('SELECT id FROM t');
+
+      expect(recordQuery.calledOnce).to.equal(true);
+      expect(recordQuery.firstCall.args[0]).to.include({
+        tool: 'execute_query',
+        success: true,
+        rowCount: 3,
+        rowsAffected: 3
+      });
+    });
+
+    it('surfaces the recorded row count through get_query_performance', async () => {
+      useResult({ recordset: [{ id: 1 }, { id: 2 }], rowsAffected: [2] });
+
+      await server.executeQuery('SELECT id FROM t');
+
+      const parsed = JSON.parse(
+        server.getQueryPerformance(10, { toolFilter: 'execute_query' })[0].text
+      );
+      expect(parsed.data.queries).to.have.lengthOf(1);
+      expect(parsed.data.queries[0].rowCount).to.equal(2);
+      // The normalized rowsAffected must surface too, not just be stored (#1101).
+      expect(parsed.data.queries[0].rowsAffected).to.equal(2);
+    });
+  });
 });
