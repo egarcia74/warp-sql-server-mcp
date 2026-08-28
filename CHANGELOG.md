@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.20] - 2026-08-28
+
 ### Fixed
 
 - `get_query_performance` now reports the real returned-row count (`rowCount`) and `rowsAffected` for every tool
