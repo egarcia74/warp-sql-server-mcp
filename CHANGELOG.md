@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- npm releases are now published with provenance: `npm-publish.yml` runs `npm publish --provenance` under an OIDC
+  `id-token`, so every tarball from 1.7.21 onward carries a Sigstore attestation binding it to the exact GitHub Actions
+  workflow and commit that built it. Verify an install with `npm audit signatures`; the package page shows a
+  Provenance badge. `package.json` gains the `repository`, `homepage` and `bugs` fields the attestation requires
+  ([#1115](https://github.com/egarcia74/warp-sql-server-mcp/pull/1115)).
+
+### Changed
+
+- Rewrote the security policy (`.github/SECURITY.md`) to match the shipped project: supported versions are the
+  `1.7.x` line from 1.7.18 (1.7.11–1.7.17 are deprecated on npm); the three published advisories
+  (GHSA-qhf4-jmhq-73c8, GHSA-crw3-hmxc-f53p, GHSA-p8gx-89fp-x73j) are listed with affected and fixed versions;
+  vulnerability reports go through GitHub private vulnerability reporting only (the previous text pointed at a public
+  issue); the guards are described as the lexical checks they are, including the deliberate raw-`where` exception and
+  denial-only audit logging; the unfounded "AST-based validation" and "verified signatures" claims are gone. The
+  reporting section of `docs/SECURITY.md` now matches it
+  ([#1115](https://github.com/egarcia74/warp-sql-server-mcp/pull/1115)).
+
 ## [1.7.20] - 2026-08-28
 
 ### Fixed
