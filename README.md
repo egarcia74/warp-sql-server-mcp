@@ -201,7 +201,9 @@ npm install
   on every pull request** (1,100 unit + 27 integration + 40 live-database against a Docker SQL
   Server CI starts itself); only the 20 MCP protocol smoke tests are run on demand
 - **40 Live-Database Integration Tests**: Live database validation across all security phases, run in CI
-- **20 Protocol Tests**: End-to-end MCP communication validation, run on demand via `npm run docker:test`
+- **20 Protocol Tests**: End-to-end MCP communication validation, run on demand via
+  `npm run docker:test -- protocol` (a bare `npm run docker:test` defaults to `phase1` and never
+  reaches them)
 - **100% Success Rate**: All security phases validated in production scenarios
 
 ### 🐳 **Quick Testing with Docker** (Recommended for Development)
