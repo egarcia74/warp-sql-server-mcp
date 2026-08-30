@@ -29,3 +29,6 @@ yarn.lock
 # Session buffers and agent working docs
 .remember/
 docs/superpowers/
+
+# Local agent/editor state (gitignored, never committed)
+.claude/
