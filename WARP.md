@@ -1092,7 +1092,8 @@ Grouped by area; the group totals sum to 1,100:
   - Protocol compliance verification
   - **Located in**: `test/protocol/` - [Protocol Testing Guide →](test/protocol/README.md)
 
-**📋 Manual Integration Testing**: Located in `test/integration/manual/` - [Complete Guide →](test/integration/manual/README.md)
+**📋 Live-Database Integration Testing**: Located in `test/integration/manual/` (the directory
+name predates these tests being automated) - [Complete Guide →](test/integration/manual/README.md)
 
 **⚠️ Important**: The 20 MCP protocol smoke tests (`mcp-client-smoke-test.js`) are the only suite
 no CI job runs. The 40 live-database phase tests do require a SQL Server, but CI supplies one via
@@ -1224,7 +1225,8 @@ npm run test:watch                    # Watch mode for active development
 npm run test:coverage                 # Component test coverage
 ```
 
-Manual validation for database components:
+Live-database validation for database components - these are the same steps `npm test`
+and CI's required `Tests` job run:
 
 ```bash
 npm run test:integration:manual      # Security validation (all phases)
@@ -1715,7 +1717,10 @@ For reference, recent version history:
 
 When adding new database operations, **ALWAYS follow TDD**:
 
-1. **Write comprehensive tests first** (following existing test patterns in `test/sqlserver-mcp.test.js`)
+1. **Write comprehensive tests first** (following existing test patterns in
+   `test/unit/database-tools-handler.test.js` for tool behaviour, `test/unit/index.test.js` for
+   dispatch and `validateQuery`, and `test/unit/sql-injection-battery.test.js` for injection
+   boundaries)
    - Test normal operation
    - Test error conditions
    - Test security boundaries

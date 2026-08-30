@@ -1,9 +1,20 @@
 # Integration Test Organization Summary
 
-> **Note**: This document reflects historical changes. The current npm scripts have been updated:
+> **Note**: This is a historical record of a one-off reorganisation. Every count and claim below
+> describes the repository **as it was at the time of that change**, not as it is today. Two things
+> have since changed materially:
 >
-> - `npm run test:integration:manual` (was `test:manual`)
-> - `npm run test:integration:protocol` (was `test:manual:protocol`)
+> 1. **Script names**: `npm run test:integration:manual` (was `test:manual`) and
+>    `npm run test:integration:protocol` (was `test:manual:protocol`).
+> 2. **The live-database tests are no longer excluded from CI.** `npm test` now chains
+>    `test:unit` → `test:integration`, and `test:integration` starts a Docker SQL Server, runs all
+>    40 phase tests against it, and stops it again. CI's required `Tests (20)` / `Tests (22)` jobs
+>    run `npm test`, so those 40 tests gate every pull request.
+>
+> For the current picture, see [`test/README.md`](../test/README.md) and
+> [`WARP.md`](../WARP.md). Today's totals are 1,187 tests - 1,100 unit, 27 Vitest integration,
+> 40 live-database, and 20 protocol smoke tests - of which 1,167 run automatically per pull
+> request.
 
 ## 🎯 **Changes Made**
 
@@ -13,7 +24,7 @@ We have successfully reorganized the integration test files to ensure they are *
 
 ```text
 test/
-├── unit/                              # Automated unit tests (535+ tests)
+├── unit/                              # Automated unit tests (535+ at the time; 1,100 today)
 ├── integration/
 │   ├── sqlserver-mcp-integration.test.js  # Automated integration tests (15 tests)
 │   └── manual/                        # 🆕 Manual integration tests (40 tests)
@@ -119,9 +130,12 @@ phase3-ddl-operations.test.js
 
 ### ✅ **Separation of Concerns**
 
-- **Unit tests** (535+): Fast, mocked, always run
-- **Automated integration** (15): Safe, no external dependencies
-- **Manual integration** (40): Live database, production validation
+_Figures as of this reorganisation; see the note at the top of this document for today's numbers._
+
+- **Unit tests** (535+ then, 1,100 now): Fast, mocked, always run
+- **Automated integration** (15 then, 27 now): Safe, no external dependencies
+- **Manual integration** (40, unchanged): Live database - production validation then, and now also
+  run automatically in CI against a Docker SQL Server
 
 ### ✅ **CI/CD Integrity**
 

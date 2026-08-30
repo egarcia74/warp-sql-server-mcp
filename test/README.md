@@ -6,52 +6,79 @@ This directory contains all test-related files organized by type and purpose.
 
 ```text
 test/
-├── README.md                           # This file - test documentation
-├── setup.js                            # Global test setup and mocks
-├── TEST_IMPROVEMENTS.md                # Test improvement tracking
+├── README.md                                # This file - test documentation
+├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
+├── setup.js                                 # Vitest global setup and mocks
 │
-├── unit/                               # Unit tests (fast, mocked dependencies)
-│   ├── sqlserver-mcp.test.js          # Original monolithic test suite (127 tests)
-│   ├── mcp-connection.test.js         # Database connection tests (4 tests)
-│   ├── mcp-security.test.js           # Safety mechanisms tests (38 tests)
-│   ├── mcp-core-tools.test.js         # Core SQL tools tests (12 tests)
-│   ├── mcp-data-tools.test.js         # Data manipulation tools tests (36 tests)
-│   ├── mcp-performance-tools.test.js  # Performance monitoring tests (22 tests)
-│   ├── mcp-server-lifecycle.test.js   # Server lifecycle tests (15 tests)
-│   ├── logger.test.js                 # Logger utility tests
-│   ├── performance-monitor.test.js    # Performance monitor tests
-│   ├── response-formatter.test.js     # Response formatting tests
-│   ├── secret-manager.test.js         # Secret management tests
-│   ├── streaming-handler.test.js      # Streaming handler tests
-│   ├── mcp-shared-fixtures.js         # Shared test fixtures and utilities
-│   └── fixtures/                      # Test fixtures and sample data
+├── unit/                                    # Vitest unit suites - 25 files, 1,100 tests
+│   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
+│   ├── query-optimizer.test.js              # 132 - Query analysis and optimization engine
+│   ├── sql-injection-battery.test.js        # 103 - Behavioral SQL injection guard
+│   ├── where-clause-guard.test.js           #  81 - WHERE-clause validation
+│   ├── performance-monitor.test.js          #  70 - Metrics collection
+│   ├── streaming-handler.test.js            #  60 - Streaming large result sets
+│   ├── tool-registry.test.js                #  59 - Tool definitions and input schemas
+│   ├── database-tools-handler.test.js       #  55 - Database tool handlers
+│   ├── secret-manager.test.js               #  54 - Azure/AWS secret backends
+│   ├── logger.test.js                       #  52 - Structured logging and audit trail
+│   ├── mcp-security.test.js                 #  38 - Three-tier safety system
+│   ├── response-formatter.test.js           #  35 - Output formatting
+│   ├── connection-manager.test.js           #  33 - Pooling, retries, authentication
+│   ├── sql-batch-guard.test.js              #  30 - Whole-batch forbidden-statement scan
+│   ├── sql-construction-guard.test.js       #  30 - Dispatch-vs-escaping static guard
+│   ├── get-server-info.test.js              #  27 - Server diagnostics tool
+│   ├── server-config.test.js                #  24 - Configuration parsing and defaults
+│   ├── query-policy.test.js                 #  19 - Safety-tier policy decisions
+│   ├── sql-identifier.test.js               #  16 - Identifier/literal escaping helpers
+│   ├── query-optimizer-security.test.js     #  13 - Optimizer input hardening
+│   ├── bottleneck-detector.test.js          #   9 - Bottleneck categorisation
+│   ├── link-checker.test.js                 #   6 - Documentation link validation
+│   ├── cli.test.js                          #   4 - cli.js behavior
+│   ├── docker-command-utils.test.js         #   4 - Docker helper argument handling
+│   ├── dependabot-config.test.js            #   2 - Dependabot config validation
+│   ├── mcp-shared-fixtures.js               # Shared fixtures and mocks (not a suite)
+│   └── fixtures/modern-fixtures.js          # Additional shared fixtures
 │
-├── integration/                       # Integration tests (real services)
-│   ├── test-aws-secrets.js           # AWS Secrets Manager integration test
-│   ├── test-azure-secrets.js         # Azure Key Vault integration test
-│   └── manual/                        # Manual integration tests with live DB
-│       ├── README.md                  # Manual testing documentation
-│       ├── phase1-readonly-security.test.js   # Phase 1: Read-only security tests
-│       ├── phase2-dml-operations.test.js      # Phase 2: DML operations tests
-│       └── phase3-ddl-operations.test.js      # Phase 3: DDL operations tests
+├── integration/                             # Vitest integration suites + live-DB scripts
+│   ├── error-scenarios-integration.test.js  #  15 tests - failure-path integration
+│   ├── sqlserver-mcp-integration.test.js    #  12 tests - component integration
+│   ├── test-aws-secrets.js                  # npm run test:integration:aws (live AWS)
+│   ├── test-azure-secrets.js                # npm run test:integration:azure (live Azure)
+│   ├── shared/config-validator.js           # Shared config assertions
+│   └── manual/                              # Live-database tests (40, also run in CI)
+│       ├── README.md                        # Manual testing guide
+│       ├── test-database-helper.js          # Live-DB fixture helper
+│       ├── phase1-readonly-security.test.js #  20 tests - Read-only security
+│       ├── phase2-dml-operations.test.js    #  10 tests - DML operations
+│       └── phase3-ddl-operations.test.js    #  10 tests - DDL operations
 │
-├── protocol/                          # MCP protocol-level tests
-│   ├── README.md                      # Protocol testing documentation
-│   ├── mcp-client-smoke-test.js      # Basic MCP client communication test
-│   └── mcp-protocol-validation.test.js # Protocol validation tests
+├── protocol/                                # MCP protocol tests (live DB)
+│   ├── README.md                            # Protocol testing guide
+│   ├── mcp-client-smoke-test.js             #  20 tests - full client/server round trip
+│   └── mcp-server-startup-test.js           # Startup + JSON-RPC handshake check
 │
-├── docker/                            # Docker-based testing infrastructure
-│   └── (Docker test configurations)
+├── manual/                                  # Performance runners
+│   ├── improved-performance-test.js         # npm run test:integration:performance
+│   └── warp-mcp-performance-test.js         # npm run test:integration:warp
 │
-├── manual/                            # Additional manual test scripts
-│   └── (Manual testing utilities)
+├── docker/                                  # Docker-based testing infrastructure
+│   ├── README.md, PLATFORM-DETECTION.md, QUICK-REFERENCE.md,
+│   │   STRESS-TESTING.md, TESTING-SUMMARY.md, MCP-BENEFIT-SUMMARY.md
+│   ├── .env.docker                          # Docker environment variables
+│   ├── detect-platform.js                   # Generates docker-compose.yml (untracked)
+│   ├── command-utils.js, verify-platform-detection.js, troubleshoot-apple-silicon.js
+│   ├── init-db.sql, init-db-node.js, wait-for-db.js, test-connectivity.js
+│   └── quick-stress-test.js, developer-stress-test.js
 │
-├── temp/                              # Temporary test files and artifacts
-│   └── (Temporary test data)
+├── temp/                                    # Untracked scratch output from CSV export tests
 │
-└── archived/                          # Archived/legacy test files
-    └── (Archived test files)
+└── archived/                                # 8 superseded suites, excluded in vitest.config.js
 ```
+
+> **Note**: `test/docker/docker-compose.yml` is generated by `npm run docker:detect` and is not
+> tracked. `test/archived/` holds the superseded monolithic and per-area suites (including the
+> original `sqlserver-mcp.test.js`); `vitest.config.js` excludes that directory, so nothing in it
+> runs or counts toward any total below.
 
 **🚀 New to this project?** Choose your preferred setup:
 
@@ -63,50 +90,41 @@ Get the MCP server running first, then return here to understand the testing arc
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 565+ tests across unit, manual, and docker test suites
+- **Total Tests**: 1,187 - **1,167 of them run automatically on every pull request**
+  - 1,100 unit tests (`npm run test:unit`, 25 files, mocked)
+  - 27 Vitest integration tests (`test/integration/*.test.js`, mocked, run by a bare `vitest run`)
+  - 40 live-database tests (`test/integration/manual/`, 20 + 10 + 10, run against a Docker SQL
+    Server that CI starts itself)
+  - 20 MCP protocol smoke tests (`test/protocol/mcp-client-smoke-test.js`) - the only suite no CI
+    job runs; invoke it on demand with `npm run docker:test`
 - **Status**: ✓ All passing (100% success rate)
-- **Coverage**: 61.04% statements, 77.89% branches, 91.66% functions
-- **Test Types**: Unit tests (mocked), Manual tests (live DB), Docker tests (containerized)
+- **Coverage**: 81.79% statements, 78.99% branches, 85.04% functions (`npm run test:coverage`)
+- **Test Types**: Unit tests (mocked), integration tests (mocked), live-database tests, protocol
+  smoke tests
 - **🔒 Security Focus**: Comprehensive safety mechanism validation to prevent security bypasses
 - **📦 Modular Structure**: Tests organized by functional area for better maintainability
 - **🚀 Complete Suite**: `npm run test:integration` for full validation
 
-## 📁 Test Structure
+## 📁 Which Command Runs Which Suite
 
-```text
-test/
-├── README.md                        # This documentation
-├── setup.js                         # Global test setup and mock configurations
-├── TEST_IMPROVEMENTS.md             # Test improvement tracking
-├── unit/                            # Unit test suites
-│   ├── sqlserver-mcp.test.js       # Original monolithic test suite (127 tests)
-│   ├── mcp-connection.test.js      # Database connection tests (4 tests)
-│   ├── mcp-security.test.js        # Safety mechanisms tests (38 tests)
-│   ├── mcp-core-tools.test.js      # Core SQL tools tests (12 tests)
-│   ├── mcp-data-tools.test.js      # Data manipulation tools tests (36 tests)
-│   ├── mcp-performance-tools.test.js # Performance monitoring tests (22 tests)
-│   ├── mcp-server-lifecycle.test.js # Server lifecycle tests (15 tests)
-│   ├── mcp-shared-fixtures.js      # Shared test fixtures and utilities
-│   ├── fixtures/                   # Test fixtures and sample data
-│   └── [other utility test files]   # Logger, performance monitor, etc.
-├── integration/                     # Integration tests
-│   ├── test-aws-secrets.js         # AWS Secrets Manager tests
-│   ├── test-azure-secrets.js       # Azure Key Vault tests
-│   └── manual/                      # Manual integration tests with live DB
-│       ├── README.md                # Manual testing documentation
-│       ├── phase1-readonly-security.test.js   # Phase 1 security tests
-│       ├── phase2-dml-operations.test.js      # Phase 2 DML tests
-│       └── phase3-ddl-operations.test.js      # Phase 3 DDL tests
-├── protocol/                        # MCP protocol-level tests
-│   ├── README.md                    # Protocol testing documentation
-│   ├── mcp-client-smoke-test.js    # Basic MCP client communication test
-│   └── mcp-protocol-validation.test.js # Protocol validation tests
-├── docker/                          # Docker-based testing infrastructure
-├── manual/                          # Additional manual test scripts
-├── temp/                            # Temporary test files and artifacts
-├── archived/                        # Archived/legacy test files
-└── vitest.config.js                 # Test configuration (in root directory)
-```
+The directory tree above lists every suite and its size. This table maps them onto the npm scripts
+and the CI jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
+
+| Suite                                      | Tests           | Command                                | Runs in CI?                                |
+| ------------------------------------------ | --------------- | -------------------------------------- | ------------------------------------------ |
+| `test/unit/**`                             | 1,100           | `npm run test:unit`                    | Yes - required `Tests (20)` / `(22)`       |
+| `test/integration/*.test.js`               | 27              | `npm run test:coverage` / `npm run ci` | Yes - `coverage` job                       |
+| `test/integration/manual/phase*.js`        | 40              | `npm run test:integration:manual`      | Yes - required `Tests` job, via `npm test` |
+| `test/protocol/mcp-server-startup-test.js` | handshake check | `npm run test:integration:protocol`    | Yes - required `Tests` job                 |
+| `test/protocol/mcp-client-smoke-test.js`   | 20              | `npm run docker:test`                  | **No CI job runs this file**               |
+
+`npm test` chains `test:unit` → `test:integration` → `scripts/test-summary.js`, and
+`test:integration` starts and stops the Docker SQL Server itself. That is exactly what CI's
+required `Tests` job executes, which is why a local `npm test` needs a running Docker daemon.
+
+> **Careful**: `test:integration:protocol` and `npm run docker:test` are _not_ the same thing.
+> The former runs `mcp-server-startup-test.js` (startup + JSON-RPC handshake); the latter runs the
+> 20-test `mcp-client-smoke-test.js` round trip. Only the former runs in CI.
 
 ## 🏃‍♂️ Running Tests
 
@@ -139,24 +157,33 @@ npm run test:watch
 npm run test:coverage
 
 # Run specific test suites during development
-npm test test/unit/mcp-security.test.js        # Security tests only
-npm test test/unit/mcp-core-tools.test.js      # Core tools only
-npm test test/unit/mcp-data-tools.test.js      # Data tools only
-npm test test/unit/mcp-performance-tools.test.js # Performance monitoring only
+npx vitest run test/unit/mcp-security.test.js          # Three-tier safety system
+npx vitest run test/unit/sql-injection-battery.test.js # SQL injection guard
+npx vitest run test/unit/index.test.js                 # MCP entry point and dispatch
+npx vitest run test/unit/performance-monitor.test.js   # Performance monitoring
 ```
 
 ### Modular Test Structure
 
 The test suite has been organized into focused, modular files for better maintainability:
 
-#### 🎯 **Focused Test Files**
+#### 🎯 **Unit Suites by Area**
 
-- **`mcp-connection.test.js`** - Database connection and authentication
-- **`mcp-security.test.js`** - Safety mechanisms and query validation
-- **`mcp-core-tools.test.js`** - Core SQL tools (executeQuery, listDatabases, etc.)
-- **`mcp-data-tools.test.js`** - Data manipulation tools (getTableData, exportTableCsv, etc.)
-- **`mcp-performance-tools.test.js`** - Performance monitoring tools
-- **`mcp-server-lifecycle.test.js`** - Server startup, configuration, and runtime
+The 1,100 unit tests are spread across 25 files. Grouped by area, the totals sum to 1,100:
+
+| Area                            | Tests | Suites                                                                                                                                                                           |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core MCP server                 | 144   | `index` (144)                                                                                                                                                                    |
+| SQL safety and injection guards | 317   | `sql-injection-battery` (103), `where-clause-guard` (81), `mcp-security` (38), `sql-batch-guard` (30), `sql-construction-guard` (30), `query-policy` (19), `sql-identifier` (16) |
+| Infrastructure utilities        | 250   | `performance-monitor` (70), `streaming-handler` (60), `logger` (52), `response-formatter` (35), `connection-manager` (33)                                                        |
+| Query analysis                  | 154   | `query-optimizer` (132), `query-optimizer-security` (13), `bottleneck-detector` (9)                                                                                              |
+| Tools and handlers              | 141   | `tool-registry` (59), `database-tools-handler` (55), `get-server-info` (27)                                                                                                      |
+| Configuration and secrets       | 78    | `secret-manager` (54), `server-config` (24)                                                                                                                                      |
+| Repository and CLI tooling      | 16    | `link-checker` (6), `cli` (4), `docker-command-utils` (4), `dependabot-config` (2)                                                                                               |
+
+The earlier per-area suites (`mcp-connection`, `mcp-core-tools`, `mcp-data-tools`,
+`mcp-performance-tools`, `mcp-server-lifecycle`) and the original monolithic `sqlserver-mcp.test.js`
+now live in `test/archived/` and are excluded from every run.
 
 #### 📦 **Benefits of Modular Structure**
 
@@ -168,7 +195,11 @@ The test suite has been organized into focused, modular files for better maintai
 
 ## 🧩 Test Categories
 
-### 1. **Database Connection Tests** (4 tests)
+The sections below describe the behaviour the unit suites cover. For the authoritative
+per-suite test counts, see the table above - these headings deliberately carry no numbers
+so they cannot drift out of date.
+
+### 1. **Database Connection Tests**
 
 Tests the core database connection functionality:
 
@@ -188,7 +219,7 @@ expect(sql.connect).toHaveBeenCalledWith(
 );
 ```
 
-### 2. **Query Execution Tests** (3 tests)
+### 2. **Query Execution Tests**
 
 Tests the `execute_query` MCP tool:
 
@@ -196,28 +227,28 @@ Tests the `execute_query` MCP tool:
 - **✅ Database Switching**: Tests `USE [database]` functionality
 - **✅ Query Error Handling**: Validates SQL syntax error handling
 
-### 3. **Database Listing Tests** (2 tests)
+### 3. **Database Listing Tests**
 
 Tests the `list_databases` MCP tool:
 
 - **✅ Database Listing**: Returns user databases with metadata
 - **✅ System Database Exclusion**: Filters out system databases (master, tempdb, model, msdb)
 
-### 4. **Table Operations Tests** (2 tests)
+### 4. **Table Operations Tests**
 
 Tests the `list_tables` MCP tool:
 
 - **✅ Table Listing**: Lists tables in specified database/schema
 - **✅ Database Context**: Switches to correct database before listing
 
-### 5. **Table Schema Tests** (2 tests)
+### 5. **Table Schema Tests**
 
 Tests the `describe_table` MCP tool:
 
 - **✅ Schema Description**: Returns complete table schema information
 - **✅ Primary Key Detection**: Identifies primary key columns correctly
 
-### 6. **Data Retrieval Tests** (10 tests)
+### 6. **Data Retrieval Tests**
 
 Tests the `get_table_data` MCP tool with comprehensive WHERE clause filtering:
 
@@ -226,7 +257,7 @@ Tests the `get_table_data` MCP tool with comprehensive WHERE clause filtering:
 - **✅ Default Limit**: Retrieves data with TOP 100 limit
 - **✅ Filtered Results**: Returns correctly filtered and formatted data
 
-#### WHERE Clause Filtering (9 comprehensive tests)
+#### WHERE Clause Filtering
 
 - **✅ Basic WHERE**: Simple conditions like `id > 10`
 - **✅ Complex AND**: Multiple conditions like `status = 'active' AND created_date > '2023-01-01'`
@@ -238,7 +269,7 @@ Tests the `get_table_data` MCP tool with comprehensive WHERE clause filtering:
 - **✅ IN Clauses**: Set filtering like `status IN ('active', 'pending', 'verified')`
 - **✅ Result Validation**: Verifies filtered data is returned correctly
 
-### 7. **Query Analysis Tests** (4 tests)
+### 7. **Query Analysis Tests**
 
 Tests the `explain_query` MCP tool:
 
@@ -247,7 +278,7 @@ Tests the `explain_query` MCP tool:
 - **✅ Database Context**: Switches database context for analysis
 - **✅ Error Handling**: Handles query plan generation failures
 
-### 8. **Foreign Key Tests** (3 tests)
+### 8. **Foreign Key Tests**
 
 Tests the `list_foreign_keys` MCP tool:
 
@@ -255,7 +286,7 @@ Tests the `list_foreign_keys` MCP tool:
 - **✅ Database Switching**: Works across different databases
 - **✅ Schema Filtering**: Handles custom schema specifications
 
-### 9. **CSV Export Tests** (14 tests)
+### 9. **CSV Export Tests**
 
 Tests the `export_table_csv` MCP tool:
 
@@ -268,7 +299,7 @@ Tests the `export_table_csv` MCP tool:
 - **✅ Empty Tables**: Handles tables with no data
 - **✅ Database Switching**: Switches database context for exports
 
-#### Advanced CSV Filtering (8 comprehensive tests)
+#### Advanced CSV Filtering
 
 - **✅ Simple WHERE**: Basic filtering like `status = 'active'`
 - **✅ Complex Conditions**: AND/OR combinations like `status = 'active' AND age > 20`
@@ -279,7 +310,7 @@ Tests the `export_table_csv` MCP tool:
 - **✅ Combined Filters**: WHERE + LIMIT working together
 - **✅ Empty Results**: Graceful handling of no matching records
 
-### 10. **Server Startup and Runtime Tests** (7 tests)
+### 10. **Server Startup and Runtime Tests**
 
 Tests the MCP server lifecycle, startup, and runtime behavior:
 
@@ -639,11 +670,17 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./test/setup.js'],
+    include: ['test/**/*.test.js'],
+    exclude: [
+      'test/archived/**',
+      'test/integration/manual/**', // Live-DB phase tests - run by npm test, not by Vitest
+      'test/protocol/**' // Protocol tests - require a live DB
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['index.js'],
-      exclude: ['test/**', 'node_modules/**']
+      include: ['index.js', 'lib/**/*.js'],
+      exclude: ['test/**', 'scripts/**', 'node_modules/**']
     }
   }
 });
@@ -682,7 +719,7 @@ Tests cover all major error conditions:
 
 ## 📈 Coverage Analysis
 
-### Current Coverage (61.04% statements)
+### Current Coverage (81.79% statements, 78.99% branches, 85.04% functions)
 
 **Covered Areas:**
 
@@ -763,7 +800,7 @@ describe('New Feature', () => {
 
 ```bash
 # Run specific test file
-npx vitest test/sqlserver-mcp.test.js
+npx vitest run test/unit/sql-injection-battery.test.js
 
 # Run tests matching a pattern
 npx vitest -t "Database Connection"

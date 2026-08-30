@@ -349,19 +349,36 @@ Use **manual setup** (`npm run test:integration:manual`) when you need:
 
 ## 🔄 **Integration with CI/CD**
 
-While these tests are currently **excluded from CI/CD** (by design), the Docker setup makes it possible to add them in the future:
+This Docker setup **is already wired into CI** — it is not a future consideration. The `Tests`
+job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs `npm test` on Node 20
+and Node 22, and `npm test` expands to:
 
-```yaml
-# Example GitHub Actions integration (future consideration)
-- name: Start SQL Server
-  run: npm run docker:start
-
-- name: Run Integration Tests
-  run: npm run test:integration
-
-- name: Stop SQL Server
-  run: npm run docker:stop
+```bash
+npm run test:unit          # 1,100 unit tests (mocked, no database)
+npm run test:integration   # docker:start:init → test:integration:run → docker:stop
+node scripts/test-summary.js
 ```
+
+`npm run test:integration` starts the container defined in this directory, runs the live-database
+suites against it, and tears it down again:
+
+| Step                                   | What it runs                                        |
+| -------------------------------------- | --------------------------------------------------- |
+| `npm run docker:start:init`            | Brings up `docker-compose.yml` and seeds the schema |
+| `npm run test:integration:manual`      | Phase 1/2/3 security tests (20 + 10 + 10)           |
+| `npm run test:integration:protocol`    | `test/protocol/mcp-server-startup-test.js`          |
+| `npm run test:integration:performance` | `test/manual/improved-performance-test.js`          |
+| `npm run docker:stop`                  | Tears the container down                            |
+
+Both matrix legs — `Tests (20)` and `Tests (22)` — are **required status checks on `main`**, so
+the 40 live-database tests gate every pull request. Running `npm test` locally exercises the same
+pipeline, which is why it needs a working Docker daemon.
+
+The one suite that CI does **not** run is the full MCP client smoke test
+(`test/protocol/mcp-client-smoke-test.js`, 20 tests). It is invoked only on demand through
+`npm run docker:test` (see [`scripts/docker-test-runner.sh`](../../scripts/docker-test-runner.sh)).
+Note that this is a different file from the `test:integration:protocol` step above, which runs the
+lighter startup/handshake check.
 
 ## 🎯 **Best Practices**
 

@@ -38,13 +38,22 @@ These tests simulate exactly what a real MCP client (like Warp) would experience
 6. **Query Optimization** (4 tests): Index recommendations, query analysis, bottleneck detection, optimization insights
 7. **Security Boundary Testing** (5 tests): INSERT/UPDATE/DELETE/DDL blocking + SELECT allowed
 
+### **`mcp-server-startup-test.js`** - MCP Startup and Handshake Check
+
+A lighter check that launches the server over stdio and validates the JSON-RPC initialize
+handshake. This is what `npm run test:integration:protocol` runs, and it is part of the
+`npm test` chain that CI's required `Tests` job executes.
+
 ## 🚀 **Running Protocol Tests**
 
 ### **Quick Start**
 
 ```bash
-# Run MCP protocol smoke test
-npm run test:manual:protocol
+# Run the 20-test MCP client smoke test (starts Docker SQL Server for you)
+npm run docker:test -- protocol
+
+# Run the lighter startup/handshake check (this is the one CI runs)
+npm run test:integration:protocol
 ```
 
 ### **Manual Execution**
@@ -175,17 +184,23 @@ When tests fail, detailed error information is provided:
 The protocol test inherits debug settings from the MCP server. Enable detailed logging:
 
 ```bash
-SQL_SERVER_DEBUG=true npm run test:manual:protocol
+SQL_SERVER_DEBUG=true node test/protocol/mcp-client-smoke-test.js
 ```
 
 ## 📊 **Comparison: Test Types**
 
-| Test Type                      | Location                   | Purpose                      | Database | Count | CI/CD          |
-| ------------------------------ | -------------------------- | ---------------------------- | -------- | ----- | -------------- |
-| **Unit Tests**                 | `test/unit/`               | Code logic validation        | Mocked   | 535+  | ✅ Included    |
-| **Integration Tests (Auto)**   | `test/integration/`        | Component integration        | Mocked   | 15    | ✅ Included    |
-| **Integration Tests (Manual)** | `test/integration/manual/` | Security phase validation    | Live DB  | 40    | ❌ Manual only |
-| **Protocol Tests**             | `test/protocol/`           | MCP communication validation | Live DB  | 20    | ❌ Manual only |
+| Test Type                      | Location                                   | Purpose                      | Database | Count             | CI/CD                            |
+| ------------------------------ | ------------------------------------------ | ---------------------------- | -------- | ----------------- | -------------------------------- |
+| **Unit Tests**                 | `test/unit/`                               | Code logic validation        | Mocked   | 1,100             | ✅ Required `Tests` job          |
+| **Integration Tests (Vitest)** | `test/integration/`                        | Component integration        | Mocked   | 27                | ✅ `coverage` job                |
+| **Live-Database Tests**        | `test/integration/manual/`                 | Security phase validation    | Live DB  | 40                | ✅ Required `Tests` job (Docker) |
+| **Protocol Startup Check**     | `test/protocol/mcp-server-startup-test.js` | Startup + JSON-RPC handshake | Live DB  | 1 pass/fail check | ✅ Required `Tests` job          |
+| **Protocol Smoke Test**        | `test/protocol/mcp-client-smoke-test.js`   | MCP communication validation | Live DB  | 20                | ❌ On demand only                |
+
+> **Do not conflate the two protocol files.** `npm run test:integration:protocol` runs
+> `mcp-server-startup-test.js` and _does_ run in CI (as part of `npm test`).
+> `mcp-client-smoke-test.js` - the 20-test round trip documented here - is invoked only by
+> `npm run docker:test`, which no workflow calls. It is the single suite no CI job runs.
 
 ## 🎯 **When to Use Protocol Tests**
 
