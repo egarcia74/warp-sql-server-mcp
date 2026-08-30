@@ -56,3 +56,18 @@ If advisory proves legitimate:
 **Approved by**: Development Team
 **Review Date**: 2025-01-09
 **Next Review**: 2025-01-10 (24 hours)
+
+## Resolution: 2026-08-30
+
+Closed. The monitoring and rollback plans above are no longer active; this file is retained
+as a dated record of the decision, not as current guidance.
+
+Verified in this repository on 2026-08-30:
+
+- `npm ls debug` resolves a single deduped `debug@4.4.3` across the entire dependency tree,
+  not the `4.4.1` named above.
+- `npm audit` reports 0 vulnerabilities at every severity. GHSA-8mgj-vmr8-frr6 does not
+  appear in its output, and the 38 critical advisories recorded above are no longer present.
+
+Why the advisory no longer applies was not investigated, and no claim is made here that the
+dependency was deliberately upgraded or that the advisory was withdrawn.
