@@ -99,7 +99,10 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 
 ## 🛠️ Installation & Configuration
 
-> Note: As of v1.7.11 the package is published under the scoped name `@egarcia74/warp-sql-server-mcp`. The previous unscoped package remains temporarily and will be deprecated.
+> Note: As of v1.7.11 the package is published under the scoped name
+> `@egarcia74/warp-sql-server-mcp`. The previous unscoped package `warp-sql-server-mcp` is
+> deprecated: it was last published at 1.7.10 and predates the security fixes in 1.7.16-1.7.18,
+> so installing it is not supported. Use the scoped name.
 
 ### ⭐ **Recommended: Global npm Installation**
 
