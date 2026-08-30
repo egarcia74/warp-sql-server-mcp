@@ -29,7 +29,15 @@ These guides will help you understand both the technical architecture and practi
 
 - Node.js 20.19.0 or higher
 - npm (comes with Node.js)
-- SQL Server instance (for integration testing - optional)
+- Docker (required by the default commit workflow - see below)
+- A standalone SQL Server instance (optional; the integration suite starts its own in Docker)
+
+> **⚠️ Docker is effectively required if you install the git hooks.** `npm test` is
+> `test:unit && test:integration`, and `test:integration` starts, seeds and stops a SQL Server
+> container (`npm run docker:start:init` → tests → `npm run docker:stop`). The `pre-commit` hook
+> installed by `npm run hooks:install` runs `npm run test`, so without a working Docker daemon the
+> hook cannot pass. Contributors without Docker should run `npm run test:unit` locally and either
+> skip the hook install or commit with `--no-verify`, letting CI run the full suite.
 
 ### 🧪 Test-Driven Development (TDD) - MANDATORY
 
@@ -113,7 +121,7 @@ When you run `npm run hooks:install`, two git hooks are installed:
    - ESLint on staged JavaScript files
    - Prettier formatting check on staged files
    - markdownlint on staged markdown files
-   - Quick test suite
+   - `npm run test` - the full suite: unit tests **and** the Docker-backed integration tests
 
 2. **pre-push**: Runs before each push
    - Full test suite
@@ -146,7 +154,7 @@ The project follows these style guidelines:
 - **JavaScript**: ES6 modules, 2-space indentation, single quotes
 - **Prettier**: Automatic formatting with 100 character line limit
 - **ESLint**: Enforces Node.js best practices
-- **Markdown**: markdownlint rules with 100 character line limit
+- **Markdown**: markdownlint rules with a 200 character line limit (`MD013` in `.markdownlint.json`)
 
 ### CI/CD
 
@@ -320,9 +328,12 @@ securityConfigs.forEach(config => {
 
 ### Safety Testing Resources
 
-- **Existing Tests**: See `test/sqlserver-mcp.test.js` for security test examples
+- **Existing Tests**: See `test/unit/sql-injection-battery.test.js` (the authoritative behavioral
+  guard), plus `test/unit/mcp-security.test.js`, `test/unit/sql-batch-guard.test.js` and
+  `test/unit/where-clause-guard.test.js` for security test examples
 - **Test Patterns**: Follow established patterns for validateQuery testing
-- **Security Documentation**: Review `SECURITY.md` for threat model details
+- **Security Documentation**: Review `docs/SECURITY.md` for the threat model, and
+  `.github/SECURITY.md` for the reporting policy and supported versions
 - **Mock Data**: Use existing mock data and patterns for consistency
 
 ## Making Changes

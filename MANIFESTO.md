@@ -187,7 +187,7 @@ Every pattern implemented here has been battle-tested in production environments
 
 ### **Testability**
 
-- **Comprehensive Test Coverage**: 535+ unit tests covering all functionality and edge cases
+- **Comprehensive Test Coverage**: 1,100 unit tests covering all functionality and edge cases
 - **Proper Mocking Strategies**: External dependencies are properly mocked for deterministic testing
 - **Test-Driven Development**: All functionality developed using TDD methodology
 - **Integration Testing**: Live database validation across all security phases
@@ -228,7 +228,10 @@ The system demonstrates enterprise-grade architectural patterns that scale to pr
 
 ### **Single Responsibility**
 
-- **Query Validator**: Focuses solely on SQL query security analysis
+- **Query Safety Guards**: `lib/security/query-policy.js`, `lib/security/sql-batch-guard.js` and
+  `lib/security/where-clause-guard.js` each enforce one layer of the query-safety policy
+- **SQL Identifier Helpers**: `lib/utils/sql-identifier.js` does nothing but escape and coerce
+  caller-supplied values for the SQL context they land in
 - **Connection Manager**: Handles only database connection lifecycle
 - **Performance Monitor**: Dedicated to metrics collection and analysis
 - **Response Formatter**: Specialized in output formatting and serialization

@@ -84,9 +84,9 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 
 | Variable                | Required     | Default         | Description              |
 | ----------------------- | ------------ | --------------- | ------------------------ |
-| `SQL_SERVER_HOST`       | Yes          | `localhost`     | SQL Server hostname      |
-| `SQL_SERVER_PORT`       | Yes          | `1433`          | SQL Server port          |
-| `SQL_SERVER_DATABASE`   | Yes          | `master`        | Initial database         |
+| `SQL_SERVER_HOST`       | No           | `localhost`     | SQL Server hostname      |
+| `SQL_SERVER_PORT`       | No           | `1433`          | SQL Server port          |
+| `SQL_SERVER_DATABASE`   | No           | `master`        | Initial database         |
 | `SQL_SERVER_USER`       | For SQL Auth | -               | Database username        |
 | `SQL_SERVER_PASSWORD`   | For SQL Auth | -               | Database password        |
 | `SQL_SERVER_ENCRYPT`    | No           | `true`          | Enable SSL/TLS           |
@@ -99,7 +99,10 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 
 ## 🛠️ Installation & Configuration
 
-> Note: As of v1.7.11 the package is published under the scoped name `@egarcia74/warp-sql-server-mcp`. The previous unscoped package remains temporarily and will be deprecated.
+> Note: As of v1.7.11 the package is published under the scoped name
+> `@egarcia74/warp-sql-server-mcp`. The previous unscoped package `warp-sql-server-mcp` is
+> deprecated: it was last published at 1.7.10 and predates the security fixes in 1.7.16-1.7.18,
+> so installing it is not supported. Use the scoped name.
 
 ### ⭐ **Recommended: Global npm Installation**
 
@@ -182,7 +185,7 @@ npm install
 
 - **[Software Engineering Manifesto](MANIFESTO.md)** - Philosophy and engineering practices
 - **[Quality No-Compromise Case Study](docs/QUALITY-NO-COMPROMISE.md)** - Real-world analysis of zero-tolerance quality standards
-- **[Testing Guide](test/README.md)** - Comprehensive test documentation (535+ tests)
+- **[Testing Guide](test/README.md)** - Comprehensive test documentation (1,100 automated unit tests)
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and standards
 - **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
 - **[Git Push Checklist](docs/GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
@@ -194,9 +197,11 @@ npm install
 
 **✅ PRODUCTION-VALIDATED**: This MCP server has been **fully tested** through:
 
-- **618+ Comprehensive Tests**: All MCP tools, security boundaries, error scenarios (392 unit + 40 manual integration + 20 protocol tests)
-- **40 Manual Integration Tests**: Live database validation across all security phases
-- **20 Protocol Tests**: End-to-end MCP communication validation
+- **1,187 Tests**: All MCP tools, security boundaries, error scenarios - **1,167 run automatically
+  on every pull request** (1,100 unit + 27 integration + 40 live-database against a Docker SQL
+  Server CI starts itself); only the 20 MCP protocol smoke tests are run on demand
+- **40 Live-Database Integration Tests**: Live database validation across all security phases, run in CI
+- **20 Protocol Tests**: End-to-end MCP communication validation, run on demand via `npm run docker:test`
 - **100% Success Rate**: All security phases validated in production scenarios
 
 ### 🐳 **Quick Testing with Docker** (Recommended for Development)
@@ -347,7 +352,7 @@ npm run cleanup:processes  # Same as cleanup (alias)
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Copyright (c) 2025 Eduardo Garcia
+### Copyright (c) 2025 Eduardo Garcia-Prieto
 
 ---
 
@@ -359,7 +364,7 @@ showcases rigorous engineering standards that can be applied to any production s
 
 **Key Engineering Highlights:**
 
-- 🔬 **618+ Comprehensive Tests** covering all functionality and edge cases
+- 🔬 **1,187 Tests** covering all functionality and edge cases - all but 20 run automatically on every pull request
 - 🛡️ **Multi-layered Security** with defense-in-depth architecture
 - 📊 **Production Observability** with structured logging and performance monitoring
 - ⚡ **Enterprise Reliability** featuring connection pooling and graceful error handling
