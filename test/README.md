@@ -96,7 +96,8 @@ Get the MCP server running first, then return here to understand the testing arc
   - 40 live-database tests (`test/integration/manual/`, 20 + 10 + 10, run against a Docker SQL
     Server that CI starts itself)
   - 20 MCP protocol smoke tests (`test/protocol/mcp-client-smoke-test.js`) - the only suite no CI
-    job runs; invoke it on demand with `npm run docker:test`
+    job runs; invoke it on demand with `npm run docker:test -- protocol` (the runner defaults to
+    `phase1` when no phase is passed)
 - **Status**: ✓ All passing (100% success rate)
 - **Coverage**: 81.79% statements, 78.99% branches, 85.04% functions (`npm run test:coverage`)
 - **Test Types**: Unit tests (mocked), integration tests (mocked), live-database tests, protocol
@@ -116,15 +117,16 @@ and the CI jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 | `test/integration/*.test.js`               | 27              | `npm run test:coverage` / `npm run ci` | Yes - `coverage` job                       |
 | `test/integration/manual/phase*.js`        | 40              | `npm run test:integration:manual`      | Yes - required `Tests` job, via `npm test` |
 | `test/protocol/mcp-server-startup-test.js` | handshake check | `npm run test:integration:protocol`    | Yes - required `Tests` job                 |
-| `test/protocol/mcp-client-smoke-test.js`   | 20              | `npm run docker:test`                  | **No CI job runs this file**               |
+| `test/protocol/mcp-client-smoke-test.js`   | 20              | `npm run docker:test -- protocol`      | **No CI job runs this file**               |
 
 `npm test` chains `test:unit` → `test:integration` → `scripts/test-summary.js`, and
 `test:integration` starts and stops the Docker SQL Server itself. That is exactly what CI's
 required `Tests` job executes, which is why a local `npm test` needs a running Docker daemon.
 
-> **Careful**: `test:integration:protocol` and `npm run docker:test` are _not_ the same thing.
-> The former runs `mcp-server-startup-test.js` (startup + JSON-RPC handshake); the latter runs the
-> 20-test `mcp-client-smoke-test.js` round trip. Only the former runs in CI.
+> **Careful**: `test:integration:protocol` and `npm run docker:test -- protocol` are _not_ the same
+> thing. The former runs `mcp-server-startup-test.js` (startup + JSON-RPC handshake); the latter runs
+> the 20-test `mcp-client-smoke-test.js` round trip. Only the former runs in CI. Note the explicit
+> `-- protocol`: a bare `npm run docker:test` defaults to `phase1`.
 
 ## 🏃‍♂️ Running Tests
 

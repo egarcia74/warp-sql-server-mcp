@@ -66,13 +66,13 @@ npm run test:integration:protocol
 
 ### 📊 **Test Suite Overview**
 
-| Test Type                      | Count     | Purpose                        | Database  | Automation                           |
-| ------------------------------ | --------- | ------------------------------ | --------- | ------------------------------------ |
-| **Unit Tests**                 | 1,100     | Code logic validation          | Mocked    | ✅ Required `Tests` job              |
-| **Integration Tests (Vitest)** | 27        | Component integration          | Mocked    | ✅ `coverage` job                    |
-| **Live-Database Tests**        | 40        | Security phase validation      | Live DB   | ✅ Required `Tests` job (Docker)     |
-| **Protocol Smoke Tests**       | 20        | MCP communication validation   | Live DB   | ❌ On demand (`npm run docker:test`) |
-| **TOTAL**                      | **1,187** | **Complete system validation** | **Mixed** | **1,167 automated per PR**           |
+| Test Type                      | Count     | Purpose                        | Database  | Automation                               |
+| ------------------------------ | --------- | ------------------------------ | --------- | ---------------------------------------- |
+| **Unit Tests**                 | 1,100     | Code logic validation          | Mocked    | ✅ Required `Tests` job                  |
+| **Integration Tests (Vitest)** | 27        | Component integration          | Mocked    | ✅ `coverage` job                        |
+| **Live-Database Tests**        | 40        | Security phase validation      | Live DB   | ✅ Required `Tests` job (Docker)         |
+| **Protocol Smoke Tests**       | 20        | MCP communication validation   | Live DB   | ❌ On demand (`docker:test -- protocol`) |
+| **TOTAL**                      | **1,187** | **Complete system validation** | **Mixed** | **1,167 automated per PR**               |
 
 The 40 live-database tests are _not_ excluded from CI. The required `Tests (20)` / `Tests (22)`
 jobs run `npm test`, which starts a Docker SQL Server, runs all three security phases against it,
@@ -314,21 +314,18 @@ and stops it again. The only suite no CI job runs is
 
 #### **1. Development Testing**
 
-````bash
+```bash
 # Quick validation during development
 npm test                    # Run all automated tests
-```bash
 npm run test:coverage      # Check code coverage
-````
+```
 
 #### **Manual Testing (Live Database)**
 
-````bash
+```bash
 npm run test:integration:manual          # All 3 security phases (40 tests)
 npm run test:integration:protocol        # MCP protocol validation (20 tests)
-```bash
-# End of previous section
-````
+```
 
 #### **2. Pre-Production Validation**
 
@@ -340,15 +337,11 @@ npm run test:integration:protocol        # MCP protocol validation (20 tests)
 
 #### **3. Production Readiness Check**
 
-````bash
+```bash
 # Complete validation suite
 npm run ci                   # Full CI pipeline with security audit
-```bash
 npm run test:integration:manual          # Manual integration validation
 npm run test:integration:protocol        # Protocol communication validation
-```bash
-# Complete validation suite
-npm run ci                   # Full CI pipeline with security audit
 ```
 
 ### 📋 **Comprehensive Testing Guides**
@@ -367,10 +360,11 @@ npm run ci                   # Full CI pipeline with security audit
 
 #### **On-Demand Tests (Pre-Production)**
 
-- [ ] **Protocol smoke test** - `npm run docker:test` (the 20-test
-      `test/protocol/mcp-client-smoke-test.js` round trip; no CI job runs this file)
+- [ ] **Protocol smoke test** - `npm run docker:test -- protocol` (the 20-test
+      `test/protocol/mcp-client-smoke-test.js` round trip; no CI job runs this file - and a bare
+      `npm run docker:test` defaults to `phase1`, which never reaches it)
 
-> `npm run test:integration:protocol` is a *different* check - it runs
+> `npm run test:integration:protocol` is a _different_ check - it runs
 > `test/protocol/mcp-server-startup-test.js`, a startup and JSON-RPC handshake validation, and it
 > does run in CI as part of `npm test`.
 
@@ -390,24 +384,24 @@ With Warp MCP integration, you can validate functionality by:
 
 #### **All 16 MCP Tools (100% Validated)**
 
-| Category         | Tool                        | Status                      | Validation         |
-| ---------------- | --------------------------- | --------------------------- | ------------------ | --------------- |
-| **Database**     | `list_databases`            | ✅ Validated                | All test phases    |
-| **Database**     | `list_tables`               | ✅ Validated                | All test phases    |
-| **Schema**       | `describe_table`            | ✅ Validated                | All test phases    |
-| **Schema**       | `list_foreign_keys`         | ✅ Validated                | All test phases    |
-| **Data**         | `get_table_data`            | ✅ Validated                | All test phases    |
-| **Data**         | `export_table_csv`          | ✅ Validated                | All test phases    |
-| **Query**        | `execute_query`             | ✅ Validated                | All security modes |
-| **Query**        | `explain_query`             | ✅ Validated                | All test phases    |
-| **Performance**  | `get_performance_stats`     | ✅ Validated                | All test phases    |
-| **Performance**  | `get_query_performance`     | ✅ Validated                | All test phases    |
-| **Performance**  | `get_connection_health`     | ✅ Validated                | All test phases    |
-| **Optimization** | `get_index_recommendations` | ✅ Validated                | All test phases    |
-| **Optimization** | `analyze_query_performance` | ✅ Validated                | All test phases    |
-| **Optimization** | `detect_query_bottlenecks`  | ✅ Validated                | All test phases    |
-|                  | **Optimization**            | `get_optimization_insights` | ✅ Validated       | All test phases |
-|                  | **Diagnostics**             | `get_server_info`           | ✅ Validated       | All test phases |
+| Category         | Tool                        | Status       | Validation         |
+| ---------------- | --------------------------- | ------------ | ------------------ |
+| **Database**     | `list_databases`            | ✅ Validated | All test phases    |
+| **Database**     | `list_tables`               | ✅ Validated | All test phases    |
+| **Schema**       | `describe_table`            | ✅ Validated | All test phases    |
+| **Schema**       | `list_foreign_keys`         | ✅ Validated | All test phases    |
+| **Data**         | `get_table_data`            | ✅ Validated | All test phases    |
+| **Data**         | `export_table_csv`          | ✅ Validated | All test phases    |
+| **Query**        | `execute_query`             | ✅ Validated | All security modes |
+| **Query**        | `explain_query`             | ✅ Validated | All test phases    |
+| **Performance**  | `get_performance_stats`     | ✅ Validated | All test phases    |
+| **Performance**  | `get_query_performance`     | ✅ Validated | All test phases    |
+| **Performance**  | `get_connection_health`     | ✅ Validated | All test phases    |
+| **Optimization** | `get_index_recommendations` | ✅ Validated | All test phases    |
+| **Optimization** | `analyze_query_performance` | ✅ Validated | All test phases    |
+| **Optimization** | `detect_query_bottlenecks`  | ✅ Validated | All test phases    |
+| **Optimization** | `get_optimization_insights` | ✅ Validated | All test phases    |
+| **Diagnostics**  | `get_server_info`           | ✅ Validated | All test phases    |
 
 #### **Security System (100% Validated)**
 
@@ -420,13 +414,13 @@ With Warp MCP integration, you can validate functionality by:
 
 ### 🎯 **Test Execution Results**
 
-| Test Suite                  | Tests     | Passed    | Failed | Success Rate |
-| --------------------------- | --------- | --------- | ------ | ------------ |
-| **Unit Tests**              | 1,100     | 1,100     | 0      | **100%**     |
-| **Integration (Vitest)**    | 27        | 27        | 0      | **100%**     |
-| **Live-Database Tests**     | 40        | 40        | 0      | **100%**     |
-| **Protocol Smoke Tests**    | 20        | 20        | 0      | **100%**     |
-| **TOTAL**                   | **1,187** | **1,187** | **0**  | **100%**     |
+| Test Suite               | Tests     | Passed    | Failed | Success Rate |
+| ------------------------ | --------- | --------- | ------ | ------------ |
+| **Unit Tests**           | 1,100     | 1,100     | 0      | **100%**     |
+| **Integration (Vitest)** | 27        | 27        | 0      | **100%**     |
+| **Live-Database Tests**  | 40        | 40        | 0      | **100%**     |
+| **Protocol Smoke Tests** | 20        | 20        | 0      | **100%**     |
+| **TOTAL**                | **1,187** | **1,187** | **0**  | **100%**     |
 
 ### ✅ **All Historical Issues Resolved**
 
@@ -559,5 +553,3 @@ This MCP server demonstrates enterprise-grade software development practices wit
 ---
 
 _This document should be updated as issues are resolved and new features are added._
-```
-````

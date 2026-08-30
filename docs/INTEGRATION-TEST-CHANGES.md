@@ -139,6 +139,8 @@ _Figures as of this reorganisation; see the note at the top of this document for
 
 ### ✅ **CI/CD Integrity**
 
+_As of this reorganisation; CI now starts a Docker SQL Server and runs the 40 live-database tests._
+
 - No database dependencies in automated pipelines
 - No SSL certificate requirements for CI
 - No environment-specific configuration needed

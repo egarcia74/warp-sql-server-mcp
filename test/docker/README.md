@@ -376,7 +376,9 @@ pipeline, which is why it needs a working Docker daemon.
 
 The one suite that CI does **not** run is the full MCP client smoke test
 (`test/protocol/mcp-client-smoke-test.js`, 20 tests). It is invoked only on demand through
-`npm run docker:test` (see [`scripts/docker-test-runner.sh`](../../scripts/docker-test-runner.sh)).
+`npm run docker:test -- protocol` (or `-- all`); a bare `npm run docker:test` defaults to `phase1`
+and never reaches this file (see
+[`scripts/docker-test-runner.sh`](../../scripts/docker-test-runner.sh)).
 Note that this is a different file from the `test:integration:protocol` step above, which runs the
 lighter startup/handshake check.
 
