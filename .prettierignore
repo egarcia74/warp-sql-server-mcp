@@ -30,5 +30,6 @@ yarn.lock
 .remember/
 docs/superpowers/
 
-# Local agent/editor state (gitignored, never committed)
-.claude/
+# Claude Code local state (mirrors .gitignore; shared settings.json stays checked)
+.claude/settings.local.json
+.claude/worktrees/
