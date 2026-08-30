@@ -20,9 +20,10 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, **comprehensive performance monitoring**, and **cloud-ready
 secret management**. Built with a modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 1,160 tests
-(1,100 automated unit tests + 40 manual integration tests + 20 MCP protocol smoke tests) covering all
-security phases with **100% success rates**.
+**✅ Production Status**: This MCP server has been **fully validated** through 1,187 tests, 1,167 of
+which run automatically on every pull request (1,100 unit + 27 integration + 40 live-database);
+only the 20 MCP protocol smoke tests are run on demand. Covers all security phases with
+**100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute setup walkthrough.
 
@@ -932,7 +933,11 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 1,100 automated unit tests + 40 manual integration tests + 20 MCP protocol smoke tests (1,160 total) cover all MCP tools, connection handling, and error scenarios
+- **Comprehensive Coverage**: 1,187 tests total, split by how they run - **1,167 automated** on every
+  pull request: 1,100 unit and 27 integration under Vitest, plus the 40 live-database phase tests
+  that `npm test` drives against a Docker SQL Server the CI `Tests` job starts itself. The remaining
+  **20 MCP protocol smoke tests** are the only ones no CI job runs (`npm run docker:test` invokes
+  them on demand). Together they cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
 - **🐳 Docker Testing**: Automated containerized SQL Server for zero-configuration testing
@@ -1057,12 +1062,15 @@ Grouped by area; the group totals sum to 1,100:
 - **Repository and CLI tooling** (16): `link-checker` (6), `cli` (4), `docker-command-utils` (4),
   `dependabot-config` (2)
 
-#### **Integration Tests (27 automated + 40 manual)**
+#### **Integration Tests (27 Vitest + 40 live-database)**
 
-- **Automated Integration Tests** (27): Mocked, no external dependencies. These live in `test/integration/`
+- **Vitest Integration Tests** (27): Mocked, no external dependencies. These live in `test/integration/`
   and run under a bare `vitest run` (`npm run test:coverage`, `npm run ci`); `npm run test:unit` scopes itself
   to `test/unit` and does not include them
-- **Manual Integration Tests** (40): **Production validation with live database**
+- **Live-Database Integration Tests** (40): **Production validation with live database**. They live
+  in `test/integration/manual/` because they are not Vitest suites, but they are fully automated:
+  `npm test` runs them via `test:integration:manual`, and CI's required `Tests` job runs `npm test`
+  against a Docker SQL Server it starts itself
   - **Phase 1 - Read-Only Security** (20 tests): Maximum security configuration validation
   - **Phase 2 - DML Operations** (10 tests): Selective write permissions validation
   - **Phase 3 - DDL Operations** (10 tests): Full development mode validation
@@ -1071,9 +1079,11 @@ Grouped by area; the group totals sum to 1,100:
 
 #### **Protocol Tests (20 tests)**
 
-- **MCP Client-Server Communication Tests** (20): **End-to-end MCP protocol validation**, run by hand
-  against a live database - no npm script invokes `mcp-client-smoke-test.js`
-  (`npm run test:integration:protocol` runs the separate `mcp-server-startup-test.js` handshake check)
+- **MCP Client-Server Communication Tests** (20): **End-to-end MCP protocol validation** against a
+  live database. The only suite no CI job runs: `mcp-client-smoke-test.js` is invoked solely by
+  `npm run docker:test` (`scripts/docker-test-runner.sh`, phases `protocol` and `all`), which no
+  workflow calls; `npm run test:integration:protocol` runs the separate `mcp-server-startup-test.js`
+  handshake check instead
   - MCP server startup and initialization
   - Tool discovery and registration
   - Request/response message formatting
@@ -1440,13 +1450,18 @@ Update the version links at the bottom:
 [X.Y.Z]: https://github.com/egarcia74/warp-sql-server-mcp/compare/vPREV...vX.Y.Z
 ```
 
-#### 4. Update package.json Version
+#### 4. Update package.json and package-lock.json Versions
 
-```json
-{
-  "version": "X.Y.Z"
-}
+Use `npm version` rather than hand-editing `package.json` - it rewrites the version in both
+`package.json` and `package-lock.json` consistently, which a manual edit does not
+([#1112](https://github.com/egarcia74/warp-sql-server-mcp/issues/1112)):
+
+```bash
+npm version X.Y.Z --no-git-tag-version
 ```
+
+`--no-git-tag-version` suppresses the commit and tag `npm version` would otherwise create, leaving
+the commit to step 5 and the tag to step 6 - after the bump has landed on `main`.
 
 #### 5. Land the Version Changes via Pull Request
 
@@ -1466,8 +1481,8 @@ gh pr create --base main --title "chore(release): bump version to vX.Y.Z" --fill
 # Merge once required checks and review pass
 ```
 
-**Note**: Pre-commit hooks run automatically and must pass. Keep `package.json` and
-`package-lock.json` in step - `npm version X.Y.Z --no-git-tag-version` updates both
+**Note**: Pre-commit hooks run automatically and must pass. Both `package.json` and
+`package-lock.json` must be staged; step 4's `npm version` command is what keeps them in step
 ([#1112](https://github.com/egarcia74/warp-sql-server-mcp/issues/1112)).
 
 #### 6. Create and Push Git Tag
