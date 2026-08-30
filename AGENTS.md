@@ -33,5 +33,6 @@ Docker daemon.
 
 ## Further Reading
 
-- `CONTRIBUTING.md` - development workflow, TDD requirements, git hooks, and safety-testing rules.
+- `CONTRIBUTING.md` - development workflow, test-driven development (TDD) requirements, git hooks,
+  and safety-testing rules.
 - `WARP.md` - the detailed source of truth for architecture, security policy, and release process.
