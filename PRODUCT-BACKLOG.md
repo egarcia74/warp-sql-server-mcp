@@ -58,11 +58,12 @@ Items are numbered sequentially and uniquely; the phase lists further down refer
 
 ### 5. Automatic Environment Configuration Detection
 
-- **Issue**: [#57](https://github.com/egarcia74/warp-sql-server-mcp/issues/57) (closed - see status note)
+- **Issue**: [#57](https://github.com/egarcia74/warp-sql-server-mcp/issues/57)
 - **Business Value**: ⭐⭐⭐⭐ | **Complexity**: 🔧🔧
 - **Phase**: 2
-- **Status**: 📋 Planned (Research Complete) - **needs triage**: issue #57 is closed, but neither the
-  `ConfigDetector` class nor the `detect_optimal_config` tool exists in `lib/`, so nothing shipped.
+- **Status**: 📋 Planned (Research Complete). Issue #57 was closed without anything shipping - neither
+  the `ConfigDetector` class nor the `detect_optimal_config` tool exists in `lib/` - and has been
+  reopened.
 - **Research**: [docs/AUTO-CONFIG-DETECTION-RESEARCH.md](docs/AUTO-CONFIG-DETECTION-RESEARCH.md)
 - **Description**: Add intelligent configuration detection and recommendations for optimal environment settings based on usage patterns, connection health, and performance metrics. Features:
   - Connection pool size optimization
