@@ -443,7 +443,7 @@ npm run test:ui
 npm run test:all             # 🚀 Unit + Integration tests (complete test suite)
 ```
 
-Run manual integration tests (requires live database):
+Run the live-database integration suites on their own (requires a live database):
 
 ```bash
 npm run test:integration:manual    # All 3 phases (40 tests)
@@ -1015,7 +1015,7 @@ test/
 │   ├── test-aws-secrets.js                  # npm run test:integration:aws (live AWS)
 │   ├── test-azure-secrets.js                # npm run test:integration:azure (live Azure)
 │   ├── shared/config-validator.js           # Shared config assertions
-│   └── manual/                              # Manual live-database tests (40 total)
+│   └── manual/                              # Live-database tests (40, also run in CI)
 │       ├── README.md                        # Manual testing guide
 │       ├── test-database-helper.js          # Live-DB fixture helper
 │       ├── phase1-readonly-security.test.js #  20 tests - Maximum security
@@ -1094,7 +1094,10 @@ Grouped by area; the group totals sum to 1,100:
 
 **📋 Manual Integration Testing**: Located in `test/integration/manual/` - [Complete Guide →](test/integration/manual/README.md)
 
-**⚠️ Important**: Manual integration tests and protocol tests are **excluded from CI/CD** and require live SQL Server database for validation.
+**⚠️ Important**: The 20 MCP protocol smoke tests (`mcp-client-smoke-test.js`) are the only suite
+no CI job runs. The 40 live-database phase tests do require a SQL Server, but CI supplies one via
+Docker and runs them - together with the separate `mcp-server-startup-test.js` handshake check - in
+the required `Tests` job.
 
 ## Key Implementation Details
 
