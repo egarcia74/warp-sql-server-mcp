@@ -200,7 +200,9 @@ SQL_SERVER_DEBUG=true node test/protocol/mcp-client-smoke-test.js
 > **Do not conflate the two protocol files.** `npm run test:integration:protocol` runs
 > `mcp-server-startup-test.js` and _does_ run in CI (as part of `npm test`).
 > `mcp-client-smoke-test.js` - the 20-test round trip documented here - is invoked only by
-> `npm run docker:test`, which no workflow calls. It is the single suite no CI job runs.
+> `npm run docker:test -- protocol` (or `-- all`), which no workflow calls; a bare
+> `npm run docker:test` defaults to `phase1` and never reaches this file. It is the single suite
+> no CI job runs.
 
 ## 🎯 **When to Use Protocol Tests**
 
