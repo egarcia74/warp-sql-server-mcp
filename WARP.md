@@ -20,8 +20,9 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, **comprehensive performance monitoring**, and **cloud-ready
 secret management**. Built with a modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 618+ comprehensive tests
-(392 unit + 40 manual integration + 20 protocol tests) covering all security phases with **100% success rates**.
+**✅ Production Status**: This MCP server has been **fully validated** through 1,160 tests
+(1,100 automated unit tests + 40 manual integration tests + 20 MCP protocol smoke tests) covering all
+security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute setup walkthrough.
 
@@ -63,7 +64,10 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 #### Query Optimization (NEW)
 
 1. **get_index_recommendations**: Recommend missing indexes from `sys.dm_db_missing_index_*` DMVs (params: `database`, `schema` — restrict to one schema, `limit`, `impact_threshold`)
-2. **analyze_query_performance**: Deep static (AST-based) analysis of specific queries with optimization suggestions
+2. **analyze_query_performance**: Static lexical/heuristic analysis of a supplied query — query-type
+   classification, complexity scoring, anti-pattern warnings and optimization suggestions, combined with
+   operator/access-method extraction from execution-plan data. It is keyword- and pattern-based; there is
+   no AST or SQL parser behind it
 3. **detect_query_bottlenecks**: Identify and categorize expensive queries from `sys.dm_exec_query_stats` (params: `database`, `limit`, `severity_filter`)
 4. **get_optimization_insights**: Aggregate health summary (missing-index + expensive-query counts) with a prioritized roadmap
    (`analysis_period` is accepted but reserved/not applied; the response's `analysisPeriod` field echoes it with `applied: false`)
@@ -421,7 +425,7 @@ npm start
 
 ### Testing
 
-`````bash
+```bash
 # Run all automated tests (unit + integration)
 npm test
 
@@ -436,8 +440,10 @@ npm run test:ui
 
 # Run EVERYTHING - complete test suite (recommended for pre-release)
 npm run test:all             # 🚀 Unit + Integration tests (complete test suite)
+```
 
-# Run manual integration tests (requires live database)
+Run manual integration tests (requires live database):
+
 ```bash
 npm run test:integration:manual    # All 3 phases (40 tests)
 # Note: Individual phases are run sequentially within the manual test script
@@ -446,17 +452,17 @@ npm run test:integration:manual    # All 3 phases (40 tests)
 # Phase 3: DDL operations (10 tests)
 ```
 
-## Run performance tests
+Run performance tests:
 
 ```bash
 npm run test:integration:performance # ⭐ Fast performance test (~2s, 100% success)
 npm run test:integration:warp # Warp MCP integration test (~10s)
 ```
 
-## Run MCP protocol tests (requires live database)
+Run MCP protocol tests (requires a live database):
 
 ```bash
-npm run test:integration:protocol # MCP client-server communication (20 tests)
+npm run test:integration:protocol # MCP server startup + JSON-RPC handshake
 ```
 
 ### Code Quality and Formatting
@@ -620,10 +626,10 @@ Comprehensive checklists for quality git workflows:
   - Troubleshooting guidance for common push failures
   - Advanced push options and force push safety guidelines
   - Pull request creation and post-push validation steps
- - **[Git Release Checklist](docs/GIT-RELEASE-CHECKLIST.md)**: Step-by-step release guide
-   - Covers automated Release workflow (dry runs, auto detection, tag-collision handling)
-   - Version-bump PR to sync `package.json` with released tag
-   - Manual release fallback and npm publish instructions
+- **[Git Release Checklist](docs/GIT-RELEASE-CHECKLIST.md)**: Step-by-step release guide
+  - Covers automated Release workflow (dry runs, auto detection, tag-collision handling)
+  - Version-bump PR to sync `package.json` and `package-lock.json` with the released tag
+  - Manual release fallback and npm publish instructions
 
 ### Log Viewing Commands
 
@@ -695,11 +701,11 @@ cp .env.example .env
 
 **Quick Security Levels:**
 
-| Variable                                  | Default | Impact                                                                          |
-| ----------------------------------------- | ------- | ------------------------------------------------------------------------------- |
-| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed                                                     |
+| Variable                                  | Default | Impact                                                                                                                        |
+| ----------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed                                                                                                   |
 | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Blocks INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, WRITETEXT/UPDATETEXT, Service Broker RECEIVE, and administrative operations |
-| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER, GRANT/REVOKE/DENY, and `SELECT ... INTO`                                                          |
+| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER, GRANT/REVOKE/DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`                                    |
 
 The destructive tier also covers `WRITETEXT`/`UPDATETEXT` and the Service Broker `RECEIVE`
 statement. Administrative operations — SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE,
@@ -926,7 +932,7 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 392 unit tests + 40 integration tests + 20 protocol tests cover all MCP tools, connection handling, and error scenarios
+- **Comprehensive Coverage**: 1,100 automated unit tests + 40 manual integration tests + 20 MCP protocol smoke tests (1,160 total) cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
 - **🐳 Docker Testing**: Automated containerized SQL Server for zero-configuration testing
@@ -961,59 +967,101 @@ npm run docker:clean                  # Remove all data and containers
 
 ### Test Structure
 
+Counts below are the vitest suite sizes measured with `npm run test:unit`
+(25 files, 1,100 tests); the live-database suites are counted from their own runners.
+
 ```text
 test/
-├── README.md                            # 📖 Comprehensive test documentation
-├── unit/                                # Unit test suites (392 tests)
-│   ├── mcp-shared-fixtures.js          # Shared test fixtures and mocks
-│   ├── sqlserver-mcp.test.js           # Core MCP server tests
-│   ├── mcp-core-tools.test.js          # Core database operation tests
-│   ├── mcp-data-tools.test.js          # Data retrieval and export tests
-│   ├── mcp-performance-tools.test.js   # Performance monitoring tests
-│   ├── mcp-query-optimization-tools.test.js # Query optimization tests
-│   ├── mcp-security.test.js            # Security and validation tests
-│   ├── mcp-connection.test.js          # Connection management tests
-│   ├── mcp-server-lifecycle.test.js   # Server lifecycle tests
-│   ├── performance-monitor.test.js     # Performance monitor unit tests
-│   ├── secret-manager.test.js          # Secret management tests
-│   ├── streaming-handler.test.js       # Streaming functionality tests
-│   ├── response-formatter.test.js      # Response formatting tests
-│   ├── logger.test.js                  # Logging system tests
-│   └── link-checker.test.js           # Link validation tests
-├── docker/                              # 🐳 Docker testing infrastructure
-│   ├── README.md                        # Docker testing setup guide
-│   ├── docker-compose.yml               # SQL Server container configuration
-│   ├── init-db.sql                     # Database initialization script
-│   ├── .env.docker                     # Docker environment variables
-│   └── wait-for-db.js                  # Database readiness verification
-├── integration/                         # Integration tests
-│   ├── sqlserver-mcp-integration.test.js  # Automated integration tests (15 tests)
-│   └── manual/                          # 🆕 Manual integration tests (40 tests)
-│       ├── README.md                    # Comprehensive manual testing guide
-│       ├── phase1-readonly-security.test.js   # 20 tests - Maximum security
-│       ├── phase2-dml-operations.test.js      # 10 tests - DML operations
-│       └── phase3-ddl-operations.test.js      # 10 tests - DDL operations
-├── protocol/                            # MCP protocol tests (20 tests)
-│   └── mcp-client-smoke-test.js        # Client-server communication tests
-└── ../vitest.config.js                  # Test configuration
+├── README.md                                # Comprehensive test documentation
+├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
+├── setup.js                                 # Vitest global setup
+├── unit/                                    # Vitest unit suites - 25 files, 1,100 tests
+│   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
+│   ├── query-optimizer.test.js              # 132 - Query analysis and optimization engine
+│   ├── sql-injection-battery.test.js        # 103 - Authoritative behavioural injection guard
+│   ├── where-clause-guard.test.js           #  81 - WHERE-clause validation
+│   ├── performance-monitor.test.js          #  70 - Metrics collection
+│   ├── streaming-handler.test.js            #  60 - Streaming large result sets
+│   ├── tool-registry.test.js                #  59 - Tool definitions and input schemas
+│   ├── database-tools-handler.test.js       #  55 - Database tool handlers
+│   ├── secret-manager.test.js               #  54 - Azure/AWS secret backends
+│   ├── logger.test.js                       #  52 - Structured logging and audit trail
+│   ├── mcp-security.test.js                 #  38 - Three-tier safety system
+│   ├── response-formatter.test.js           #  35 - Output formatting
+│   ├── connection-manager.test.js           #  33 - Pooling, retries, auth
+│   ├── sql-batch-guard.test.js              #  30 - Whole-batch forbidden-statement scan
+│   ├── sql-construction-guard.test.js       #  30 - Dispatch-vs-escaping static guard
+│   ├── get-server-info.test.js              #  27 - Server diagnostics tool
+│   ├── server-config.test.js                #  24 - Configuration parsing and defaults
+│   ├── query-policy.test.js                 #  19 - Safety-tier policy decisions
+│   ├── sql-identifier.test.js               #  16 - Identifier/literal escaping helpers
+│   ├── query-optimizer-security.test.js     #  13 - Optimizer input hardening
+│   ├── bottleneck-detector.test.js          #   9 - Bottleneck categorisation
+│   ├── link-checker.test.js                 #   6 - Documentation link validation
+│   ├── cli.test.js                          #   4 - cli.js behaviour
+│   ├── docker-command-utils.test.js         #   4 - Docker helper argument handling
+│   ├── dependabot-config.test.js            #   2 - Dependabot config validation
+│   ├── mcp-shared-fixtures.js               # Shared fixtures and mocks (not a suite)
+│   ├── mcp-shared-fixtures.js.backup        # Stale tracked backup of the above; unused
+│   └── fixtures/modern-fixtures.js          # Additional shared fixtures
+├── integration/                             # Vitest integration suites + live-DB scripts
+│   ├── error-scenarios-integration.test.js  #  15 tests - failure-path integration
+│   ├── sqlserver-mcp-integration.test.js    #  12 tests - component integration
+│   ├── test-aws-secrets.js                  # npm run test:integration:aws (live AWS)
+│   ├── test-azure-secrets.js                # npm run test:integration:azure (live Azure)
+│   ├── shared/config-validator.js           # Shared config assertions
+│   └── manual/                              # Manual live-database tests (40 total)
+│       ├── README.md                        # Manual testing guide
+│       ├── test-database-helper.js          # Live-DB fixture helper
+│       ├── phase1-readonly-security.test.js #  20 tests - Maximum security
+│       ├── phase2-dml-operations.test.js    #  10 tests - DML operations
+│       └── phase3-ddl-operations.test.js    #  10 tests - DDL operations
+├── protocol/                                # MCP protocol tests (live DB)
+│   ├── README.md                            # Protocol testing guide
+│   ├── mcp-client-smoke-test.js             #  20 tests - full client/server round trip
+│   └── mcp-server-startup-test.js           # Startup + JSON-RPC handshake check
+├── manual/                                  # Performance runners
+│   ├── improved-performance-test.js         # npm run test:integration:performance
+│   └── warp-mcp-performance-test.js         # npm run test:integration:warp
+├── docker/                                  # Docker testing infrastructure
+│   ├── README.md, PLATFORM-DETECTION.md, QUICK-REFERENCE.md,
+│   │   STRESS-TESTING.md, TESTING-SUMMARY.md, MCP-BENEFIT-SUMMARY.md
+│   ├── .env.docker                          # Docker environment variables
+│   ├── detect-platform.js                   # Generates docker-compose.yml (untracked)
+│   ├── command-utils.js, verify-platform-detection.js, troubleshoot-apple-silicon.js
+│   ├── init-db.sql, init-db-node.js, wait-for-db.js, test-connectivity.js
+│   └── quick-stress-test.js, developer-stress-test.js
+└── archived/                                # 8 superseded suites, excluded in vitest.config.js
 ```
+
+> **Note**: `test/docker/docker-compose.yml` is generated by `npm run docker:detect` and is not tracked.
+> `test/unit/mcp-shared-fixtures.js.backup` is tracked but unreferenced.
 
 ### Test Categories
 
-#### **Unit Tests (392 tests)**
+#### **Unit Tests (1,100 across 25 files)**
 
-- **Core MCP Server Tests** (127): Main server implementation, tool execution, error handling
-- **Database Operations Tests** (36): Data retrieval, table operations, CSV export
-- **Performance Monitoring Tests** (80): Query tracking, connection health, metrics collection
-- **Query Optimization Tests** (21): Index recommendations, bottleneck detection, performance analysis
-- **Security & Validation Tests** (38): Three-tier safety system, query validation, audit logging
-- **Connection Management Tests** (4): Pool management, authentication, connection lifecycle
-- **Server Lifecycle Tests** (15): Startup, shutdown, configuration management
-- **Infrastructure Component Tests** (214): Performance monitor, secret manager, streaming handler, response formatter, logger, link checker
+Grouped by area; the group totals sum to 1,100:
 
-#### **Integration Tests (15 automated + 40 manual)**
+- **Core MCP server** (144): `index.test.js` - entry point, tool dispatch, `validateQuery`
+- **SQL safety and injection guards** (317): `sql-injection-battery` (103), `where-clause-guard` (81),
+  `mcp-security` (38), `sql-batch-guard` (30), `sql-construction-guard` (30), `query-policy` (19),
+  `sql-identifier` (16)
+- **Infrastructure utilities** (250): `performance-monitor` (70), `streaming-handler` (60),
+  `logger` (52), `response-formatter` (35), `connection-manager` (33)
+- **Query analysis** (154): `query-optimizer` (132), `query-optimizer-security` (13),
+  `bottleneck-detector` (9)
+- **Tools and handlers** (141): `tool-registry` (59), `database-tools-handler` (55),
+  `get-server-info` (27)
+- **Configuration and secrets** (78): `secret-manager` (54), `server-config` (24)
+- **Repository and CLI tooling** (16): `link-checker` (6), `cli` (4), `docker-command-utils` (4),
+  `dependabot-config` (2)
 
-- **Automated Integration Tests** (15): Safe, no external dependencies, run with CI/CD
+#### **Integration Tests (27 automated + 40 manual)**
+
+- **Automated Integration Tests** (27): Mocked, no external dependencies. These live in `test/integration/`
+  and run under a bare `vitest run` (`npm run test:coverage`, `npm run ci`); `npm run test:unit` scopes itself
+  to `test/unit` and does not include them
 - **Manual Integration Tests** (40): **Production validation with live database**
   - **Phase 1 - Read-Only Security** (20 tests): Maximum security configuration validation
   - **Phase 2 - DML Operations** (10 tests): Selective write permissions validation
@@ -1023,7 +1071,9 @@ test/
 
 #### **Protocol Tests (20 tests)**
 
-- **MCP Client-Server Communication Tests** (20): **End-to-end MCP protocol validation**
+- **MCP Client-Server Communication Tests** (20): **End-to-end MCP protocol validation**, run by hand
+  against a live database - no npm script invokes `mcp-client-smoke-test.js`
+  (`npm run test:integration:protocol` runs the separate `mcp-server-startup-test.js` handshake check)
   - MCP server startup and initialization
   - Tool discovery and registration
   - Request/response message formatting
@@ -1068,9 +1118,9 @@ The project uses a comprehensive multi-layered tracking system for managing feat
 #### 📋 **Product Backlog Document**
 
 - **[PRODUCT-BACKLOG.md](PRODUCT-BACKLOG.md)**: Complete prioritized feature list with business value analysis
-- **17 features** organized by priority and implementation phase
+- **18 features** organized by priority and implementation phase
 - **Strategic alignment** with enterprise-grade software framework vision
-- **Regular updates**: Weekly status, monthly priority adjustments, quarterly roadmap reviews
+- **Updated on change**: revised when features ship, priorities move, or new work is planned
 
 #### 🎯 **GitHub Issues Integration**
 
@@ -1094,38 +1144,47 @@ The project uses a comprehensive multi-layered tracking system for managing feat
 
 ### Implementation Phases
 
-#### **Phase 1 (0-3 months)**: User Experience Focus
+Phases express ordering, not calendar dates. See
+[PRODUCT-BACKLOG.md](PRODUCT-BACKLOG.md) for the numbered items these lists reference.
+
+#### **Phase 1 (Next)**: User Experience Focus
 
 - Advanced Data Export Options (Excel, JSON, Parquet)
 - Query Builder & Template System
 
-#### **Phase 2 (3-6 months)**: Analytics & Performance
+#### **Phase 2 (Following)**: Analytics & Performance
 
 - Enhanced Data Visualization Support
-- ✅ **Query Optimization & Performance Tools** (COMPLETED v1.5.0)
-  - Index recommendations based on query patterns
-  - Query bottleneck detection and analysis
-  - Performance insights and optimization roadmaps
-  - Deep query analysis with optimization suggestions
 - Data Quality & Validation Framework
+- Automatic Environment Configuration Detection
 
-#### **Phase 3 (6-12 months)**: Enterprise Features
+#### **Phase 3 (Later)**: Enterprise Features
 
 - Real-time Data Monitoring
 - Advanced Security & Audit Features
 - Database Comparison & Synchronization
 
-#### **Phase 4 (12+ months)**: Platform Expansion
+#### **Phase 4 (Exploratory)**: Platform Expansion
 
+- API Integration & Webhooks
+- Advanced Caching System
 - Multi-Database Support
 - Natural Language Query Interface
-- AI/ML Integration
+- Machine Learning Integration
+- Collaborative Features
+
+#### **Shipped**
+
+- ✅ **Performance Monitoring MCP Tools** (v1.4.0): `get_performance_stats`,
+  `get_query_performance`, `get_connection_health`
+- ✅ **Query Optimization & Performance Tools** (v1.6.0): `get_index_recommendations`,
+  `analyze_query_performance`, `detect_query_bottlenecks`, `get_optimization_insights`
 
 ### Backlog Management Process
 
 1. **Feature Request**: Use GitHub issue template for new features
-2. **Backlog Review**: Monthly priority adjustments based on user feedback
-3. **Planning**: Quarterly roadmap reviews and phase adjustments
+2. **Backlog Review**: Priorities are revisited when features ship or new work arrives, not on a fixed cadence
+3. **Planning**: Phase membership is adjusted alongside those reviews
 4. **Implementation**: Follow TDD process with comprehensive testing
 5. **Documentation**: Update backlog status and maintain synchronization
 
@@ -1146,13 +1205,13 @@ The project uses a comprehensive multi-layered tracking system for managing feat
 
 #### **2. Modular Testing Strategy**
 
-````bash
+```bash
 # Test individual components in isolation
 npm run test:watch                    # Watch mode for active development
 npm run test:coverage                 # Component test coverage
 ```
 
-### Manual validation for database components
+Manual validation for database components:
 
 ```bash
 npm run test:integration:manual      # Security validation (all phases)
@@ -1160,10 +1219,10 @@ npm run test:integration:protocol    # Protocol validation
 npm run test:integration:performance # Performance validation
 ```
 
-## End-to-end protocol validation
+End-to-end protocol validation:
 
 ```bash
-npm run test:integration:protocol # MCP client-server communication
+npm run test:integration:protocol # MCP server startup + JSON-RPC handshake
 ```
 
 #### **3. Development Best Practices**
@@ -1184,7 +1243,9 @@ This project maintains high code quality through automated tooling and architect
 > **zero-tolerance quality standards**, see [Quality No-Compromise Case Study](docs/QUALITY-NO-COMPROMISE.md).
 >
 > This document captures real-world metrics from the WARP project including:
-> - **525 automated tests** with 100% pass rate enforcement
+>
+> - **525 automated tests** with 100% pass rate enforcement (the figure captured by that case study; the
+>   suite has since grown to 1,100 automated unit tests)
 > - **74% code coverage** with strict quality gates
 > - **3x development time** vs. 90% reduction in debugging time
 > - **The five critical challenges** teams face with no-compromise quality
@@ -1251,7 +1312,7 @@ The project includes comprehensive system maintenance tools to manage developmen
 
 #### **Process Cleanup Infrastructure**
 
-During intensive testing sessions (like our 525-test comprehensive suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
+During intensive testing sessions (like our 1,100-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
 
 The project includes automated cleanup tools:
 
@@ -1276,6 +1337,7 @@ npm run cleanup:processes
 #### **Real-World Validation**
 
 The cleanup infrastructure has been validated under extreme conditions:
+
 - **Tested under 138% CPU load** during comprehensive test execution
 - **Freed 1.8GB RAM** from 3 orphaned Vitest processes
 - **Maintained quality standards** while managing system resources
@@ -1283,9 +1345,6 @@ The cleanup infrastructure has been validated under extreme conditions:
 
 > **📋 Complete Guide**: See [System Maintenance Guide](docs/MAINTENANCE.md) for comprehensive
 > maintenance procedures, troubleshooting, and prevention strategies.
-
-## ESLint and Prettier Integration
-`````
 
 ## ESLint and Prettier Integration
 
@@ -1389,19 +1448,27 @@ Update the version links at the bottom:
 }
 ```
 
-#### 5. Commit Version Changes
+#### 5. Land the Version Changes via Pull Request
+
+`main` is protected and requires a reviewed pull request, so the version bump cannot be pushed
+to `main` directly. Put it on a branch and merge it:
 
 ```bash
-git add CHANGELOG.md package.json
-git commit -m "chore: bump version to vX.Y.Z
+git checkout -b chore/release/vX.Y.Z
+git add CHANGELOG.md package.json package-lock.json
+git commit -m "chore(release): bump version to vX.Y.Z
 
 - Update CHANGELOG.md with vX.Y.Z release notes
-- Update package.json version to X.Y.Z
+- Update package.json and package-lock.json version to X.Y.Z
 - Include summary of key changes"
-git push origin main
+git push -u origin chore/release/vX.Y.Z
+gh pr create --base main --title "chore(release): bump version to vX.Y.Z" --fill
+# Merge once required checks and review pass
 ```
 
-**Note**: Pre-commit hooks will run automatically and must pass.
+**Note**: Pre-commit hooks run automatically and must pass. Keep `package.json` and
+`package-lock.json` in step - `npm version X.Y.Z --no-git-tag-version` updates both
+([#1112](https://github.com/egarcia74/warp-sql-server-mcp/issues/1112)).
 
 #### 6. Create and Push Git Tag
 
@@ -1459,9 +1526,13 @@ The project includes a GitHub Actions workflow for releases that can be manually
 1. Go to:
    `https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/release.yml`
 2. Click "Run workflow"
-3. Select release type: `auto`, `patch`, `minor`, `major`, or `prerelease`
-4. Optionally enable "Dry run" to preview without creating the release
-5. Click "Run workflow"
+3. Fill in the three dispatch inputs:
+   - **`release_type`** (required, default `auto`): `auto`, `patch`, `minor`, `major`, or `prerelease`
+   - **`dry_run`** (optional, default `false`): preview the computed version and changelog without
+     creating a tag, GitHub Release, or version-bump PR
+   - **`create_version_pr`** (optional, default `true`): open a PR that bumps `package.json` **and**
+     `package-lock.json` to the released version
+4. Click "Run workflow"
 
 **Note**: The automated workflow is currently set to `workflow_dispatch`
 (manual trigger) to provide better control over releases.
@@ -1474,11 +1545,34 @@ The project includes a GitHub Actions workflow for releases that can be manually
   - `fix:` / `bugfix:` → patch
   - `docs:` / `chore:` → patch (treated as release‑worthy for auditability)
 - Tag collision handling: If the computed tag (e.g., `vX.Y.Z`) already exists, the workflow
-  automatically increments the patch version until it finds a free tag, then proceeds. The
-  version bump is not committed to `main` (by design, to respect branch protection); only the
-  tag and GitHub Release are created.
+  automatically increments the patch version until it finds a free tag, then proceeds.
+- Version bump on `main`: the `release` job never pushes the bump to `main` directly - branch
+  protection forbids it - so the tag and GitHub Release are created from the unbumped commit.
+  A separate `version-pr` job then runs when `create_version_pr=true` (the default): it creates
+  the branch `chore/release/vX.Y.Z`, then runs
+  `npm version <version> --no-git-tag-version --allow-same-version`
+  so `package.json` and `package-lock.json` move together, and opens a PR against `main`. Set `create_version_pr=false` to create only the tag and Release and bump the
+  version yourself later.
 - Dry runs: Set `dry_run=true` to preview the computed version and changelog without creating a
-  tag or GitHub Release. The run summary includes the preview.
+  tag, GitHub Release, or version-bump PR. The run summary includes the preview.
+
+#### Publishing to npm
+
+Publishing is a separate workflow, `.github/workflows/npm-publish.yml`. It is **not** triggered by
+the tag or the Release - it triggers on a push to `main` that touches `package.json`, which in
+practice means the merge of the version-bump PR above:
+
+- It publishes only when a tag matching the new `package.json` version already exists, and skips if
+  that version is already on npm - so a `package.json` edit that is not a release bump is a no-op.
+- It runs `npm run test:unit` before publishing.
+- It publishes with `npm publish --access public --provenance` under an OIDC `id-token`, so each
+  tarball carries a Sigstore provenance attestation binding it to the workflow run and commit that
+  built it. Verify an install with `npm audit signatures`; the npm package page shows a Provenance
+  badge.
+- The package is published as `@egarcia74/warp-sql-server-mcp`.
+
+If `create_version_pr=false` was used, nothing publishes to npm until a `package.json` version bump
+lands on `main` by some other route.
 
 ### Post-Release Tasks
 
