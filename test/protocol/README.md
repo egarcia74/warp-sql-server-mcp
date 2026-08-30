@@ -49,7 +49,13 @@ handshake. This is what `npm run test:integration:protocol` runs, and it is part
 ### **Quick Start**
 
 ```bash
-# Run the 20-test MCP client smoke test (starts Docker SQL Server for you)
+# First run, or after `docker compose down -v`: seed the schema first.
+# `docker:test` starts the container but does NOT run `docker:init`, and the
+# smoke client skips its database-dependent cases when no test database exists -
+# so without this step the run reports success having executed fewer than 20 tests.
+npm run docker:start:init
+
+# Run the 20-test MCP client smoke test
 npm run docker:test -- protocol
 
 # Run the lighter startup/handshake check (this is the one CI runs)
