@@ -936,8 +936,9 @@ Generated files:
 - **Comprehensive Coverage**: 1,187 tests total, split by how they run - **1,167 automated** on every
   pull request: 1,100 unit and 27 integration under Vitest, plus the 40 live-database phase tests
   that `npm test` drives against a Docker SQL Server the CI `Tests` job starts itself. The remaining
-  **20 MCP protocol smoke tests** are the only ones no CI job runs (`npm run docker:test` invokes
-  them on demand). Together they cover all MCP tools, connection handling, and error scenarios
+  **20 MCP protocol smoke tests** are the only ones no CI job runs (`npm run docker:test -- protocol`
+  invokes them on demand; a bare `npm run docker:test` defaults to `phase1` and never reaches them).
+  Together they cover all MCP tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
 - **🐳 Docker Testing**: Automated containerized SQL Server for zero-configuration testing
@@ -1081,8 +1082,9 @@ Grouped by area; the group totals sum to 1,100:
 
 - **MCP Client-Server Communication Tests** (20): **End-to-end MCP protocol validation** against a
   live database. The only suite no CI job runs: `mcp-client-smoke-test.js` is invoked solely by
-  `npm run docker:test` (`scripts/docker-test-runner.sh`, phases `protocol` and `all`), which no
-  workflow calls; `npm run test:integration:protocol` runs the separate `mcp-server-startup-test.js`
+  `npm run docker:test -- protocol` (or `-- all`) - `scripts/docker-test-runner.sh` defaults to
+  `phase1` when no phase is passed - and no workflow calls it;
+  `npm run test:integration:protocol` runs the separate `mcp-server-startup-test.js`
   handshake check instead
   - MCP server startup and initialization
   - Tool discovery and registration
@@ -1092,7 +1094,8 @@ Grouped by area; the group totals sum to 1,100:
   - Protocol compliance verification
   - **Located in**: `test/protocol/` - [Protocol Testing Guide →](test/protocol/README.md)
 
-**📋 Manual Integration Testing**: Located in `test/integration/manual/` - [Complete Guide →](test/integration/manual/README.md)
+**📋 Live-Database Integration Testing**: Located in `test/integration/manual/` (the directory
+name predates these tests being automated) - [Complete Guide →](test/integration/manual/README.md)
 
 **⚠️ Important**: The 20 MCP protocol smoke tests (`mcp-client-smoke-test.js`) are the only suite
 no CI job runs. The 40 live-database phase tests do require a SQL Server, but CI supplies one via
@@ -1224,7 +1227,8 @@ npm run test:watch                    # Watch mode for active development
 npm run test:coverage                 # Component test coverage
 ```
 
-Manual validation for database components:
+Live-database validation for database components - these are the same steps `npm test`
+and CI's required `Tests` job run:
 
 ```bash
 npm run test:integration:manual      # Security validation (all phases)
@@ -1715,7 +1719,10 @@ For reference, recent version history:
 
 When adding new database operations, **ALWAYS follow TDD**:
 
-1. **Write comprehensive tests first** (following existing test patterns in `test/sqlserver-mcp.test.js`)
+1. **Write comprehensive tests first** (following existing test patterns in
+   `test/unit/database-tools-handler.test.js` for tool behaviour, `test/unit/index.test.js` for
+   dispatch and `validateQuery`, and `test/unit/sql-injection-battery.test.js` for injection
+   boundaries)
    - Test normal operation
    - Test error conditions
    - Test security boundaries

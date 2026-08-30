@@ -560,8 +560,8 @@ This project follows strict TDD practices. When developing new features:
 #### 1. 🔴 **RED Phase**: Write Failing Tests
 
 ```bash
-# Open test file in VS Code
-code test/sqlserver-mcp.test.js
+# Open a test file in VS Code (pick the suite closest to your change)
+code test/unit/database-tools-handler.test.js
 
 # Run tests in watch mode
 npm run test:watch
