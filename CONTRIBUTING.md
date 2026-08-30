@@ -328,7 +328,7 @@ securityConfigs.forEach(config => {
 
 ### Safety Testing Resources
 
-- **Existing Tests**: See `test/unit/sql-injection-battery.test.js` (the authoritative behavioural
+- **Existing Tests**: See `test/unit/sql-injection-battery.test.js` (the authoritative behavioral
   guard), plus `test/unit/mcp-security.test.js`, `test/unit/sql-batch-guard.test.js` and
   `test/unit/where-clause-guard.test.js` for security test examples
 - **Test Patterns**: Follow established patterns for validateQuery testing

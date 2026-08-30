@@ -983,7 +983,7 @@ test/
 ├── unit/                                    # Vitest unit suites - 25 files, 1,100 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
 │   ├── query-optimizer.test.js              # 132 - Query analysis and optimization engine
-│   ├── sql-injection-battery.test.js        # 103 - Authoritative behavioural injection guard
+│   ├── sql-injection-battery.test.js        # 103 - Authoritative behavioral injection guard
 │   ├── where-clause-guard.test.js           #  81 - WHERE-clause validation
 │   ├── performance-monitor.test.js          #  70 - Metrics collection
 │   ├── streaming-handler.test.js            #  60 - Streaming large result sets
@@ -1003,7 +1003,7 @@ test/
 │   ├── query-optimizer-security.test.js     #  13 - Optimizer input hardening
 │   ├── bottleneck-detector.test.js          #   9 - Bottleneck categorisation
 │   ├── link-checker.test.js                 #   6 - Documentation link validation
-│   ├── cli.test.js                          #   4 - cli.js behaviour
+│   ├── cli.test.js                          #   4 - cli.js behavior
 │   ├── docker-command-utils.test.js         #   4 - Docker helper argument handling
 │   ├── dependabot-config.test.js            #   2 - Dependabot config validation
 │   ├── mcp-shared-fixtures.js               # Shared fixtures and mocks (not a suite)
