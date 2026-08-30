@@ -86,3 +86,7 @@ docs/superpowers/
 
 # Local Git worktrees
 .worktrees/
+
+# Claude Code local state (personal; shared .claude/settings.json stays committable)
+.claude/settings.local.json
+.claude/worktrees/

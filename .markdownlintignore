@@ -6,3 +6,4 @@ build/
 *.log
 .remember/
 docs/superpowers/
+.github/instructions/

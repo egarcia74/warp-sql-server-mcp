@@ -29,3 +29,7 @@ yarn.lock
 # Session buffers and agent working docs
 .remember/
 docs/superpowers/
+
+# Claude Code local state (mirrors .gitignore; shared settings.json stays checked)
+.claude/settings.local.json
+.claude/worktrees/
