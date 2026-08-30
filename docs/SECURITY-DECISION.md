@@ -71,3 +71,18 @@ Verified in this repository on 2026-08-30:
 
 Why the advisory no longer applies was not investigated, and no claim is made here that the
 dependency was deliberately upgraded or that the advisory was withdrawn.
+
+### Note on the header date
+
+The header date above is inconsistent with this repository's history. Recorded here without
+correction:
+
+- The header and the **Review Date** line both read `2025-01-09`.
+- The file entered this repository on `2025-09-09`, added at the repository root by commit
+  `8468dca` (PR #99), and was moved to `docs/` in the commit that added the resolution above.
+- This repository's first commit is dated `2025-08-28`, so `2025-01-09` cannot describe an event
+  that occurred in this repository.
+- The interval from `2025-09-09` to this resolution (`2026-08-30`) is 355 days.
+
+The header date is left as written. Which date is correct was not determined, and no claim is
+made here about how the discrepancy arose.

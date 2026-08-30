@@ -77,6 +77,8 @@ Each component must have a single, well-defined responsibility:
 - **Logging Layer**: Provides structured, searchable operational data
 - **Query Safety Guards**: `lib/security/query-policy.js`, `lib/security/sql-batch-guard.js` and
   `lib/security/where-clause-guard.js` each enforce one layer of the query-safety policy
+- **SQL Identifier Helpers**: `lib/utils/sql-identifier.js` does nothing but escape and coerce
+  caller-supplied values for the SQL context they land in
 
 ### Interface Segregation
 
