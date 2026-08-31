@@ -26,7 +26,8 @@
       "WARP.md": "markdown",
       "*.md": "markdown"
     },
-    "chatgpt.openOnStartup": true
+    "chatgpt.openOnStartup": true,
+    "codacy.guardrails.instructionsFile": "manual"
   },
   "extensions": {
     "recommendations": [
