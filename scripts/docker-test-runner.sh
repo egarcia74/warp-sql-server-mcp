@@ -78,8 +78,8 @@ fi
 # Start Docker if not already running or if we just cleaned
 if [ "$CLEAN_FLAG" = true ] || ! docker ps --filter "name=warp-mcp-sqlserver" --filter "status=running" | grep -q warp-mcp-sqlserver; then
     print_info "Starting Docker SQL Server container..."
-    npm run docker:start
-    print_success "Docker container started and ready"
+    npm run docker:start:init
+    print_success "Docker container started, schema initialised, and ready"
 fi
 
 # Set testing mode
