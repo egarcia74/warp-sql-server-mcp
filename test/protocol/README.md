@@ -147,8 +147,10 @@ enforcement is covered by the live-database phase tests in `test/integration/man
 💥 Startup test failed: Server startup timed out after 10 seconds
 ```
 
-This test resolves on the JSON-RPC `initialize` response arriving on stdout, falling back to the
-server's startup banner on stderr. A timeout means neither arrived within 10 seconds.
+This test succeeds only on the JSON-RPC `initialize` response arriving on stdout. The server's
+startup banner is logged for diagnostics but deliberately does not satisfy the test - it used to,
+which let the run report success without ever validating JSON-RPC. A timeout means no valid
+initialize response arrived within 10 seconds.
 
 **Solutions:**
 
