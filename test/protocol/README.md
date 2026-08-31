@@ -50,7 +50,9 @@ It is a single pass/fail script, not a counted suite, so it does not contribute 
 > removed. If you gate on server output, do not set `NODE_ENV=test`, and remember that
 > `lib/utils/logger.js` only routes log output to stderr when it detects VS Code
 > (`VSCODE_MCP` / `VSCODE_PID` / `VSCODE_IPC_HOOK`) - otherwise it goes to stdout. Gating on the
-> JSON-RPC response, as this test does, avoids the problem entirely.
+> JSON-RPC response, as this test does, removes the dependency on the banner - but not the
+> requirement for clean stdout, since the logger writes there outside VS Code and stray non-JSON
+> lines still break response matching.
 
 ## 🚀 **Running Protocol Tests**
 
@@ -152,7 +154,8 @@ server's startup banner on stderr. A timeout means neither arrived within 10 sec
 
 - Verify SQL Server is running and `npm run docker:start:init` has seeded it - the server connects
   during startup, so an unreachable database delays or prevents the handshake
-- Check `.env` file configuration
+- Check the environment file in use - `MCP_TESTING_MODE=docker` loads
+  `test/docker/.env.docker` with `override: true`, so it wins over `.env`
 - Run `node index.js` by hand and confirm it starts and stays up
 - Send an `initialize` request manually and check the reply parses as JSON - stray non-JSON output
   on stdout will break response matching
@@ -206,11 +209,12 @@ SQL_SERVER_DEBUG=true node test/protocol/mcp-server-startup-test.js
 
 ### **Use Protocol Tests When:**
 
-- ✅ Validating MCP client-server communication
-- ✅ Testing MCP message serialization/deserialization
-- ✅ Simulating real Warp or VS Code integration scenarios
-- ✅ Verifying the server starts and completes the MCP handshake
-- ✅ Verifying MCP protocol compliance
+- ✅ Verifying the server starts and completes the MCP `initialize` handshake
+- ✅ Exercising the stdio transport path that clients such as Warp and VS Code use
+- ✅ Confirming a well-formed JSON-RPC response is produced over a real process boundary
+
+This is a startup and handshake check, not a conformance suite: it does not exercise the full
+protocol surface or every message type.
 
 ### **Use Integration Tests When:**
 
