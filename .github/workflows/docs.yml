@@ -286,8 +286,11 @@ jobs:
           if git diff --staged --quiet; then
             echo "No documentation changes to commit"
           else
-            # Create a unique branch name
-            branch_name="docs/auto-update-$(date +%Y%m%d-%H%M%S)"
+            # Create a unique branch name. GITHUB_RUN_ID guards against
+            # concurrent runs sharing the second-precision timestamp — the
+            # failure path deletes $branch_name, and a shared name could
+            # delete a branch whose PR another run just created.
+            branch_name="docs/auto-update-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_ID}"
             git checkout -b "$branch_name"
             
             # Get tool count for commit message
