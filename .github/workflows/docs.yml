@@ -300,45 +300,66 @@ jobs:
             # Push using token-authenticated URL to ensure CI can be triggered when using a PAT
             git push "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$branch_name"
             
-            # Create PR using GitHub CLI
-            if gh pr create \
-              --title "📚 Auto-update API documentation" \
-              --body "## 🤖 Automated Documentation Update
-            
-            This PR contains automatically generated documentation updates.
-            
-            ### 📊 Changes
-            - **Tools documented**: $tool_count MCP tools
-            - **Generated files**: 
-              - \`docs/index.html\` - Landing page with tool overview
-              - \`docs/tools.html\` - Comprehensive API documentation
-              - \`docs-data/tools.json\` - Structured tool data
-            
-            ### 🔍 Verification
-            - ✅ All tools extracted successfully
-            - ✅ HTML documentation generated
-            - ✅ Landing page updated with current tool count
-            
-            ### 📋 Review Checklist
-            - [ ] Tool count matches expected number (currently $tool_count)
-            - [ ] HTML files are properly formatted
-            - [ ] No sensitive information exposed
-            - [ ] Documentation reflects current codebase
-            
-            **This PR can be safely merged** - it only contains auto-generated documentation." \
-              --head "$branch_name" \
-              --base "main" \
-              --label "documentation" \
-              --label "automated"; then
-              echo "✅ Documentation PR created: $branch_name"
+            # Create the PR via the REST API. `gh pr create` uses the GraphQL
+            # API, which rejects fine-grained PATs (HTTP 401) — that failure
+            # was silently swallowed here for months, orphaning one
+            # docs/auto-update-* branch per run. REST works with fine-grained
+            # PATs, classic PATs, and GITHUB_TOKEN alike.
+            # The heredoc terminator must be at column 0 of the script after
+            # YAML dedents this block, hence the outdented lines below.
+            cat > /tmp/pr-body.md <<'PR_BODY'
+          ## 🤖 Automated Documentation Update
+
+          This PR contains automatically generated documentation updates.
+
+          ### 📊 Changes
+          - **Tools documented**: __TOOL_COUNT__ MCP tools
+          - **Generated files**:
+            - `docs/index.html` - Landing page with tool overview
+            - `docs/tools.html` - Comprehensive API documentation
+            - `docs-data/tools.json` - Structured tool data
+
+          ### 🔍 Verification
+          - ✅ All tools extracted successfully
+          - ✅ HTML documentation generated
+          - ✅ Landing page updated with current tool count
+
+          ### 📋 Review Checklist
+          - [ ] Tool count matches expected number (currently __TOOL_COUNT__)
+          - [ ] HTML files are properly formatted
+          - [ ] No sensitive information exposed
+          - [ ] Documentation reflects current codebase
+
+          **This PR can be safely merged** - it only contains auto-generated documentation.
+          PR_BODY
+            sed -i "s/__TOOL_COUNT__/$tool_count/g" /tmp/pr-body.md
+
+            create_pr() {
+              GH_TOKEN="$1" gh api "repos/${{ github.repository }}/pulls" \
+                -f title="📚 Auto-update API documentation" \
+                -f head="$branch_name" \
+                -f base="main" \
+                -F body=@/tmp/pr-body.md \
+                --jq '.number'
+            }
+
+            # Prefer DOCS_PAT (its PRs trigger CI); fall back to the workflow
+            # token, whose PRs need a manual noop commit to run CI but still
+            # beat an orphaned branch.
+            if pr_number=$(create_pr "$GH_TOKEN"); then
+              echo "✅ Documentation PR created: #$pr_number ($branch_name)"
+            elif pr_number=$(create_pr "${{ github.token }}"); then
+              echo "✅ Documentation PR created with workflow token: #$pr_number ($branch_name)"
+              echo "⚠️ CI will not trigger on this PR automatically — push a noop commit or fix DOCS_PAT."
             else
-              echo "⚠️ Could not create PR automatically (likely due to permissions)"
-              echo "📋 Manual PR creation required:"
-              echo "   Branch: $branch_name"
-              echo "   Command: gh pr create --head $branch_name --base main --title '📚 Auto-update API documentation' --label documentation --label automated"
-              echo "🔗 Direct link: https://github.com/${{ github.repository }}/compare/main...$branch_name"
-              echo "💡 Tip: Configure a DOCS_PAT repository secret with 'contents:write' and 'pull_request:write' to allow docs PRs to trigger CI checks automatically."
+              echo "❌ PR creation failed with both tokens — deleting the pushed branch so it does not orphan"
+              git push "https://$PUSH_TOKEN@github.com/${{ github.repository }}" --delete "$branch_name" || true
+              exit 1
             fi
+
+            GH_TOKEN="${{ github.token }}" gh api "repos/${{ github.repository }}/issues/$pr_number/labels" \
+              -f "labels[]=documentation" -f "labels[]=automated" \
+              || echo "⚠️ Could not add labels to PR #$pr_number"
           fi
 
       - name: Upload documentation artifacts
