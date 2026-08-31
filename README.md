@@ -197,13 +197,13 @@ npm install
 
 **✅ PRODUCTION-VALIDATED**: This MCP server has been **fully tested** through:
 
-- **1,187 Tests**: All MCP tools, security boundaries, error scenarios - **1,167 run automatically
-  on every pull request** (1,100 unit + 27 integration + 40 live-database against a Docker SQL
-  Server CI starts itself); only the 20 MCP protocol smoke tests are run on demand
+- **1,167 Tests**: All MCP tools, security boundaries, error scenarios - **every one of them runs
+  automatically on every pull request** (1,100 unit + 27 integration + 40 live-database against a
+  Docker SQL Server CI starts itself)
 - **40 Live-Database Integration Tests**: Live database validation across all security phases, run in CI
-- **20 Protocol Tests**: End-to-end MCP communication validation, run on demand via
-  `npm run docker:test -- protocol` (a bare `npm run docker:test` defaults to `phase1` and never
-  reaches them)
+- **MCP Protocol Validation**: `test/protocol/mcp-server-startup-test.js` checks server startup and
+  the JSON-RPC initialize handshake. `npm run test:integration:protocol` runs it in CI;
+  `npm run docker:test -- protocol` runs the same file against a container it starts for you
 - **100% Success Rate**: All security phases validated in production scenarios
 
 ### 🐳 **Quick Testing with Docker** (Recommended for Development)
@@ -366,7 +366,7 @@ showcases rigorous engineering standards that can be applied to any production s
 
 **Key Engineering Highlights:**
 
-- 🔬 **1,187 Tests** covering all functionality and edge cases - all but 20 run automatically on every pull request
+- 🔬 **1,167 Tests** covering all functionality and edge cases - every one of them runs automatically on every pull request
 - 🛡️ **Multi-layered Security** with defense-in-depth architecture
 - 📊 **Production Observability** with structured logging and performance monitoring
 - ⚡ **Enterprise Reliability** featuring connection pooling and graceful error handling

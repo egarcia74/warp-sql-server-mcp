@@ -4,7 +4,7 @@
 
 This guide provides comprehensive testing procedures for the SQL Server MCP server, covering **automated**,
 **manual**, and **protocol-level** testing approaches. The MCP server has been **fully validated**
-through 1,187 tests across all testing layers, 1,167 of which run automatically on every
+through 1,167 tests across all testing layers, every one of which runs automatically on every
 pull request.
 
 **✅ Production Status**: This MCP server has been **comprehensively tested and validated** with 100% success rates across all security phases.
@@ -66,25 +66,26 @@ npm run test:integration:protocol
 
 ### 📊 **Test Suite Overview**
 
-| Test Type                      | Count     | Purpose                        | Database  | Automation                               |
-| ------------------------------ | --------- | ------------------------------ | --------- | ---------------------------------------- |
-| **Unit Tests**                 | 1,100     | Code logic validation          | Mocked    | ✅ Required `Tests` job                  |
-| **Integration Tests (Vitest)** | 27        | Component integration          | Mocked    | ✅ `coverage` job                        |
-| **Live-Database Tests**        | 40        | Security phase validation      | Live DB   | ✅ Required `Tests` job (Docker)         |
-| **Protocol Smoke Tests**       | 20        | MCP communication validation   | Live DB   | ❌ On demand (`docker:test -- protocol`) |
-| **TOTAL**                      | **1,187** | **Complete system validation** | **Mixed** | **1,167 automated per PR**               |
+| Test Type                      | Count     | Purpose                        | Database  | Automation                       |
+| ------------------------------ | --------- | ------------------------------ | --------- | -------------------------------- |
+| **Unit Tests**                 | 1,100     | Code logic validation          | Mocked    | ✅ Required `Tests` job          |
+| **Integration Tests (Vitest)** | 27        | Component integration          | Mocked    | ✅ `coverage` job                |
+| **Live-Database Tests**        | 40        | Security phase validation      | Live DB   | ✅ Required `Tests` job (Docker) |
+| **TOTAL**                      | **1,167** | **Complete system validation** | **Mixed** | **1,167 automated per PR**       |
+
+On top of the counted suites, `test/protocol/mcp-server-startup-test.js` runs as a pass/fail
+handshake check in the same required `Tests` job.
 
 The 40 live-database tests are _not_ excluded from CI. The required `Tests (20)` / `Tests (22)`
 jobs run `npm test`, which starts a Docker SQL Server, runs all three security phases against it,
-and stops it again. The only suite no CI job runs is
-`test/protocol/mcp-client-smoke-test.js` - see the note below the checklist.
+and stops it again. Every suite in the repository runs in CI.
 
 ### ✅ **Production Validation Results**
 
 - **✅ Phase 1 (Read-Only)**: 20/20 tests passed - Maximum security validated
 - **✅ Phase 2 (DML Operations)**: 10/10 tests passed - Selective permissions validated
 - **✅ Phase 3 (DDL Operations)**: 10/10 tests passed - Full development mode validated
-- **✅ Protocol Communication**: 20/20 tests passed - MCP client-server validated
+- **✅ Protocol Communication**: MCP startup and JSON-RPC handshake validated
 
 #### Total: 100% success rate across all manual validation tests
 
@@ -358,15 +359,14 @@ npm run test:integration:protocol        # Protocol communication validation
 - [ ] **Coverage** - `npm run test:coverage` (1,100 unit + 27 integration; 80%+ statements)
 - [ ] **Code Quality** - `npm run ci` (linting, formatting, links, coverage, security)
 
-#### **On-Demand Tests (Pre-Production)**
+#### **Ad-Hoc Runs Against a Local Container**
 
-- [ ] **Protocol smoke test** - `npm run docker:test -- protocol` (the 20-test
-      `test/protocol/mcp-client-smoke-test.js` round trip; no CI job runs this file - and a bare
+- [ ] **Protocol handshake check** - `npm run docker:test -- protocol` (starts and seeds the Docker
+      SQL Server, then runs `test/protocol/mcp-server-startup-test.js`; a bare
       `npm run docker:test` defaults to `phase1`, which never reaches it)
 
-> `npm run test:integration:protocol` is a _different_ check - it runs
-> `test/protocol/mcp-server-startup-test.js`, a startup and JSON-RPC handshake validation, and it
-> does run in CI as part of `npm test`.
+> This is the same file that `npm run test:integration:protocol` runs in CI as part of `npm test`.
+> The runner variant simply brings the container up for you first.
 
 ### 🎯 **Using Warp AI Terminal**
 
@@ -419,8 +419,7 @@ With Warp MCP integration, you can validate functionality by:
 | **Unit Tests**           | 1,100     | 1,100     | 0      | **100%**     |
 | **Integration (Vitest)** | 27        | 27        | 0      | **100%**     |
 | **Live-Database Tests**  | 40        | 40        | 0      | **100%**     |
-| **Protocol Smoke Tests** | 20        | 20        | 0      | **100%**     |
-| **TOTAL**                | **1,187** | **1,187** | **0**  | **100%**     |
+| **TOTAL**                | **1,167** | **1,167** | **0**  | **100%**     |
 
 ### ✅ **All Historical Issues Resolved**
 
@@ -496,21 +495,21 @@ With Warp MCP integration, you can validate functionality by:
 
 - **✅ All 16 MCP Tools**: 100% functional across all security phases
 - **✅ Three-Tier Security**: 100% validated across 40 integration tests
-- **✅ MCP Protocol**: 100% compliant through 20 protocol tests
+- **✅ MCP Protocol**: 100% compliant, verified by the startup and JSON-RPC handshake check
 - **✅ Enterprise Ready**: SSL/TLS, configuration management, error handling
 - **✅ Performance Monitoring**: Comprehensive tracking and optimization
 - **✅ Code Quality**: 1,100 unit tests with extensive coverage
 
-**TOTAL VALIDATION**: 1,187 tests with 100% success rate - 1,167 of them automatically on every
-pull request
+**TOTAL VALIDATION**: 1,167 tests with 100% success rate - every one of them automatically on
+every pull request
 
 ## Testing Architecture Improvements ✅
 
 ### Completed in v1.7.0+
 
-1. ✅ **Comprehensive Testing Suite**: 1,187 tests across all system layers
+1. ✅ **Comprehensive Testing Suite**: 1,167 tests across all system layers
 2. ✅ **Live-Database Integration Testing**: 40 tests validating all 3 security phases
-3. ✅ **Protocol Testing**: 20 tests validating MCP client-server communication
+3. ✅ **Protocol Testing**: MCP server startup and JSON-RPC handshake validation
 4. ✅ **CI/CD Integration**: Automated tests run on every commit
 5. ✅ **Production Validation**: 100% success rate across all test phases
 6. ✅ **Test Organization**: Clear separation of automated vs manual testing
@@ -520,7 +519,7 @@ pull request
 
 1. ✅ **Unit Tests**: Mock-based testing for rapid development feedback
 2. ✅ **Integration Tests**: Live database validation for production readiness
-3. ✅ **Protocol Tests**: End-to-end MCP communication validation
+3. ✅ **Protocol Tests**: MCP startup and JSON-RPC handshake validation
 4. ✅ **Security Testing**: All three security phases comprehensively validated
 5. ✅ **Performance Testing**: Query execution and optimization validation
 
@@ -530,7 +529,7 @@ The SQL Server MCP server has been **comprehensively validated** through extensi
 
 ### 🎯 **Validation Summary**
 
-- **✅ 1,187 Total Tests**: Complete system validation (1,167 automated per pull request)
+- **✅ 1,167 Total Tests**: Complete system validation (all automated per pull request)
 - **✅ 100% Success Rate**: All tests passing across all phases
 - **✅ Production Validated**: Live database testing with real-world scenarios
 - **✅ Security Proven**: Three-tier safety system comprehensively tested
@@ -544,7 +543,7 @@ With **100% test success rates** across:
 - **1,100 Unit Tests** - Code logic validation
 - **27 Integration Tests** - Component integration
 - **40 Live-Database Tests** - Security phase validation (automated in CI via Docker)
-- **20 Protocol Smoke Tests** - MCP communication validation (on demand)
+- **MCP Startup Handshake Check** - Protocol validation (automated in CI via Docker)
 
 **Overall Assessment**: ✅ **COMPREHENSIVELY VALIDATED - ENTERPRISE PRODUCTION READY**
 

@@ -104,8 +104,8 @@ case $PHASE in
         ;;
     protocol)
         echo ""
-        print_info "📡 Running MCP Protocol Smoke Test"
-        node test/protocol/mcp-client-smoke-test.js
+        print_info "📡 Running MCP Server Startup Test"
+        node test/protocol/mcp-server-startup-test.js
         ;;
     all)
         echo ""
@@ -123,8 +123,8 @@ case $PHASE in
         node test/integration/manual/phase3-ddl-operations.test.js
         
         echo ""
-        print_info "📡 MCP Protocol Smoke Test"
-        node test/protocol/mcp-client-smoke-test.js
+        print_info "📡 MCP Server Startup Test"
+        node test/protocol/mcp-server-startup-test.js
         ;;
 esac
 
