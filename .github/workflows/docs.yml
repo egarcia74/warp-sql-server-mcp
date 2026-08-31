@@ -272,6 +272,9 @@ jobs:
           # Fallback to GITHUB_TOKEN if DOCS_PAT is not configured (PR may require a manual noop commit)
           PUSH_TOKEN: ${{ secrets.DOCS_PAT || secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.DOCS_PAT || github.token }}
+          # Lets the script tell a real DOCS_PAT success apart from the
+          # implicit workflow-token fallback, which creates CI-blocked PRs.
+          DOCS_PAT_SET: ${{ secrets.DOCS_PAT != '' }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -345,9 +348,16 @@ jobs:
 
             # Prefer DOCS_PAT (its PRs trigger CI); fall back to the workflow
             # token, whose PRs need a manual noop commit to run CI but still
-            # beat an orphaned branch.
+            # beat an orphaned branch. When DOCS_PAT is not configured,
+            # GH_TOKEN already holds the workflow token, so the first call
+            # succeeding is still the CI-blocked case — warn accordingly.
             if pr_number=$(create_pr "$GH_TOKEN"); then
-              echo "✅ Documentation PR created: #$pr_number ($branch_name)"
+              if [ "$DOCS_PAT_SET" = "true" ]; then
+                echo "✅ Documentation PR created: #$pr_number ($branch_name)"
+              else
+                echo "✅ Documentation PR created with workflow token: #$pr_number ($branch_name)"
+                echo "⚠️ CI will not trigger on this PR automatically — push a noop commit, or configure a DOCS_PAT secret."
+              fi
             elif pr_number=$(create_pr "${{ github.token }}"); then
               echo "✅ Documentation PR created with workflow token: #$pr_number ($branch_name)"
               echo "⚠️ CI will not trigger on this PR automatically — push a noop commit or fix DOCS_PAT."
