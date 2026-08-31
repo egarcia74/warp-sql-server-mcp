@@ -145,12 +145,17 @@ enforcement is covered by the live-database phase tests in `test/integration/man
 💥 Startup test failed: Server startup timed out after 10 seconds
 ```
 
+This test resolves on the JSON-RPC `initialize` response arriving on stdout, falling back to the
+server's startup banner on stderr. A timeout means neither arrived within 10 seconds.
+
 **Solutions:**
 
-- Verify SQL Server is running and `npm run docker:start:init` has seeded it
+- Verify SQL Server is running and `npm run docker:start:init` has seeded it - the server connects
+  during startup, so an unreachable database delays or prevents the handshake
 - Check `.env` file configuration
-- Do not set `NODE_ENV=test` - it suppresses the server's startup output
-- Run `node index.js` by hand and confirm it starts
+- Run `node index.js` by hand and confirm it starts and stays up
+- Send an `initialize` request manually and check the reply parses as JSON - stray non-JSON output
+  on stdout will break response matching
 
 #### **Connection Failures**
 
