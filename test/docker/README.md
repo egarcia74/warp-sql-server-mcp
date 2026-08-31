@@ -145,7 +145,7 @@ Docker testing uses `test/docker/.env.docker`:
 ```bash
 # Database connection (container defaults)
 SQL_SERVER_HOST=localhost
-SQL_SERVER_PORT=1433
+SQL_SERVER_PORT=14330
 SQL_SERVER_USER=sa
 SQL_SERVER_PASSWORD=WarpMCP123!
 
@@ -164,7 +164,7 @@ SQL_SERVER_TRUST_CERT=true
 
 - **Image**: `mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f`
   - Note: Using a pinned digest ensures reproducible builds and satisfies supply‑chain checks.
-- **Port**: `1433` (mapped to host)
+- **Port**: `14330` on the host, mapped to `1433` inside the container (avoids colliding with a local SQL Server)
 - **Memory**: 2GB allocated
 - **Storage**: Persistent volume for data
 - **Network**: Isolated Docker network
@@ -242,8 +242,8 @@ npm run test:integration:manual
 docker info
 
 # Check port availability
-netstat -an | grep 1433
-lsof -i :1433
+netstat -an | grep 14330
+lsof -i :14330
 
 # Check container logs
 npm run docker:logs
@@ -268,11 +268,11 @@ npm run docker:sql
 
 ### Common Issues
 
-#### Port 1433 Already in Use
+#### Port 14330 Already in Use
 
 ```bash
 # Find what's using the port
-lsof -i :1433
+lsof -i :14330
 
 # Either stop the conflicting service or change port in docker-compose.yml
 ```

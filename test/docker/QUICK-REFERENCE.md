@@ -29,7 +29,7 @@ cat test/docker/.platform-config.json
 
 ```bash
 # Common issues
-lsof -i :1433              # Check port conflicts
+lsof -i :14330             # Check port conflicts
 docker system prune        # Clean Docker cache
 docker --version           # Verify Docker availability
 npm run docker:clean       # Reset environment

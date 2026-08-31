@@ -43,7 +43,7 @@ npm run docker:start:init
 
 ### 2. Connection Refused (ECONNREFUSED)
 
-**Error**: `connect ECONNREFUSED 127.0.0.1:1433`
+**Error**: `connect ECONNREFUSED 127.0.0.1:14330`
 
 **Cause**: Container startup takes longer on Apple Silicon due to emulation.
 

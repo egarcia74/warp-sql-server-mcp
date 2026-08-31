@@ -8,6 +8,13 @@
 
 import { spawn } from 'child_process';
 import { performance } from 'perf_hooks';
+import dotenv from 'dotenv';
+
+// Load the Docker test environment (host, port 14330, credentials) so the
+// spawned MCP server targets the test container instead of the production
+// default localhost:1433. Existing environment variables take precedence,
+// so a manual run against another server can still override these values.
+dotenv.config({ path: './test/docker/.env.docker' });
 
 class ImprovedPerformanceTest {
   constructor() {
@@ -33,7 +40,11 @@ class ImprovedPerformanceTest {
 
     return new Promise((resolve, reject) => {
       this.mcpProcess = spawn('node', ['index.js'], {
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        // NODE_ENV=test (from .env.docker) suppresses the startup banner this
+        // harness waits for; 'development' keeps the same developmentMode
+        // behavior while letting the banner through.
+        env: { ...process.env, NODE_ENV: 'development' }
       });
 
       // Set high max listeners early to prevent warnings during concurrent tests
@@ -145,8 +156,12 @@ class ImprovedPerformanceTest {
 
             if (jsonResponse) {
               const responseTime = performance.now() - startTime;
+              // A JSON-RPC error or an MCP tool error payload is a failed
+              // request, not a successful round-trip — otherwise the suite
+              // passes while every query fails (e.g. wrong port).
+              const isError = Boolean(jsonResponse.error) || jsonResponse.result?.isError === true;
               resolve({
-                success: true,
+                success: !isError,
                 responseTime,
                 response: jsonResponse
               });
@@ -253,7 +268,7 @@ class ImprovedPerformanceTest {
     for (let i = 0; i < count; i++) {
       try {
         const start = performance.now();
-        const _result = await this.sendMCPRequest('tools/call', {
+        const result = await this.sendMCPRequest('tools/call', {
           name: 'execute_query',
           arguments: queryParams
         });
@@ -261,12 +276,16 @@ class ImprovedPerformanceTest {
 
         results.push({
           index: i,
-          success: true,
-          responseTime: duration,
-          error: null
+          success: result.success,
+          responseTime: result.success ? duration : null,
+          error: result.success ? null : 'MCP error response'
         });
 
-        console.log(`   Query ${i + 1}/${count}: ${Math.round(duration)}ms`);
+        if (result.success) {
+          console.log(`   Query ${i + 1}/${count}: ${Math.round(duration)}ms`);
+        } else {
+          console.log(`   Query ${i + 1}/${count}: Failed - MCP error response`);
+        }
       } catch (error) {
         results.push({
           index: i,
@@ -300,16 +319,16 @@ class ImprovedPerformanceTest {
         (async () => {
           const start = performance.now();
           try {
-            const _result = await this.sendMCPRequest('tools/call', {
+            const result = await this.sendMCPRequest('tools/call', {
               name: 'execute_query',
               arguments: queryParams
             });
             const duration = performance.now() - start;
             return {
               index: i,
-              success: true,
-              responseTime: duration,
-              error: null
+              success: result.success,
+              responseTime: result.success ? duration : null,
+              error: result.success ? null : 'MCP error response'
             };
           } catch (error) {
             return {
@@ -491,10 +510,11 @@ class ImprovedPerformanceTest {
 
           const successCount = sequentialResults.filter(r => r.success).length;
           return {
-            success: successCount > 0,
+            success: successCount === sequentialResults.length,
             response: { sequential_results: sequentialResults },
             responseTime:
-              sequentialResults.reduce((sum, r) => sum + (r.responseTime || 0), 0) / successCount
+              sequentialResults.reduce((sum, r) => sum + (r.responseTime || 0), 0) /
+              Math.max(successCount, 1)
           };
         },
         { description: 'Executes multiple queries sequentially to test stability' }
@@ -506,15 +526,16 @@ class ImprovedPerformanceTest {
         async () => {
           const concurrentResults = await this.runConcurrentQueries(10, {
             query:
-              'SELECT DB_NAME() as current_db, @@VERSION as sql_version, GETDATE() as current_time'
+              'SELECT DB_NAME() as current_db, @@VERSION as sql_version, GETDATE() as [current_time]'
           });
 
           const successCount = concurrentResults.filter(r => r.success).length;
           return {
-            success: successCount > 0,
+            success: successCount === concurrentResults.length,
             response: { concurrent_results: concurrentResults },
             responseTime:
-              concurrentResults.reduce((sum, r) => sum + (r.responseTime || 0), 0) / successCount
+              concurrentResults.reduce((sum, r) => sum + (r.responseTime || 0), 0) /
+              Math.max(successCount, 1)
           };
         },
         { description: 'Executes multiple queries concurrently to stress test the system' }
@@ -538,6 +559,13 @@ class ImprovedPerformanceTest {
       // Complete
       this.stats.endTime = performance.now();
       this.printPerformanceSummary();
+
+      if (this.stats.failedRequests > 0) {
+        console.log(
+          `\n❌ Performance tests failed: ${this.stats.failedRequests} request(s) failed`
+        );
+        process.exit(1);
+      }
       console.log('\n✅ Performance tests completed successfully');
     } catch (error) {
       console.error(`\n❌ Test suite failed: ${error.message}`);

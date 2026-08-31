@@ -99,7 +99,7 @@ npm run test:unit && npm run test:integration:ci
 ### Manual Testing
 
 ```bash
-# If you have a running SQL Server on localhost:1433
+# If you have a running SQL Server on localhost:14330
 npm run test:integration:ci
 
 # Or use Docker (recommended)

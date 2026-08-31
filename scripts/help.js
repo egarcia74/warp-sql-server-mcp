@@ -178,12 +178,12 @@ ${'─'.repeat(80)}
 
 🐳 Docker Test Issues:
   • Container not starting: npm run docker:logs
-  • Port 1433 in use: docker ps (check for conflicts)
+  • Port 14330 in use: docker ps (check for conflicts)
   • Database not ready: npm run docker:wait
   • Clean reset: npm run docker:clean && npm run docker:start
 
 🔧 Manual Test Failures:
-  • Check SQL Server is running: telnet localhost 1433
+  • Check the test container is running: telnet localhost 14330
   • Verify .env configuration
   • Kill orphaned processes: pkill -f "node index.js"
 
