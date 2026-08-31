@@ -38,6 +38,9 @@ jobs:
       - name: Lint markdown files
         run: npm run markdown:lint
 
+      - name: Check for swallowed code fences
+        run: npm run fences:check
+
   test:
     name: Tests
     runs-on: ubuntu-latest

@@ -20,8 +20,10 @@
  * Fences are parsed per CommonMark: a fence closes only on a run of the same
  * character at least as long as the opener, with no info string.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { resolve, relative, isAbsolute } from 'node:path';
 
 const MAX_BLOCK_LINES = 120;
 const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
@@ -61,20 +63,52 @@ export function scanMarkdown(text) {
   return { unclosed, oversized };
 }
 
+function repoRoot() {
+  return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+}
+
 function trackedMarkdown() {
   return execFileSync('git', ['ls-files', '*.md'], { encoding: 'utf8' })
     .split('\n')
     .filter(Boolean);
 }
 
+/**
+ * Resolve a candidate path and confirm it is a regular file inside the repository.
+ * This tool exists to check one repository's own Markdown, so anything outside the
+ * work tree is out of scope by definition - and constraining the read keeps the
+ * script from being pointed at arbitrary files on the filesystem.
+ * Returns the absolute path, or null with a reason logged.
+ */
+function safePath(candidate, root) {
+  const absolute = resolve(root, candidate);
+  const rel = relative(root, absolute);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    console.error(`${candidate}: outside the repository - refusing to read`);
+    return null;
+  }
+  if (!statSync(absolute, { throwIfNoEntry: false })?.isFile()) {
+    console.error(`${candidate}: not a readable file`);
+    return null;
+  }
+  return absolute;
+}
+
 function main() {
+  const root = repoRoot();
   const files = process.argv.slice(2).length ? process.argv.slice(2) : trackedMarkdown();
   let failures = 0;
 
   for (const file of files) {
+    const absolute = safePath(file, root);
+    if (absolute === null) {
+      failures++;
+      continue;
+    }
+
     let text;
     try {
-      text = readFileSync(file, 'utf8');
+      text = readFileSync(absolute, 'utf8');
     } catch (error) {
       // A file this check cannot read is a file it cannot vouch for, so fail
       // rather than skipping quietly - a gate that reports clean on what it
@@ -107,4 +141,8 @@ function main() {
   console.log(`Fenced-block check: ${files.length} file(s) clean.`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// Compare as file URLs: process.argv[1] is a plain filesystem path while
+// import.meta.url is percent-encoded, so a hand-built `file://` + path string
+// fails to match whenever the checkout contains a space (and on Windows), and
+// main() would be skipped silently - exit 0, no output, gate never run.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
