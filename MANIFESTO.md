@@ -96,6 +96,13 @@ High-level modules must not depend on low-level modules; both must depend on abs
 - **Dependency Injection**: Dependencies must be injected, not hard-coded
 - **Configuration-Driven**: System behavior must be configurable without code changes
 
+### Extensibility
+
+Extension points must be explicit and few: adding an MCP tool means declaring its schema in
+`lib/tools/tool-registry.js`, implementing its behaviour on a handler in `lib/tools/handlers/`,
+and wiring the two together with a case in the dispatch in `index.js` - three known places,
+deliberately named rather than discovered by convention.
+
 ## Quality Standards
 
 ### Code Quality
