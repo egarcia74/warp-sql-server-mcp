@@ -45,7 +45,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        # --ignore-scripts blocks dependency lifecycle scripts (supply-chain
+        # hardening); the docs tooling is pure JS and does not need them.
+        run: npm ci --ignore-scripts
 
       - name: Validate markdown links
         uses: gaurav-nelson/github-action-markdown-link-check@5c5dfc0ac2e225883c0e5f03a85311ec2830d368 # v1
@@ -244,7 +246,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        # --ignore-scripts blocks dependency lifecycle scripts (supply-chain
+        # hardening); the docs tooling is pure JS and does not need them.
+        run: npm ci --ignore-scripts
 
       - name: Extract MCP Tools Documentation
         run: |
