@@ -75,7 +75,12 @@ function main() {
     let text;
     try {
       text = readFileSync(file, 'utf8');
-    } catch {
+    } catch (error) {
+      // A file this check cannot read is a file it cannot vouch for, so fail
+      // rather than skipping quietly - a gate that reports clean on what it
+      // never inspected is the failure mode this script exists to prevent.
+      console.error(`${file}: could not read - ${error.message}`);
+      failures++;
       continue;
     }
     const { unclosed, oversized } = scanMarkdown(text);
@@ -96,7 +101,7 @@ function main() {
   }
 
   if (failures > 0) {
-    console.error(`\n${failures} suspicious code fence(s) found in ${files.length} file(s).`);
+    console.error(`\n${failures} problem(s) found across ${files.length} file(s).`);
     process.exit(1);
   }
   console.log(`Fenced-block check: ${files.length} file(s) clean.`);
