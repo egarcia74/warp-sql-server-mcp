@@ -54,7 +54,6 @@ test/
 │
 ├── protocol/                                # MCP protocol tests (live DB)
 │   ├── README.md                            # Protocol testing guide
-│   ├── mcp-client-smoke-test.js             #  20 tests - full client/server round trip
 │   └── mcp-server-startup-test.js           # Startup + JSON-RPC handshake check
 │
 ├── manual/                                  # Performance runners
@@ -90,18 +89,17 @@ Get the MCP server running first, then return here to understand the testing arc
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 1,187 - **1,167 of them run automatically on every pull request**
+- **Total Tests**: 1,167 - **every one of them runs automatically on every pull request**
   - 1,100 unit tests (`npm run test:unit`, 25 files, mocked)
   - 27 Vitest integration tests (`test/integration/*.test.js`, mocked, run by a bare `vitest run`)
   - 40 live-database tests (`test/integration/manual/`, 20 + 10 + 10, run against a Docker SQL
     Server that CI starts itself)
-  - 20 MCP protocol smoke tests (`test/protocol/mcp-client-smoke-test.js`) - the only suite no CI
-    job runs; invoke it on demand with `npm run docker:test -- protocol` (the runner defaults to
-    `phase1` when no phase is passed)
+  - Plus the `test/protocol/mcp-server-startup-test.js` handshake check, which is a pass/fail
+    script rather than a counted suite
 - **Status**: ✓ All passing (100% success rate)
 - **Coverage**: 81.79% statements, 78.99% branches, 85.04% functions (`npm run test:coverage`)
-- **Test Types**: Unit tests (mocked), integration tests (mocked), live-database tests, protocol
-  smoke tests
+- **Test Types**: Unit tests (mocked), integration tests (mocked), live-database tests, and a
+  protocol handshake check
 - **🔒 Security Focus**: Comprehensive safety mechanism validation to prevent security bypasses
 - **📦 Modular Structure**: Tests organized by functional area for better maintainability
 - **🚀 Complete Suite**: `npm run test:integration` for full validation
@@ -117,16 +115,15 @@ and the CI jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 | `test/integration/*.test.js`               | 27              | `npm run test:coverage` / `npm run ci` | Yes - `coverage` job                       |
 | `test/integration/manual/phase*.js`        | 40              | `npm run test:integration:manual`      | Yes - required `Tests` job, via `npm test` |
 | `test/protocol/mcp-server-startup-test.js` | handshake check | `npm run test:integration:protocol`    | Yes - required `Tests` job                 |
-| `test/protocol/mcp-client-smoke-test.js`   | 20              | `npm run docker:test -- protocol`      | **No CI job runs this file**               |
 
 `npm test` chains `test:unit` → `test:integration` → `scripts/test-summary.js`, and
 `test:integration` starts and stops the Docker SQL Server itself. That is exactly what CI's
 required `Tests` job executes, which is why a local `npm test` needs a running Docker daemon.
 
-> **Careful**: `test:integration:protocol` and `npm run docker:test -- protocol` are _not_ the same
-> thing. The former runs `mcp-server-startup-test.js` (startup + JSON-RPC handshake); the latter runs
-> the 20-test `mcp-client-smoke-test.js` round trip. Only the former runs in CI. Note the explicit
-> `-- protocol`: a bare `npm run docker:test` defaults to `phase1`.
+> **Note**: `npm run test:integration:protocol` and `npm run docker:test -- protocol` run the same
+> file, `mcp-server-startup-test.js`. They differ only in setup: `docker:test` starts and seeds the
+> SQL Server container for you, while the npm script expects one to be running already. Note the
+> explicit `-- protocol`: a bare `npm run docker:test` defaults to `phase1`.
 
 ## 🏃‍♂️ Running Tests
 

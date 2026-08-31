@@ -20,10 +20,9 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, **comprehensive performance monitoring**, and **cloud-ready
 secret management**. Built with a modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 1,187 tests, 1,167 of
-which run automatically on every pull request (1,100 unit + 27 integration + 40 live-database);
-only the 20 MCP protocol smoke tests are run on demand. Covers all security phases with
-**100% success rates**.
+**✅ Production Status**: This MCP server has been **fully validated** through 1,167 tests, every
+one of which runs automatically on every pull request (1,100 unit + 27 integration + 40
+live-database). Covers all security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute setup walkthrough.
 
@@ -933,12 +932,10 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 1,187 tests total, split by how they run - **1,167 automated** on every
-  pull request: 1,100 unit and 27 integration under Vitest, plus the 40 live-database phase tests
-  that `npm test` drives against a Docker SQL Server the CI `Tests` job starts itself. The remaining
-  **20 MCP protocol smoke tests** are the only ones no CI job runs (`npm run docker:test -- protocol`
-  invokes them on demand; a bare `npm run docker:test` defaults to `phase1` and never reaches them).
-  Together they cover all MCP tools, connection handling, and error scenarios
+- **Comprehensive Coverage**: 1,167 tests total, **all of them automated** on every pull request:
+  1,100 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
+  drives against a Docker SQL Server the CI `Tests` job starts itself. Together they cover all MCP
+  tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
 - **🐳 Docker Testing**: Automated containerized SQL Server for zero-configuration testing
@@ -1023,7 +1020,6 @@ test/
 │       └── phase3-ddl-operations.test.js    #  10 tests - DDL operations
 ├── protocol/                                # MCP protocol tests (live DB)
 │   ├── README.md                            # Protocol testing guide
-│   ├── mcp-client-smoke-test.js             #  20 tests - full client/server round trip
 │   └── mcp-server-startup-test.js           # Startup + JSON-RPC handshake check
 ├── manual/                                  # Performance runners
 │   ├── improved-performance-test.js         # npm run test:integration:performance
@@ -1076,29 +1072,26 @@ Grouped by area; the group totals sum to 1,100:
   - **Security Boundary Enforcement**: All three phases validated with **100% success rates**
   - **Production Readiness**: SSL/TLS, configuration management, error handling
 
-#### **Protocol Tests (20 tests)**
+#### **Protocol Tests**
 
-- **MCP Client-Server Communication Tests** (20): **End-to-end MCP protocol validation** against a
-  live database. The only suite no CI job runs: `mcp-client-smoke-test.js` is invoked solely by
-  `npm run docker:test -- protocol` (or `-- all`) - `scripts/docker-test-runner.sh` defaults to
-  `phase1` when no phase is passed - and no workflow calls it;
-  `npm run test:integration:protocol` runs the separate `mcp-server-startup-test.js`
-  handshake check instead
+- **MCP Server Startup Test**: `mcp-server-startup-test.js` spawns the server over stdio and drives
+  a real JSON-RPC `initialize` / `notifications/initialized` handshake.
+  `npm run test:integration:protocol` runs it as part of `npm test`, so CI's required `Tests` job
+  covers it; `npm run docker:test -- protocol` (or `-- all`) runs the same file against a container
+  the runner starts and seeds for you. Note that `scripts/docker-test-runner.sh` defaults to
+  `phase1` when no phase is passed
   - MCP server startup and initialization
-  - Tool discovery and registration
   - Request/response message formatting
-  - Error handling and edge cases
-  - Connection lifecycle management
-  - Protocol compliance verification
+  - JSON-RPC handshake and protocol compliance
+  - Clean shutdown after the handshake completes
   - **Located in**: `test/protocol/` - [Protocol Testing Guide →](test/protocol/README.md)
 
 **📋 Live-Database Integration Testing**: Located in `test/integration/manual/` (the directory
 name predates these tests being automated) - [Complete Guide →](test/integration/manual/README.md)
 
-**⚠️ Important**: The 20 MCP protocol smoke tests (`mcp-client-smoke-test.js`) are the only suite
-no CI job runs. The 40 live-database phase tests do require a SQL Server, but CI supplies one via
-Docker and runs them - together with the separate `mcp-server-startup-test.js` handshake check - in
-the required `Tests` job.
+**✅ Note**: Every test suite in this repository runs in CI. The 40 live-database phase tests do
+require a SQL Server, but CI supplies one via Docker and runs them - together with the
+`mcp-server-startup-test.js` handshake check - in the required `Tests` job.
 
 ## Key Implementation Details
 

@@ -12,9 +12,10 @@
 >    run `npm test`, so those 40 tests gate every pull request.
 >
 > For the current picture, see [`test/README.md`](../test/README.md) and
-> [`WARP.md`](../WARP.md). Today's totals are 1,187 tests - 1,100 unit, 27 Vitest integration,
-> 40 live-database, and 20 protocol smoke tests - of which 1,167 run automatically per pull
-> request.
+> [`WARP.md`](../WARP.md). Today's totals are 1,167 tests - 1,100 unit, 27 Vitest integration and
+> 40 live-database - every one of which runs automatically per pull request, plus the
+> `mcp-server-startup-test.js` handshake check. The 20-test `mcp-client-smoke-test.js` round trip
+> that earlier totals included has since been removed; it could not run.
 
 ## 🎯 **Changes Made**
 

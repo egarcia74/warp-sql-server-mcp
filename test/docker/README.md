@@ -374,13 +374,12 @@ Both matrix legs — `Tests (20)` and `Tests (22)` — are **required status che
 the 40 live-database tests gate every pull request. Running `npm test` locally exercises the same
 pipeline, which is why it needs a working Docker daemon.
 
-The one suite that CI does **not** run is the full MCP client smoke test
-(`test/protocol/mcp-client-smoke-test.js`, 20 tests). It is invoked only on demand through
-`npm run docker:test -- protocol` (or `-- all`); a bare `npm run docker:test` defaults to `phase1`
-and never reaches this file (see
+Every test suite in the repository runs in CI. `npm run docker:test -- protocol` (or `-- all`)
+runs the same `test/protocol/mcp-server-startup-test.js` check as the
+`npm run test:integration:protocol` step above - the difference is that the runner starts and seeds
+the container for you first. A bare `npm run docker:test` defaults to `phase1` and never reaches
+the protocol phase (see
 [`scripts/docker-test-runner.sh`](../../scripts/docker-test-runner.sh)).
-Note that this is a different file from the `test:integration:protocol` step above, which runs the
-lighter startup/handshake check.
 
 ## 🎯 **Best Practices**
 

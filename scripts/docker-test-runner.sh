@@ -78,8 +78,8 @@ fi
 # Start Docker if not already running or if we just cleaned
 if [ "$CLEAN_FLAG" = true ] || ! docker ps --filter "name=warp-mcp-sqlserver" --filter "status=running" | grep -q warp-mcp-sqlserver; then
     print_info "Starting Docker SQL Server container..."
-    npm run docker:start
-    print_success "Docker container started and ready"
+    npm run docker:start:init
+    print_success "Docker container started, schema initialised, and ready"
 fi
 
 # Set testing mode
@@ -104,8 +104,8 @@ case $PHASE in
         ;;
     protocol)
         echo ""
-        print_info "📡 Running MCP Protocol Smoke Test"
-        node test/protocol/mcp-client-smoke-test.js
+        print_info "📡 Running MCP Server Startup Test"
+        node test/protocol/mcp-server-startup-test.js
         ;;
     all)
         echo ""
@@ -123,8 +123,8 @@ case $PHASE in
         node test/integration/manual/phase3-ddl-operations.test.js
         
         echo ""
-        print_info "📡 MCP Protocol Smoke Test"
-        node test/protocol/mcp-client-smoke-test.js
+        print_info "📡 MCP Server Startup Test"
+        node test/protocol/mcp-server-startup-test.js
         ;;
 esac
 

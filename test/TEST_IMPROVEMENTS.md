@@ -16,6 +16,11 @@ Based on the 10-run reliability test results (100% success rate), here are the i
 - Added contextual messages instead of generic warnings
 - Made the test output clearer about why operations succeed or fail
 
+> **Since superseded**: `mcp-client-smoke-test.js` has since been removed. It waited on the spawned
+> server's stderr for a startup banner that `index.js` never emits under the `NODE_ENV=test` the
+> test itself set, so it could not pass in any environment. `test/protocol/mcp-server-startup-test.js`
+> is now the only protocol test.
+
 ### 3. **Better Warning Message Formatting**
 
 - Changed `⚠️  Warning:` to `ℹ️  Note:` for expected behaviors
