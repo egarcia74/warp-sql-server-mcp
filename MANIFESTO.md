@@ -99,8 +99,9 @@ High-level modules must not depend on low-level modules; both must depend on abs
 ### Extensibility
 
 Extension points must be explicit and few: adding an MCP tool means declaring its schema in
-`lib/tools/tool-registry.js` and adding its case to the dispatch in `index.js` - two known
-places, deliberately named rather than discovered by convention.
+`lib/tools/tool-registry.js`, implementing its behaviour on a handler in `lib/tools/handlers/`,
+and wiring the two together with a case in the dispatch in `index.js` - three known places,
+deliberately named rather than discovered by convention.
 
 ## Quality Standards
 
