@@ -20,7 +20,7 @@
  * Fences are parsed per CommonMark: a fence closes only on a run of the same
  * character at least as long as the opener, with no info string.
  */
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { resolve, relative, isAbsolute } from 'node:path';
@@ -87,10 +87,8 @@ function safePath(candidate, root) {
     console.error(`${candidate}: outside the repository - refusing to read`);
     return null;
   }
-  if (!statSync(absolute, { throwIfNoEntry: false })?.isFile()) {
-    console.error(`${candidate}: not a readable file`);
-    return null;
-  }
+  // No stat() here: readFileSync already throws EISDIR for a directory and
+  // ENOENT for a missing path, and the caller reports and counts those.
   return absolute;
 }
 
