@@ -63,6 +63,25 @@ export function scanMarkdown(text) {
   return { unclosed, oversized };
 }
 
+// Both helpers below invoke `git` by name, so it resolves through PATH. SonarQube
+// flags this as javascript:S4036 (OS commands should not rely on PATH resolution),
+// and the finding is accurate rather than a false positive - it has been marked
+// Accepted rather than False Positive for that reason.
+//
+// The risk is accepted because it is immaterial here: this is a development-time
+// lint script, and an attacker able to control PATH in the environment running it
+// already controls `node`, `npm`, `eslint`, `prettier` and `vitest` in the same
+// pipeline. The repository already invokes `docker`, `npx` and `node` the same way
+// (scripts/docs/extract-docs.js, test/docker/troubleshoot-apple-silicon.js,
+// test/unit/cli.test.js); those are not flagged only because SonarQube gates on
+// new code.
+//
+// The alternatives were considered and are worse: an absolute path is not portable
+// across macOS, Linux and Windows, and resolving one via `which` reintroduces the
+// same PATH dependency. Replacing git with a filesystem walk means hand-maintaining
+// a gitignore-equivalent skip list - measured at 69 files walked versus 53 tracked,
+// the difference being ignored directories - which is precisely the kind of list
+// that drifts out of date.
 function repoRoot() {
   return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 }
