@@ -4,7 +4,7 @@
 
 This guide provides comprehensive testing procedures for the SQL Server MCP server, covering **automated**,
 **manual**, and **protocol-level** testing approaches. The MCP server has been **fully validated**
-through 1,167 tests across all testing layers, every one of which runs automatically on every
+through 1,176 tests across all testing layers, every one of which runs automatically on every
 pull request.
 
 **✅ Production Status**: This MCP server has been **comprehensively tested and validated** with 100% success rates across all security phases.
@@ -68,10 +68,10 @@ npm run test:integration:protocol
 
 | Test Type                      | Count     | Purpose                        | Database  | Automation                       |
 | ------------------------------ | --------- | ------------------------------ | --------- | -------------------------------- |
-| **Unit Tests**                 | 1,100     | Code logic validation          | Mocked    | ✅ Required `Tests` job          |
+| **Unit Tests**                 | 1,109     | Code logic validation          | Mocked    | ✅ Required `Tests` job          |
 | **Integration Tests (Vitest)** | 27        | Component integration          | Mocked    | ✅ `coverage` job                |
 | **Live-Database Tests**        | 40        | Security phase validation      | Live DB   | ✅ Required `Tests` job (Docker) |
-| **TOTAL**                      | **1,167** | **Complete system validation** | **Mixed** | **1,167 automated per PR**       |
+| **TOTAL**                      | **1,176** | **Complete system validation** | **Mixed** | **1,176 automated per PR**       |
 
 On top of the counted suites, `test/protocol/mcp-server-startup-test.js` runs as a pass/fail
 handshake check in the same required `Tests` job.
@@ -355,8 +355,8 @@ npm run test:integration:protocol        # Protocol communication validation
 
 #### **Automated Tests (Run on Every Pull Request)**
 
-- [ ] **Full suite** - `npm test` (1,100 unit + the 40 live-database phase tests, via Docker)
-- [ ] **Coverage** - `npm run test:coverage` (1,100 unit + 27 integration; 80%+ statements)
+- [ ] **Full suite** - `npm test` (1,109 unit + the 40 live-database phase tests, via Docker)
+- [ ] **Coverage** - `npm run test:coverage` (1,109 unit + 27 integration; 80%+ statements)
 - [ ] **Code Quality** - `npm run ci` (linting, formatting, links, coverage, security)
 
 #### **Ad-Hoc Runs Against a Local Container**
@@ -416,10 +416,10 @@ With Warp MCP integration, you can validate functionality by:
 
 | Test Suite               | Tests     | Passed    | Failed | Success Rate |
 | ------------------------ | --------- | --------- | ------ | ------------ |
-| **Unit Tests**           | 1,100     | 1,100     | 0      | **100%**     |
+| **Unit Tests**           | 1,109     | 1,109     | 0      | **100%**     |
 | **Integration (Vitest)** | 27        | 27        | 0      | **100%**     |
 | **Live-Database Tests**  | 40        | 40        | 0      | **100%**     |
-| **TOTAL**                | **1,167** | **1,167** | **0**  | **100%**     |
+| **TOTAL**                | **1,176** | **1,176** | **0**  | **100%**     |
 
 ### ✅ **All Historical Issues Resolved**
 
@@ -498,16 +498,16 @@ With Warp MCP integration, you can validate functionality by:
 - **✅ MCP Protocol**: 100% compliant, verified by the startup and JSON-RPC handshake check
 - **✅ Enterprise Ready**: SSL/TLS, configuration management, error handling
 - **✅ Performance Monitoring**: Comprehensive tracking and optimization
-- **✅ Code Quality**: 1,100 unit tests with extensive coverage
+- **✅ Code Quality**: 1,109 unit tests with extensive coverage
 
-**TOTAL VALIDATION**: 1,167 tests with 100% success rate - every one of them automatically on
+**TOTAL VALIDATION**: 1,176 tests with 100% success rate - every one of them automatically on
 every pull request
 
 ## Testing Architecture Improvements ✅
 
 ### Completed in v1.7.0+
 
-1. ✅ **Comprehensive Testing Suite**: 1,167 tests across all system layers
+1. ✅ **Comprehensive Testing Suite**: 1,176 tests across all system layers
 2. ✅ **Live-Database Integration Testing**: 40 tests validating all 3 security phases
 3. ✅ **Protocol Testing**: MCP server startup and JSON-RPC handshake validation
 4. ✅ **CI/CD Integration**: Automated tests run on every commit
@@ -529,7 +529,7 @@ The SQL Server MCP server has been **comprehensively validated** through extensi
 
 ### 🎯 **Validation Summary**
 
-- **✅ 1,167 Total Tests**: Complete system validation (all automated per pull request)
+- **✅ 1,176 Total Tests**: Complete system validation (all automated per pull request)
 - **✅ 100% Success Rate**: All tests passing across all phases
 - **✅ Production Validated**: Live database testing with real-world scenarios
 - **✅ Security Proven**: Three-tier safety system comprehensively tested
@@ -540,7 +540,7 @@ The SQL Server MCP server has been **comprehensively validated** through extensi
 
 With **100% test success rates** across:
 
-- **1,100 Unit Tests** - Code logic validation
+- **1,109 Unit Tests** - Code logic validation
 - **27 Integration Tests** - Component integration
 - **40 Live-Database Tests** - Security phase validation (automated in CI via Docker)
 - **MCP Startup Handshake Check** - Protocol validation (automated in CI via Docker)
