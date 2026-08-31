@@ -2,10 +2,11 @@
 
 ## Overview
 
-This directory contains **MCP protocol-level tests** that validate the server through actual MCP
-client-server communication over stdio. Rather than calling server methods directly, these tests
-spawn `index.js` as a child process and speak JSON-RPC to it - exactly what a real MCP client (like
-Warp or VS Code) does.
+This directory contains **MCP protocol-level tests** that exercise the server over its real stdio
+transport. Rather than calling server methods directly, they spawn `index.js` as a child process and
+write hand-built JSON-RPC messages to its stdin, simulating the startup handshake an MCP client such
+as Warp or VS Code performs. No client library is involved, and no real client is run - the point is
+that the server is crossed at a process boundary rather than called in-process.
 
 ## 🔄 **Protocol Testing vs Integration Testing**
 
@@ -37,7 +38,8 @@ The only protocol test in this directory. It:
 2. Writes a JSON-RPC `initialize` request to the server's stdin
 3. Asserts a well-formed `initialize` result comes back on stdout
 4. Completes the handshake with a `notifications/initialized` notification
-5. Terminates the server with `SIGTERM` and asserts a clean shutdown
+5. Sends `SIGTERM` and waits briefly before exiting - it requests shutdown, it does not verify
+   the exit code
 
 It is a single pass/fail script, not a counted suite, so it does not contribute to the repository's
 1,167-test total.
