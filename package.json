@@ -31,7 +31,7 @@
     "test:integration:warp": "node test/manual/warp-mcp-performance-test.js",
     "test:integration:aws": "node test/integration/test-aws-secrets.js",
     "test:integration:azure": "node test/integration/test-azure-secrets.js",
-    "test:integration:ci": "echo '\u26a0\ufe0f  This requires a running SQL Server on localhost:1433 with SA password WarpMCP123!' && npm run test:integration:run",
+    "test:integration:ci": "echo '\u26a0\ufe0f  This requires a running SQL Server on localhost:14330 with SA password WarpMCP123!' && npm run test:integration:run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",

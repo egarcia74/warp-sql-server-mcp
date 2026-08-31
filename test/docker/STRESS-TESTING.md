@@ -242,7 +242,7 @@ Solutions:
 ❌ Container Startup Test - Container not running
 
 Solutions:
-🔍 Check port availability: lsof -i :1433
+🔍 Check port availability: lsof -i :14330
 🧹 Clean Docker state: npm run docker:clean
 📋 Verify Docker Compose: docker-compose -f test/docker/docker-compose.yml config
 ```

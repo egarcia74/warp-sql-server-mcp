@@ -243,7 +243,9 @@ function generateDockerCompose(selectedConfig) {
           SA_PASSWORD: 'WarpMCP123!',
           ...selectedConfig.config.environment
         },
-        ports: ['1433:1433'],
+        // Host port 14330 avoids colliding with a local SQL Server on 1433;
+        // the container-internal port stays 1433.
+        ports: ['14330:1433'],
         volumes: ['./init-db.sql:/tmp/init-db.sql:ro', 'sqlserver_data:/var/opt/mssql'],
         healthcheck: {
           test: selectedConfig.config.healthcheck.test,
