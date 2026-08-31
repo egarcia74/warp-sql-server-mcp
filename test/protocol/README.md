@@ -42,7 +42,7 @@ The only protocol test in this directory. It:
    the exit code
 
 It is a single pass/fail script, not a counted suite, so it does not contribute to the repository's
-1,167-test total.
+1,176-test total.
 
 > **A note for anyone adding a test here.** This test deliberately does **not** set `NODE_ENV=test`
 > when it spawns the server - see the comment at the top of the spawn options. `index.js` guards its
@@ -200,7 +200,7 @@ SQL_SERVER_DEBUG=true node test/protocol/mcp-server-startup-test.js
 
 | Test Type                      | Location                                   | Purpose                      | Database | Count             | CI/CD                            |
 | ------------------------------ | ------------------------------------------ | ---------------------------- | -------- | ----------------- | -------------------------------- |
-| **Unit Tests**                 | `test/unit/`                               | Code logic validation        | Mocked   | 1,100             | ✅ Required `Tests` job          |
+| **Unit Tests**                 | `test/unit/`                               | Code logic validation        | Mocked   | 1,109             | ✅ Required `Tests` job          |
 | **Integration Tests (Vitest)** | `test/integration/`                        | Component integration        | Mocked   | 27                | ✅ `coverage` job                |
 | **Live-Database Tests**        | `test/integration/manual/`                 | Security phase validation    | Live DB  | 40                | ✅ Required `Tests` job (Docker) |
 | **Protocol Startup Check**     | `test/protocol/mcp-server-startup-test.js` | Startup + JSON-RPC handshake | Live DB  | 1 pass/fail check | ✅ Required `Tests` job          |

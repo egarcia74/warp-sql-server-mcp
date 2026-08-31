@@ -354,7 +354,7 @@ job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs `npm te
 and Node 22, and `npm test` expands to:
 
 ```bash
-npm run test:unit          # 1,100 unit tests (mocked, no database)
+npm run test:unit          # 1,109 unit tests (mocked, no database)
 npm run test:integration   # docker:start:init → test:integration:run → docker:stop
 node scripts/test-summary.js
 ```
