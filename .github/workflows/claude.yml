@@ -2,8 +2,17 @@ name: Claude Code
 
 # Responds when someone writes "@claude" in an issue, an issue comment,
 # a PR review, or a PR review comment. Claude reads the thread and the code,
-# and can push commits to a claude/* branch when asked. It cannot run shell
-# commands - see the claude_args note below for why.
+# runs the repo's lint/test scripts, and can push commits to a claude/*
+# branch when asked.
+#
+# Claude does NOT run on pull requests from forks. The action checks out the
+# PR head, and an untrusted head can execute code in this step -- via npm
+# lifecycle scripts, .claude/settings.json hooks, or a .mcp.json server (the
+# action force-enables project MCP servers) -- while the step holds the Claude
+# credential and a write-scoped app token. Requiring write access to *invoke*
+# Claude does not help, since a maintainer can be induced to run it on a
+# hostile fork PR. The guard step below stops that; the tool allowlist is
+# only reached for same-repo heads.
 #
 # Requires ONE of these repository secrets:
 #   ANTHROPIC_API_KEY        - Anthropic Console API key
@@ -16,8 +25,11 @@ on:
     types: [created]
   pull_request_review_comment:
     types: [created]
+  # `assigned` is deliberately excluded: the mention gate below matches the
+  # issue body/title, so assigning an issue that already says @claude would
+  # replay a stale request. It is only useful alongside `assignee_trigger`.
   issues:
-    types: [opened, assigned]
+    types: [opened]
   pull_request_review:
     types: [submitted]
 
@@ -51,13 +63,62 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Runs before any PR-head code is fetched: the checkout above is the
+      # default branch for these event types, and this step only calls the
+      # GitHub API. Event data is passed via env, never interpolated into the
+      # script body.
+      - name: Determine whether the PR head is trusted
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          IS_PR: ${{ github.event.issue.pull_request != null || github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' }}
+        run: |
+          set -euo pipefail
+          if [ "$IS_PR" != "true" ]; then
+            echo "Issue event - no PR head to check."
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          head=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.head.repo.full_name // ""')
+          echo "PR #$PR_NUMBER head repo: ${head:-<deleted fork>}"
+          if [ "$head" = "$REPO" ]; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Refusing to run Claude on a fork PR head ($head)."
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Say why Claude did not run
+        if: steps.guard.outputs.trusted != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/issues/$PR_NUMBER/comments" --silent \
+            -f body="Claude does not run on pull requests from forks, because this workflow would execute the PR head's code alongside repository credentials. Review the diff and run the work from a same-repo branch instead."
+
       - name: Run Claude Code
         id: claude
+        if: steps.guard.outputs.trusted == 'true'
         uses: anthropics/claude-code-action@ef8bb1e43bf303cff727a1dd0b8837029fe982a2 # v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          use_sticky_comment: true
+          # NOTE: `use_sticky_comment` is deliberately absent. Runs are not
+          # serialized, so two overlapping @claude mentions on one PR would
+          # write over each other in a single shared comment. One comment per
+          # invocation is the lesser evil.
+
           # Scopes of the app token minted by the OIDC exchange. These are NOT
           # inherited from the job's `permissions:` block, which only governs
           # GITHUB_TOKEN (unused by this action). The exchange defaults to
@@ -65,13 +126,10 @@ jobs:
           # results or logs unless actions:read is requested here.
           additional_permissions: |
             actions: read
-          # No Bash tools are pre-authorized. On a pull request this action
-          # checks out the PR head, so on a fork PR `package.json` is
-          # attacker-controlled: `npm ci` alone would run preinstall/prepare
-          # lifecycle scripts in this step, which holds the Claude token and a
-          # write-scoped GitHub app token. Requiring write access to *invoke*
-          # Claude does not help, since a maintainer can be induced to run it
-          # on a hostile fork PR. CI already runs the suite on every PR.
-          # To let Claude run commands, first gate the job to same-repo heads.
+          # Safe only because the guard step above restricts this job to
+          # same-repo heads. Anyone who can push such a branch already has
+          # write access, so these commands grant no new privilege. Do not
+          # widen the triggers without revisiting the guard.
           claude_args: |
             --max-turns 20
+            --allowedTools "Bash(npm ci),Bash(npm run lint),Bash(npm run lint:fix),Bash(npm run format),Bash(npm run format:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run precommit),Bash(npm run ci)"
