@@ -30,7 +30,8 @@ permissions: {}
 jobs:
   claude:
     name: Claude Code
-    # Only run when @claude is actually mentioned by a human-authored body.
+    # Gate on an @claude mention in the triggering body. Bot-authored
+    # events are filtered by the action itself (allowed_bots defaults to none).
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
