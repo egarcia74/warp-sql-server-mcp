@@ -1,8 +1,9 @@
 name: Claude Code
 
 # Responds when someone writes "@claude" in an issue, an issue comment,
-# a PR review, or a PR review comment. Claude reads the thread, can run the
-# repo's test/lint commands, and pushes commits to a claude/* branch when asked.
+# a PR review, or a PR review comment. Claude reads the thread and the code,
+# and can push commits to a claude/* branch when asked. It cannot run shell
+# commands - see the claude_args note below for why.
 #
 # Requires ONE of these repository secrets:
 #   ANTHROPIC_API_KEY        - Anthropic Console API key
@@ -19,11 +20,6 @@ on:
     types: [opened, assigned]
   pull_request_review:
     types: [submitted]
-
-# Never cancel an in-flight Claude run: it may be mid-commit on a branch.
-concurrency:
-  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
-  cancel-in-progress: false
 
 permissions: {}
 
@@ -53,12 +49,6 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '20'
-          cache: 'npm'
-
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@ef8bb1e43bf303cff727a1dd0b8837029fe982a2 # v1
@@ -66,6 +56,13 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
+          # No Bash tools are pre-authorized. On a pull request this action
+          # checks out the PR head, so on a fork PR `package.json` is
+          # attacker-controlled: `npm ci` alone would run preinstall/prepare
+          # lifecycle scripts in this step, which holds the Claude token and a
+          # write-scoped GitHub app token. Requiring write access to *invoke*
+          # Claude does not help, since a maintainer can be induced to run it
+          # on a hostile fork PR. CI already runs the suite on every PR.
+          # To let Claude run commands, first gate the job to same-repo heads.
           claude_args: |
             --max-turns 20
-            --allowedTools "Bash(npm ci),Bash(npm run lint),Bash(npm run lint:fix),Bash(npm run format),Bash(npm run format:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run precommit)"
