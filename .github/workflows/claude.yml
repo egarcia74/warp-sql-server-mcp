@@ -40,7 +40,9 @@ jobs:
       pull-requests: write # comment on and open PRs
       issues: write # comment on issues
       id-token: write # OIDC token for the action's auth exchange
-      actions: read # read CI results on PRs
+      # Scopes GITHUB_TOKEN only. Claude's own CI access is granted
+      # separately, via additional_permissions below.
+      actions: read
 
     steps:
       - name: Checkout repository
@@ -56,6 +58,13 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
+          # Scopes of the app token minted by the OIDC exchange. These are NOT
+          # inherited from the job's `permissions:` block, which only governs
+          # GITHUB_TOKEN (unused by this action). The exchange defaults to
+          # contents/pull_requests/issues write, so Claude cannot read CI
+          # results or logs unless actions:read is requested here.
+          additional_permissions: |
+            actions: read
           # No Bash tools are pre-authorized. On a pull request this action
           # checks out the PR head, so on a fork PR `package.json` is
           # attacker-controlled: `npm ci` alone would run preinstall/prepare
