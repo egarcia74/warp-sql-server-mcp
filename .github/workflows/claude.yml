@@ -5,14 +5,15 @@ name: Claude Code
 # runs the repo's lint/test scripts, and can push commits to a claude/*
 # branch when asked.
 #
-# Claude does NOT run on pull requests from forks. The action checks out the
+# Claude does NOT run on a pull request whose head is on a fork or was opened
+# by a bot, and ignores anyone without write access. The action checks out the
 # PR head, and an untrusted head can execute code in this step -- via npm
 # lifecycle scripts, .claude/settings.json hooks, or a .mcp.json server (the
 # action force-enables project MCP servers) -- while the step holds the Claude
-# credential and a write-scoped app token. Requiring write access to *invoke*
-# Claude does not help, since a maintainer can be induced to run it on a
-# hostile fork PR. The guard step below stops that; the tool allowlist is
-# only reached for same-repo heads.
+# credential and a write-scoped app token. None of those need a tool grant, so
+# withholding shell access is not a substitute for not checking the head out.
+# Requiring write access to *invoke* Claude is not sufficient either, since a
+# maintainer can be induced to run it on a hostile head. See the guard step.
 #
 # Requires ONE of these repository secrets:
 #   ANTHROPIC_API_KEY        - Anthropic Console API key
@@ -73,21 +74,48 @@ jobs:
       # default branch for these event types, and this step only calls the
       # GitHub API. Event data is passed via env, never interpolated into the
       # script body.
-      - name: Determine whether the PR head is trusted
+      #
+      # Claude runs only when ALL of these hold:
+      #   * the actor has write access (checked first, so an unauthorized
+      #     caller cannot make this workflow post anything on their behalf)
+      #   * the head is in this repository, not a fork
+      #   * the PR was opened by a human, not a bot
+      #
+      # The last two are one requirement, not two: whatever is in the head is
+      # loaded by Claude Code as project configuration. A `.claude/settings.json`
+      # hook or a `.mcp.json` server (the action force-enables project MCP
+      # servers) executes shell without needing any tool grant, so withholding
+      # the Bash allowlist is not isolation. Only a head that could have been
+      # pushed by someone who already has write access is safe to check out.
+      - name: Decide whether Claude may run
         id: guard
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
           PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
           IS_PR: ${{ github.event.issue.pull_request != null || github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' }}
         run: |
           set -euo pipefail
-          if [ "$IS_PR" != "true" ]; then
-            echo "Issue event - no PR head to check."
-            echo "trusted=true" >> "$GITHUB_OUTPUT"
-            echo "tools=true" >> "$GITHUB_OUTPUT"
+
+          # Authorize the caller before doing anything observable. The action
+          # enforces this too, but only after this job has already started and
+          # could have commented. Fails closed: an API error means "no".
+          perm=$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq '.permission' 2>/dev/null || echo "none")
+          if [ "$perm" != "admin" ] && [ "$perm" != "write" ]; then
+            echo "::notice::$ACTOR has '$perm' permission; ignoring silently."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "notify=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          if [ "$IS_PR" != "true" ]; then
+            echo "Issue event - no PR head to check."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "notify=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           pr=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '[.head.repo.full_name // "", .user.type // "", .user.login // ""] | @tsv')
           head=$(printf '%s' "$pr" | cut -f1)
           author_type=$(printf '%s' "$pr" | cut -f2)
@@ -95,40 +123,42 @@ jobs:
           echo "PR #$PR_NUMBER head=${head:-<deleted fork>} author=$author ($author_type)"
 
           if [ "$head" != "$REPO" ]; then
-            # Fork head: arbitrary code in the checkout. Do not run at all.
-            echo "::warning::Refusing to run Claude on a fork PR head ($head)."
-            echo "trusted=false" >> "$GITHUB_OUTPUT"
-            echo "tools=false" >> "$GITHUB_OUTPUT"
+            reason="its head is on a fork"
           elif [ "$author_type" = "Bot" ]; then
-            # Same-repo but machine-authored (Dependabot, Renovate, ...). The
-            # branch is trusted, but its whole purpose is to change dependency
-            # versions. `npm ci` would run install scripts from the proposed
-            # versions, and any `npm run` script would execute binaries out of
-            # the freshly installed node_modules -- either one puts unreviewed
-            # third-party code in this step alongside the credentials. Claude
-            # may read and comment; it gets no shell.
-            echo "::notice::Bot-authored PR ($author): running Claude without shell tools."
-            echo "trusted=true" >> "$GITHUB_OUTPUT"
-            echo "tools=false" >> "$GITHUB_OUTPUT"
+            # Machine-authored (Dependabot, Renovate, ...). Same-repo, but
+            # nobody with write access reviewed the head before it existed,
+            # and a compromised or misconfigured bot can put anything in it.
+            reason="it was opened by the bot $author"
           else
-            echo "trusted=true" >> "$GITHUB_OUTPUT"
-            echo "tools=true" >> "$GITHUB_OUTPUT"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "notify=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
+          echo "::warning::Refusing to run Claude on PR #$PR_NUMBER: $reason."
+          {
+            echo "run=false"
+            echo "notify=true"
+            echo "reason=$reason"
+          } >> "$GITHUB_OUTPUT"
+
+      # Only reached for an authorized caller, so this cannot be used by an
+      # outsider to make the repository bot speak.
       - name: Say why Claude did not run
-        if: steps.guard.outputs.trusted != 'true'
+        if: steps.guard.outputs.notify == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          REASON: ${{ steps.guard.outputs.reason }}
         run: |
           set -euo pipefail
           gh api "repos/$REPO/issues/$PR_NUMBER/comments" --silent \
-            -f body="Claude does not run on pull requests from forks, because this workflow would execute the PR head's code alongside repository credentials. Review the diff and run the work from a same-repo branch instead."
+            -f body="Claude did not run on this pull request because $REASON. This workflow checks out the PR head, and anything in that head - npm lifecycle scripts, \`.claude/settings.json\` hooks, a \`.mcp.json\` server - would execute alongside repository credentials. Review the diff and continue from a branch in this repository."
 
       - name: Run Claude Code
         id: claude
-        if: steps.guard.outputs.trusted == 'true'
+        if: steps.guard.outputs.run == 'true'
         uses: anthropics/claude-code-action@ef8bb1e43bf303cff727a1dd0b8837029fe982a2 # v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -145,11 +175,10 @@ jobs:
           # results or logs unless actions:read is requested here.
           additional_permissions: |
             actions: read
-          # Shell tools are granted only for human-authored, same-repo heads
-          # (guard.outputs.tools). Such a branch could only be pushed by
-          # someone who already has write access, so the commands grant no
-          # new privilege. Bot-authored PRs get no shell -- see the guard.
-          # Do not widen the triggers without revisiting that step.
+          # This step is reached only for heads that someone with write
+          # access could have pushed, so these commands grant no privilege
+          # that the caller does not already have. Do not widen the guard
+          # without revisiting this list.
           claude_args: |
             --max-turns 20
-            ${{ steps.guard.outputs.tools == 'true' && '--allowedTools "Bash(npm ci),Bash(npm run lint),Bash(npm run lint:fix),Bash(npm run format),Bash(npm run format:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run precommit),Bash(npm run ci)"' || '' }}
+            --allowedTools "Bash(npm ci),Bash(npm run lint),Bash(npm run lint:fix),Bash(npm run format),Bash(npm run format:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run precommit),Bash(npm run ci)"
