@@ -1,5 +1,8 @@
 # Architecture Guide: A Framework for Enterprise-Grade Software
 
+> **Audience**: Engineers evaluating the design or its security posture  
+> **Last reviewed**: 2026-09-06
+
 ## Overview
 
 This document describes the architectural design of what appears to be an MCP (Model Context Protocol) server but is

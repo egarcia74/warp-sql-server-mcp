@@ -1,5 +1,8 @@
 # Quick Start Guide
 
+> **Audience**: Anyone setting up or running the MCP server  
+> **Last reviewed**: 2026-09-06
+
 Get your **SQL Server MCP** running in Warp in under 3 minutes! 🚀
 
 ## Prerequisites

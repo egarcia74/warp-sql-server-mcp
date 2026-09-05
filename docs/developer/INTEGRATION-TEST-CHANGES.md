@@ -1,5 +1,8 @@
 # Integration Test Organization Summary
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+>
 > **Note**: This is a historical record of a one-off reorganisation. Every count and claim below
 > describes the repository **as it was at the time of that change**, not as it is today. Two things
 > have since changed materially:

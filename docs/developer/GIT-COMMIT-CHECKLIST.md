@@ -1,5 +1,8 @@
 # Git Commit Checklist
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+>
 > **⚠️ CRITICAL**: This checklist reflects what the automated git hooks will run, plus additional manual checks.  
 > **🚫 NEVER use `--no-verify` to bypass pre-commit hooks - fix the issues instead!**
 

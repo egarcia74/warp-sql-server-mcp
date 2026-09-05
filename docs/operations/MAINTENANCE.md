@@ -1,5 +1,8 @@
 # 🛠️ System Maintenance Guide
 
+> **Audience**: Maintainers running, releasing and supporting the server  
+> **Last reviewed**: 2026-09-06
+
 This guide covers essential maintenance tasks for the WARP SQL Server MCP project to keep your development environment running optimally.
 
 ## 🧹 Process Cleanup
