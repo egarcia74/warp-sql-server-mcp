@@ -1,5 +1,8 @@
 # Git Push Checklist
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+>
 > **⚠️ CRITICAL**: This checklist reflects what the automated pre-push hook will run, plus additional manual checks.  
 > **🚫 NEVER use `--no-verify` to bypass pre-push hooks - fix the issues instead!**
 

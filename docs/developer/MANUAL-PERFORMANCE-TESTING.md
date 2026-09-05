@@ -1,5 +1,8 @@
 # Manual Performance Testing
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+
 This document describes how to use the manual performance testing feature to validate the MCP server's performance, monitoring, and connection pool behavior.
 
 ## Overview

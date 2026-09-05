@@ -1,5 +1,8 @@
 # No-Compromise Quality: The WARP Project Case Study
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+>
 > **Mission Statement**: Document the challenges, realities, and outcomes when making software quality absolutely non-negotiable.
 
 ## 🎯 Executive Summary
@@ -10,6 +13,11 @@ project. It serves as both a testament to what's possible and a warning about th
 ## 📊 Current Quality Metrics (September 2025)
 
 ### **Test Coverage & Validation**
+
+> The figures below are a **September 2025 snapshot**, preserved so the case study's before/after
+> reasoning still reads correctly. They are not current — see [Testing Guide](TESTING-GUIDE.md) and
+> [`test/README.md`](../../test/README.md) for today's numbers (1,176 tests: 1,109 unit, 27 Vitest
+> integration, 40 live-database).
 
 - **525 automated tests** (465 unit + 40 integration + 20 protocol)
 - **74.06% code coverage** with strict enforcement

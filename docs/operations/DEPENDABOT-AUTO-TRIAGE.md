@@ -1,5 +1,8 @@
 # 🤖 Dependabot Auto-Triage System
 
+> **Audience**: Maintainers running, releasing and supporting the server  
+> **Last reviewed**: 2026-09-06
+
 ## Overview
 
 This repository implements a comprehensive **Dependabot Auto-Triage System** that intelligently manages dependency updates, security alerts, and vulnerability responses with minimal manual intervention.

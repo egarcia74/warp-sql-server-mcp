@@ -924,7 +924,7 @@ node scripts/docs/generate-landing-page.js
 
 Generated files:
 
-- `docs/tools.json`: Extracted tool definitions
+- `docs-data/tools.json`: Extracted tool definitions
 - `docs/index.html`: Landing page
 - `docs/tools.html`: Detailed API documentation
 

@@ -1,5 +1,8 @@
 # Testing Structure Refactoring
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+
 ## Overview
 
 The npm test scripts have been reorganized and cleaned up to follow standard naming conventions and eliminate
