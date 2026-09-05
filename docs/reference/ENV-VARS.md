@@ -471,8 +471,8 @@ Environment variables are processed in this order:
 
 ## Related Documentation
 
-- **[.env.example](../.env.example)** - Example environment configuration file
-- **[Security Guide](SECURITY.md)** - Comprehensive security configuration
+- **[.env.example](../../.env.example)** - Example environment configuration file
+- **[Security Guide](../architecture/SECURITY.md)** - Comprehensive security configuration
 - **[AWS Secrets Guide](AWS-SECRETS-GUIDE.md)** - AWS Secrets Manager setup
 - **[Azure Secrets Guide](AZURE-SECRETS-GUIDE.md)** - Azure Key Vault setup
-- **[Quick Start](QUICKSTART.md)** - Getting started guide
+- **[Quick Start](../user/QUICKSTART.md)** - Getting started guide

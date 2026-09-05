@@ -1,82 +1,81 @@
 # 📚 SQL Server MCP Documentation
 
-Welcome to the comprehensive documentation for the SQL Server MCP (Model Context Protocol) server. This directory
-contains all the detailed documentation for understanding, setting up, and using this enterprise-grade database
-integration tool.
+Welcome to the documentation for the SQL Server MCP (Model Context Protocol) server. This directory contains
+everything needed to understand, set up, operate and extend this enterprise-grade database integration tool.
 
-## 🚀 Quick Start Guides
+## Where things live
 
-Perfect for getting up and running quickly:
+| Folder                          | Audience                               |
+| ------------------------------- | -------------------------------------- |
+| [`user/`](user)                 | Getting set up and running             |
+| [`developer/`](developer)       | Contributing, testing, quality gates   |
+| [`operations/`](operations)     | Running, releasing, maintaining        |
+| [`architecture/`](architecture) | System design and threat model         |
+| [`reference/`](reference)       | Configuration and cloud-secrets lookup |
+| [`archive/`](archive)           | Historical, unmaintained               |
 
-- **[Quick Start - Warp Terminal](QUICKSTART.md)** - 5-minute setup for Warp Terminal
-- **[Quick Start - VS Code](QUICKSTART-VSCODE.md)** - 5-minute setup for GitHub Copilot in VS Code
-- **[Warp Setup Guide](WARP_SETUP_GUIDE.md)** - Detailed Warp Terminal configuration
+New documentation goes in one of these folders — never at the `docs/` root, which holds only this index, the
+doc template, and the generated site. Start from [`TEMPLATE.md`](TEMPLATE.md).
 
-## 🏗️ Core Documentation
+## 🚀 User Guides
 
-Essential technical documentation:
+Getting productive quickly:
 
-- **[Architecture Guide](ARCHITECTURE.md)** - Technical deep-dive and system design
-- **[Security Guide](SECURITY.md)** - Comprehensive security configuration and threat model
-- **[Integration Test Changes](INTEGRATION-TEST-CHANGES.md)** - Testing methodology and validation
+- **[Quick Start - Warp Terminal](user/QUICKSTART.md)** - 5-minute setup for Warp Terminal
+- **[Quick Start - VS Code](user/QUICKSTART-VSCODE.md)** - 5-minute setup for GitHub Copilot in VS Code
+- **[Warp Setup Guide](user/WARP_SETUP_GUIDE.md)** - Detailed Warp Terminal configuration
+- **[VS Code Integration Guide](user/VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
 
-## ☁️ Cloud & Integration Guides
+## 🏗️ Architecture
 
-Enterprise deployment and integration:
+System design and security posture:
 
-- **[AWS Secrets Manager Guide](AWS-SECRETS-GUIDE.md)** - Enterprise credential management
-- **[Azure Key Vault Guide](AZURE-SECRETS-GUIDE.md)** - Cloud secret management setup
-- **[VS Code Integration Guide](VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
+- **[Architecture Guide](architecture/ARCHITECTURE.md)** - Technical deep-dive and system design
+- **[Security Guide](architecture/SECURITY.md)** - Security configuration and threat model
 
-## 🛠️ Development & Operations
+## 📖 Reference
 
-For developers and system administrators:
+Look-up material:
 
-- **[Performance Guide](PERFORMANCE.md)** - Performance monitoring, benchmarks, and optimization
-- **[Debug Logging Guide](DEBUG-LOGGING.md)** - Troubleshooting and debugging
-- **[Smoke Test Guide](SMOKE-TEST-GUIDE.md)** - Validation and testing procedures
-- **[System Maintenance Guide](MAINTENANCE.md)** - Process cleanup, resource management, and system optimization
-- **[Release Token Setup](RELEASE-TOKEN-SETUP.md)** - CI/CD and release configuration
+- **[Environment Variables Reference](reference/ENV-VARS.md)** - Every setting, with examples
+- **[AWS Secrets Manager Guide](reference/AWS-SECRETS-GUIDE.md)** - Enterprise credential management
+- **[Azure Key Vault Guide](reference/AZURE-SECRETS-GUIDE.md)** - Cloud secret management setup
 
-## 🤖 DevOps & Automation
+## 🛠️ Developer
 
-Automated workflows and processes:
+For contributors and maintainers:
 
-- **[Dependabot Auto-Triage](DEPENDABOT-AUTO-TRIAGE.md)** - Dependency management automation
-- **[Git Commit Checklist](GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
-- **[Git Push Checklist](GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
-- **[Quality No-Compromise Case Study](QUALITY-NO-COMPROMISE.md)** - Real-world analysis of zero-tolerance quality standards
+- **[Testing Guide](developer/TESTING-GUIDE.md)** - All test categories and how to run them
+- **[Testing Structure](developer/TESTING-STRUCTURE.md)** - How the test suite is laid out
+- **[Docker Clean Testing](developer/DOCKER-CLEAN-TESTING.md)** - Running tests against a clean container
+- **[Integration Test Changes](developer/INTEGRATION-TEST-CHANGES.md)** - Testing methodology and validation
+- **[Manual Performance Testing](developer/MANUAL-PERFORMANCE-TESTING.md)** - Performance testing methodology
+- **[Debug Logging Guide](developer/DEBUG-LOGGING.md)** - Troubleshooting and debugging
+- **[Git Commit Checklist](developer/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates
+- **[Git Push Checklist](developer/GIT-PUSH-CHECKLIST.md)** - Pre-push validation
+- **[Git Release Checklist](developer/GIT-RELEASE-CHECKLIST.md)** - Release procedure
+- **[Quality No-Compromise Case Study](developer/QUALITY-NO-COMPROMISE.md)** - Zero-tolerance quality standards
+
+## ⚙️ Operations
+
+For running and maintaining the server:
+
+- **[Performance Guide](operations/PERFORMANCE.md)** - Monitoring, benchmarks, and optimization
+- **[Smoke Test Guide](operations/SMOKE-TEST-GUIDE.md)** - Validation and testing procedures
+- **[System Maintenance Guide](operations/MAINTENANCE.md)** - Process cleanup and resource management
+- **[Release Token Setup](operations/RELEASE-TOKEN-SETUP.md)** - CI/CD and release configuration
+- **[Dependabot Auto-Triage](operations/DEPENDABOT-AUTO-TRIAGE.md)** - Dependency management automation
+- **[Apple Silicon Docker](operations/APPLE-SILICON-DOCKER.md)** - Running the test container on arm64
 
 ## 📊 API Documentation
-
-Complete reference materials:
 
 - **[API Tools Reference](tools.html)** - Complete MCP tools documentation (16 tools)
 - **[Documentation Site](index.html)** - Generated documentation landing page
 
-## 📋 Documentation Organization
+## 🗄️ Archive
 
-This documentation is organized into several categories:
-
-### **User Guides** 🎯
-
-Focus on getting users productive quickly with clear setup instructions and common use cases.
-
-### **Technical Documentation** ⚙️
-
-Deep technical content for developers, system architects, and advanced users.
-
-### **Cloud Integration** ☁️
-
-Enterprise deployment patterns, cloud services integration, and production considerations.
-
-### **Development Resources** 🛠️
-
-Materials for contributors, maintainers, and those extending the system.
-
-### **API Reference** 📚
-
-Complete technical specifications for all MCP tools and interfaces.
+Historical documents, kept for context and no longer maintained — see
+**[archive/README.md](archive/README.md)**.
 
 ## 🔗 External Resources
 
@@ -91,20 +90,21 @@ Found an issue with the documentation or want to contribute?
 1. Check the [main project README](../README.md) for contribution guidelines
 2. Review the [Testing Guide](../test/README.md) for comprehensive test documentation
 3. See the [Contributing Guide](../CONTRIBUTING.md) for development workflow
+4. Start new documents from [`TEMPLATE.md`](TEMPLATE.md) and place them in the folder that matches the audience
 
 ## 📄 Documentation Maintenance
 
-This documentation index is maintained alongside the codebase. When adding new documentation:
+This index is maintained alongside the codebase. When adding new documentation:
 
-1. Add the new file to the appropriate section above
-2. Include a brief, helpful description
+1. Copy [`TEMPLATE.md`](TEMPLATE.md) into the folder matching its audience
+2. Add it to the appropriate section above with a brief description
 3. Update any cross-references as needed
-4. Test all links for accuracy
+4. Run `npm run markdown:lint` and the link check before committing
 
 ---
 
 **💡 Quick Navigation**:
 
 - [Back to Main README](../README.md)
-- [View All Files in This Directory](.)
+- [Where things live](#where-things-live)
 - [Project Overview](../WARP.md)

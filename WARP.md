@@ -5,8 +5,8 @@
 > please see:
 >
 > - **[README.md](README.md)** - Main project overview and quick links
-> - **[QUICKSTART-VSCODE.md](docs/QUICKSTART-VSCODE.md)** - VS Code + GitHub Copilot setup
-> - **[QUICKSTART.md](docs/QUICKSTART.md)** - Warp Terminal setup
+> - **[QUICKSTART-VSCODE.md](docs/user/QUICKSTART-VSCODE.md)** - VS Code + GitHub Copilot setup
+> - **[QUICKSTART.md](docs/user/QUICKSTART.md)** - Warp Terminal setup
 > - **[Complete Documentation Site](https://egarcia74.github.io/warp-sql-server-mcp/)**
 
 This file provides comprehensive technical guidance to WARP (warp.dev) when working with code in this repository.
@@ -24,7 +24,7 @@ secret management**. Built with a modular architecture for enterprise-scale depl
 one of which runs automatically on every pull request (1,109 unit + 27 integration + 40
 live-database). Covers all security phases with **100% success rates**.
 
-**🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute setup walkthrough.
+**🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/user/QUICKSTART.md) for a 5-minute setup walkthrough.
 
 ## Architecture
 
@@ -177,8 +177,8 @@ SECRET_MANAGER_TYPE=env
 
 **📋 Detailed Cloud Secret Management**:
 
-- **Azure Key Vault**: [Azure Secrets Configuration Guide](docs/AZURE-SECRETS-GUIDE.md) - Complete setup with authentication, secret naming, and troubleshooting
-- **AWS Secrets Manager**: [AWS Secrets Configuration Guide](docs/AWS-SECRETS-GUIDE.md) - Comprehensive guide with IAM roles, JSON secrets, and multi-environment deployment
+- **Azure Key Vault**: [Azure Secrets Configuration Guide](docs/reference/AZURE-SECRETS-GUIDE.md) - Complete setup with authentication, secret naming, and troubleshooting
+- **AWS Secrets Manager**: [AWS Secrets Configuration Guide](docs/reference/AWS-SECRETS-GUIDE.md) - Comprehensive guide with IAM roles, JSON secrets, and multi-environment deployment
 
 ### 🔒 Query Safety Policy
 
@@ -616,17 +616,17 @@ npm run prepush
 
 Comprehensive checklists for quality git workflows:
 
-- **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)**: Pre-commit quality gates and guidelines
+- **[Git Commit Checklist](docs/developer/GIT-COMMIT-CHECKLIST.md)**: Pre-commit quality gates and guidelines
   - Documents actual pre-commit hook behavior (ESLint --fix, Prettier --write, Markdownlint --fix, npm test)
   - Conventional commits format with examples
   - Manual verification steps for security and change review
   - Generic guidelines for consistent development workflow
-- **[Git Push Checklist](docs/GIT-PUSH-CHECKLIST.md)**: Pre-push validation and deployment guidelines
+- **[Git Push Checklist](docs/developer/GIT-PUSH-CHECKLIST.md)**: Pre-push validation and deployment guidelines
   - Documents automated pre-push checks (full test suite, coverage, security audit, linting)
   - Troubleshooting guidance for common push failures
   - Advanced push options and force push safety guidelines
   - Pull request creation and post-push validation steps
-- **[Git Release Checklist](docs/GIT-RELEASE-CHECKLIST.md)**: Step-by-step release guide
+- **[Git Release Checklist](docs/developer/GIT-RELEASE-CHECKLIST.md)**: Step-by-step release guide
   - Covers automated Release workflow (dry runs, auto detection, tag-collision handling)
   - Version-bump PR to sync `package.json` and `package-lock.json` with the released tag
   - Manual release fallback and npm publish instructions
@@ -672,7 +672,9 @@ cp .env.example .env
 
 ## Environment Configuration
 
-> **📖 Complete Reference**: See **[docs/ENV-VARS.md](docs/ENV-VARS.md)** for comprehensive documentation of all environment variables, defaults, context-aware behavior, and configuration examples.
+> **📖 Complete Reference**: See **[docs/reference/ENV-VARS.md](docs/reference/ENV-VARS.md)** for
+> comprehensive documentation of all environment variables, defaults, context-aware behavior, and
+> configuration examples.
 
 ### Essential Variables (Quick Reference)
 
@@ -697,7 +699,7 @@ cp .env.example .env
 
 **⚠️ IMPORTANT**: Starting with v1.3.0, the MCP server defaults to maximum security.
 
-> **📖 Complete Security Guide**: See **[docs/ENV-VARS.md#database-security-settings](docs/ENV-VARS.md#database-security-settings)** for detailed security configuration options.
+> **📖 Complete Security Guide**: See **[docs/reference/ENV-VARS.md#database-security-settings](docs/reference/ENV-VARS.md#database-security-settings)** for detailed security configuration options.
 
 **Quick Security Levels:**
 
@@ -723,7 +725,7 @@ unterminated string literals, identifiers, or comments are rejected.
 - **📆 Data Analysis**: Enable destructive operations, block schema changes
 - **🛠️ Full Development**: Disable all restrictions (use with caution)
 
-See **[docs/ENV-VARS.md#security-configuration-examples](docs/ENV-VARS.md#security-configuration-examples)** for complete configuration examples.
+See **[docs/reference/ENV-VARS.md#security-configuration-examples](docs/reference/ENV-VARS.md#security-configuration-examples)** for complete configuration examples.
 
 ## Warp Integration
 
@@ -1249,7 +1251,7 @@ This project maintains high code quality through automated tooling and architect
 #### **No-Compromise Quality Philosophy**
 
 > **📊 Case Study**: For a comprehensive analysis of the challenges and outcomes of implementing
-> **zero-tolerance quality standards**, see [Quality No-Compromise Case Study](docs/QUALITY-NO-COMPROMISE.md).
+> **zero-tolerance quality standards**, see [Quality No-Compromise Case Study](docs/developer/QUALITY-NO-COMPROMISE.md).
 >
 > This document captures real-world metrics from the WARP project including:
 >
@@ -1352,7 +1354,7 @@ The cleanup infrastructure has been validated under extreme conditions:
 - **Maintained quality standards** while managing system resources
 - **Integrated seamlessly** with existing quality gates
 
-> **📋 Complete Guide**: See [System Maintenance Guide](docs/MAINTENANCE.md) for comprehensive
+> **📋 Complete Guide**: See [System Maintenance Guide](docs/operations/MAINTENANCE.md) for comprehensive
 > maintenance procedures, troubleshooting, and prevention strategies.
 
 ## ESLint and Prettier Integration

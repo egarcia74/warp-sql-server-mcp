@@ -241,9 +241,13 @@ Install these extensions for the best development experience:
 warp-sql-server-mcp/
 ├── 📁 .vscode/                 # VS Code settings (git-ignored)
 ├── 📁 docs/                    # Documentation
-│   ├── 📄 VSCODE-INTEGRATION-GUIDE.md  # This guide
-│   ├── 📄 AWS-SECRETS-GUIDE.md
-│   └── 📄 AZURE-SECRETS-GUIDE.md
+│   ├── 📄 README.md            # Documentation index
+│   ├── 📁 user/                # Setup guides (incl. this one)
+│   ├── 📁 developer/           # Contributing, testing, quality gates
+│   ├── 📁 operations/          # Running, releasing, maintaining
+│   ├── 📁 architecture/        # System design and threat model
+│   ├── 📁 reference/           # Config and cloud-secrets lookup
+│   └── 📁 archive/             # Historical, unmaintained
 ├── 📁 lib/                     # Core modules
 │   ├── 📁 analysis/            # Query optimization & performance analysis
 │   ├── 📁 config/              # Configuration management
@@ -1162,13 +1166,13 @@ Show me queries that took longer than 5 seconds to execute
 
 ### Documentation Resources
 
-- 📖 **[Complete Documentation](../README.md)** - Full project documentation
+- 📖 **[Complete Documentation](../../README.md)** - Full project documentation
 - 💻 **[VS Code Quick Start Guide](QUICKSTART-VSCODE.md)** - 5-minute VS Code + Warp setup
 - 🚀 **[Warp Quick Start Guide](QUICKSTART.md)** - Original Warp-focused setup
-- 🔒 **[Security Guide](SECURITY.md)** - Comprehensive security documentation
-- 🏗️ **[Architecture Guide](ARCHITECTURE.md)** - Technical architecture details
-- ☁️ **[AWS Secrets Guide](AWS-SECRETS-GUIDE.md)** - AWS Secrets Manager integration
-- 🔑 **[Azure Secrets Guide](AZURE-SECRETS-GUIDE.md)** - Azure Key Vault integration
+- 🔒 **[Security Guide](../architecture/SECURITY.md)** - Comprehensive security documentation
+- 🏗️ **[Architecture Guide](../architecture/ARCHITECTURE.md)** - Technical architecture details
+- ☁️ **[AWS Secrets Guide](../reference/AWS-SECRETS-GUIDE.md)** - AWS Secrets Manager integration
+- 🔑 **[Azure Secrets Guide](../reference/AZURE-SECRETS-GUIDE.md)** - Azure Key Vault integration
 
 ### Support Channels
 
@@ -1221,8 +1225,8 @@ Warp's MCP capabilities creates an unparalleled database development experience.
 
 - 💻 **[Try the VS Code Quick Start Guide](QUICKSTART-VSCODE.md)** for immediate VS Code setup
 - 🚀 **[Try the Warp Quick Start Guide](QUICKSTART.md)** for Warp-only setup
-- 🔒 **[Review Security Best Practices](SECURITY.md)** for production deployment
-- 🏗️ **[Explore the Architecture](ARCHITECTURE.md)** to understand the enterprise patterns
+- 🔒 **[Review Security Best Practices](../architecture/SECURITY.md)** for production deployment
+- 🏗️ **[Explore the Architecture](../architecture/ARCHITECTURE.md)** to understand the enterprise patterns
 
 ---
 

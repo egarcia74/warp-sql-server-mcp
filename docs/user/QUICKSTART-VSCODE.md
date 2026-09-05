@@ -29,7 +29,9 @@ warp-sql-server-mcp init
 # File: ~/.warp-sql-server-mcp.json
 ```
 
-> **📖 Need more configuration options?** See the [Complete Environment Variables Reference](ENV-VARS.md) for SSL settings, security configuration, performance tuning, and cloud deployment options.
+> **📖 Need more configuration options?** See the
+> [Complete Environment Variables Reference](../reference/ENV-VARS.md) for SSL settings, security
+> configuration, performance tuning, and cloud deployment options.
 
 ## Step 2: Configure VS Code MCP Settings
 
@@ -169,7 +171,7 @@ To modify security settings, edit your config file:
 }
 ```
 
-> **🔒 Security configuration details:** See the [Environment Variables Reference](ENV-VARS.md#database-security-settings)
+> **🔒 Security configuration details:** See the [Environment Variables Reference](../reference/ENV-VARS.md#database-security-settings)
 > for complete security options, including examples for production, data analysis, and development modes.
 
 ## Troubleshooting
@@ -209,7 +211,7 @@ npm run logs:audit         # Show security audit logs
 - Check the security settings in your config file
 - Review the MCP server logs in VS Code Developer Console
 
-> **🔧 Detailed troubleshooting:** Check the [Environment Variables Reference](ENV-VARS.md#troubleshooting)
+> **🔧 Detailed troubleshooting:** Check the [Environment Variables Reference](../reference/ENV-VARS.md#troubleshooting)
 > for comprehensive troubleshooting guides covering connection issues, SSL problems, and performance
 > optimization.
 >
