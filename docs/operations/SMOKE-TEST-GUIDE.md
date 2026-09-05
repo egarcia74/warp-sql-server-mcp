@@ -1,5 +1,8 @@
 # SQL Server MCP Testing Guide
 
+> **Audience**: Maintainers running, releasing and supporting the server  
+> **Last reviewed**: 2026-09-06
+
 ## Overview
 
 This guide provides comprehensive testing procedures for the SQL Server MCP server, covering **automated**,

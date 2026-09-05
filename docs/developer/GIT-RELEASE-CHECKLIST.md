@@ -1,5 +1,8 @@
 # Git Release Checklist
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+>
 > This checklist standardizes how we cut releases and publish artifacts.
 > It complements the Commit and Push checklists and reflects our current
 > automation in `.github/workflows/release.yml` and the Release section

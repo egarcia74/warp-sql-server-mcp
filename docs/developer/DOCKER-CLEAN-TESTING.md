@@ -1,5 +1,8 @@
 # Docker Clean Flag Testing Guide
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+
 This guide explains the various testing options available for running Docker tests with clean slate functionality.
 
 ## 🚀 Quick Start

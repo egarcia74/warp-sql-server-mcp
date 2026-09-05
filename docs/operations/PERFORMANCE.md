@@ -1,5 +1,8 @@
 # Performance Monitoring & Benchmarks
 
+> **Audience**: Maintainers running, releasing and supporting the server  
+> **Last reviewed**: 2026-09-06
+
 ## Overview
 
 This framework includes a comprehensive **PerformanceMonitor** class that provides production-ready performance

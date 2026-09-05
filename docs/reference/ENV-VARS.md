@@ -1,5 +1,8 @@
 # Environment Variables Reference
 
+> **Audience**: Anyone looking up configuration details  
+> **Last reviewed**: 2026-09-06
+>
 > **📍 Single Source of Truth**: This document contains the complete reference for all environment
 > variables supported by the SQL Server MCP. Other documentation files reference this document to
 > avoid duplication.

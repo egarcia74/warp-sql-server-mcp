@@ -1,5 +1,8 @@
 # Security Policy
 
+> **Audience**: Engineers evaluating the design or its security posture  
+> **Last reviewed**: 2026-09-06
+
 ## 🔒 Overview
 
 Warp SQL Server MCP implements a **three-tier graduated security system** designed to prevent

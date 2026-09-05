@@ -1,5 +1,8 @@
 # Release Token Setup Guide
 
+> **Audience**: Maintainers running, releasing and supporting the server  
+> **Last reviewed**: 2026-09-06
+
 ## Overview
 
 This guide explains how to set up an optional `RELEASE_TOKEN` to completely eliminate Token-Permissions security

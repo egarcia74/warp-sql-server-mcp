@@ -1,5 +1,8 @@
 # Testing Guide
 
+> **Audience**: Contributors working on this codebase  
+> **Last reviewed**: 2026-09-06
+
 This document explains how to run the various tests in this project and when to use each type.
 
 ## 🧪 Test Categories
