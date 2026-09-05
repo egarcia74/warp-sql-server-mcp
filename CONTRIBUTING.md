@@ -16,10 +16,10 @@ Before diving into code, please read our [**Software Engineering Manifesto**](MA
 - **Observability by Default**: Proper logging and monitoring for all features
 - **Production Readiness**: Code that's ready for enterprise deployment
 
-**🚀 New to this project?** Review our [Architecture Guide](docs/ARCHITECTURE.md) and choose your preferred setup:
+**🚀 New to this project?** Review our [Architecture Guide](docs/architecture/ARCHITECTURE.md) and choose your preferred setup:
 
-- **[Warp Terminal Quick Start Guide](docs/QUICKSTART.md)** - Original 5-minute setup
-- **[VS Code Quick Start Guide](docs/QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
+- **[Warp Terminal Quick Start Guide](docs/user/QUICKSTART.md)** - Original 5-minute setup
+- **[VS Code Quick Start Guide](docs/user/QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
 
 These guides will help you understand both the technical architecture and practical usage.
 
@@ -332,7 +332,7 @@ securityConfigs.forEach(config => {
   guard), plus `test/unit/mcp-security.test.js`, `test/unit/sql-batch-guard.test.js` and
   `test/unit/where-clause-guard.test.js` for security test examples
 - **Test Patterns**: Follow established patterns for validateQuery testing
-- **Security Documentation**: Review `docs/SECURITY.md` for the threat model, and
+- **Security Documentation**: Review `docs/architecture/SECURITY.md` for the threat model, and
   `.github/SECURITY.md` for the reporting policy and supported versions
 - **Mock Data**: Use existing mock data and patterns for consistency
 
@@ -349,7 +349,9 @@ securityConfigs.forEach(config => {
    - **STEP 2**: Write tests for functionality
    - **STEP 3**: Implement security validation
    - **STEP 4**: Implement core functionality
-   - **STEP 5**: Update documentation as needed
+   - **STEP 5**: Update documentation as needed - new docs go under `docs/user`, `docs/developer`,
+     `docs/operations`, `docs/architecture` or `docs/reference` (see [docs/README.md](docs/README.md));
+     start from [docs/TEMPLATE.md](docs/TEMPLATE.md)
    - **STEP 6**: Follow the existing code style
 
 3. **Test locally**

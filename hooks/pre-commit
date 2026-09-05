@@ -15,7 +15,7 @@ js_files=""
 while IFS= read -r file; do
   [ -z "$file" ] && continue
   js_files="$js_files '$file'"
-done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|mjs|cjs)$' || true)
+done < <(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(js|mjs|cjs)$' || true)
 
 if [ -n "$js_files" ]; then
   if command -v npx >/dev/null 2>&1; then
@@ -40,7 +40,7 @@ staged_files=""
 while IFS= read -r file; do
   [ -z "$file" ] && continue
   staged_files="$staged_files '$file'"
-done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|mjs|cjs|json|md)$' || true)
+done < <(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(js|mjs|cjs|json|md)$' || true)
 
 if [ -n "$staged_files" ]; then
   if command -v npx >/dev/null 2>&1; then
@@ -65,7 +65,7 @@ md_files=""
 while IFS= read -r file; do
   [ -z "$file" ] && continue
   md_files="$md_files '$file'"
-done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.md$' || true)
+done < <(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.md$' || true)
 
 if [ -n "$md_files" ]; then
   if command -v npx >/dev/null 2>&1; then

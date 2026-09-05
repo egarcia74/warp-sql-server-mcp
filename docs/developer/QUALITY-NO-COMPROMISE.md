@@ -257,8 +257,8 @@ No-compromise quality requires significant upfront investment in:
 - [Git Commit Checklist](GIT-COMMIT-CHECKLIST.md) - Process enforcement
 - [Git Push Checklist](GIT-PUSH-CHECKLIST.md) - Quality gate validation
 - [Testing Guide](TESTING-GUIDE.md) - Comprehensive testing strategy
-- [Architecture](ARCHITECTURE.md) - System design for quality
-- [Security](SECURITY.md) - Security-first development approach
+- [Architecture](../architecture/ARCHITECTURE.md) - System design for quality
+- [Security](../architecture/SECURITY.md) - Security-first development approach
 
 ---
 

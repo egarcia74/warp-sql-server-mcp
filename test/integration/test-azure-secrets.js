@@ -247,7 +247,7 @@ This script tests the Azure Key Vault integration with comprehensive examples.
 ✅ Health monitoring
 
 📚 For detailed setup instructions, see:
-   docs/AZURE-SECRETS-GUIDE.md
+   docs/reference/AZURE-SECRETS-GUIDE.md
 `);
 }
 

@@ -134,9 +134,9 @@ function generateLandingPageHTML() {
             <p>Complete setup guides, installation instructions, and usage examples.</p>
             <a href="https://github.com/egarcia74/warp-sql-server-mcp#readme">📖 README →</a>
             <br><br>
-            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/docs/QUICKSTART.md">🖥️ Warp Quick Start →</a>
+            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/docs/user/QUICKSTART.md">🖥️ Warp Quick Start →</a>
             <br><br>
-            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/docs/QUICKSTART-VSCODE.md">💻 VS Code Quick Start →</a>
+            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/docs/user/QUICKSTART-VSCODE.md">💻 VS Code Quick Start →</a>
         </div>
 
         <div class="card">

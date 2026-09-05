@@ -32,7 +32,9 @@ npm install -g @egarcia74/warp-sql-server-mcp
    #   "SQL_SERVER_PASSWORD": "your_password"
    ```
 
-   > **📖 Need more configuration options?** See the [Complete Environment Variables Reference](ENV-VARS.md) for all available settings including SSL, security, performance, and cloud deployment options.
+   > **📖 Need more configuration options?** See the
+   > [Complete Environment Variables Reference](../reference/ENV-VARS.md) for all available settings
+   > including SSL, security, performance, and cloud deployment options.
 
 3. **Add to Warp**:
    - Open Warp Settings: `Cmd+,` → **MCP** tab
@@ -120,9 +122,9 @@ npm run logs:audit         # Show security audit logs
 - Review SSL settings if using remote servers
 - Check server logs: `npm run logs` for detailed error information
 
-> **🔧 Advanced configuration?** Check the [Environment Variables Reference](ENV-VARS.md) for detailed troubleshooting, SSL settings, security configuration, and performance tuning options.
+> **🔧 Advanced configuration?** Check the [Environment Variables Reference](../reference/ENV-VARS.md) for detailed troubleshooting, SSL settings, security configuration, and performance tuning options.
 
-**Want more features?** See the [complete documentation](README.md)
+**Want more features?** See the [complete documentation](../README.md)
 
 ---
 
