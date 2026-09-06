@@ -23,7 +23,7 @@ Getting productive quickly:
 
 - **[Quick Start - Warp Terminal](user/QUICKSTART.md)** - 5-minute setup for Warp Terminal
 - **[Quick Start - VS Code](user/QUICKSTART-VSCODE.md)** - 5-minute setup for GitHub Copilot in VS Code
-- **[Warp Setup Guide](user/WARP_SETUP_GUIDE.md)** - Detailed Warp Terminal configuration
+- **[Warp Setup Guide](user/WARP_SETUP_GUIDE.md)** - Using the performance-monitoring tools from Warp
 - **[VS Code Integration Guide](user/VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
 
 ## 🏗️ Architecture
@@ -32,6 +32,7 @@ System design and security posture:
 
 - **[Architecture Guide](architecture/ARCHITECTURE.md)** - Technical deep-dive and system design
 - **[Security Guide](architecture/SECURITY.md)** - Security configuration and threat model
+- **[Auto-Config Detection Research](architecture/AUTO-CONFIG-DETECTION-RESEARCH.md)** - Design research for automatic configuration detection (spec for backlog item 5 / issue #57)
 
 ## 📖 Reference
 
@@ -46,9 +47,9 @@ Look-up material:
 For contributors and maintainers:
 
 - **[Testing Guide](developer/TESTING-GUIDE.md)** - All test categories and how to run them
-- **[Testing Structure](developer/TESTING-STRUCTURE.md)** - How the test suite is laid out
+- **[Testing Structure](developer/TESTING-STRUCTURE.md)** - Inventory of the npm test scripts and what each runs
 - **[Docker Clean Testing](developer/DOCKER-CLEAN-TESTING.md)** - Running tests against a clean container
-- **[Integration Test Changes](developer/INTEGRATION-TEST-CHANGES.md)** - Testing methodology and validation
+- **[Integration Test Changes](developer/INTEGRATION-TEST-CHANGES.md)** - Historical record of a one-off test reorganisation (not current methodology)
 - **[Manual Performance Testing](developer/MANUAL-PERFORMANCE-TESTING.md)** - Performance testing methodology
 - **[Debug Logging Guide](developer/DEBUG-LOGGING.md)** - Troubleshooting and debugging
 - **[Git Commit Checklist](developer/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates

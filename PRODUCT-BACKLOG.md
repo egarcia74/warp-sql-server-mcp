@@ -64,7 +64,7 @@ Items are numbered sequentially and uniquely; the phase lists further down refer
 - **Status**: 📋 Planned (Research Complete). Issue #57 was closed without anything shipping - neither
   the `ConfigDetector` class nor the `detect_optimal_config` tool exists in `lib/` - and has been
   reopened.
-- **Research**: [docs/archive/AUTO-CONFIG-DETECTION-RESEARCH.md](docs/archive/AUTO-CONFIG-DETECTION-RESEARCH.md)
+- **Research**: [docs/architecture/AUTO-CONFIG-DETECTION-RESEARCH.md](docs/architecture/AUTO-CONFIG-DETECTION-RESEARCH.md)
 - **Description**: Add intelligent configuration detection and recommendations for optimal environment settings based on usage patterns, connection health, and performance metrics. Features:
   - Connection pool size optimization
   - Security level recommendations

@@ -2,6 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 /**
  * Generates the landing page HTML with dynamic tool information
@@ -225,7 +226,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     // Write the HTML file
     fs.writeFileSync(path.join(docsDir, 'index.html'), html);
-    console.log('✅ Landing page generated: docs/index.html');
+
+    // Format with Prettier so regeneration is idempotent. Without this the
+    // generator's raw output differs from the committed copy on every run,
+    // turning a one-line version bump into a whole-file reformat. Mirrors
+    // what extract-docs.js already does for docs-data/tools.json.
+    try {
+      execSync('npx prettier --write docs/index.html', { stdio: 'inherit' });
+      console.log('✅ Landing page generated and formatted: docs/index.html');
+    } catch {
+      console.log('✅ Landing page generated: docs/index.html (formatting skipped)');
+    }
   } catch (error) {
     console.error('❌ Error generating landing page:', error.message);
     process.exit(1);

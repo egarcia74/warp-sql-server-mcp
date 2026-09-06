@@ -2,6 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 
 /**
  * Generates the detailed tools documentation HTML page
@@ -319,7 +320,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     // Write the HTML file
     fs.writeFileSync(path.join(docsDir, 'tools.html'), html);
-    console.log('✅ Tools documentation generated: docs/tools.html');
+
+    // Format with Prettier so regeneration is idempotent. Without this the
+    // generator's raw output differs from the committed copy on every run,
+    // turning a one-line version bump into a whole-file reformat. Mirrors
+    // what extract-docs.js already does for docs-data/tools.json.
+    try {
+      execSync('npx prettier --write docs/tools.html', { stdio: 'inherit' });
+      console.log('✅ Tools documentation generated and formatted: docs/tools.html');
+    } catch {
+      console.log('✅ Tools documentation generated: docs/tools.html (formatting skipped)');
+    }
   } catch (error) {
     console.error('❌ Error generating tools documentation:', error.message);
     process.exit(1);

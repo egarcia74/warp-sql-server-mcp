@@ -1,5 +1,3 @@
-> **Archived** - historical and unmaintained. See the [documentation index](../README.md) for current docs.
-
 # Automatic Environment Configuration Detection — Research & Analysis
 
 > **Issue**: [#57](https://github.com/egarcia74/warp-sql-server-mcp/issues/57)  
