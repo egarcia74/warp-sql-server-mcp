@@ -1,7 +1,6 @@
 # SQL Server MCP Testing Guide
 
-> **Audience**: Operators validating a deployment across all testing layers  
-> **Last reviewed**: 2026-09-06
+> **Audience**: Operators validating a deployment across all testing layers
 
 ## Overview
 

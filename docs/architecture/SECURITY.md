@@ -1,7 +1,6 @@
 # Security Policy
 
-> **Audience**: Operators configuring the safety tiers, and reviewers assessing the threat model  
-> **Last reviewed**: 2026-09-06
+> **Audience**: Operators configuring the safety tiers, and reviewers assessing the threat model
 
 ## 🔒 Overview
 

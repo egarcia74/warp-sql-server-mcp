@@ -1,7 +1,6 @@
 # Release Token Setup Guide
 
-> **Audience**: Maintainers configuring CI/CD publish credentials  
-> **Last reviewed**: 2026-09-06
+> **Audience**: Maintainers configuring CI/CD publish credentials
 
 ## Overview
 

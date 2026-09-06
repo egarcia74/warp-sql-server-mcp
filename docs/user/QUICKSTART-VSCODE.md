@@ -1,7 +1,6 @@
 # VS Code Copilot + SQL Server MCP Guide
 
-> **Audience**: First-time users wiring the server into VS Code + GitHub Copilot  
-> **Last reviewed**: 2026-09-06
+> **Audience**: First-time users wiring the server into VS Code + GitHub Copilot
 
 Connect **GitHub Copilot** in VS Code directly to your **SQL Server** using MCP! 🤖
 

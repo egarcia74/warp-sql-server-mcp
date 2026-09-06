@@ -1,7 +1,6 @@
 # Git Release Checklist
 
-> **Audience**: Maintainers cutting a release  
-> **Last reviewed**: 2026-09-06
+> **Audience**: Maintainers cutting a release
 >
 > This checklist standardizes how we cut releases and publish artifacts.
 > It complements the Commit and Push checklists and reflects our current

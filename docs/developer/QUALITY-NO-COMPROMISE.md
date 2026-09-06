@@ -1,7 +1,6 @@
 # No-Compromise Quality: The WARP Project Case Study
 
-> **Audience**: Anyone weighing the cost of a zero-tolerance quality gate (2025 case study)  
-> **Last reviewed**: 2026-09-06
+> **Audience**: Anyone weighing the cost of a zero-tolerance quality gate (2025 case study)
 >
 > **Mission Statement**: Document the challenges, realities, and outcomes when making software quality absolutely non-negotiable.
 
@@ -16,7 +15,7 @@ project. It serves as both a testament to what's possible and a warning about th
 > preserved so the case study's before/after reasoning still reads correctly. None of it is current —
 > the test, coverage, file and link counts have all moved since. For today's numbers see the
 > [Testing Guide](TESTING-GUIDE.md) and [`test/README.md`](../../test/README.md): 1,176 tests
-> (1,109 unit, 27 Vitest integration, 40 live-database) across 106 markdown files.
+> (1,109 unit, 27 Vitest integration, 40 live-database) across 55 tracked markdown files.
 >
 > Note the snapshot is internally inconsistent — "525 automated tests" and "492/492 tests passing"
 > below cannot both be true. Reproduced as written rather than silently corrected.

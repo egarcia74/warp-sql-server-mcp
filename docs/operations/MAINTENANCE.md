@@ -1,7 +1,6 @@
 # 🛠️ System Maintenance Guide
 
-> **Audience**: Operators reclaiming resources from orphaned test processes  
-> **Last reviewed**: 2026-09-06
+> **Audience**: Operators reclaiming resources from orphaned test processes
 
 This guide covers essential maintenance tasks for the WARP SQL Server MCP project to keep your development environment running optimally.
 

@@ -1,7 +1,6 @@
 # Apple Silicon Docker SQL Server Troubleshooting Guide
 
-> **Audience**: Anyone whose SQL Server test container misbehaves on an M-series Mac  
-> **Last reviewed**: 2026-09-06
+> **Audience**: Anyone whose SQL Server test container misbehaves on an M-series Mac
 
 This guide helps resolve common SQL Server Docker issues on Apple Silicon (M1/M2) Macs.
 

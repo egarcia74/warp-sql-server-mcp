@@ -1,7 +1,6 @@
 # Debug Logging and Log Analysis
 
-> **Audience**: Anyone diagnosing server behaviour from its logs  
-> **Last reviewed**: 2026-09-06
+> **Audience**: Anyone diagnosing server behaviour from its logs
 
 This document describes the logging features and debugging tools available in the Warp SQL Server MCP.
 
