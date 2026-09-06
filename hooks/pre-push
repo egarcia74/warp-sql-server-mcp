@@ -6,9 +6,11 @@ echo "[pre-push] Running pre-push checks..."
 
 # Clean up any leftover test processes first
 if [ -f "scripts/cleanup-test-processes.sh" ]; then
-  echo "[pre-push] 🧹 Cleaning up leftover test processes..."
+  # Reports only. A hook must not kill processes on a heuristic that cannot
+  # tell an adopted orphan from one a session manager spawned deliberately.
+  echo "[pre-push] 🧹 Checking for leftover test processes..."
   ./scripts/cleanup-test-processes.sh
-  echo "[pre-push] ✅ Process cleanup complete."
+  echo "[pre-push] ✅ Process check complete (run 'npm run cleanup -- --kill' to terminate any listed)."
 fi
 
 # Check if we're in a Node.js project

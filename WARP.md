@@ -1317,7 +1317,7 @@ npm run cleanup:processes
 #### **Automated Integration**
 
 - **Pre-Push Hook Integration**: Cleanup runs automatically before comprehensive testing
-- **Orphans Only**: Terminates only Vitest processes adopted by an init-like parent; a live suite is reported and left alone (see [System Maintenance Guide](docs/operations/MAINTENANCE.md))
+- **Reports, Does Not Kill**: The pre-push hook only lists leftover Vitest processes; terminating requires `npm run cleanup -- --kill`, which targets PID-1 orphans only (see [System Maintenance Guide](docs/operations/MAINTENANCE.md))
 - **Resource Monitoring**: Reports system load improvements after cleanup
 - **Quality Gate Protection**: Prevents system overload during testing
 

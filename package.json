@@ -87,7 +87,8 @@
     "audit:fix": "npm audit fix",
     "clean": "rm -rf node_modules coverage .vitest",
     "cleanup": "./scripts/cleanup-test-processes.sh",
-    "cleanup:processes": "./scripts/cleanup-test-processes.sh"
+    "cleanup:processes": "./scripts/cleanup-test-processes.sh",
+    "cleanup:kill": "./scripts/cleanup-test-processes.sh --kill"
   },
   "keywords": [
     "mcp",

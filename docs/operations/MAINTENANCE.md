@@ -51,20 +51,26 @@ The cleanup is automatically integrated into:
 
 The `cleanup-test-processes.sh` script:
 
-- ✅ **Orphans only**: Terminates a Vitest process only when its parent has died and it has been
-  adopted by an init-like process (PID 1, or a `systemd --user` / `launchd` session manager). A
-  Vitest process with a live parent is somebody's running suite and is reported as deliberately
-  skipped, never killed - including a run in another checkout, and including the caller's own.
-- ✅ **Safe Termination**: Graceful kill first, force kill as backup, then re-checks and says so if
-  a process could not be signalled (for example one owned by another user)
-- ✅ **Progress Reporting**: Shows what was terminated and what was skipped, and why
-- ✅ **System Status**: Displays load after cleanup
+- ✅ **Reports by default**: With no arguments the script lists what it found and exits 0. It never
+  terminates anything unless you pass `--kill` (`npm run cleanup -- --kill`, or `npm run
+cleanup:kill`). The pre-push hook calls it without arguments, so pushing can no longer kill a
+  process.
+- ✅ **Conservative selection**: `--kill` targets only processes whose parent is **PID 1**. A Vitest
+  process with a live parent is never touched - not a run in another checkout, and not the caller's
+  own suite.
+- ✅ **PID-reuse safe**: the command is re-checked immediately before `SIGKILL`, so a PID recycled
+  during the wait cannot be killed by mistake.
+- ✅ **Rescans after TERM**: killing a coordinator reparents its workers to PID 1, so the scan is
+  repeated rather than working from the original list.
+- ✅ **Honest reporting**: a kill that fails - for example a process owned by another user, which
+  `ps -e` lists but cannot be signalled - is reported, not swallowed.
 
-> **Known gap**: an abandoned `npm run test:unit` whose `npm`/`sh` wrappers are still alive leaves
-> Vitest with a live, non-init parent, so it is skipped. That is deliberate - it cannot be told apart
-> from a running suite without guessing - but it means the script does not catch every leak. Kill
-> those by hand. Before this was scoped, the script killed every Vitest process it could see,
-> including healthy ones.
+> **Known gap, deliberately not guessed at.** There is no reliable way to distinguish an _adopted_
+> orphan from a process a session manager spawned on purpose. Under `systemd --user` (which sets
+> `PR_SET_CHILD_SUBREAPER`) orphans reparent to the user manager rather than to PID 1, so `--kill`
+> will not find them. Matching on the parent's command instead would kill a Vitest run launched _as_
+> a user systemd service. Under-detecting is the failure worth having; list processes yourself with
+> `ps -ef | grep vitest` and kill by hand if needed.
 
 ## 🔄 Regular Maintenance Tasks
 

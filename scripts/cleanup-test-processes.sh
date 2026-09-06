@@ -1,43 +1,54 @@
 #!/bin/bash
 
-# WARP SQL Server MCP - Test Process Cleanup Script
+# WARP SQL Server MCP - Test Process Cleanup
 #
-# Terminates ORPHANED Vitest processes only.
+# Reports leftover Vitest processes. Terminates them only with --kill.
 #
-# The previous version selected every process matching `node.*vitest` and killed
-# it, which meant running this - or the pre-push hook that calls it - could tear
-# down a test run that was working perfectly well, including one in a different
-# checkout, and including the caller's own suite. docs/operations/MAINTENANCE.md
-# promised "zero false positives"; that promise is only true if the selection is
-# actually scoped, which is what this does.
+# History, because the naive versions of this are actively harmful:
 #
-# Orphaned means the process was reparented to an init-like process because the
-# shell or runner that started it died. A Vitest process still owned by a live
-# parent is somebody's running test suite and is left alone. The script's own
-# process ancestry is excluded as well, so it can never kill its caller.
+#   1. The original selected every process matching `node.*vitest` and killed
+#      it. Running it - or the pre-push hook that calls it - could tear down a
+#      healthy suite in any checkout, including the caller's own.
+#   2. Restricting that to PPID 1 fixed the false positives but is a silent
+#      no-op under `systemd --user`, which sets PR_SET_CHILD_SUBREAPER so
+#      orphans reparent to the user manager rather than to PID 1.
+#   3. Also matching a parent whose command contains `systemd` fixed the
+#      no-op and reintroduced the original harm from the other direction: a
+#      Vitest run launched *as* a user systemd service has the user manager as
+#      its live parent, and would be killed as an "orphan".
 #
-# "Init-like" is NOT just PID 1. On Linux, `systemd --user` sets
-# PR_SET_CHILD_SUBREAPER, so an orphan in a desktop session reparents to the
-# user manager rather than to PID 1. Testing `ppid == 1` alone would classify
-# every such orphan as live and make this script a silent no-op on the most
-# common Linux dev setup - while still printing a reassuring "leaving them
-# alone". So the parent's command is checked too.
+# There is no reliable way to tell an adopted orphan from a process the
+# session manager spawned deliberately. So this script does not guess:
 #
-# Known residual gap: an abandoned `npm run test:unit` whose npm/sh wrappers
-# are still alive leaves vitest with a live, non-init parent, and is skipped.
-# That is deliberate - it is indistinguishable from a running suite without
-# guessing - but it means this script does not catch every leak.
+#   * It reports by default and exits 0. Safe to call from a hook.
+#   * `--kill` terminates, and only processes whose parent is PID 1 - the
+#     conservative subset. Under a systemd user session some orphans will not
+#     be detected; that is a missed cleanup, which is the failure worth having.
+#   * Its own process ancestry is always excluded, so it can never kill its
+#     caller.
 
 set -uo pipefail
 
+KILL=0
+for arg in "$@"; do
+  case "$arg" in
+    --kill) KILL=1 ;;
+    -h|--help)
+      echo "Usage: $0 [--kill]"
+      echo "  (no args)  report leftover Vitest processes and exit 0"
+      echo "  --kill     terminate processes whose parent is PID 1"
+      exit 0
+      ;;
+    *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
+  esac
+done
+
 echo "🧹 WARP Test Process Cleanup"
 echo "=================================="
-echo "📊 Scanning for orphaned Vitest processes..."
 
-# PIDs from this script up to init, so we never target our own ancestry.
 self_ancestry() {
   local pid=$$
-  while [ "$pid" -gt 1 ]; do
+  while [ "$pid" -gt 1 ] 2>/dev/null; do
     echo "$pid"
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -z "$pid" ] && break
@@ -45,90 +56,97 @@ self_ancestry() {
 }
 ANCESTRY=" $(self_ancestry | tr '\n' ' ') "
 
-# A parent is init-like if it is PID 1 or a session/user manager that adopts
-# orphans (systemd --user, launchd, init, upstart).
-is_init_like() {
-  local ppid="$1"
-  [ "$ppid" = "1" ] && return 0
-  local pcmd
-  pcmd=$(ps -o command= -p "$ppid" 2>/dev/null || true)
-  case "$pcmd" in
-    *systemd*|*launchd*|/sbin/init*|*/init) return 0 ;;
-    *) return 1 ;;
-  esac
+# Emits "pid ppid command" for every Vitest process that is not us.
+scan() {
+  # pgrep cannot report PPID and command together, and the parent is what the
+  # orphan test needs.
+  # shellcheck disable=SC2009
+  ps -eo pid=,ppid=,command= 2>/dev/null | grep -E "node.*vitest" | grep -v grep \
+  | while read -r pid ppid command; do
+      case "$command" in *cleanup-test-processes*) continue ;; esac
+      case "$ANCESTRY" in *" $pid "*) continue ;; esac
+      echo "$pid $ppid $command"
+    done
 }
 
-ORPHAN_PIDS=""
-LIVE_COUNT=0
+# True only if the command still looks like the Vitest process we selected.
+# Guards against PID reuse between TERM and KILL: the PID can be recycled
+# during the wait, and `kill -0` only proves *something* holds that number.
+still_vitest() {
+  local pid="$1"
+  ps -o command= -p "$pid" 2>/dev/null | grep -qE "node.*vitest"
+}
 
-# `ps -o pid=,ppid=,command=` is portable across macOS and Linux.
-# pgrep cannot report PPID and command together, and the parent is precisely
-# what distinguishes an orphan from a live run - hence ps, not pgrep.
-# shellcheck disable=SC2009
+ORPHANS=""
+LIVE=0
 while read -r pid ppid command; do
-  case "$command" in
-    *vitest*) ;;
-    *) continue ;;
-  esac
-  case "$command" in
-    *cleanup-test-processes*) continue ;;
-  esac
-  case "$ANCESTRY" in
-    *" $pid "*) continue ;;
-  esac
-  if is_init_like "$ppid"; then
-    ORPHAN_PIDS="$ORPHAN_PIDS $pid"
+  [ -z "${pid:-}" ] && continue
+  if [ "$ppid" = "1" ]; then
+    ORPHANS="$ORPHANS $pid"
   else
-    LIVE_COUNT=$((LIVE_COUNT + 1))
+    LIVE=$((LIVE + 1))
   fi
-done < <(ps -eo pid=,ppid=,command= 2>/dev/null | grep -E "node.*vitest" | grep -v grep || true)
+done < <(scan)
+ORPHANS="$(echo "$ORPHANS" | xargs || true)"
 
-ORPHAN_PIDS="$(echo "$ORPHAN_PIDS" | xargs || true)"
-
-if [ "$LIVE_COUNT" -gt 0 ]; then
-  echo "ℹ️  $LIVE_COUNT Vitest process(es) still have a live parent - leaving them alone."
-  echo "   These are running test suites, not leftovers."
+if [ "$LIVE" -gt 0 ]; then
+  echo "ℹ️  $LIVE Vitest process(es) have a live parent - not touched."
+  echo "   These are running suites, or orphans adopted by a subreaper that"
+  echo "   this script deliberately does not try to identify."
 fi
 
-if [ -z "$ORPHAN_PIDS" ]; then
-  echo "✅ No orphaned Vitest processes found"
+if [ -z "$ORPHANS" ]; then
+  echo "✅ No orphaned Vitest processes (parent = PID 1) found"
 else
-  echo "⚠️  Found orphaned Vitest processes (parent exited): $ORPHAN_PIDS"
-  echo "🔄 Terminating..."
-  # shellcheck disable=SC2086
-  kill $ORPHAN_PIDS 2>/dev/null || true
-
-  sleep 2
-
-  STILL_RUNNING=""
-  for pid in $ORPHAN_PIDS; do
-    if kill -0 "$pid" 2>/dev/null; then
-      STILL_RUNNING="$STILL_RUNNING $pid"
-    fi
-  done
-  STILL_RUNNING="$(echo "$STILL_RUNNING" | xargs || true)"
-
-  if [ -n "$STILL_RUNNING" ]; then
-    echo "💥 Force killing stubborn processes: $STILL_RUNNING"
-    # shellcheck disable=SC2086
-    kill -9 $STILL_RUNNING 2>/dev/null || true
-    sleep 1
-  fi
-
-  # Re-check rather than assume: a process owned by another user is listed by
-  # `ps -e` but cannot be signalled, and both kills fail silently.
-  SURVIVED=""
-  for pid in $ORPHAN_PIDS; do
-    if kill -0 "$pid" 2>/dev/null; then
-      SURVIVED="$SURVIVED $pid"
-    fi
-  done
-  SURVIVED="$(echo "$SURVIVED" | xargs || true)"
-
-  if [ -n "$SURVIVED" ]; then
-    echo "⚠️  Could not terminate: $SURVIVED (owned by another user?)"
+  echo "⚠️  Orphaned Vitest processes (parent = PID 1): $ORPHANS"
+  if [ "$KILL" -eq 0 ]; then
+    ORPHAN_CSV="$(echo "$ORPHANS" | tr ' ' ',')"
+    ps -o pid=,etime=,command= -p "$ORPHAN_CSV" 2>/dev/null || true
+    echo ""
+    echo "   Reporting only. To terminate these: npm run cleanup -- --kill"
   else
-    echo "✅ Cleanup complete"
+    echo "🔄 Terminating..."
+    # shellcheck disable=SC2086
+    kill $ORPHANS 2>/dev/null || true
+    sleep 2
+
+    # Killing a coordinator reparents its workers to PID 1, so rescan once
+    # rather than working from the original list.
+    SECOND=""
+    while read -r pid ppid command; do
+      [ -z "${pid:-}" ] && continue
+      [ "$ppid" = "1" ] && SECOND="$SECOND $pid"
+    done < <(scan)
+    SECOND="$(echo "$SECOND" | xargs || true)"
+
+    STUBBORN=""
+    for pid in $SECOND; do
+      if kill -0 "$pid" 2>/dev/null && still_vitest "$pid"; then
+        STUBBORN="$STUBBORN $pid"
+      fi
+    done
+    STUBBORN="$(echo "$STUBBORN" | xargs || true)"
+
+    if [ -n "$STUBBORN" ]; then
+      echo "💥 Force killing: $STUBBORN"
+      # shellcheck disable=SC2086
+      kill -9 $STUBBORN 2>/dev/null || true
+      sleep 1
+    fi
+
+    SURVIVED=""
+    for pid in $STUBBORN; do
+      if kill -0 "$pid" 2>/dev/null && still_vitest "$pid"; then
+        SURVIVED="$SURVIVED $pid"
+      fi
+    done
+    SURVIVED="$(echo "$SURVIVED" | xargs || true)"
+
+    if [ -n "$SURVIVED" ]; then
+      echo "⚠️  Could not terminate: $SURVIVED (owned by another user?)"
+    else
+      echo "✅ Cleanup complete"
+    fi
   fi
 fi
 
@@ -141,6 +159,3 @@ if command -v top >/dev/null 2>&1; then
     top -b -n 1 | head -5   # Linux
   fi
 fi
-
-echo ""
-echo "🎯 Done."

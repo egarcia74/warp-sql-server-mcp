@@ -30,13 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **`scripts/cleanup-test-processes.sh` no longer kills healthy test runs.** It previously selected every
-  `node.*vitest` process and killed it, with no check on parent or ownership - so running it, or the pre-push hook
-  that calls it, could tear down a working suite in any checkout, including the caller's own. It now terminates only
-  processes adopted by an init-like parent (PID 1, or a `systemd --user` / `launchd` session manager, since systemd
-  sets `PR_SET_CHILD_SUBREAPER` and orphans do not reparent to PID 1 there). Live runs are reported as skipped, and
-  a failed kill is now surfaced instead of reported as success. Also fixes `top` on Linux, which needs `-b -n 1`
-  ([#1153](https://github.com/egarcia74/warp-sql-server-mcp/pull/1153)).
+- **`scripts/cleanup-test-processes.sh` no longer kills healthy test runs, and no longer kills anything by
+  default.** It previously selected every `node.*vitest` process and killed it, with no check on parent or
+  ownership - so running it, or the pre-push hook that calls it, could tear down a working suite in any checkout,
+  including the caller's own. It now **reports by default and exits 0**; termination requires `--kill`
+  (`npm run cleanup -- --kill`), which targets only processes whose parent is PID 1. There is no reliable way to
+  distinguish an adopted orphan from a process a session manager spawned deliberately, so the script does not
+  guess: under `systemd --user` some orphans will not be detected, which is the safer failure. The command is
+  re-checked before `SIGKILL` so a recycled PID cannot be hit, the scan is repeated after `TERM` to catch workers
+  reparented by killing their coordinator, and a kill that fails is reported rather than swallowed. Also fixes
+  `top` on Linux, which needs `-b -n 1`
+  ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).
 
 ### Security
 
