@@ -4,10 +4,9 @@
 >
 > **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
 > unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
-> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE`,
-> `AWS_REGION` or `AZURE_KEY_VAULT_URL` currently has **no effect** - a deployment with credentials
-> only in AWS Secrets Manager or Azure Key Vault will not connect. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
-> Use environment variables until this is resolved.
+> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE` or `AWS_REGION` currently has
+> **no effect** - a deployment with credentials only in AWS Secrets Manager will not connect. Use plain
+> environment variables ([ENV-VARS.md](ENV-VARS.md)) until this is resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
 
 This guide provides comprehensive instructions for configuring AWS Secrets Manager with the Warp SQL Server MCP project.
 
@@ -335,7 +334,7 @@ const user = await secretManager.getSecret('sql-mcp/SQL_SERVER_USER');
 ```bash
 export SECRET_MANAGER_TYPE="aws"
 export AWS_REGION="us-east-1"
-# Individual secrets will be automatically retrieved
+# Individual secrets are intended to be automatically retrieved once #1152 is resolved; today they are not
 ```
 
 ### Strategy 2: Structured JSON Secrets
@@ -940,6 +939,7 @@ Resources:
             Resource: !Ref SQLMCPDatabaseSecret
 ```
 
-This completes the comprehensive AWS Secrets Manager configuration guide. The secret manager
-handles both individual secrets and JSON-structured secrets automatically, providing maximum
-flexibility for different deployment scenarios.
+This completes the comprehensive AWS Secrets Manager configuration guide. Once the integration is
+wired into startup ([#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)), the secret manager will handle both individual secrets and
+JSON-structured secrets automatically. **Until then none of the above takes effect at runtime** -
+use plain environment variables ([ENV-VARS.md](ENV-VARS.md)).

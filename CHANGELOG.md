@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`SQL_SERVER_RESPONSE_FORMAT` and the `ResponseFormatter` class.** The setting was never consumed by any code
+  path: tool responses are formatted by `base-handler.formatResults()` and `lib/utils/result-formatter.js`, and
+  nothing ever constructed `ResponseFormatter`. Setting the variable had no effect, and its two defaults disagreed
+  (`json` in `ServerConfig`, `structured` in the formatter). Removed rather than wired in, since wiring it would have
+  changed output format for every consumer to deliver a feature nobody could have been using.
+  **`get_server_info` no longer returns `logging.responseFormat`** - it reported a value that controlled nothing.
+  `lib/utils/response-formatter.js` was a deep-importable path of the published package, so treat this as a
+  user-visible removal ([#1153](https://github.com/egarcia74/warp-sql-server-mcp/pull/1153)).
+
+### Fixed
+
+- **`scripts/cleanup-test-processes.sh` no longer kills healthy test runs.** It previously selected every
+  `node.*vitest` process and killed it, with no check on parent or ownership - so running it, or the pre-push hook
+  that calls it, could tear down a working suite in any checkout, including the caller's own. It now terminates only
+  processes adopted by an init-like parent (PID 1, or a `systemd --user` / `launchd` session manager, since systemd
+  sets `PR_SET_CHILD_SUBREAPER` and orphans do not reparent to PID 1 there). Live runs are reported as skipped, and
+  a failed kill is now surfaced instead of reported as success. Also fixes `top` on Linux, which needs `-b -n 1`
+  ([#1153](https://github.com/egarcia74/warp-sql-server-mcp/pull/1153)).
+
 ### Security
 
 - npm releases are now published with provenance: `npm-publish.yml` runs `npm publish --provenance` under an OIDC

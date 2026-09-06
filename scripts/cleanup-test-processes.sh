@@ -11,10 +11,22 @@
 # promised "zero false positives"; that promise is only true if the selection is
 # actually scoped, which is what this does.
 #
-# Orphaned means the process was reparented to init/launchd (PPID 1) because the
+# Orphaned means the process was reparented to an init-like process because the
 # shell or runner that started it died. A Vitest process still owned by a live
 # parent is somebody's running test suite and is left alone. The script's own
 # process ancestry is excluded as well, so it can never kill its caller.
+#
+# "Init-like" is NOT just PID 1. On Linux, `systemd --user` sets
+# PR_SET_CHILD_SUBREAPER, so an orphan in a desktop session reparents to the
+# user manager rather than to PID 1. Testing `ppid == 1` alone would classify
+# every such orphan as live and make this script a silent no-op on the most
+# common Linux dev setup - while still printing a reassuring "leaving them
+# alone". So the parent's command is checked too.
+#
+# Known residual gap: an abandoned `npm run test:unit` whose npm/sh wrappers
+# are still alive leaves vitest with a live, non-init parent, and is skipped.
+# That is deliberate - it is indistinguishable from a running suite without
+# guessing - but it means this script does not catch every leak.
 
 set -uo pipefail
 
@@ -32,6 +44,19 @@ self_ancestry() {
   done
 }
 ANCESTRY=" $(self_ancestry | tr '\n' ' ') "
+
+# A parent is init-like if it is PID 1 or a session/user manager that adopts
+# orphans (systemd --user, launchd, init, upstart).
+is_init_like() {
+  local ppid="$1"
+  [ "$ppid" = "1" ] && return 0
+  local pcmd
+  pcmd=$(ps -o command= -p "$ppid" 2>/dev/null || true)
+  case "$pcmd" in
+    *systemd*|*launchd*|/sbin/init*|*/init) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 ORPHAN_PIDS=""
 LIVE_COUNT=0
@@ -51,7 +76,7 @@ while read -r pid ppid command; do
   case "$ANCESTRY" in
     *" $pid "*) continue ;;
   esac
-  if [ "$ppid" = "1" ]; then
+  if is_init_like "$ppid"; then
     ORPHAN_PIDS="$ORPHAN_PIDS $pid"
   else
     LIVE_COUNT=$((LIVE_COUNT + 1))
@@ -87,9 +112,24 @@ else
     echo "💥 Force killing stubborn processes: $STILL_RUNNING"
     # shellcheck disable=SC2086
     kill -9 $STILL_RUNNING 2>/dev/null || true
+    sleep 1
   fi
 
-  echo "✅ Cleanup complete"
+  # Re-check rather than assume: a process owned by another user is listed by
+  # `ps -e` but cannot be signalled, and both kills fail silently.
+  SURVIVED=""
+  for pid in $ORPHAN_PIDS; do
+    if kill -0 "$pid" 2>/dev/null; then
+      SURVIVED="$SURVIVED $pid"
+    fi
+  done
+  SURVIVED="$(echo "$SURVIVED" | xargs || true)"
+
+  if [ -n "$SURVIVED" ]; then
+    echo "⚠️  Could not terminate: $SURVIVED (owned by another user?)"
+  else
+    echo "✅ Cleanup complete"
+  fi
 fi
 
 echo ""

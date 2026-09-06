@@ -14,7 +14,7 @@
 >    run `npm test`, so those 40 tests gate every pull request.
 >
 > For the current picture, see [`test/README.md`](../../test/README.md) and
-> [`WARP.md`](../../WARP.md). Today's totals are 1,176 tests - 1,109 unit, 27 Vitest integration and
+> [`WARP.md`](../../WARP.md). Today's totals are 1,141 tests - 1,074 unit, 27 Vitest integration and
 > 40 live-database - every one of which runs automatically per pull request, plus the
 > `mcp-server-startup-test.js` handshake check. The 20-test `mcp-client-smoke-test.js` round trip
 > that earlier totals included has since been removed; it could not run.
@@ -27,7 +27,7 @@ We have successfully reorganized the integration test files to ensure they are *
 
 ```text
 test/
-├── unit/                              # Automated unit tests (535+ at the time; 1,109 today)
+├── unit/                              # Automated unit tests (535+ at the time; 1,074 today)
 ├── integration/
 │   ├── sqlserver-mcp-integration.test.js  # Automated integration tests (15 tests)
 │   └── manual/                        # 🆕 Manual integration tests (40 tests)
@@ -135,7 +135,7 @@ phase3-ddl-operations.test.js
 
 _Figures as of this reorganisation; see the note at the top of this document for today's numbers._
 
-- **Unit tests** (535+ then, 1,109 now): Fast, mocked, always run
+- **Unit tests** (535+ then, 1,074 now): Fast, mocked, always run
 - **Automated integration** (15 then, 27 now): Safe, no external dependencies
 - **Manual integration** (40, unchanged): Live database - production validation then, and now also
   run automatically in CI against a Docker SQL Server

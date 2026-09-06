@@ -8,7 +8,7 @@ This guide covers essential maintenance tasks for the WARP SQL Server MCP projec
 
 ### Problem: Memory-Heavy Test Processes
 
-During intensive testing sessions (like our comprehensive 1,109-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
+During intensive testing sessions (like our comprehensive 1,074-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
 
 - **Symptoms**: High CPU usage (100%+), excessive memory consumption (500MB+ per process), system slowdown
 - **Root Cause**: Test worker processes not terminating cleanly after test completion
@@ -51,11 +51,20 @@ The cleanup is automatically integrated into:
 
 The `cleanup-test-processes.sh` script:
 
-- ✅ **Smart Detection**: Only targets actual Vitest test processes
-- ✅ **Safe Termination**: Uses graceful kill first, force kill as backup
-- ✅ **Progress Reporting**: Shows which processes are being cleaned
-- ✅ **System Status**: Displays load improvement after cleanup
-- ✅ **Zero False Positives**: Won't kill legitimate Node processes
+- ✅ **Orphans only**: Terminates a Vitest process only when its parent has died and it has been
+  adopted by an init-like process (PID 1, or a `systemd --user` / `launchd` session manager). A
+  Vitest process with a live parent is somebody's running suite and is reported as deliberately
+  skipped, never killed - including a run in another checkout, and including the caller's own.
+- ✅ **Safe Termination**: Graceful kill first, force kill as backup, then re-checks and says so if
+  a process could not be signalled (for example one owned by another user)
+- ✅ **Progress Reporting**: Shows what was terminated and what was skipped, and why
+- ✅ **System Status**: Displays load after cleanup
+
+> **Known gap**: an abandoned `npm run test:unit` whose `npm`/`sh` wrappers are still alive leaves
+> Vitest with a live, non-init parent, so it is skipped. That is deliberate - it cannot be told apart
+> from a running suite without guessing - but it means the script does not catch every leak. Kill
+> those by hand. Before this was scoped, the script killed every Vitest process it could see,
+> including healthy ones.
 
 ## 🔄 Regular Maintenance Tasks
 
@@ -85,7 +94,7 @@ git push                # Pre-push hook includes cleanup
 ### Performance Monitoring
 
 ```bash
-# Check system load
+# Check system load (macOS; on Linux use: top -b -n 1 | head -10)
 top -l 1 | head -10
 
 # Monitor Node processes

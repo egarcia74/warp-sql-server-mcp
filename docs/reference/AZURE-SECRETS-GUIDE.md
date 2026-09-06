@@ -4,10 +4,9 @@
 >
 > **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
 > unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
-> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE`,
-> `AWS_REGION` or `AZURE_KEY_VAULT_URL` currently has **no effect** - a deployment with credentials
-> only in AWS Secrets Manager or Azure Key Vault will not connect. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
-> Use environment variables until this is resolved.
+> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE` or `AZURE_KEY_VAULT_URL` currently has
+> **no effect** - a deployment with credentials only in Azure Key Vault will not connect. Use plain
+> environment variables ([ENV-VARS.md](ENV-VARS.md)) until this is resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
 
 This guide provides comprehensive instructions for configuring Azure Key Vault with the Warp SQL Server MCP project.
 
@@ -86,7 +85,7 @@ az keyvault secret set --vault-name "your-sql-mcp-vault" --name "SQL-SERVER-POOL
 - **Length**: 1-127 characters
 - **Case**: Case-insensitive
 
-The MCP server automatically converts environment variable names to Azure-compatible format:
+Once wired up (see #1152), the MCP server will convert environment variable names to Azure-compatible format:
 
 | Environment Variable  | Azure Key Vault Secret Name |
 | --------------------- | --------------------------- |
@@ -535,6 +534,7 @@ console.log(health);
 }
 ```
 
-This completes the comprehensive Azure Key Vault configuration guide. The secret manager will
-handle the automatic conversion between environment variable names and Azure-compatible secret
-names, providing seamless integration with your existing configuration patterns.
+This completes the comprehensive Azure Key Vault configuration guide. Once the integration is wired
+into startup ([#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)), the secret manager will convert between environment variable names and
+Azure-compatible secret names automatically. **Until then none of the above takes effect at
+runtime** - use plain environment variables ([ENV-VARS.md](ENV-VARS.md)).
