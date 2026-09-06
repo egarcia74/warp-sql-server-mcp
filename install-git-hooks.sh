@@ -40,7 +40,12 @@ for hook in "$HOOKS_DIR"/*; do
     ln -s "$hook" "$target"
     chmod +x "$hook"
     echo "✓ Installed $name hook"
-    ((installed_count++))
+    # Not ((installed_count++)): post-increment evaluates to the OLD value, so
+    # the first iteration returns 0, which bash treats as a failed command. Under
+    # `set -e` (line 3) that aborts the script after the first hook is linked.
+    # bash 3.2 (macOS /bin/bash) does not abort, which is why this went unnoticed
+    # locally while breaking for anyone on bash 4+.
+    installed_count=$((installed_count + 1))
   fi
 done
 
