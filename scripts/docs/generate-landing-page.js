@@ -2,7 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import prettier from 'prettier';
 
 /**
  * Generates the landing page HTML with dynamic tool information
@@ -229,13 +229,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     // Format with Prettier so regeneration is idempotent. Without this the
     // generator's raw output differs from the committed copy on every run,
-    // turning a one-line version bump into a whole-file reformat. Mirrors
-    // what extract-docs.js already does for docs-data/tools.json.
+    // turning a one-line version bump into a whole-file reformat. Uses the
+    // Prettier API rather than shelling out to `npx prettier`, which avoids
+    // a PATH-dependent subprocess (SonarQube javascript:S4036).
     try {
-      execSync('npx prettier --write docs/index.html', { stdio: 'inherit' });
+      const outPath = path.join(docsDir, 'index.html');
+      const options = await prettier.resolveConfig(outPath);
+      const formatted = await prettier.format(html, { ...options, filepath: outPath });
+      fs.writeFileSync(outPath, formatted);
       console.log('✅ Landing page generated and formatted: docs/index.html');
-    } catch {
-      console.log('✅ Landing page generated: docs/index.html (formatting skipped)');
+    } catch (formatError) {
+      console.log(
+        `✅ Landing page generated: docs/index.html (formatting skipped: ${formatError.message})`
+      );
     }
   } catch (error) {
     console.error('❌ Error generating landing page:', error.message);

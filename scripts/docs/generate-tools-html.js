@@ -2,7 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import prettier from 'prettier';
 
 /**
  * Generates the detailed tools documentation HTML page
@@ -323,13 +323,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     // Format with Prettier so regeneration is idempotent. Without this the
     // generator's raw output differs from the committed copy on every run,
-    // turning a one-line version bump into a whole-file reformat. Mirrors
-    // what extract-docs.js already does for docs-data/tools.json.
+    // turning a one-line version bump into a whole-file reformat. Uses the
+    // Prettier API rather than shelling out to `npx prettier`, which avoids
+    // a PATH-dependent subprocess (SonarQube javascript:S4036).
     try {
-      execSync('npx prettier --write docs/tools.html', { stdio: 'inherit' });
+      const outPath = path.join(docsDir, 'tools.html');
+      const options = await prettier.resolveConfig(outPath);
+      const formatted = await prettier.format(html, { ...options, filepath: outPath });
+      fs.writeFileSync(outPath, formatted);
       console.log('✅ Tools documentation generated and formatted: docs/tools.html');
-    } catch {
-      console.log('✅ Tools documentation generated: docs/tools.html (formatting skipped)');
+    } catch (formatError) {
+      console.log(
+        `✅ Tools documentation generated: docs/tools.html (formatting skipped: ${formatError.message})`
+      );
     }
   } catch (error) {
     console.error('❌ Error generating tools documentation:', error.message);
