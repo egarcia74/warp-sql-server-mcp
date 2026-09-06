@@ -924,7 +924,7 @@ node scripts/docs/generate-landing-page.js
 
 Generated files:
 
-- `docs/tools.json`: Extracted tool definitions
+- `docs-data/tools.json`: Extracted tool definitions
 - `docs/index.html`: Landing page
 - `docs/tools.html`: Detailed API documentation
 
@@ -1128,7 +1128,7 @@ The project uses a comprehensive multi-layered tracking system for managing feat
 #### 📋 **Product Backlog Document**
 
 - **[PRODUCT-BACKLOG.md](PRODUCT-BACKLOG.md)**: Complete prioritized feature list with business value analysis
-- **18 features** organized by priority and implementation phase
+- **19 features** organized by priority and implementation phase
 - **Strategic alignment** with enterprise-grade software framework vision
 - **Updated on change**: revised when features ship, priorities move, or new work is planned
 

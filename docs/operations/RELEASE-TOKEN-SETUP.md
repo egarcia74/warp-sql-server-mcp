@@ -1,5 +1,7 @@
 # Release Token Setup Guide
 
+> **Audience**: Maintainers configuring CI/CD publish credentials
+
 ## Overview
 
 This guide explains how to set up an optional `RELEASE_TOKEN` to completely eliminate Token-Permissions security

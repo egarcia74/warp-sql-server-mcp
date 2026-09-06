@@ -1,5 +1,7 @@
 # Git Commit Checklist
 
+> **Audience**: Contributors about to commit - what the pre-commit hook will run
+>
 > **⚠️ CRITICAL**: This checklist reflects what the automated git hooks will run, plus additional manual checks.  
 > **🚫 NEVER use `--no-verify` to bypass pre-commit hooks - fix the issues instead!**
 

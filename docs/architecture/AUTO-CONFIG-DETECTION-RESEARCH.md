@@ -1,5 +1,7 @@
 # Automatic Environment Configuration Detection — Research & Analysis
 
+> **Audience**: Whoever implements backlog item 5 / issue #57 - this is its specification
+>
 > **Issue**: [#57](https://github.com/egarcia74/warp-sql-server-mcp/issues/57)  
 > **Status**: 🔬 Research Complete — Ready for Staged Implementation Planning  
 > **Last Updated**: March 2026  

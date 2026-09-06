@@ -1,5 +1,7 @@
 # Security Policy
 
+> **Audience**: Operators configuring the safety tiers, and reviewers assessing the threat model
+
 ## 🔒 Overview
 
 Warp SQL Server MCP implements a **three-tier graduated security system** designed to prevent

@@ -1,5 +1,7 @@
 # Testing Guide
 
+> **Audience**: Contributors deciding which test suite to run and when
+
 This document explains how to run the various tests in this project and when to use each type.
 
 ## 🧪 Test Categories

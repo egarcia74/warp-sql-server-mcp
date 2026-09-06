@@ -1,10 +1,16 @@
 # Performance Monitoring & Benchmarks
 
+> **Audience**: Operators reading performance metrics and setting benchmarks
+
 ## Overview
 
 This framework includes a comprehensive **PerformanceMonitor** class that provides production-ready performance
-monitoring, health assessment, and metrics collection. **All 11 SQL Server MCP tools** are instrumented with
-performance tracking, providing complete visibility into query execution, connection health, and system performance.
+monitoring, health assessment, and metrics collection. **Every tool that executes a database query is instrumented** with performance tracking, giving
+visibility into query execution and connection health. The optimization and diagnostic tools
+(`get_index_recommendations`, `analyze_query_performance`, `detect_query_bottlenecks`,
+`get_optimization_insights`, `get_server_info`) report on collected metrics rather than recording
+their own - `QueryOptimizer` and `BottleneckDetector` are constructed without the
+`PerformanceMonitor`, so their queries do not appear in `get_query_performance` or its `tool_filter`.
 
 This document describes the performance capabilities and provides benchmarking guidelines.
 
