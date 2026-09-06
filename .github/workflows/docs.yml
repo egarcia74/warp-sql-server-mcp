@@ -56,7 +56,7 @@ jobs:
           use-verbose-mode: 'yes'
           config-file: '.github/markdown-link-check.json'
           folder-path: '.'
-          max-depth: 3
+          max-depth: 4
 
       - name: Check for broken internal links
         run: |

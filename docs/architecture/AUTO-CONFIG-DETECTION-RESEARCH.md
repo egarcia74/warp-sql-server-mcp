@@ -18,8 +18,8 @@ No code is implemented here. This document is the basis for driving implementati
 
 ## 2. User Scenarios — Who Benefits and How
 
-The following scenarios were identified by cross-referencing the project's stated use cases (`README.md`, `docs/SECURITY.md`, `docs/QUICKSTART.md`),
-the three-tier security model, and the configuration surface area in `.env.example` and `docs/ENV-VARS.md`.
+The following scenarios were identified by cross-referencing the project's stated use cases (`README.md`, `docs/architecture/SECURITY.md`, `docs/user/QUICKSTART.md`),
+the three-tier security model, and the configuration surface area in `.env.example` and `docs/reference/ENV-VARS.md`.
 
 ### Scenario 1 — First-Time Developer Setup
 
@@ -27,7 +27,7 @@ the three-tier security model, and the configuration surface area in `.env.examp
 
 **Pain today**:
 
-- Must manually read `.env.example` (155 lines) and `docs/ENV-VARS.md` to understand which settings matter.
+- Must manually read `.env.example` (155 lines) and `docs/reference/ENV-VARS.md` to understand which settings matter.
 - Gets connection failures due to `SQL_SERVER_TRUST_CERT` mismatches without clear guidance.
 - Unsure which pool size, timeout, or security level to start with.
 
@@ -314,7 +314,7 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
    - `envVar` — the controlling variable
    - `currentValue` — the redacted current value
    - `recommendation` — what to do if not passing
-2. Checklist items map directly to the `docs/SECURITY.md` production checklist.
+2. Checklist items map directly to the `docs/architecture/SECURITY.md` production checklist.
 3. Add `secretManager` section to `detect_optimal_config` output — type, health, cache stats (no secret values).
 4. Update `WARP.md` MCP tools table to include `detect_optimal_config`.
 5. Update `CHANGELOG.md`.

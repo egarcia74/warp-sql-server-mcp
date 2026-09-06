@@ -4,7 +4,7 @@
  *
  * Why this exists: three separate regions of this repo's documentation were
  * invisible for months because a fence was opened and never closed at the same
- * backtick length. WARP.md hid 864 lines, docs/SMOKE-TEST-GUIDE.md hid 220, and
+ * backtick length. WARP.md hid 864 lines, docs/operations/SMOKE-TEST-GUIDE.md hid 220, and
  * a second WARP.md instance hid a smaller region. Every one had a *balanced*
  * fence count, so markdownlint, prettier and the link checker all passed. All
  * three were found by eye.
@@ -79,7 +79,7 @@ export function scanMarkdown(text) {
 // The alternatives were considered and are worse: an absolute path is not portable
 // across macOS, Linux and Windows, and resolving one via `which` reintroduces the
 // same PATH dependency. Replacing git with a filesystem walk means hand-maintaining
-// a gitignore-equivalent skip list - measured at 69 files walked versus 53 tracked,
+// a gitignore-equivalent skip list - measured at 69 files walked versus 55 tracked,
 // the difference being ignored directories - which is precisely the kind of list
 // that drifts out of date.
 function repoRoot() {

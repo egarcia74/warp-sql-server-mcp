@@ -8,8 +8,8 @@ SQL operations are permitted, with secure defaults that prioritize safety over f
 
 **🚀 First time setup?** Choose your preferred environment:
 
-- **[Warp Terminal Quick Start Guide](QUICKSTART.md)** - Original 5-minute setup
-- **[VS Code Quick Start Guide](QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
+- **[Warp Terminal Quick Start Guide](../user/QUICKSTART.md)** - Original 5-minute setup
+- **[VS Code Quick Start Guide](../user/QUICKSTART-VSCODE.md)** - Complete VS Code + Warp integration
 
 Both guides get the server running with secure defaults, then return here for detailed security configuration.
 
@@ -255,7 +255,7 @@ if (!fs.existsSync(file)) {
 
 ### Environment-Specific Recommendations
 
-> **📖 Complete Environment Variables Reference**: See **[ENV-VARS.md](ENV-VARS.md)** for comprehensive documentation of all environment variables and their defaults.
+> **📖 Complete Environment Variables Reference**: See **[ENV-VARS.md](../reference/ENV-VARS.md)** for comprehensive documentation of all environment variables and their defaults.
 
 #### Production Environment
 
@@ -322,7 +322,7 @@ Before deploying to production:
 The MCP server uses **conservative security defaults** for SSL certificate trust through intelligent
 environment detection. This prevents accidental certificate trust in production environments.
 
-> **📖 Complete SSL Configuration**: See **[ENV-VARS.md#ssl-tls-security-settings](ENV-VARS.md#ssltls-security-settings)** for comprehensive SSL configuration options.
+> **📖 Complete SSL Configuration**: See **[ENV-VARS.md#ssl-tls-security-settings](../reference/ENV-VARS.md#ssltls-security-settings)** for comprehensive SSL configuration options.
 
 #### Trust Behavior
 
@@ -480,7 +480,7 @@ DROP TABLE TestTable;
 ## 📞 Security Issue Reporting
 
 The authoritative disclosure policy, supported-versions table and list of published
-advisories live in [`.github/SECURITY.md`](../.github/SECURITY.md). In short:
+advisories live in [`.github/SECURITY.md`](../../.github/SECURITY.md). In short:
 
 ### Reporting Security Vulnerabilities
 

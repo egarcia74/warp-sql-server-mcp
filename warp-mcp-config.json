@@ -1,7 +1,7 @@
 {
   "_config_header": "=======================================================================",
   "_config_title": "SQL Server MCP Configuration for Warp Terminal",
-  "_config_docs": "See docs/ENV-VARS.md for complete environment variable reference",
+  "_config_docs": "See docs/reference/ENV-VARS.md for complete environment variable reference",
   "_config_note": "Method 1: CLI Tool (Recommended) - Use warp-sql-server-mcp init",
   "_config_footer": "=======================================================================",
 

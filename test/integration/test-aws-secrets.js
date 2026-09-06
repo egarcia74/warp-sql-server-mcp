@@ -397,7 +397,7 @@ This script tests the AWS Secrets Manager integration with comprehensive example
 ✅ AWS-specific features (regions, versioning)
 
 📚 For detailed setup instructions, see:
-   docs/AWS-SECRETS-GUIDE.md
+   docs/reference/AWS-SECRETS-GUIDE.md
 
 🛠️  Common Troubleshooting:
 

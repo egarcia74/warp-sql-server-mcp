@@ -2,6 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { writeDocsHtml } from './write-html.js';
 
 /**
  * Generates the landing page HTML with dynamic tool information
@@ -134,9 +135,9 @@ function generateLandingPageHTML() {
             <p>Complete setup guides, installation instructions, and usage examples.</p>
             <a href="https://github.com/egarcia74/warp-sql-server-mcp#readme">📖 README →</a>
             <br><br>
-            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/docs/QUICKSTART.md">🖥️ Warp Quick Start →</a>
+            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/docs/user/QUICKSTART.md">🖥️ Warp Quick Start →</a>
             <br><br>
-            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/docs/QUICKSTART-VSCODE.md">💻 VS Code Quick Start →</a>
+            <a href="https://github.com/egarcia74/warp-sql-server-mcp/blob/main/docs/user/QUICKSTART-VSCODE.md">💻 VS Code Quick Start →</a>
         </div>
 
         <div class="card">
@@ -215,17 +216,7 @@ ${toolListHTML}
 if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     console.log('Generating landing page documentation...');
-    const html = generateLandingPageHTML();
-
-    // Ensure docs directory exists
-    const docsDir = 'docs';
-    if (!fs.existsSync(docsDir)) {
-      fs.mkdirSync(docsDir, { recursive: true });
-    }
-
-    // Write the HTML file
-    fs.writeFileSync(path.join(docsDir, 'index.html'), html);
-    console.log('✅ Landing page generated: docs/index.html');
+    await writeDocsHtml('index.html', generateLandingPageHTML(), 'Landing page');
   } catch (error) {
     console.error('❌ Error generating landing page:', error.message);
     process.exit(1);

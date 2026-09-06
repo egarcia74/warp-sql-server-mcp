@@ -2,7 +2,7 @@
 
 This file is the disclosure and support policy for `@egarcia74/warp-sql-server-mcp`.
 For how the server's safety controls work and how to configure them, see the
-**[Security Guide](../docs/SECURITY.md)**.
+**[Security Guide](../docs/architecture/SECURITY.md)**.
 
 ## 🔒 Supported Versions
 
@@ -76,7 +76,7 @@ mode (`SQL_SERVER_READ_ONLY=false`, `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=tru
 ## 🧱 Security Controls (summary)
 
 Detailed behaviour, configuration and threat model live in the
-[Security Guide](../docs/SECURITY.md). In brief:
+[Security Guide](../docs/architecture/SECURITY.md). In brief:
 
 ### Three-tier safety system
 

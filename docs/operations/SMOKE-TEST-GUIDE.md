@@ -347,9 +347,9 @@ npm run test:integration:protocol        # Protocol communication validation
 
 ### 📋 **Comprehensive Testing Guides**
 
-- **[Manual Integration Tests →](../test/integration/manual/README.md)** - Complete guide for manual security phase testing
-- **[Protocol Tests →](../test/protocol/README.md)** - MCP client-server communication testing
-- **[Unit Tests →](../test/README.md)** - Comprehensive unit test documentation
+- **[Manual Integration Tests →](../../test/integration/manual/README.md)** - Complete guide for manual security phase testing
+- **[Protocol Tests →](../../test/protocol/README.md)** - MCP client-server communication testing
+- **[Unit Tests →](../../test/README.md)** - Comprehensive unit test documentation
 
 ### ✅ **Quick Validation Checklist**
 

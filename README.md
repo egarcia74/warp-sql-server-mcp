@@ -20,7 +20,7 @@ Connect AI assistants to your SQL Server databases with enterprise-grade securit
 
 Perfect for developers who want AI-powered SQL assistance directly in their IDE.
 
-**[→ 5-Minute VS Code Setup Guide](docs/QUICKSTART-VSCODE.md)**
+**[→ 5-Minute VS Code Setup Guide](docs/user/QUICKSTART-VSCODE.md)**
 
 - ✅ **GitHub Copilot** can query your databases directly
 - ✅ **Context-aware suggestions** based on your actual schema
@@ -31,7 +31,7 @@ Perfect for developers who want AI-powered SQL assistance directly in their IDE.
 
 Ideal for terminal-based workflows and command-line database interactions.
 
-**[→ 5-Minute Warp Setup Guide](docs/QUICKSTART.md)**
+**[→ 5-Minute Warp Setup Guide](docs/user/QUICKSTART.md)**
 
 - ✅ **AI-powered terminal** with SQL Server integration
 - ✅ **Natural language** database queries
@@ -40,7 +40,7 @@ Ideal for terminal-based workflows and command-line database interactions.
 
 ### **🔧 Advanced Integration**
 
-**[Complete VS Code Integration Guide →](docs/VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
+**[Complete VS Code Integration Guide →](docs/user/VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
 
 > **Using another AI assistant?** This MCP server works with any MCP-compatible system.
 
@@ -80,7 +80,7 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 
 ## 📋 Essential Environment Variables
 
-> **📖 Complete Reference**: See **[docs/ENV-VARS.md](docs/ENV-VARS.md)** for comprehensive documentation of all environment variables, defaults, and context-aware behavior.
+> **📖 Complete Reference**: See **[docs/reference/ENV-VARS.md](docs/reference/ENV-VARS.md)** for comprehensive documentation of all environment variables, defaults, and context-aware behavior.
 
 | Variable                | Required     | Default         | Description              |
 | ----------------------- | ------------ | --------------- | ------------------------ |
@@ -169,27 +169,27 @@ npm install
 
 ### **User Guides**
 
-- **[Environment Variables Reference](docs/ENV-VARS.md)** - Complete environment variables documentation
-- **[Security Guide](docs/SECURITY.md)** - Comprehensive security configuration and threat model
+- **[Environment Variables Reference](docs/reference/ENV-VARS.md)** - Complete environment variables documentation
+- **[Security Guide](docs/architecture/SECURITY.md)** - Comprehensive security configuration and threat model
 - **[Security Threat Analysis Process](WARP.md#security-threat-analysis--response-process)** - Workflows for reviewing and responding to security alerts
-- **[Architecture Guide](docs/ARCHITECTURE.md)** - Technical deep-dive and system design
+- **[Architecture Guide](docs/architecture/ARCHITECTURE.md)** - Technical deep-dive and system design
 - **[All MCP Tools](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Complete API reference (16 tools)
 
 ### **Setup Guides**
 
-- **[VS Code Integration Guide](docs/VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
-- **[Azure Key Vault Guide](docs/AZURE-SECRETS-GUIDE.md)** - Cloud secret management setup
-- **[AWS Secrets Manager Guide](docs/AWS-SECRETS-GUIDE.md)** - Enterprise credential management
+- **[VS Code Integration Guide](docs/user/VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
+- **[Azure Key Vault Guide](docs/reference/AZURE-SECRETS-GUIDE.md)** - Cloud secret management setup
+- **[AWS Secrets Manager Guide](docs/reference/AWS-SECRETS-GUIDE.md)** - Enterprise credential management
 
 ### **Developer Resources**
 
 - **[Software Engineering Manifesto](MANIFESTO.md)** - Philosophy and engineering practices
-- **[Quality No-Compromise Case Study](docs/QUALITY-NO-COMPROMISE.md)** - Real-world analysis of zero-tolerance quality standards
+- **[Quality No-Compromise Case Study](docs/developer/QUALITY-NO-COMPROMISE.md)** - Real-world analysis of zero-tolerance quality standards
 - **[Testing Guide](test/README.md)** - Comprehensive test documentation (1,109 automated unit tests)
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and standards
-- **[Git Commit Checklist](docs/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
-- **[Git Push Checklist](docs/GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
-- **[Git Release Checklist](docs/GIT-RELEASE-CHECKLIST.md)** - Step-by-step release guide (automation + npm)
+- **[Git Commit Checklist](docs/developer/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
+- **[Git Push Checklist](docs/developer/GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
+- **[Git Release Checklist](docs/developer/GIT-RELEASE-CHECKLIST.md)** - Step-by-step release guide (automation + npm)
 
 ---
 

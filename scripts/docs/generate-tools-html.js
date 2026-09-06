@@ -2,6 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { writeDocsHtml } from './write-html.js';
 
 /**
  * Generates the detailed tools documentation HTML page
@@ -309,17 +310,7 @@ function generateExamples(toolName, examples) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     console.log('Generating detailed tools documentation...');
-    const html = generateToolsHTML();
-
-    // Ensure docs directory exists
-    const docsDir = 'docs';
-    if (!fs.existsSync(docsDir)) {
-      fs.mkdirSync(docsDir, { recursive: true });
-    }
-
-    // Write the HTML file
-    fs.writeFileSync(path.join(docsDir, 'tools.html'), html);
-    console.log('✅ Tools documentation generated: docs/tools.html');
+    await writeDocsHtml('tools.html', generateToolsHTML(), 'Tools documentation');
   } catch (error) {
     console.error('❌ Error generating tools documentation:', error.message);
     process.exit(1);

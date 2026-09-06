@@ -1,3 +1,5 @@
+> **Archived** - historical and unmaintained. See the [documentation index](../README.md) for current docs.
+
 # Release v1.7.12
 
 ## Highlights

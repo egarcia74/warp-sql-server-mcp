@@ -201,10 +201,10 @@ Connection Problems:
 📚 DOCUMENTATION LINKS
 ${'─'.repeat(80)}
 
-  README.md                        Project overview and quick start
-  docs/TESTING-GUIDE.md            Comprehensive testing documentation
-  docs/SECURITY.md                 Security configuration guide
-  docs/ARCHITECTURE.md             Technical architecture details
+  README.md                          Project overview and quick start
+  docs/developer/TESTING-GUIDE.md    Comprehensive testing documentation
+  docs/architecture/SECURITY.md      Security configuration guide
+  docs/architecture/ARCHITECTURE.md  Technical architecture details
 
 💡 TIPS
 ${'─'.repeat(80)}
