@@ -1317,7 +1317,7 @@ npm run cleanup:processes
 #### **Automated Integration**
 
 - **Pre-Push Hook Integration**: Cleanup runs automatically before comprehensive testing
-- **Smart Detection**: Only targets actual Vitest test processes (no false positives)
+- **Orphans Only**: Terminates only Vitest processes adopted by an init-like parent; a live suite is reported and left alone (see [System Maintenance Guide](docs/operations/MAINTENANCE.md))
 - **Resource Monitoring**: Reports system load improvements after cleanup
 - **Quality Gate Protection**: Prevents system overload during testing
 

@@ -28,6 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   ([#1155](https://github.com/egarcia74/warp-sql-server-mcp/pull/1155))
 
+### Fixed
+
+- **`scripts/cleanup-test-processes.sh` no longer kills healthy test runs.** It previously selected every
+  `node.*vitest` process and killed it, with no check on parent or ownership - so running it, or the pre-push hook
+  that calls it, could tear down a working suite in any checkout, including the caller's own. It now terminates only
+  processes adopted by an init-like parent (PID 1, or a `systemd --user` / `launchd` session manager, since systemd
+  sets `PR_SET_CHILD_SUBREAPER` and orphans do not reparent to PID 1 there). Live runs are reported as skipped, and
+  a failed kill is now surfaced instead of reported as success. Also fixes `top` on Linux, which needs `-b -n 1`
+  ([#1153](https://github.com/egarcia74/warp-sql-server-mcp/pull/1153)).
+
 ### Security
 
 - npm releases are now published with provenance: `npm-publish.yml` runs `npm publish --provenance` under an OIDC
