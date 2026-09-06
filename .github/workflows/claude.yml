@@ -61,7 +61,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
         with:
-          fetch-depth: 1
+          # Full history, not depth 1: the read-only git commands granted in
+          # claude_args below are useless against a single commit - `git diff`
+          # cannot reach a base ref to diff against. The whole repository is
+          # ~6 MB across ~1,000 commits, and this workflow only runs on an
+          # explicit @claude mention, so the extra clone time is negligible and
+          # rare. This still checks out the default branch, not the PR head;
+          # depth does not change which ref lands here, so the guard below is
+          # unaffected.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js
@@ -179,6 +187,33 @@ jobs:
           # access could have pushed, so these commands grant no privilege
           # that the caller does not already have. Do not widen the guard
           # without revisiting this list.
+          #
+          # --max-turns: 20 was too low to review anything substantial. Both
+          # @claude review requests on the docs reorganization (#1148, #1149 -
+          # 53 and 31 files) died with `error_max_turns` after ~1m45s, having
+          # spent every turn gathering context and posting nothing but a
+          # half-ticked todo list. The failure surfaces as a generic "Claude
+          # encountered an error", so it reads like an outage rather than a
+          # budget. 60 gives roughly 3x headroom on a PR that size; the real
+          # backstop is `timeout-minutes: 30` on the job, and the failed run
+          # burned 20 turns in under two minutes, so 60 stays well inside it.
+          #
+          # Read-only git commands: verified against this pinned action SHA
+          # (src/modes/tag/index.ts), whose base tools are Glob/Grep/LS/Read,
+          # the comment and CI MCP tools, and - only when git CLI commit
+          # signing is off - git add/commit/rm. So Claude could write history
+          # but not read it. Note the action's published configuration doc
+          # claims read-only git is included by default; at this SHA it is not. Without `git diff` a review has to Read whole files one at
+          # a time, which is what exhausted the turn budget above. These are
+          # strictly read-only and expose nothing Read/Glob/Grep do not already
+          # expose; they just make a review cost a handful of turns instead of
+          # dozens. `git diff` is deliberately unrestricted (`:*`) so Claude can
+          # scope it to a base ref.
+          #
+          # Passed via claude_args, NOT the `max_turns:` input: upstream issue
+          # #1177 reports that input is dropped before reaching the SDK. The
+          # claude_args path demonstrably works at this SHA - the failed run
+          # logged "maxTurns": 20 and stopped at exactly 20.
           claude_args: |
-            --max-turns 20
-            --allowedTools "Bash(npm ci),Bash(npm run lint),Bash(npm run lint:fix),Bash(npm run format),Bash(npm run format:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run precommit),Bash(npm run ci)"
+            --max-turns 60
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(npm ci),Bash(npm run lint),Bash(npm run lint:fix),Bash(npm run format),Bash(npm run format:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run precommit),Bash(npm run ci)"
