@@ -344,7 +344,8 @@ accidental certificate trust in cloud production environments using private IP a
 > unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
 > directly, and credentials are read straight from `process.env`. Setting any variable in this section currently has
 > **no effect** - a deployment with credentials only in a cloud secret store will not connect. Use plain
-> environment variables ([ENV-VARS.md](#secret-management-settings)) until this is resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
+> environment variables (`SQL_SERVER_USER` / `SQL_SERVER_PASSWORD`, documented above) until this is
+> resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
 
 ### `SECRET_MANAGER_TYPE`
 
