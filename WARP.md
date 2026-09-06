@@ -152,6 +152,13 @@ lib/
 
 ### 🔐 Enhanced Secret Management
 
+> **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
+> unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
+> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE`,
+> `AWS_REGION` or `AZURE_KEY_VAULT_URL` currently has **no effect** - a deployment with credentials
+> only in AWS Secrets Manager or Azure Key Vault will not connect. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
+> Use environment variables until this is resolved.
+
 **Multi-Provider Secret Management**:
 
 - **Environment Variables** (default and fallback)
@@ -265,21 +272,6 @@ identifier SQL and executes it, the registration test will fail until you add it
 behavioral-battery case for each caller-controlled input it accepts. Both steps are
 required: registration gets the file scanned; the battery is what actually proves the
 inputs are neutralized.
-
-### 📊 Enhanced Response Formatting
-
-**Configurable Output Formats**: Supports different integration patterns:
-
-```bash
-# Structured objects (recommended for programmatic use)
-SQL_SERVER_RESPONSE_FORMAT=structured
-
-# Compact JSON (minimal bandwidth)
-SQL_SERVER_RESPONSE_FORMAT=json
-
-# Pretty-printed JSON (human-readable, original behavior)
-SQL_SERVER_RESPONSE_FORMAT=pretty-json
-```
 
 **Advanced Features**:
 

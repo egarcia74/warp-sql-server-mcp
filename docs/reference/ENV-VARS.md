@@ -338,16 +338,14 @@ accidental certificate trust in cloud production environments using private IP a
   - `true` (enable security audit logging)
   - `false` (standard security logging)
 
-### `SQL_SERVER_RESPONSE_FORMAT`
-
-- **Default**: `json`
-- **Description**: Default response format for query results
-- **Values**:
-  - `json` (JSON format)
-  - `structured` (structured objects)
-  - `pretty-json` (pretty-printed JSON)
-
 ## Secret Management Settings
+
+> **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
+> unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
+> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE`,
+> `AWS_REGION` or `AZURE_KEY_VAULT_URL` currently has **no effect** - a deployment with credentials
+> only in AWS Secrets Manager or Azure Key Vault will not connect. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
+> Use environment variables until this is resolved.
 
 ### `SECRET_MANAGER_TYPE`
 
