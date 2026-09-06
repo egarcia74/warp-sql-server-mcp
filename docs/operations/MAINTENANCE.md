@@ -1,12 +1,14 @@
 # 🛠️ System Maintenance Guide
 
+> **Audience**: Operators reclaiming resources from orphaned test processes
+
 This guide covers essential maintenance tasks for the WARP SQL Server MCP project to keep your development environment running optimally.
 
 ## 🧹 Process Cleanup
 
 ### Problem: Memory-Heavy Test Processes
 
-During intensive testing sessions (like our comprehensive 525-test suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
+During intensive testing sessions (like our comprehensive 1,109-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
 
 - **Symptoms**: High CPU usage (100%+), excessive memory consumption (500MB+ per process), system slowdown
 - **Root Cause**: Test worker processes not terminating cleanly after test completion
@@ -105,7 +107,7 @@ ps aux | sort -nr -k 4 | head -10
 
 The cleanup process is integrated into quality gates:
 
-- **Pre-Push Hook**: Automatically cleans before running 525 tests
+- **Pre-Push Hook**: Automatically cleans before running the full test suite
 - **CI/CD Pipeline**: Ensures clean testing environments
 - **Development Workflow**: Part of no-compromise quality standards
 

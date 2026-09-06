@@ -1,5 +1,7 @@
 # 🤖 Dependabot Auto-Triage System
 
+> **Audience**: Maintainers handling the automated dependency PR flow
+
 ## Overview
 
 This repository implements a comprehensive **Dependabot Auto-Triage System** that intelligently manages dependency updates, security alerts, and vulnerability responses with minimal manual intervention.

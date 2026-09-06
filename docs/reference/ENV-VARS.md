@@ -1,5 +1,7 @@
 # Environment Variables Reference
 
+> **Audience**: Anyone looking up a configuration variable - the single source of truth
+>
 > **📍 Single Source of Truth**: This document contains the complete reference for all environment
 > variables supported by the SQL Server MCP. Other documentation files reference this document to
 > avoid duplication.

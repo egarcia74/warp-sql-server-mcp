@@ -1,5 +1,7 @@
 # Quick Start Guide
 
+> **Audience**: First-time users wiring the server into Warp Terminal
+
 Get your **SQL Server MCP** running in Warp in under 3 minutes! 🚀
 
 ## Prerequisites

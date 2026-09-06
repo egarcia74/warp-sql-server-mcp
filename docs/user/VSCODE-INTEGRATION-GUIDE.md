@@ -1,5 +1,7 @@
 # VS Code Integration Guide for Warp SQL Server MCP
 
+> **Audience**: VS Code users going beyond the quickstart - workflows, tasks, troubleshooting
+>
 > **Complete guide for integrating warp-sql-server-mcp with Visual Studio Code and the Model Context Protocol (MCP)**
 
 This guide covers VS Code setup, MCP configuration, development workflow, and best practices for working with the Warp SQL Server MCP in Visual Studio Code.

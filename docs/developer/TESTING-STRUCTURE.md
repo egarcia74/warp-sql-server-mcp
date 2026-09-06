@@ -1,5 +1,7 @@
 # Testing Structure Refactoring
 
+> **Audience**: Contributors looking up what each npm test script actually runs
+
 ## Overview
 
 The npm test scripts have been reorganized and cleaned up to follow standard naming conventions and eliminate

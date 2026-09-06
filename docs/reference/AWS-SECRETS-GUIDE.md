@@ -1,5 +1,7 @@
 # AWS Secrets Manager Configuration Guide
 
+> **Audience**: Operators putting credentials in AWS Secrets Manager
+
 This guide provides comprehensive instructions for configuring AWS Secrets Manager with the Warp SQL Server MCP project.
 
 ## Table of Contents

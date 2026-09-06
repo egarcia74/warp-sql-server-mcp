@@ -1,7 +1,7 @@
 # Product Backlog & Roadmap
 
-> **Last Updated**: August 30, 2026  
-> **Version**: 1.2  
+> **Last Updated**: September 6, 2026  
+> **Version**: 1.3  
 > **Current Release**: v1.7.20
 
 ## 🎯 Overview
@@ -10,14 +10,14 @@ This document maintains our prioritized feature backlog, organized by business v
 
 ## 📊 Backlog Summary
 
-- **Total Features**: 18
+- **Total Features**: 19
 - **High Priority**: 4 features
 - **Medium Priority**: 7 features
 - **Low Priority**: 3 features
-- **Technical Debt**: 2 features
+- **Technical Debt**: 3 features
 - **Completed Features**: 2 features ✅
 
-Items are numbered sequentially and uniquely; the phase lists further down reference them by
+Item numbers are unique and never reused (new items take the next free number, and sit in their priority section rather than in numeric order); the phase lists further down reference them by
 **item number**, and the `Issue` field carries the GitHub issue number where one exists.
 
 ## 🚀 HIGH PRIORITY Features
@@ -155,6 +155,14 @@ Items are numbered sequentially and uniquely; the phase lists further down refer
 - **Phase**: Ongoing
 - **Status**: 📋 Planned
 
+### 19. Documentation Management Architecture
+
+- **Issue**: [#97](https://github.com/egarcia74/warp-sql-server-mcp/issues/97)
+- **Business Value**: ⭐⭐⭐ | **Complexity**: 🔧🔧
+- **Phase**: Ongoing
+- **Status**: 🚧 In Progress - Phase 1 (restructure into audience folders) and Phase 2 (currency
+  pass) delivered; Phase 3 (orphan-file and env-var doc-sync checks in `docs.yml`) outstanding
+
 ## ✅ COMPLETED Features
 
 ### 17. Performance Monitoring MCP Tools
@@ -219,6 +227,7 @@ removed rather than re-guessed. Items are referenced by their backlog item numbe
 
 - Enhanced Testing Framework (item 15)
 - Configuration Management Enhancement (item 16)
+- Documentation Management Architecture (item 19)
 
 ## 🏷️ Status Definitions
 
