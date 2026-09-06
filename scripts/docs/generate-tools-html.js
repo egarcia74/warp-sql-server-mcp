@@ -2,7 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import prettier from 'prettier';
+import { writeDocsHtml } from './write-html.js';
 
 /**
  * Generates the detailed tools documentation HTML page
@@ -310,33 +310,7 @@ function generateExamples(toolName, examples) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     console.log('Generating detailed tools documentation...');
-    const html = generateToolsHTML();
-
-    // Ensure docs directory exists
-    const docsDir = 'docs';
-    if (!fs.existsSync(docsDir)) {
-      fs.mkdirSync(docsDir, { recursive: true });
-    }
-
-    // Write the HTML file
-    fs.writeFileSync(path.join(docsDir, 'tools.html'), html);
-
-    // Format with Prettier so regeneration is idempotent. Without this the
-    // generator's raw output differs from the committed copy on every run,
-    // turning a one-line version bump into a whole-file reformat. Uses the
-    // Prettier API rather than shelling out to `npx prettier`, which avoids
-    // a PATH-dependent subprocess (SonarQube javascript:S4036).
-    try {
-      const outPath = path.join(docsDir, 'tools.html');
-      const options = await prettier.resolveConfig(outPath);
-      const formatted = await prettier.format(html, { ...options, filepath: outPath });
-      fs.writeFileSync(outPath, formatted);
-      console.log('✅ Tools documentation generated and formatted: docs/tools.html');
-    } catch (formatError) {
-      console.log(
-        `✅ Tools documentation generated: docs/tools.html (formatting skipped: ${formatError.message})`
-      );
-    }
+    await writeDocsHtml('tools.html', generateToolsHTML(), 'Tools documentation');
   } catch (error) {
     console.error('❌ Error generating tools documentation:', error.message);
     process.exit(1);

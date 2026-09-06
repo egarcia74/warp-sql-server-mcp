@@ -2,7 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import prettier from 'prettier';
+import { writeDocsHtml } from './write-html.js';
 
 /**
  * Generates the landing page HTML with dynamic tool information
@@ -216,33 +216,7 @@ ${toolListHTML}
 if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     console.log('Generating landing page documentation...');
-    const html = generateLandingPageHTML();
-
-    // Ensure docs directory exists
-    const docsDir = 'docs';
-    if (!fs.existsSync(docsDir)) {
-      fs.mkdirSync(docsDir, { recursive: true });
-    }
-
-    // Write the HTML file
-    fs.writeFileSync(path.join(docsDir, 'index.html'), html);
-
-    // Format with Prettier so regeneration is idempotent. Without this the
-    // generator's raw output differs from the committed copy on every run,
-    // turning a one-line version bump into a whole-file reformat. Uses the
-    // Prettier API rather than shelling out to `npx prettier`, which avoids
-    // a PATH-dependent subprocess (SonarQube javascript:S4036).
-    try {
-      const outPath = path.join(docsDir, 'index.html');
-      const options = await prettier.resolveConfig(outPath);
-      const formatted = await prettier.format(html, { ...options, filepath: outPath });
-      fs.writeFileSync(outPath, formatted);
-      console.log('✅ Landing page generated and formatted: docs/index.html');
-    } catch (formatError) {
-      console.log(
-        `✅ Landing page generated: docs/index.html (formatting skipped: ${formatError.message})`
-      );
-    }
+    await writeDocsHtml('index.html', generateLandingPageHTML(), 'Landing page');
   } catch (error) {
     console.error('❌ Error generating landing page:', error.message);
     process.exit(1);
