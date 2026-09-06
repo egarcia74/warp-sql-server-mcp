@@ -1,6 +1,6 @@
 # Testing Guide
 
-> **Audience**: Contributors working on this codebase  
+> **Audience**: Contributors deciding which test suite to run and when  
 > **Last reviewed**: 2026-09-06
 
 This document explains how to run the various tests in this project and when to use each type.

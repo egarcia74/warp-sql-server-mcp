@@ -1,6 +1,6 @@
 # Azure Key Vault Configuration Guide
 
-> **Audience**: Anyone looking up configuration details  
+> **Audience**: Operators putting credentials in Azure Key Vault  
 > **Last reviewed**: 2026-09-06
 
 This guide provides comprehensive instructions for configuring Azure Key Vault with the Warp SQL Server MCP project.

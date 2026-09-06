@@ -1,6 +1,6 @@
 # Testing Structure Refactoring
 
-> **Audience**: Contributors working on this codebase  
+> **Audience**: Contributors looking up what each npm test script actually runs  
 > **Last reviewed**: 2026-09-06
 
 ## Overview

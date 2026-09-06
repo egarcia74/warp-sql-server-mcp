@@ -1,6 +1,6 @@
 # Git Push Checklist
 
-> **Audience**: Contributors working on this codebase  
+> **Audience**: Contributors about to push - what the pre-push hook will run  
 > **Last reviewed**: 2026-09-06
 >
 > **⚠️ CRITICAL**: This checklist reflects what the automated pre-push hook will run, plus additional manual checks.  

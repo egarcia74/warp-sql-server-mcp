@@ -1,6 +1,6 @@
 # SQL Server MCP Testing Guide
 
-> **Audience**: Maintainers running, releasing and supporting the server  
+> **Audience**: Operators validating a deployment across all testing layers  
 > **Last reviewed**: 2026-09-06
 
 ## Overview
@@ -47,7 +47,7 @@ npm run test:integration:manual
 ### 📡 **Protocol Testing (MCP Client-Server Communication)**
 
 ```bash
-# Test MCP protocol communication (20 tests)
+# Test MCP protocol communication (single startup/handshake check)
 npm run test:integration:protocol
 ```
 
@@ -328,7 +328,7 @@ npm run test:coverage      # Check code coverage
 
 ```bash
 npm run test:integration:manual          # All 3 security phases (40 tests)
-npm run test:integration:protocol        # MCP protocol validation (20 tests)
+npm run test:integration:protocol        # MCP protocol validation (startup/handshake)
 ```
 
 #### **2. Pre-Production Validation**
@@ -336,7 +336,7 @@ npm run test:integration:protocol        # MCP protocol validation (20 tests)
 ```bash
 # Comprehensive manual testing before deployment
 npm run test:integration:manual          # All 3 security phases (40 tests)
-npm run test:integration:protocol        # MCP protocol validation (20 tests)
+npm run test:integration:protocol        # MCP protocol validation (startup/handshake)
 ```
 
 #### **3. Production Readiness Check**
@@ -413,7 +413,7 @@ With Warp MCP integration, you can validate functionality by:
 | **Phase 1**    | Read-Only Mode    | 20/20 tests | ✅ **100%** |
 | **Phase 2**    | DML Operations    | 10/10 tests | ✅ **100%** |
 | **Phase 3**    | DDL Operations    | 10/10 tests | ✅ **100%** |
-| **Protocol**   | MCP Communication | 20/20 tests | ✅ **100%** |
+| **Protocol**   | MCP Communication | handshake   | ✅ **100%** |
 
 ### 🎯 **Test Execution Results**
 

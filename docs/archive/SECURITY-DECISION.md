@@ -1,6 +1,6 @@
-> **Archived** - historical and unmaintained. See the [documentation index](../README.md) for current docs.
-
 # Security Decision Log
+
+> **Archived** - historical and unmaintained. See the [documentation index](../README.md) for current docs.
 
 ## Date: 2025-01-09
 

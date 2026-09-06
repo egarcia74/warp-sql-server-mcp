@@ -17,7 +17,7 @@ This document maintains our prioritized feature backlog, organized by business v
 - **Technical Debt**: 3 features
 - **Completed Features**: 2 features ✅
 
-Items are numbered sequentially and uniquely; the phase lists further down reference them by
+Item numbers are unique and never reused (new items take the next free number, and sit in their priority section rather than in numeric order); the phase lists further down reference them by
 **item number**, and the `Issue` field carries the GitHub issue number where one exists.
 
 ## 🚀 HIGH PRIORITY Features
@@ -227,6 +227,7 @@ removed rather than re-guessed. Items are referenced by their backlog item numbe
 
 - Enhanced Testing Framework (item 15)
 - Configuration Management Enhancement (item 16)
+- Documentation Management Architecture (item 19)
 
 ## 🏷️ Status Definitions
 

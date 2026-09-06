@@ -1,6 +1,6 @@
 # Integration Test Organization Summary
 
-> **Audience**: Contributors working on this codebase  
+> **Audience**: Anyone tracing why the test layout is shaped the way it is (historical)  
 > **Last reviewed**: 2026-09-06
 >
 > **Note**: This is a historical record of a one-off reorganisation. Every count and claim below

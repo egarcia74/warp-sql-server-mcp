@@ -1,6 +1,6 @@
 # 🚀 Warp MCP Setup Guide - Performance Monitoring Features
 
-> **Audience**: Anyone setting up or running the MCP server  
+> **Audience**: Warp users who want the performance-monitoring tools  
 > **Last reviewed**: 2026-09-06
 
 This guide will help you set up and use the new performance monitoring features (GitHub Issue #15) in Warp.

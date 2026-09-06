@@ -1,6 +1,6 @@
 # Security Policy
 
-> **Audience**: Engineers evaluating the design or its security posture  
+> **Audience**: Operators configuring the safety tiers, and reviewers assessing the threat model  
 > **Last reviewed**: 2026-09-06
 
 ## 🔒 Overview

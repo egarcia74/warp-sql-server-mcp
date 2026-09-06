@@ -1,14 +1,10 @@
 # Document Title
 
-> **Audience**: who this is for, in one line
+> **Audience**: who specifically this is for, and what they came here to do  
 > **Last reviewed**: YYYY-MM-DD
 
 One paragraph saying what this document covers and what it does not.
 
 ## First section
 
-Body.
-
----
-
-**Related**: links to sibling docs, using `../<folder>/FILE.md` form for other folders
+Body. Link to docs in other folders with `../<folder>/FILE.md`, and to repo-root files with `../../FILE.md`.

@@ -1,6 +1,6 @@
 # Git Release Checklist
 
-> **Audience**: Contributors working on this codebase  
+> **Audience**: Maintainers cutting a release  
 > **Last reviewed**: 2026-09-06
 >
 > This checklist standardizes how we cut releases and publish artifacts.

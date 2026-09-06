@@ -1,12 +1,12 @@
 # Performance Monitoring & Benchmarks
 
-> **Audience**: Maintainers running, releasing and supporting the server  
+> **Audience**: Operators reading performance metrics and setting benchmarks  
 > **Last reviewed**: 2026-09-06
 
 ## Overview
 
 This framework includes a comprehensive **PerformanceMonitor** class that provides production-ready performance
-monitoring, health assessment, and metrics collection. **All 11 SQL Server MCP tools** are instrumented with
+monitoring, health assessment, and metrics collection. **All 16 SQL Server MCP tools** are instrumented with
 performance tracking, providing complete visibility into query execution, connection health, and system performance.
 
 This document describes the performance capabilities and provides benchmarking guidelines.

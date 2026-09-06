@@ -1,6 +1,6 @@
 # Git Commit Checklist
 
-> **Audience**: Contributors working on this codebase  
+> **Audience**: Contributors about to commit - what the pre-commit hook will run  
 > **Last reviewed**: 2026-09-06
 >
 > **⚠️ CRITICAL**: This checklist reflects what the automated git hooks will run, plus additional manual checks.  

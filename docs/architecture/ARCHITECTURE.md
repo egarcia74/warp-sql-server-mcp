@@ -1,6 +1,6 @@
 # Architecture Guide: A Framework for Enterprise-Grade Software
 
-> **Audience**: Engineers evaluating the design or its security posture  
+> **Audience**: Engineers evaluating the system design and its layering  
 > **Last reviewed**: 2026-09-06
 
 ## Overview

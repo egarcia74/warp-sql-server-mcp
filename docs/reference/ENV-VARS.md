@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-> **Audience**: Anyone looking up configuration details  
+> **Audience**: Anyone looking up a configuration variable - the single source of truth  
 > **Last reviewed**: 2026-09-06
 >
 > **📍 Single Source of Truth**: This document contains the complete reference for all environment

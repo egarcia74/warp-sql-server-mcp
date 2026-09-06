@@ -1,6 +1,6 @@
 # 🤖 Dependabot Auto-Triage System
 
-> **Audience**: Maintainers running, releasing and supporting the server  
+> **Audience**: Maintainers handling the automated dependency PR flow  
 > **Last reviewed**: 2026-09-06
 
 ## Overview
