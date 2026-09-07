@@ -130,7 +130,17 @@ else
     echo "Nothing to terminate."
   else
     echo "🔄 Sending TERM to: $TARGETS"
-    for pid in $TARGETS; do kill "$pid" 2>/dev/null || true; done
+    # Re-verify here, not just when TARGETS was built: a named process can exit
+    # and have its PID reused between validation and this loop, especially with
+    # several PIDs supplied. The usage text promises a check immediately before
+    # each signal, so make that true of TERM as well as KILL.
+    for pid in $TARGETS; do
+      if is_vitest "$pid"; then
+        kill "$pid" 2>/dev/null || true
+      else
+        echo "  ⏭️  $pid: no longer a Vitest process, not signalled"
+      fi
+    done
     sleep 2
 
     # Only PIDs that were actually sent TERM may be escalated. A process that
