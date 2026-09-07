@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exits non-zero when a requested process is still running, so automation can tell a completed
   termination from a run that changed nothing, and zero-padded PIDs are canonicalised before the
   ancestry checks (`--kill 0001` previously walked past the PID-1 guard and signalled it). The
-  script is covered by 32 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
+  script is covered by 33 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
   against a stubbed `ps` so the destructive path, the PID guards and the exit status are exercised
   without depending on what happens to be running
   ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).

@@ -387,8 +387,21 @@ else
       echo "  ⏭️  $pid: not a running Vitest process, skipped"
       continue
     fi
+    # No identity, no signal. Every post-TERM decision -- escalate, kill,
+    # report -- compares against the start time captured here, so a target
+    # without one cannot be tracked: it would be TERMed, then reported as
+    # terminated because the comparison can never match, while possibly still
+    # running. Refusing is the honest outcome, and it is recoverable: the
+    # report still lists the process so it can be dealt with by hand.
+    id=$(identity_of "$pid")
+    if [[ -z "$id" ]]; then
+      echo "  ⏭️  $pid: no start time available, skipped (its identity cannot be"
+      echo "        verified before or after signalling)"
+      EXIT_STATUS=1
+      continue
+    fi
     TARGET_PIDS+=("$pid")
-    TARGET_IDS+=("$(identity_of "$pid")")
+    TARGET_IDS+=("$id")
     TARGETS="$TARGETS $pid"
   done
   TARGETS="${TARGETS# }"

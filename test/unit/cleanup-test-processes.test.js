@@ -71,6 +71,9 @@ case "$args" in
     echo "05:00"
     ;;
   *"-o lstart="*)
+    # PS_NO_LSTART simulates a ps without start-time support, while
+    # -o command= keeps working: a target that cannot be given an identity.
+    [ -n "\${PS_NO_LSTART:-}" ] && exit 1
     known || exec /bin/ps "$@"
     if [ -n "\${PS_LSTART_DRIFT:-}" ]; then
       if [ -f "$PS_LSTART_DRIFT" ]; then echo "Mon Sep  7 11:11:11 2026"; exit 0; fi
@@ -457,6 +460,23 @@ describe('cleanup-test-processes.sh - when a target renames itself', () => {
     expect(stdout).toMatch(new RegExp(`MOCK-KILL -9 ${ABSENT_PID}`));
     expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: still running`));
     expect(stdout).not.toMatch(new RegExp(`${ABSENT_PID}: terminated`));
+    expect(status).toBe(1);
+  });
+});
+
+describe('cleanup-test-processes.sh - when no start time is available', () => {
+  // Regression: with no identity to capture, the target was TERMed and then
+  // reported "✅ terminated" with exit 0 because the post-TERM comparison could
+  // never match -- while the same run said "1 Vitest process(es) remain".
+  it('refuses to signal a target whose identity cannot be captured', () => {
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_NO_LSTART: '1' }
+    );
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: no start time available, skipped`));
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(stdout).not.toMatch(/terminated/);
     expect(status).toBe(1);
   });
 });
