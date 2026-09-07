@@ -237,14 +237,34 @@ identity_of() {
   return 0
 }
 
+# 0 = a running Vitest process, 1 = something else or gone, 2 = could not be
+# determined. The third state is not decoration. `ps -o command=` failing --
+# denied for another user's process, or a transient error -- is not evidence
+# that the target is not Vitest, and collapsing it into 1 made kill mode print
+# "not a running Vitest process, skipped" and exit 0 for a live named PID it had
+# never classified, so automation was told the request succeeded. A blank answer
+# is treated the same way, for the reason `identity_of` refuses one.
 is_vitest() {
   local pid="${1:-}" cmd
-  cmd=$(ps -o command= -p "$pid" 2>/dev/null) || return 1
-  case "$cmd" in
-    *node*vitest*) ;;
-    *) return 1 ;;
-  esac
-  return 0
+  cmd=$(ps -o command= -p "$pid" 2>/dev/null) || cmd=""
+  if [[ -n "${cmd//[[:space:]]/}" ]]; then
+    case "$cmd" in
+      *node*vitest*) return 0 ;;
+      *) return 1 ;;
+    esac
+  fi
+  # The lookup said nothing. That is only evidence about the process if `ps` is
+  # working and positively cannot see the PID: it is gone, and "nothing here to
+  # signal" is the honest answer -- naming an already-exited PID stays a benign
+  # no-op. A PID that is still visible, or a `ps` that is not answering at all,
+  # leaves the classification genuinely unknown.
+  if pid_exists "$pid"; then
+    return 2
+  fi
+  if ps_answers; then
+    return 1
+  fi
+  return 2
 }
 
 # Reads the process table into PROCESS_TABLE. Returns non-zero if `ps` could
@@ -429,10 +449,20 @@ else
     esac
     # Liveness first: a PID that is not a running Vitest process needs no
     # ancestry walk, and walking a dead one only produces failed lookups.
-    if ! is_vitest "$pid"; then
-      echo "  ⏭️  $pid: not a running Vitest process, skipped"
-      continue
-    fi
+    is_vitest "$pid"
+    case "$?" in
+      1)
+        echo "  ⏭️  $pid: not a running Vitest process, skipped"
+        continue
+        ;;
+      2)
+        echo "  ⏭️  $pid: could not be classified (its command line could not"
+        echo "        be read), skipped"
+        EXIT_STATUS=1
+        continue
+        ;;
+      *) ;;
+    esac
     is_self_descendant "$pid"
     case "$?" in
       0)
@@ -484,8 +514,12 @@ else
     i=0
     while [[ $i -lt ${#TARGET_PIDS[@]} ]]; do
       pid="${TARGET_PIDS[$i]}"
-      if ! is_vitest "$pid"; then
+      is_vitest "$pid"
+      vitest_rc=$?
+      if [[ "$vitest_rc" == "1" ]]; then
         echo "  ⏭️  $pid: no longer a Vitest process, not signalled"
+      elif [[ "$vitest_rc" == "2" ]]; then
+        echo "  ⏭️  $pid: could not be re-classified, not signalled"
       elif [[ "$(identity_of "$pid")" != "${TARGET_IDS[$i]}" ]]; then
         echo "  ⏭️  $pid: a different process now holds this PID, not signalled"
       elif kill "$pid" 2>/dev/null; then

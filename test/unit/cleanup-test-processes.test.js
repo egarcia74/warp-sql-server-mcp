@@ -477,6 +477,45 @@ describe('cleanup-test-processes.sh - when the start time comes back blank', () 
   });
 });
 
+describe('cleanup-test-processes.sh - when a target cannot be classified', () => {
+  // Regression: `is_vitest` returned the same status for "ps says this is not
+  // Vitest" and "the ps lookup failed", so a live named PID whose `command=`
+  // lookup was denied or failed transiently was reported "not a running Vitest
+  // process, skipped" -- a positive claim about a process never classified --
+  // and kill mode exited 0, telling automation the request had succeeded.
+  it('reports an unclassifiable live target as unknown, not as not-Vitest', () => {
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_COMMAND_FAIL_FOR: ABSENT_PID }
+    );
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: could not be classified`));
+    expect(stdout).not.toMatch(/not a running Vitest process/);
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(status).toBe(1);
+  });
+
+  // The re-check in the TERM loop has the same two-into-three problem.
+  it('does not signal a target it can no longer re-classify', () => {
+    const counter = path.join(stubDir, 'command-count');
+    rmSync(counter, { force: true });
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_COMMAND_FAIL_AFTER: '1', PS_COMMAND_COUNT: counter }
+    );
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: could not be re-classified, not signalled`));
+    // No TERM and no KILL. The `MOCK-KILL -0` that does appear is the outcome
+    // loop's liveness probe, and the target staying in the report -- rather
+    // than being dropped as it was at validation -- is the point: an
+    // unsignalled PID is still accounted for, and still fails the run.
+    expect(stdout).not.toMatch(new RegExp(`MOCK-KILL ${ABSENT_PID}`));
+    expect(stdout).not.toMatch(/MOCK-KILL -9/);
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: still running`));
+    expect(status).toBe(1);
+  });
+});
+
 describe('cleanup-test-processes.sh - when the final existence probe fails', () => {
   // Regression: the outcome loop read a failed `kill -0` as "alive but not
   // ours" and reported "still running and cannot be signalled" with exit 1.

@@ -53,8 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was built by prefixing the value unconditionally, so a blank one yielded the constant `lstart_` —
   non-empty, so it satisfied the "no identity, no signal" refusal, and equal for every PID whose
   lookup degraded the same way, which is exactly the collision the identity check exists to
-  prevent. The
-  script is covered by 46 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
+  prevent. Classifying a target is likewise three-valued: `ps -o command=` failing — denied for
+  another user's process, or a transient error — is not evidence that the PID is not Vitest, but it
+  was reported as "not a running Vitest process, skipped" with exit 0, so automation was told a
+  request had succeeded for a live process nothing had managed to inspect; naming an already-exited
+  PID remains a benign no-op, since `ps` answering and not seeing it is real evidence. The
+  script is covered by 48 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
   against a stubbed `ps` so the destructive path, the PID guards and the exit status are exercised
   without depending on what happens to be running
   ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).

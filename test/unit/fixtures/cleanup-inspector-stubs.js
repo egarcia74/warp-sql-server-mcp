@@ -21,6 +21,9 @@
 //   PS_LSTART_EMPTY       lstart exits 0 but prints only whitespace
 //   PS_RENAME_AFTER=<n>   command= reports a non-Vitest name from call n+1
 //   PS_RENAME_COUNT=<file>  call counter used by the one above
+//   PS_COMMAND_FAIL_FOR=<pid>  command= lookup fails only for that PID
+//   PS_COMMAND_FAIL_AFTER=<n>  command= succeeds n times then fails
+//   PS_COMMAND_COUNT=<file>  call counter used by the one above
 //   PS_STATE=<char>       process state reported by state= (Z for a zombie)
 
 export const PS_STUB = `#!/bin/bash
@@ -66,6 +69,20 @@ case "$args" in
     ;;
   *"-o command="*)
     known || exec /bin/ps "$@"
+    # PS_COMMAND_FAIL_FOR=<pid> denies just the classification lookup, while
+    # pid=/lstart=/state= keep answering: a live target that cannot be
+    # classified, as opposed to one that is genuinely not Vitest.
+    if [ -n "\${PS_COMMAND_FAIL_FOR:-}" ] && [ "$target" = "$PS_COMMAND_FAIL_FOR" ]; then
+      exit 1
+    fi
+    # PS_COMMAND_FAIL_AFTER=<n> classifies n times then fails, which targets
+    # the re-classification in the TERM loop without touching validation.
+    if [ -n "\${PS_COMMAND_FAIL_AFTER:-}" ]; then
+      n=0
+      [ -f "$PS_COMMAND_COUNT" ] && n=$(cat "$PS_COMMAND_COUNT")
+      n=$((n + 1)); echo "$n" > "$PS_COMMAND_COUNT"
+      [ "$n" -gt "$PS_COMMAND_FAIL_AFTER" ] && exit 1
+    fi
     # PS_RENAME_AFTER=<n> reports a non-Vitest command from call n+1 onward,
     # while lstart stays put: a process that rewrites its own argv (Node's
     # process.title) without exiting.

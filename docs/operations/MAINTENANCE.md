@@ -8,7 +8,7 @@ This guide covers essential maintenance tasks for the WARP SQL Server MCP projec
 
 ### Problem: Memory-Heavy Test Processes
 
-During intensive testing sessions (like our comprehensive 1,120-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
+During intensive testing sessions (like our comprehensive 1,122-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
 
 - **Symptoms**: High CPU usage (100%+), excessive memory consumption (500MB+ per process), system slowdown
 - **Root Cause**: Test worker processes not terminating cleanly after test completion
@@ -95,7 +95,12 @@ The `cleanup-test-processes.sh` script:
   but not ours", so a target exiting between the identity read and the probe — likeliest right at
   the end of the post-`KILL` wait, the moment cleanup has just succeeded — was reported as an
   unsignallable survivor. Failure of that probe is now resolved with `ps`: visible means `EPERM` on
-  a live process, invisible with `ps` answering means gone, and `ps` not answering means unknown. Once a target has been signalled, whether it is
+  a live process, invisible with `ps` answering means gone, and `ps` not answering means unknown.
+  Classification is three-valued for the same reason: a target whose command line cannot be read is
+  reported as unclassifiable and fails the run, rather than being asserted to be "not a running
+  Vitest process" — which would be a claim about a process nothing had managed to inspect. A PID
+  that has simply exited stays a benign no-op, since `ps` answering and not seeing it is real
+  evidence. Once a target has been signalled, whether it is
   still alive is decided by its **start time**, never by its command line: a process can rewrite
   its own `argv` (Node exposes this as `process.title`), so a `SIGTERM` handler that renames itself
   while refusing to exit would otherwise be reported as terminated while still running. A target
