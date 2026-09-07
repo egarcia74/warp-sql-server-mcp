@@ -65,15 +65,27 @@ afterAll(() => {
   rmSync(stubDir, { recursive: true, force: true });
 });
 
+const text = stream => String(stream ?? '');
+
+/** Write the fixture table the stub `ps` reads, and return its path. */
+const writeTable = rows => {
+  const table = path.join(stubDir, 'ps-table');
+  writeFileSync(table, rows.length > 0 ? `${rows.join('\n')}\n` : '');
+  return table;
+};
+
 /** Run the inspector with `ps` answering from the given fixture rows. */
 const run = (args = [], processes = []) => {
-  const table = path.join(stubDir, 'ps-table');
-  writeFileSync(table, processes.length ? `${processes.join('\n')}\n` : '');
+  const table = writeTable(processes);
   const result = spawnSync(SCRIPT, args, {
     encoding: 'utf8',
     env: { ...process.env, PATH: `${stubDir}:${process.env.PATH}`, PS_TABLE: table }
   });
-  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+  return Object.freeze({
+    status: result.status,
+    stdout: text(result.stdout),
+    stderr: text(result.stderr)
+  });
 };
 
 const VITEST = '4242 1 node /repo/node_modules/.bin/vitest run test/unit';
