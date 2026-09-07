@@ -73,8 +73,17 @@ The `cleanup-test-processes.sh` script:
   immediately before `TERM` and again before `KILL`. The check and the signal are separate
   operations, so this narrows the recycled-PID window rather than closing it; the residual race is
   microscopic but real.
-- ✅ **Graceful before forceful**: only PIDs that actually received `TERM` can be escalated to
-  `KILL`. A process that appears during the wait is never force-killed without a chance to exit.
+- ✅ **Checks identity, not just the number**: a PID can be released and reissued during the wait
+  between `TERM` and `KILL`, so each target's start time is recorded before signalling and compared
+  before signalling, before escalating and before reporting its outcome. On Linux that start time
+  comes from `/proc/<pid>/stat` in clock ticks since boot (~10ms). On macOS there is no procfs and
+  `ps -o lstart=` is whole seconds, so a PID reissued **within the same second** to another Vitest
+  process that also started in that second would still match. That window is far narrower than the
+  two-second wait it guards, and the alternative — refusing to terminate anything when a
+  finer-grained identity is unavailable — would disable `--kill` on macOS altogether.
+- ✅ **Graceful before forceful**: only PIDs that `TERM` actually reached, and whose identity still
+  matches, can be escalated to `KILL`. A process that appears during the wait is never force-killed
+  without a chance to exit.
 - ✅ **Honest per-PID outcomes**: liveness is checked with `ps`, not `kill -0`. `kill -0` fails with
   `EPERM` for a process owned by another user, which is indistinguishable from "gone" — so that
   case used to be silently dropped and reported as success. Each PID now reports terminated, still

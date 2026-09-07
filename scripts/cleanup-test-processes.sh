@@ -145,9 +145,28 @@ canonical_pid() {
 # it does not drift while we wait, and it distinguishes the process we
 # signalled from a different one that later holds the same number.
 identity_of() {
-  local raw
-  raw=$(ps -o lstart= -p "${1:-}" 2>/dev/null) || return 0
-  printf '%s' "${raw//[[:space:]]/_}"
+  local pid="${1:-}" line rest raw
+  local -a fields
+  # Linux: field 22 of /proc/<pid>/stat is the start time in clock ticks since
+  # boot - roughly 10ms at the usual USER_HZ of 100, which is far finer than
+  # any PID reuse this script could race. Field 2 (`comm`) may itself contain
+  # spaces and parentheses, so everything up to the last ") " is discarded
+  # rather than split on.
+  if [[ -r "/proc/$pid/stat" ]] && read -r line < "/proc/$pid/stat"; then
+    rest="${line##*') '}"
+    read -r -a fields <<< "$rest"
+    if [[ -n "${fields[19]:-}" ]]; then
+      printf 'ticks_%s' "${fields[19]}"
+      return 0
+    fi
+  fi
+  # Elsewhere - darwin has no procfs - `ps -o lstart=` is the finest start time
+  # the shell can see, and it is whole seconds. Two processes that start in the
+  # same second are therefore indistinguishable here. That residual is stated
+  # in the docs rather than papered over: failing closed instead would disable
+  # kill mode entirely on macOS, which is where this script is mostly used.
+  raw=$(ps -o lstart= -p "$pid" 2>/dev/null) || return 0
+  printf 'lstart_%s' "${raw//[[:space:]]/_}"
   return 0
 }
 

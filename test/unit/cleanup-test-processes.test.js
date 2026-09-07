@@ -109,6 +109,32 @@ const KILL_MOCK = { 'BASH_FUNC_kill%%': '() { echo "MOCK-KILL $*"; return 0; }' 
 /** Run with signalling mocked out: nothing on the host is ever signalled. */
 const runWithKillMocked = (args, processes) => invoke(args, writeTable(processes), KILL_MOCK);
 
+/** Run with a `tr` that fails, to prove the guards do not depend on it. */
+const runWithBrokenTr = (args, processes, extraEnv = {}) => {
+  const brokenDir = mkdtempSync(path.join(tmpdir(), 'cleanup-notr-'));
+  const brokenTr = path.join(brokenDir, 'tr');
+  writeFileSync(brokenTr, '#!/bin/bash\nexit 1\n');
+  chmodSync(brokenTr, 0o755);
+  try {
+    const result = spawnSync(SCRIPT, args, {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${brokenDir}:${stubDir}:${process.env.PATH}`,
+        PS_TABLE: writeTable(processes),
+        ...extraEnv
+      }
+    });
+    return Object.freeze({
+      status: result.status,
+      stdout: text(result.stdout),
+      stderr: text(result.stderr)
+    });
+  } finally {
+    rmSync(brokenDir, { recursive: true, force: true });
+  }
+};
+
 const VITEST = '4242 1 node /repo/node_modules/.bin/vitest run test/unit';
 
 describe('cleanup-test-processes.sh - report mode', () => {
@@ -254,41 +280,20 @@ describe('cleanup-test-processes.sh - exit status', () => {
   // and in a container whose PID 1 is Vitest the previous revision printed
   // "Sending TERM to: 1" and signalled it.
   it('still protects PID 1 when `tr` fails', () => {
-    const brokenDir = mkdtempSync(path.join(tmpdir(), 'cleanup-notr-'));
-    const brokenTr = path.join(brokenDir, 'tr');
-    writeFileSync(brokenTr, '#!/bin/bash\nexit 1\n');
-    chmodSync(brokenTr, 0o755);
-    const result = spawnSync(SCRIPT, ['--kill', '1'], {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${brokenDir}:${stubDir}:${process.env.PATH}`,
-        PS_TABLE: writeTable(['1 0 node /app/node_modules/.bin/vitest run']),
-        ...KILL_MOCK
-      }
-    });
-    rmSync(brokenDir, { recursive: true, force: true });
-    expect(text(result.stdout)).toMatch(/1: is this script's own ancestor, skipped/);
-    expect(text(result.stdout)).not.toMatch(/MOCK-KILL/);
-    expect(text(result.stdout)).not.toMatch(/Sending TERM/);
+    const { stdout } = runWithBrokenTr(
+      ['--kill', '1'],
+      ['1 0 node /app/node_modules/.bin/vitest run'],
+      KILL_MOCK
+    );
+    expect(stdout).toMatch(/1: is this script's own ancestor, skipped/);
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(stdout).not.toMatch(/Sending TERM/);
   });
 
   it('still reports processes when `tr` fails', () => {
-    const brokenDir = mkdtempSync(path.join(tmpdir(), 'cleanup-notr2-'));
-    const brokenTr = path.join(brokenDir, 'tr');
-    writeFileSync(brokenTr, '#!/bin/bash\nexit 1\n');
-    chmodSync(brokenTr, 0o755);
-    const result = spawnSync(SCRIPT, [], {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${brokenDir}:${stubDir}:${process.env.PATH}`,
-        PS_TABLE: writeTable([VITEST])
-      }
-    });
-    rmSync(brokenDir, { recursive: true, force: true });
-    expect(result.status).toBe(0);
-    expect(text(result.stdout)).toMatch(/^4242\s/m);
+    const { status, stdout } = runWithBrokenTr([], [VITEST]);
+    expect(status).toBe(0);
+    expect(stdout).toMatch(/^4242\s/m);
   });
 
   it('exits 2 on an unknown option', () => {
