@@ -563,14 +563,14 @@ This section documents standardized procedures for reviewing and responding to s
 ### System Maintenance
 
 ```bash
-# Clean up leftover test processes to free system memory
+# List leftover test processes - reports only, frees nothing
 npm run cleanup
 
-# Alternative cleanup command (same functionality)
+# Alternative alias (same functionality)
 npm run cleanup:processes
 
-# Show current system resource usage
-./scripts/cleanup-test-processes.sh
+# Terminate the ones you judged stale, by PID
+npm run cleanup -- --kill <pid> [<pid>...]
 ```
 
 ### Git Hooks and CI
@@ -1304,24 +1304,28 @@ During intensive testing sessions (like our 1,074-test unit suite), Node.js/Vite
 The project includes automated cleanup tools:
 
 ```bash
-# List leftover test processes (reports only; kill by PID with --kill)
+# List leftover test processes (reports only; terminate by PID with --kill)
 npm run cleanup
 
 # Alternative alias
 npm run cleanup:processes
 
-# Direct script execution
+# Direct script execution (also lists only)
 ./scripts/cleanup-test-processes.sh
+
+# Terminate specific PIDs from that list
+npm run cleanup -- --kill <pid> [<pid>...]
 ```
 
 #### **Automated Integration**
 
-- **Pre-Push Hook Integration**: Cleanup runs automatically before comprehensive testing
+- **Pre-Push Hook Integration**: the inspector runs automatically before comprehensive testing,
+  and terminates nothing
 - **Reports, Does Not Kill**: `npm run cleanup` and the pre-push hook only list leftover Vitest
   processes. Terminating requires naming PIDs explicitly (`npm run cleanup -- --kill <pid>`),
   because process state cannot distinguish an adopted orphan from one a service manager started
   deliberately - see the [System Maintenance Guide](docs/operations/MAINTENANCE.md)
-- **Resource Monitoring**: Reports system load improvements after cleanup
+- **Resource Monitoring**: reports current system load after the run
 - **Quality Gate Protection**: Prevents system overload during testing
 
 #### **Real-World Validation**

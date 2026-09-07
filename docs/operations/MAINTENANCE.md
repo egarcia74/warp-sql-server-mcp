@@ -1,6 +1,6 @@
 # 🛠️ System Maintenance Guide
 
-> **Audience**: Operators reclaiming resources from orphaned test processes
+> **Audience**: Operators inspecting leftover test processes and terminating them by PID
 
 This guide covers essential maintenance tasks for the WARP SQL Server MCP project to keep your development environment running optimally.
 
@@ -14,38 +14,50 @@ During intensive testing sessions (like our comprehensive 1,074-test unit suite)
 - **Root Cause**: Test worker processes not terminating cleanly after test completion
 - **Impact**: System performance degradation, memory exhaustion
 
-### Solution: Automated Cleanup
+### Solution: Inspect First, Then Terminate by PID
 
-#### 🚀 **Quick Cleanup (Recommended)**
+Nothing below reclaims resources on its own. The inspector **lists** processes and terminates
+only the PIDs you name, because process state cannot tell an adopted orphan from a process a
+service manager started deliberately (see [Why there is no automatic orphan
+mode](#script-features)).
+
+#### 🚀 **Inspect (Recommended First Step)**
 
 ```bash
-# Clean up leftover test processes
+# List leftover test processes with PID, PPID, elapsed time and command.
+# Terminates nothing; exits 0.
 npm run cleanup
 
 # Alternative command (same functionality)
 npm run cleanup:processes
+
+# Terminate the ones you judged stale, by PID
+npm run cleanup -- --kill 12345 12346
 ```
 
-#### 🔧 **Manual Cleanup**
+#### 🔧 **Manual Inspection**
 
 ```bash
 # 1. Identify problem processes
 ps aux | grep -E "(node|vitest)" | grep -v grep
 
-# 2. Run cleanup script directly
+# 2. Run the inspector directly (lists only)
 ./scripts/cleanup-test-processes.sh
 
-# 3. Force kill specific processes (if needed)
+# 3. Terminate a specific process yourself (if needed)
 kill -9 <process_id>
 ```
 
 #### ⚙️ **Automated Prevention**
 
-The cleanup is automatically integrated into:
+The **inspection** is integrated into:
 
-1. **Pre-Push Git Hook**: Cleans up processes before running tests
-2. **NPM Scripts**: Easy access via `npm run cleanup`
-3. **Development Workflow**: Part of quality gate enforcement
+1. **Pre-Push Git Hook**: lists leftover processes before running tests, and terminates none of
+   them - a push can never kill a process
+2. **NPM Scripts**: easy access via `npm run cleanup`
+3. **Development Workflow**: part of quality gate enforcement
+
+Terminating is never automatic; it always takes an explicit `--kill PID`.
 
 ### Script Features
 
@@ -130,17 +142,19 @@ ps aux | sort -nr -k 4 | head -10
 
 ### Process Management
 
-1. **Regular Cleanup**: Run `npm run cleanup` at the start/end of development sessions
+1. **Regular Inspection**: Run `npm run cleanup` at the start/end of development sessions, then
+   `--kill` anything stale it lists
 2. **Monitor Resources**: Keep an eye on system performance during intensive testing
 3. **Investigate Unusual Load**: If system feels slow, check for leftover processes
 
 ### Quality Gate Integration
 
-The cleanup process is integrated into quality gates:
+The inspection is integrated into quality gates:
 
-- **Pre-Push Hook**: Automatically cleans before running the full test suite
-- **CI/CD Pipeline**: Ensures clean testing environments
-- **Development Workflow**: Part of no-compromise quality standards
+- **Pre-Push Hook**: lists leftovers before running the full test suite; it terminates nothing, so
+  anything it reports is still running afterwards
+- **CI/CD Pipeline**: ensures clean testing environments
+- **Development Workflow**: part of no-compromise quality standards
 
 ### Memory Management
 
@@ -159,8 +173,9 @@ top -o cpu
 # 2. Check for Vitest processes
 ps aux | grep vitest
 
-# 3. Clean up if found
+# 3. List them, then terminate the stale ones by PID
 npm run cleanup
+npm run cleanup -- --kill <pid> [<pid>...]
 ```
 
 ### Memory Issues
@@ -172,8 +187,9 @@ ps aux | sort -nr -k 4 | head -10
 # 2. Look for Node.js processes with high memory
 ps aux | grep node | sort -nr -k 4
 
-# 3. Clean up test processes
+# 3. List test processes, then terminate the stale ones by PID
 npm run cleanup
+npm run cleanup -- --kill <pid> [<pid>...]
 ```
 
 ### System Unresponsive
@@ -185,17 +201,18 @@ sudo pkill -f "vitest"
 # Clean Docker containers if using
 docker system prune -f
 
-# Restart development environment
-npm run cleanup && npm run dev
+# Restart development environment (the first command only lists)
+npm run cleanup
+npm run dev
 ```
 
 ## 💡 Prevention Strategies
 
 ### Automated Solutions
 
-1. **Git Hook Integration**: Cleanup runs automatically before quality gates
-2. **NPM Script Aliases**: Easy access to cleanup commands
-3. **Development Workflow**: Built into standard operations
+1. **Git Hook Integration**: the pre-push hook lists leftovers before quality gates (report-only)
+2. **NPM Script Aliases**: easy access to the inspector and to `--kill`
+3. **Development Workflow**: built into standard operations
 
 ### Manual Monitoring
 
@@ -205,7 +222,11 @@ npm run cleanup && npm run dev
 
 ## 📊 Real-World Example
 
-**Before Cleanup (System Under Stress):**
+A point-in-time record from one session, kept for the scale of the problem. The recovery came
+from terminating three named PIDs; `npm run cleanup` on its own would have listed them and
+changed nothing.
+
+**Before terminating the three PIDs (system under stress):**
 
 ```text
 CPU: 138% usage (severely overloaded)
@@ -213,7 +234,7 @@ Memory: 3 Vitest processes consuming ~1.8GB
 Load Average: 12.94+ (critical)
 ```
 
-**After Cleanup (System Recovered):**
+**After terminating them (system recovered):**
 
 ```text
 CPU: 54% usage (46% idle - healthy)

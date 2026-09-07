@@ -344,8 +344,9 @@ npm run logs:audit         # Show security audit logs
 npm run logs:tail:audit    # Follow audit logs in real-time
 
 # System maintenance and cleanup
-npm run cleanup            # Clean up leftover test processes
+npm run cleanup            # List leftover test processes (reports only)
 npm run cleanup:processes  # Same as cleanup (alias)
+npm run cleanup -- --kill <pid>   # Terminate a listed process by PID
 ```
 
 ---

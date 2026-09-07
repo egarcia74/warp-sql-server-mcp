@@ -59,10 +59,14 @@ fi
 
 self_ancestry() {
   local pid=$$
-  while [ "$pid" -gt 1 ] 2>/dev/null; do
+  # PID 1 is recorded, not merely walked past: in a container whose PID 1 *is*
+  # the Vitest process that launched this inspector, stopping short of it would
+  # offer the caller's own ancestor as a kill candidate, and `--kill 1` would
+  # then pass the ancestry guard.
+  while [ -n "$pid" ] && [ "$pid" -ge 1 ] 2>/dev/null; do
     echo "$pid"
+    [ "$pid" -eq 1 ] && break
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-    [ -z "$pid" ] && break
   done
 }
 ANCESTRY=" $(self_ancestry | tr '\n' ' ') "
@@ -77,9 +81,12 @@ is_vitest() {
 scan() {
   # pgrep cannot report PPID and command together.
   # shellcheck disable=SC2009
+  # Self-exclusion is by ancestry (below), never by matching this script's own
+  # name in the command: a Vitest process legitimately carrying the string -- a
+  # worktree named after this fix, or a focused test for this script -- would be
+  # silently withheld from the report, and with it the PID needed for --kill.
   ps -eo pid=,ppid=,command= 2>/dev/null | grep -E "node.*vitest" | grep -v grep \
   | while read -r pid ppid command; do
-      case "$command" in *cleanup-test-processes*) continue ;; esac
       case "$ANCESTRY" in *" $pid "*) continue ;; esac
       echo "$pid $ppid $command"
     done
@@ -186,9 +193,18 @@ fi
 # `set -e`, and an aborted push over a failed `top` would be absurd.
 echo ""
 echo "📈 Current System Status:"
+# Capture before truncating: `head` closes the pipe, `top` dies of SIGPIPE, and
+# `pipefail` reports 141 for a run that in fact succeeded -- which sent both
+# fallbacks down the `||` chain and printed "(top unavailable)" under real output.
 {
   if command -v top >/dev/null 2>&1; then
-    top -l 1 2>/dev/null | head -5 || top -b -n 1 2>/dev/null | head -5 || echo "   (top unavailable)"
+    snapshot=$(top -l 1 2>/dev/null || true)
+    [ -z "$snapshot" ] && snapshot=$(top -b -n 1 2>/dev/null || true)
+    if [ -n "$snapshot" ]; then
+      printf '%s\n' "$snapshot" | head -5
+    else
+      echo "   (top unavailable)"
+    fi
   else
     echo "   (top not installed)"
   fi
