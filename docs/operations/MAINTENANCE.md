@@ -8,7 +8,7 @@ This guide covers essential maintenance tasks for the WARP SQL Server MCP projec
 
 ### Problem: Memory-Heavy Test Processes
 
-During intensive testing sessions (like our comprehensive 1,107-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
+During intensive testing sessions (like our comprehensive 1,110-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
 
 - **Symptoms**: High CPU usage (100%+), excessive memory consumption (500MB+ per process), system slowdown
 - **Root Cause**: Test worker processes not terminating cleanly after test completion
@@ -95,6 +95,12 @@ The `cleanup-test-processes.sh` script:
   tell "exited" from "still there", so the run refuses and says so rather than sending a signal it
   cannot account for.
 - ✅ **Cannot abort a push**: the closing system-status display can never affect the exit status.
+- ✅ **Non-zero when a request was not carried out**: kill mode exits 1 if a named PID was left
+  running, could not be signalled, had an outcome that could not be determined, or was refused as
+  this script's own ancestor or child. Report mode always exits 0, so the pre-push hook cannot fail
+  over a process listing. An outcome that cannot be determined is reported as unknown rather than
+  as success — an identity that was captured at validation but cannot be re-read afterwards means
+  the process may still be running, and "unreadable" is not the same as "gone".
 
 > **Why there is no automatic orphan mode.** `PPID == 1` means either "the parent exited and this
 > was reparented" or "a service manager started it here", and nothing in process state separates

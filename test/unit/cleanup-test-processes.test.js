@@ -39,6 +39,11 @@ case "$args" in
     cat "$table" 2>/dev/null
     ;;
   *"-o ppid="*)
+    # PS_PPID_FAIL_FOR=<pid> fails only for that PID, leaving the caller's own
+    # ancestry walk intact: a descendant check that cannot conclude.
+    if [ -n "\${PS_PPID_FAIL_FOR:-}" ] && [ "$target" = "$PS_PPID_FAIL_FOR" ]; then
+      exit 1
+    fi
     # With PS_PPID_BREAK set, the first lookup answers and every later one
     # fails: an ancestry walk that stops partway up.
     if [ -n "\${PS_PPID_BREAK:-}" ]; then
@@ -74,6 +79,14 @@ case "$args" in
     # PS_NO_LSTART simulates a ps without start-time support, while
     # -o command= keeps working: a target that cannot be given an identity.
     [ -n "\${PS_NO_LSTART:-}" ] && exit 1
+    # PS_LSTART_FAIL_AFTER=<n> succeeds for n calls then fails: an identity
+    # captured at validation whose re-read breaks later on.
+    if [ -n "\${PS_LSTART_FAIL_AFTER:-}" ]; then
+      n=0
+      [ -f "$PS_LSTART_COUNT" ] && n=$(cat "$PS_LSTART_COUNT")
+      n=$((n + 1)); echo "$n" > "$PS_LSTART_COUNT"
+      [ "$n" -gt "$PS_LSTART_FAIL_AFTER" ] && exit 1
+    fi
     known || exec /bin/ps "$@"
     if [ -n "\${PS_LSTART_DRIFT:-}" ]; then
       if [ -f "$PS_LSTART_DRIFT" ]; then echo "Mon Sep  7 11:11:11 2026"; exit 0; fi
@@ -254,7 +267,8 @@ describe('cleanup-test-processes.sh - PID validation', () => {
     const { status, stdout } = run(['--kill', '1'], ['1 0 node /repo/.bin/vitest run']);
     expect(stdout).toMatch(/1: is this script's own ancestor, skipped/);
     expect(stdout).toMatch(/Nothing to terminate/);
-    expect(status).toBe(0);
+    // A refused request is an unfulfilled one, so automation must see non-zero.
+    expect(status).toBe(1);
   });
 
   // Regression: digit-only validation accepted "0001", which then failed to
@@ -264,7 +278,7 @@ describe('cleanup-test-processes.sh - PID validation', () => {
     const { status, stdout } = run(['--kill', '0001'], ['1 0 node /repo/.bin/vitest run']);
     expect(stdout).toMatch(/is this script's own ancestor, skipped/);
     expect(stdout).not.toMatch(/Sending TERM/);
-    expect(status).toBe(0);
+    expect(status).toBe(1);
   });
 
   it('skips a named PID that is not a Vitest process', () => {
@@ -478,6 +492,48 @@ describe('cleanup-test-processes.sh - when no start time is available', () => {
     expect(stdout).not.toMatch(/MOCK-KILL/);
     expect(stdout).not.toMatch(/terminated/);
     expect(status).toBe(1);
+  });
+});
+
+describe('cleanup-test-processes.sh - unknown outcomes', () => {
+  // Regression: an identity captured at validation whose re-read failed at
+  // final verification was reported "✅ terminated" with exit 0, because
+  // unreadable was equated with gone. The process was demonstrably still alive.
+  it('reports an unknown outcome, not success, when the identity cannot be re-read', () => {
+    const counter = path.join(stubDir, 'lstart-fail-count');
+    rmSync(counter, { force: true });
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_LSTART_FAIL_AFTER: '4', PS_LSTART_COUNT: counter }
+    );
+    expect(stdout).toMatch(/identity could not be re-read/);
+    expect(stdout).toMatch(/outcome unknown/);
+    expect(stdout).not.toMatch(new RegExp(`✅ ${ABSENT_PID}: terminated`));
+    expect(status).toBe(1);
+  });
+
+  // Regression: an inconclusive descendant check skipped safely but exited 0,
+  // so a live target was left untouched while the run reported success.
+  it('fails when the descendant check cannot conclude', () => {
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_PPID_FAIL_FOR: ABSENT_PID }
+    );
+    expect(stdout).toMatch(/could not verify it is not this script's own child/);
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(status).toBe(1);
+  });
+
+  // Guard against the fix above over-reaching: a PID that simply no longer
+  // exists fails the same `ps -o ppid=` lookup, and must stay a benign no-op
+  // rather than an inconclusive failure.
+  it('treats an already-gone PID as a benign no-op', () => {
+    const { status, stdout } = runWithKillMocked(['--kill', ABSENT_PID], []);
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: not a running Vitest process, skipped`));
+    expect(stdout).not.toMatch(/could not verify/);
+    expect(status).toBe(0);
   });
 });
 

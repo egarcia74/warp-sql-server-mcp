@@ -41,11 +41,15 @@ Usage: cleanup-test-processes.sh [--kill PID...]
 Nothing is selected for you: PPID 1 can mean an adopted orphan or a process a
 service manager started deliberately, and process state cannot tell them apart.
 
-Exit status: 0 when a listing completes, or when every named PID is gone.
-             1 when kill mode left a requested process running or unsignallable.
-             2 on a usage error.
-             3 when the caller's own ancestry could not be established, in
-               which case nothing is signalled.
+Exit status: 0 a listing completed, or every named PID is gone or was not a
+               Vitest process.
+             1 a named PID was left running, could not be signalled, or its
+               outcome could not be determined. This includes PIDs refused
+               because they are this script's own ancestor or child: the
+               request was not carried out, and automation should see that.
+             2 a usage error.
+             3 the caller's own ancestry could not be established, in which
+               case nothing is signalled at all.
 USAGE
   return 0
 }
@@ -150,6 +154,10 @@ is_self_descendant() {
     fi
     [[ "$pid" -eq $$ ]] && return 0
     if ! raw=$(ps -o ppid= -p "$pid" 2>/dev/null); then
+      # Inconclusive at any depth. Callers reach this only for a PID that
+      # `is_vitest` has already confirmed is running, so a failed lookup here
+      # is `ps` misbehaving, not the process being absent -- an absent PID is
+      # rejected earlier and never gets walked.
       return 2
     fi
     pid="${raw//[[:space:]]/}"
@@ -368,25 +376,33 @@ else
       continue
     fi
     case "$ANCESTRY" in
-      *" $pid "*) echo "  ⏭️  $pid: is this script's own ancestor, skipped"; continue ;;
-      *) ;;
-    esac
-    is_self_descendant "$pid"
-    case "$?" in
-      0)
-        echo "  ⏭️  $pid: is this script's own child, skipped"
-        continue
-        ;;
-      2)
-        echo "  ⏭️  $pid: could not verify it is not this script's own child, skipped"
+      *" $pid "*)
+        echo "  ⏭️  $pid: is this script's own ancestor, skipped"
+        EXIT_STATUS=1
         continue
         ;;
       *) ;;
     esac
+    # Liveness first: a PID that is not a running Vitest process needs no
+    # ancestry walk, and walking a dead one only produces failed lookups.
     if ! is_vitest "$pid"; then
       echo "  ⏭️  $pid: not a running Vitest process, skipped"
       continue
     fi
+    is_self_descendant "$pid"
+    case "$?" in
+      0)
+        echo "  ⏭️  $pid: is this script's own child, skipped"
+        EXIT_STATUS=1
+        continue
+        ;;
+      2)
+        echo "  ⏭️  $pid: could not verify it is not this script's own child, skipped"
+        EXIT_STATUS=1
+        continue
+        ;;
+      *) ;;
+    esac
     # No identity, no signal. Every post-TERM decision -- escalate, kill,
     # report -- compares against the start time captured here, so a target
     # without one cannot be tracked: it would be TERMed, then reported as
@@ -497,14 +513,29 @@ else
     i=0
     while [[ $i -lt ${#TARGET_PIDS[@]} ]]; do
       pid="${TARGET_PIDS[$i]}"
-      if still_same_process "$pid" "${TARGET_IDS[$i]}"; then
+      now=$(identity_of "$pid")
+      if [[ -n "$now" && "$now" == "${TARGET_IDS[$i]}" ]]; then
         if kill -0 "$pid" 2>/dev/null; then
           echo "  ⚠️  $pid: still running"
         else
           echo "  ⚠️  $pid: still running and cannot be signalled (owned by another user?)"
         fi
         EXIT_STATUS=1
+      elif [[ -n "$now" ]]; then
+        # Readable, and it is a different process: ours is gone.
+        echo "  ✅ $pid: terminated"
+      elif kill -0 "$pid" 2>/dev/null; then
+        # Unreadable is not the same as gone. The identity captured at
+        # validation succeeded, so a failure only here is the lookup breaking,
+        # not the process exiting -- and the number is demonstrably still
+        # alive. Reporting "terminated" here was a false success.
+        echo "  ⚠️  $pid: still alive, but its identity could not be re-read;"
+        echo "        outcome unknown"
+        EXIT_STATUS=1
       else
+        # No identity and no liveness: the process is gone. `kill -0` also
+        # fails with EPERM, but `ps` can read another user's start time, so
+        # an unreadable identity paired with a failed `kill -0` is an exit.
         echo "  ✅ $pid: terminated"
       fi
       i=$((i + 1))
