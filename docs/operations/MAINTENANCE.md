@@ -8,7 +8,7 @@ This guide covers essential maintenance tasks for the WARP SQL Server MCP projec
 
 ### Problem: Memory-Heavy Test Processes
 
-During intensive testing sessions (like our comprehensive 1,118-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
+During intensive testing sessions (like our comprehensive 1,120-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
 
 - **Symptoms**: High CPU usage (100%+), excessive memory consumption (500MB+ per process), system slowdown
 - **Root Cause**: Test worker processes not terminating cleanly after test completion
@@ -90,7 +90,12 @@ The `cleanup-test-processes.sh` script:
 - ✅ **Honest per-PID outcomes**: liveness is checked with `ps`, not `kill -0`. `kill -0` fails with
   `EPERM` for a process owned by another user, which is indistinguishable from "gone" — so that
   case used to be silently dropped and reported as success. Each PID now reports terminated, still
-  running, or still running and unsignallable. Once a target has been signalled, whether it is
+  running, or still running and unsignallable. That applies to the final probe as well, which is
+  the one place the rule had not been carried through: a failed `kill -0` there was read as "alive
+  but not ours", so a target exiting between the identity read and the probe — likeliest right at
+  the end of the post-`KILL` wait, the moment cleanup has just succeeded — was reported as an
+  unsignallable survivor. Failure of that probe is now resolved with `ps`: visible means `EPERM` on
+  a live process, invisible with `ps` answering means gone, and `ps` not answering means unknown. Once a target has been signalled, whether it is
   still alive is decided by its **start time**, never by its command line: a process can rewrite
   its own `argv` (Node exposes this as `process.title`), so a `SIGTERM` handler that renames itself
   while refusing to exit would otherwise be reported as terminated while still running. A target

@@ -75,6 +75,14 @@ const KILL_MOCK = { 'BASH_FUNC_kill%%': '() { echo "MOCK-KILL $*"; return 0; }' 
 // both `kill` and `kill -0` are denied.
 const KILL_MOCK_DENIED = { 'BASH_FUNC_kill%%': '() { return 1; }' };
 
+// Signals land, but the `kill -0` existence probe fails: ESRCH, the target has
+// exited. The mirror image of KILL_MOCK_DENIED, where the same probe fails for
+// EPERM on a process that is very much alive -- `kill -0` reports both
+// identically, which is why nothing here may read it as proof of survival.
+const KILL_MOCK_NO_PROBE = {
+  'BASH_FUNC_kill%%': '() { case "${1:-}" in -0) return 1 ;; esac; echo "MOCK-KILL $*"; return 0; }'
+};
+
 /** Run with signalling mocked out: nothing on the host is ever signalled. */
 const runWithKillMocked = (args, processes, extra = {}) =>
   invoke(args, writeTable(processes), { ...KILL_MOCK, ...extra });
@@ -465,6 +473,38 @@ describe('cleanup-test-processes.sh - when the start time comes back blank', () 
     expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: no start time available, skipped`));
     expect(stdout).not.toMatch(/MOCK-KILL/);
     expect(stdout).not.toMatch(/terminated/);
+    expect(status).toBe(1);
+  });
+});
+
+describe('cleanup-test-processes.sh - when the final existence probe fails', () => {
+  // Regression: the outcome loop read a failed `kill -0` as "alive but not
+  // ours" and reported "still running and cannot be signalled" with exit 1.
+  // `kill -0` cannot tell ESRCH from EPERM -- the ambiguity every other
+  // liveness check here was deliberately moved off `kill -0` to avoid -- so a
+  // target that exited between the identity read and the probe was reported as
+  // an unsignallable survivor. That window is likeliest at the end of the
+  // post-KILL wait: the moment cleanup has just succeeded.
+  it('reports a target ps cannot see as terminated, not as unsignallable', () => {
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK_NO_PROBE, PS_PID_ABSENT: ABSENT_PID }
+    );
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: terminated`));
+    expect(stdout).not.toMatch(/cannot be signalled/);
+    expect(status).toBe(0);
+  });
+
+  // The other half of the same branch: `ps` CAN see it, so the failed probe
+  // really was EPERM and the target really did survive.
+  it('still reports a live process it may not signal as unsignallable', () => {
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK_NO_PROBE }
+    );
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: still running and cannot be signalled`));
     expect(status).toBe(1);
   });
 });

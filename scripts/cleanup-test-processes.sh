@@ -567,12 +567,24 @@ else
         if is_zombie "$pid"; then
           # Terminated, so this must not set the failure status.
           echo "  ✅ $pid: terminated (exited; its parent has not reaped it yet)"
+        elif kill -0 "$pid" 2>/dev/null; then
+          echo "  ⚠️  $pid: still running"
+          EXIT_STATUS=1
+        # `kill -0` failing does not establish that the target survived: it
+        # cannot tell ESRCH from EPERM, which is the whole reason liveness is
+        # decided by `ps` everywhere else here. The target can exit between the
+        # identity read above and this probe -- likeliest right at the end of
+        # the post-KILL wait, i.e. when cleanup has just succeeded -- so ask
+        # `ps` rather than assuming the failure means "alive but not ours".
+        elif pid_exists "$pid"; then
+          echo "  ⚠️  $pid: still running and cannot be signalled (owned by another user?)"
+          EXIT_STATUS=1
+        elif ps_answers; then
+          # `ps` is working and cannot see the PID: it is gone.
+          echo "  ✅ $pid: terminated"
         else
-          if kill -0 "$pid" 2>/dev/null; then
-            echo "  ⚠️  $pid: still running"
-          else
-            echo "  ⚠️  $pid: still running and cannot be signalled (owned by another user?)"
-          fi
+          echo "  ⚠️  $pid: liveness could not be established (ps is not"
+          echo "        answering); outcome unknown"
           EXIT_STATUS=1
         fi
       elif [[ -n "$now" ]]; then

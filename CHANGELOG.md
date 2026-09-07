@@ -40,8 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Vitest process and still be the process whose start time was recorded; before `KILL` only that start time is
   re-checked, since a target can rewrite its own command line and would otherwise rename itself out of being
   force-killed (this narrows, though it does not close, the window in which a recycled PID could be hit),
-  only PIDs that `TERM` actually reached can be escalated to `KILL`, liveness is checked with `ps` rather than `kill -0` (which fails with `EPERM` for another user's
-  process, indistinguishable from "gone", and was previously reported as success), and the closing status display can no
+  only PIDs that `TERM` actually reached can be escalated to `KILL`, liveness is checked with `ps` rather than `kill -0` — including the final outcome probe, where a
+  failed `kill -0` was being read as "alive but not ours", so a target that exited between the
+  identity read and that probe (likeliest right at the end of the post-KILL wait, i.e. on success)
+  was reported as an unsignallable survivor with exit 1; `kill -0` fails with `EPERM` for another
+  user's process indistinguishably from "gone", and was previously reported as success, and the closing status display can no
   longer abort a push. `npm run cleanup:kill` is removed, since termination now requires arguments. Kill mode now
   exits non-zero when a requested process is still running, so automation can tell a completed
   termination from a run that changed nothing, and zero-padded PIDs are canonicalised before the
@@ -51,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-empty, so it satisfied the "no identity, no signal" refusal, and equal for every PID whose
   lookup degraded the same way, which is exactly the collision the identity check exists to
   prevent. The
-  script is covered by 44 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
+  script is covered by 46 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
   against a stubbed `ps` so the destructive path, the PID guards and the exit status are exercised
   without depending on what happens to be running
   ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).
