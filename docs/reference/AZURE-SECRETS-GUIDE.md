@@ -1,6 +1,12 @@
 # Azure Key Vault Configuration Guide
 
 > **Audience**: Operators putting credentials in Azure Key Vault
+>
+> **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
+> unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
+> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE` or `AZURE_KEY_VAULT_URL` currently has
+> **no effect** - a deployment with credentials only in Azure Key Vault will not connect. Use plain
+> environment variables ([ENV-VARS.md](ENV-VARS.md)) until this is resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
 
 This guide provides comprehensive instructions for configuring Azure Key Vault with the Warp SQL Server MCP project.
 
@@ -79,7 +85,7 @@ az keyvault secret set --vault-name "your-sql-mcp-vault" --name "SQL-SERVER-POOL
 - **Length**: 1-127 characters
 - **Case**: Case-insensitive
 
-The MCP server automatically converts environment variable names to Azure-compatible format:
+Once wired up (see #1152), the MCP server will convert environment variable names to Azure-compatible format:
 
 | Environment Variable  | Azure Key Vault Secret Name |
 | --------------------- | --------------------------- |
@@ -342,6 +348,11 @@ node test-azure-secrets.js
 
 ### 3. Test MCP Server Startup
 
+> **⚠️ Unavailable until [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152) is resolved.** Startup never constructs `SecretManager`, so none of
+> the messages below are emitted no matter how Azure Key Vault is configured. Their absence is not an
+> Azure problem and is not worth diagnosing as one. The step is kept for when the integration is
+> wired up.
+
 ```bash
 # Enable debug logging to see secret loading
 export LOG_LEVEL="debug"
@@ -452,6 +463,9 @@ npm start
 
 This will show detailed logs including:
 
+> **⚠️** The secret-manager entries below are also unavailable until [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152) is resolved: nothing
+> constructs `SecretManager` at startup, so it never initializes, authenticates or retrieves.
+
 - Secret Manager initialization
 - Authentication attempts
 - Secret retrieval operations
@@ -460,7 +474,9 @@ This will show detailed logs including:
 
 ### Health Check Endpoint
 
-The MCP server includes a health check for the secret manager:
+`SecretManager` provides a health check for Azure Key Vault. The snippet below constructs
+the class directly, which works today; the running server does not call it, since it never
+constructs `SecretManager` ([#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)).
 
 ```javascript
 // Access health check programmatically
@@ -528,6 +544,7 @@ console.log(health);
 }
 ```
 
-This completes the comprehensive Azure Key Vault configuration guide. The secret manager will
-handle the automatic conversion between environment variable names and Azure-compatible secret
-names, providing seamless integration with your existing configuration patterns.
+This completes the comprehensive Azure Key Vault configuration guide. Once the integration is wired
+into startup ([#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)), the secret manager will convert between environment variable names and
+Azure-compatible secret names automatically. **Until then none of the above takes effect at
+runtime** - use plain environment variables ([ENV-VARS.md](ENV-VARS.md)).
