@@ -239,6 +239,18 @@ read_process_table() {
   return 0
 }
 
+# Once TERM has reached a verified target, survival is judged by the recorded
+# start time and never by the command line. A process can rewrite its own argv
+# -- Node exposes it as `process.title` -- so a SIGTERM handler that renames
+# itself while refusing to exit would fail `is_vitest`, be dropped from
+# escalation, and be reported as terminated while still running. Start time is
+# assigned by the kernel and the process cannot change it.
+still_same_process() {
+  local pid="${1:-}" want="${2:-}" now
+  now=$(identity_of "$pid")
+  [[ -n "$now" && -n "$want" && "$now" == "$want" ]]
+}
+
 scan() {
   # Matching happens in the shell, with no `grep` in the pipeline. `grep -E
   # "node.*vitest"` matches its own argument text where it appears in `ps`
@@ -431,14 +443,14 @@ else
     for i in ${TERMED_IDX[@]+"${TERMED_IDX[@]}"}; do
       if [[ "$GRACE_OK" != "1" ]]; then break; fi
       pid="${TARGET_PIDS[$i]}"
-      if ! is_vitest "$pid"; then continue; fi
       # The number surviving is not enough. If our target exited and a new
-      # Vitest process took its PID during the wait, KILLing it here would
-      # force-kill a process that never received TERM.
-      if [[ "$(identity_of "$pid")" == "${TARGET_IDS[$i]}" ]]; then
+      # process took its PID during the wait, KILLing it here would force-kill
+      # something that never received TERM.
+      now=$(identity_of "$pid")
+      if [[ -n "$now" && "$now" == "${TARGET_IDS[$i]}" ]]; then
         ESCALATE_IDX+=("$i")
         ESCALATE="$ESCALATE $pid"
-      else
+      elif [[ -n "$now" ]]; then
         echo "  ⏭️  $pid: a different process now holds this PID, not escalated"
       fi
     done
@@ -453,9 +465,8 @@ else
       # replacement looks like Vitest.
       for i in ${ESCALATE_IDX[@]+"${ESCALATE_IDX[@]}"}; do
         pid="${TARGET_PIDS[$i]}"
-        if ! is_vitest "$pid"; then continue; fi
-        if [[ "$(identity_of "$pid")" != "${TARGET_IDS[$i]}" ]]; then
-          echo "  ⏭️  $pid: a different process now holds this PID, not killed"
+        if ! still_same_process "$pid" "${TARGET_IDS[$i]}"; then
+          echo "  ⏭️  $pid: no longer the process that was signalled, not killed"
           continue
         fi
         kill -9 "$pid" 2>/dev/null || true
@@ -473,7 +484,7 @@ else
     i=0
     while [[ $i -lt ${#TARGET_PIDS[@]} ]]; do
       pid="${TARGET_PIDS[$i]}"
-      if is_vitest "$pid" && [[ "$(identity_of "$pid")" == "${TARGET_IDS[$i]}" ]]; then
+      if still_same_process "$pid" "${TARGET_IDS[$i]}"; then
         if kill -0 "$pid" 2>/dev/null; then
           echo "  ⚠️  $pid: still running"
         else

@@ -52,6 +52,18 @@ case "$args" in
     ;;
   *"-o command="*)
     known || exec /bin/ps "$@"
+    # PS_RENAME_AFTER=<n> reports a non-Vitest command from call n+1 onward,
+    # while lstart stays put: a process that rewrites its own argv (Node's
+    # process.title) without exiting.
+    if [ -n "\${PS_RENAME_AFTER:-}" ]; then
+      n=0
+      [ -f "$PS_RENAME_COUNT" ] && n=$(cat "$PS_RENAME_COUNT")
+      n=$((n + 1)); echo "$n" > "$PS_RENAME_COUNT"
+      if [ "$n" -gt "$PS_RENAME_AFTER" ]; then
+        echo "renamed-and-still-here"
+        exit 0
+      fi
+    fi
     awk -v p="$target" '$1==p { $1=""; $2=""; sub(/^ +/, ""); print }' "$table"
     ;;
   *"-o etime="*)
@@ -422,8 +434,30 @@ describe('cleanup-test-processes.sh - identity at the moment of KILL', () => {
     );
     // TERM went out and escalation was decided, then the identity changed.
     expect(stdout).toMatch(new RegExp(`MOCK-KILL ${ABSENT_PID}`));
-    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: a different process now holds this PID`));
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: no longer the process that was signalled`));
     expect(stdout).not.toMatch(/MOCK-KILL -9/);
+  });
+});
+
+describe('cleanup-test-processes.sh - when a target renames itself', () => {
+  // Regression: escalation and the outcome report both keyed off `is_vitest`,
+  // so a SIGTERM handler that rewrites its own argv while refusing to exit was
+  // dropped from escalation and reported "terminated" with exit 0. Reproduced
+  // for real with a Node process whose SIGTERM handler set process.title: the
+  // script printed "✅ terminated" while `kill -0` still succeeded.
+  it('escalates and reports honestly when the command line changes', () => {
+    const counter = path.join(stubDir, 'rename-count');
+    rmSync(counter, { force: true });
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_RENAME_AFTER: '2', PS_RENAME_COUNT: counter }
+    );
+    // Identity is unchanged, so the rename must not be read as an exit.
+    expect(stdout).toMatch(new RegExp(`MOCK-KILL -9 ${ABSENT_PID}`));
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: still running`));
+    expect(stdout).not.toMatch(new RegExp(`${ABSENT_PID}: terminated`));
+    expect(status).toBe(1);
   });
 });
 
