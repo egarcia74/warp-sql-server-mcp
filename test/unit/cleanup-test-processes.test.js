@@ -28,16 +28,8 @@ const writeStub = (name, body) => {
   chmodSync(file, 0o755);
 };
 
-beforeAll(() => {
-  stubDir = mkdtempSync(path.join(tmpdir(), 'cleanup-stub-'));
-
-  // Fixture format, one process per line: "<pid> <ppid> <command...>".
-  // PIDs absent from the fixture are delegated to the real `ps`, so the
-  // script's own ancestry walk still resolves and only the simulated
-  // processes are synthetic.
-  writeStub(
-    'ps',
-    `#!/bin/bash
+// Stub bodies live at module scope so the `beforeAll` hook stays small.
+const PS_STUB = `#!/bin/bash
 table="\${PS_TABLE:-/dev/null}"
 args="$*"
 target="\${args##*-p }"
@@ -72,16 +64,33 @@ case "$args" in
       if [ -f "$PS_LSTART_DRIFT" ]; then echo "Mon Sep  7 11:11:11 2026"; exit 0; fi
       : > "$PS_LSTART_DRIFT"
     fi
+    # PS_LSTART_AFTER=<n> drifts only from call n+1 onward, which lets a single
+    # comparison site be targeted rather than all of them at once.
+    if [ -n "\${PS_LSTART_AFTER:-}" ]; then
+      n=0
+      [ -f "$PS_LSTART_COUNT" ] && n=$(cat "$PS_LSTART_COUNT")
+      n=$((n + 1)); echo "$n" > "$PS_LSTART_COUNT"
+      if [ "$n" -gt "$PS_LSTART_AFTER" ]; then
+        echo "Mon Sep  7 11:11:11 2026"
+        exit 0
+      fi
+    fi
     echo "Mon Sep  7 09:00:00 2026"
     ;;
   *)
     exec /bin/ps "$@"
     ;;
 esac
-`
-  );
-  writeStub('sleep', '#!/bin/bash\nexit 0\n');
-  writeStub('top', '#!/bin/bash\necho "Processes: 1 total"\necho "CPU usage: 0.0% user"\n');
+`;
+
+const SLEEP_STUB = '#!/bin/bash\nexit 0\n';
+const TOP_STUB = '#!/bin/bash\necho "Processes: 1 total"\necho "CPU usage: 0.0% user"\n';
+
+beforeAll(() => {
+  stubDir = mkdtempSync(path.join(tmpdir(), 'cleanup-stub-'));
+  writeStub('ps', PS_STUB);
+  writeStub('sleep', SLEEP_STUB);
+  writeStub('top', TOP_STUB);
 });
 
 afterAll(() => {
@@ -380,6 +389,41 @@ describe('cleanup-test-processes.sh - when `sleep` fails', () => {
     expect(stdout).toMatch(/grace period could not be waited out/);
     expect(stdout).not.toMatch(/MOCK-KILL -9/);
     expect(stdout).not.toMatch(/sending KILL/);
+  });
+});
+
+describe('cleanup-test-processes.sh - when the process table cannot be read', () => {
+  // Regression: `ps -eo` piped straight into the filter loop made a failed
+  // scan indistinguishable from an empty one -- no rows, `scan` returning 0,
+  // and the report announcing "No Vitest processes found" having inspected
+  // nothing. The pre-push hook would read that as a clean system.
+  it('says it inspected nothing rather than reporting a clean system', () => {
+    const { status, stdout } = runWithBrokenTool('ps', [], [VITEST]);
+    expect(stdout).toMatch(/process table could not be read/);
+    expect(stdout).toMatch(/NOT a report that the system is clean/);
+    expect(stdout).not.toMatch(/No Vitest processes found/);
+    // Still safe for the hook to call.
+    expect(status).toBe(0);
+  });
+});
+
+describe('cleanup-test-processes.sh - identity at the moment of KILL', () => {
+  // Regression: ESCALATE was built in one pass and signalled in another, and
+  // the KILL loop re-checked only `is_vitest`. With several targets, an
+  // earlier one could exit and have its number reissued in between, and the
+  // replacement would take SIGKILL having never received TERM.
+  it('does not KILL a PID whose identity changed after escalation was decided', () => {
+    const counter = path.join(stubDir, 'lstart-count');
+    rmSync(counter, { force: true });
+    const { stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_LSTART_AFTER: '3', PS_LSTART_COUNT: counter }
+    );
+    // TERM went out and escalation was decided, then the identity changed.
+    expect(stdout).toMatch(new RegExp(`MOCK-KILL ${ABSENT_PID}`));
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: a different process now holds this PID`));
+    expect(stdout).not.toMatch(/MOCK-KILL -9/);
   });
 });
 

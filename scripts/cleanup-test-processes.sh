@@ -59,6 +59,7 @@ MODE="report"
 EXIT_STATUS=0
 # Depth bound for both ancestry walks; see self_ancestry.
 MAX_WALK=64
+PROCESS_TABLE=""
 if [[ "$#" -gt 0 ]]; then
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -226,6 +227,18 @@ is_vitest() {
   return 0
 }
 
+# Reads the process table into PROCESS_TABLE. Returns non-zero if `ps` could
+# not be read at all, which callers must distinguish from an empty table.
+# pgrep cannot report PPID and command together.
+# shellcheck disable=SC2009
+read_process_table() {
+  if ! PROCESS_TABLE=$(ps -eo pid=,ppid=,command= 2>/dev/null); then
+    PROCESS_TABLE=""
+    return 1
+  fi
+  return 0
+}
+
 scan() {
   # Matching happens in the shell, with no `grep` in the pipeline. `grep -E
   # "node.*vitest"` matches its own argument text where it appears in `ps`
@@ -234,9 +247,12 @@ scan() {
   # anywhere: a test file named greplike.test.js, a path segment such as
   # grep-utils/. That is the same silent-omission bug as the self-name filter
   # removed in 375f1e8. No grep, nothing to filter, nothing hidden.
-  # pgrep cannot report PPID and command together.
-  # shellcheck disable=SC2009
-  ps -eo pid=,ppid=,command= 2>/dev/null \
+  # The table is captured before it is filtered, so a failed `ps` is
+  # distinguishable from an empty result. Piping `ps` straight into the loop
+  # made those identical: a denied or broken `ps -eo` produced no rows, `scan`
+  # returned 0, and the report said "No Vitest processes found" having
+  # inspected nothing at all.
+  printf '%s\n' "$PROCESS_TABLE" \
   | while read -r pid ppid command; do
       case "$command" in *node*vitest*) ;; *) continue ;; esac
       case "$ANCESTRY" in *" $pid "*) continue ;; *) ;; esac
@@ -252,6 +268,18 @@ echo "🧹 WARP Test Process Inspector"
 echo "=================================="
 
 if [[ "$MODE" == "report" ]]; then
+  # The table is read here, in the main shell, so the failure is visible. Doing
+  # it inside `scan` would bury it: `< <(scan)` runs in a subshell whose exit
+  # status the loop never sees.
+  if ! read_process_table; then
+    echo "⚠️  The process table could not be read (ps failed), so nothing was"
+    echo "   inspected. This is NOT a report that the system is clean."
+    echo ""
+    echo "📈 Current System Status:"
+    echo "   (skipped)"
+    exit 0
+  fi
+
   found=0
   while read -r pid ppid command; do
     [[ -z "${pid:-}" ]] && continue
@@ -396,6 +424,9 @@ else
 
     # Only PIDs that were actually sent TERM may be escalated. A process that
     # appeared during the wait has not had a chance to shut down gracefully.
+    # Indices, not bare PIDs: the KILL loop below has to re-read each
+    # target's recorded identity, and a list of numbers cannot carry that.
+    ESCALATE_IDX=()
     ESCALATE=""
     for i in ${TERMED_IDX[@]+"${TERMED_IDX[@]}"}; do
       if [[ "$GRACE_OK" != "1" ]]; then break; fi
@@ -405,6 +436,7 @@ else
       # Vitest process took its PID during the wait, KILLing it here would
       # force-kill a process that never received TERM.
       if [[ "$(identity_of "$pid")" == "${TARGET_IDS[$i]}" ]]; then
+        ESCALATE_IDX+=("$i")
         ESCALATE="$ESCALATE $pid"
       else
         echo "  ⏭️  $pid: a different process now holds this PID, not escalated"
@@ -414,8 +446,19 @@ else
 
     if [[ -n "$ESCALATE" ]]; then
       echo "💥 Still running, sending KILL to: $ESCALATE"
-      for pid in $ESCALATE; do
-        is_vitest "$pid" && kill -9 "$pid" 2>/dev/null || true
+      # Identity is re-read here rather than trusted from the loop above.
+      # Building the list and signalling it are separate passes, so with
+      # several targets an earlier one can exit and have its number reissued
+      # in between -- and `is_vitest` alone would happily confirm that the
+      # replacement looks like Vitest.
+      for i in ${ESCALATE_IDX[@]+"${ESCALATE_IDX[@]}"}; do
+        pid="${TARGET_PIDS[$i]}"
+        if ! is_vitest "$pid"; then continue; fi
+        if [[ "$(identity_of "$pid")" != "${TARGET_IDS[$i]}" ]]; then
+          echo "  ⏭️  $pid: a different process now holds this PID, not killed"
+          continue
+        fi
+        kill -9 "$pid" 2>/dev/null || true
       done
       sleep 1
     fi
@@ -445,14 +488,20 @@ else
 
     # Killing a coordinator reparents its workers. Report them rather than
     # killing anything that was not named.
-    LEFT=0
-    while read -r _line; do
-      [[ -n "$_line" ]] && LEFT=$((LEFT + 1))
-    done < <(scan)
-    if [[ "$LEFT" != "0" ]]; then
+    if read_process_table; then
+      LEFT=0
+      while read -r _line; do
+        [[ -n "$_line" ]] && LEFT=$((LEFT + 1))
+      done < <(scan)
+      if [[ "$LEFT" != "0" ]]; then
+        echo ""
+        echo "ℹ️  $LEFT Vitest process(es) remain (workers reparented by the kill, or"
+        echo "   unrelated runs). Re-run with no arguments to list them."
+      fi
+    else
       echo ""
-      echo "ℹ️  $LEFT Vitest process(es) remain (workers reparented by the kill, or"
-      echo "   unrelated runs). Re-run with no arguments to list them."
+      echo "⚠️  The process table could not be re-read, so whether any Vitest"
+      echo "   processes remain is unknown."
     fi
   fi
 fi
