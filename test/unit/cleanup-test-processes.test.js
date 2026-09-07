@@ -296,6 +296,16 @@ describe('cleanup-test-processes.sh - exit status', () => {
     expect(stdout).toMatch(/Exit status/);
     expect(stdout).toMatch(/--kill PID/);
   });
+
+  // The pre-KILL check is identity-only by design, and that claim has now gone
+  // stale twice in places a docs edit missed. Pin the mechanism rather than the
+  // prose: --help must describe the start-time check, not promise that the
+  // command line is re-verified before every signal.
+  it('describes the pre-KILL check as identity-based in --help', () => {
+    const { stdout } = run(['--help']);
+    expect(stdout).toMatch(/start time/);
+    expect(stdout).not.toMatch(/re-verified as a Vitest process immediately before/);
+  });
 });
 
 describe('cleanup-test-processes.sh - argument handling', () => {

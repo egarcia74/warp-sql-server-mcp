@@ -33,10 +33,14 @@ Usage: cleanup-test-processes.sh [--kill PID...]
   (no args)      List Vitest processes with parent, elapsed time and command.
                  Exits 0. Safe to call from a hook.
   --kill PID...  Terminate exactly these PIDs (TERM, then KILL if needed).
-                 Each is re-verified as a Vitest process immediately before
-                 each signal. The check and the signal are still two separate
-                 operations, so a PID recycled inside that window could be hit;
-                 the window is microscopic, but it is not zero.
+                 Before TERM a PID must still be a Vitest process AND still be
+                 the process whose start time was recorded. Before KILL only
+                 that start time is re-checked: a target can rewrite its own
+                 command line, so requiring it to still look like Vitest would
+                 let a TERM handler rename itself out of being force-killed.
+                 Either way the check and the signal are separate operations,
+                 so a PID recycled inside that window could be hit; the window
+                 is microscopic, but it is not zero.
 
 Nothing is selected for you: PPID 1 can mean an adopted orphan or a process a
 service manager started deliberately, and process state cannot tell them apart.

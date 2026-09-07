@@ -36,15 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their PID, parent, elapsed time and command, and exits 0; termination requires naming PIDs
   (`npm run cleanup -- --kill <pid>`). There is deliberately no automatic orphan mode: `PPID == 1` means either
   "reparented after the parent exited" or "a service manager started it here", and process state cannot separate them —
-  four heuristics were tried and each killed healthy processes or silently found none. Each PID now re-verifies as a
-  Vitest process before every signal (narrowing, though not closing, the window in which a recycled PID could be hit),
+  four heuristics were tried and each killed healthy processes or silently found none. Before `TERM` each PID must still be a
+  Vitest process and still be the process whose start time was recorded; before `KILL` only that start time is
+  re-checked, since a target can rewrite its own command line and would otherwise rename itself out of being
+  force-killed (this narrows, though it does not close, the window in which a recycled PID could be hit),
   only PIDs that `TERM` actually reached can be escalated to `KILL`, liveness is checked with `ps` rather than `kill -0` (which fails with `EPERM` for another user's
   process, indistinguishable from "gone", and was previously reported as success), and the closing status display can no
   longer abort a push. `npm run cleanup:kill` is removed, since termination now requires arguments. Kill mode now
   exits non-zero when a requested process is still running, so automation can tell a completed
   termination from a run that changed nothing, and zero-padded PIDs are canonicalised before the
   ancestry checks (`--kill 0001` previously walked past the PID-1 guard and signalled it). The
-  script is covered by 41 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
+  script is covered by 42 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
   against a stubbed `ps` so the destructive path, the PID guards and the exit status are exercised
   without depending on what happens to be running
   ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).
