@@ -117,6 +117,28 @@ ANCESTRY=" $(self_ancestry | tr '\n' ' ') "
 # Liveness via ps, not `kill -0`: kill -0 fails with EPERM for a process owned
 # by another user, which is indistinguishable from "gone" and silently drops it
 # from failure reporting. ps sees it regardless of signal permission.
+# Leading zeroes are stripped textually, never with `$((10#$raw))`. Bash
+# arithmetic silently wraps past 2^63, so `$((10#18446744073709555859))` is
+# 4243 -- an all-digit argument the user never named would validate and then be
+# signalled. The length bound is deliberately generous: no platform has a PID
+# wider than seven digits (Linux caps `pid_max` at 4194304).
+canonical_pid() {
+  local raw="${1:-}" stripped
+  stripped="${raw#"${raw%%[!0]*}"}"
+  [[ -z "$stripped" ]] && stripped=0
+  [[ ${#stripped} -gt 7 ]] && return 1
+  printf '%s' "$stripped"
+  return 0
+}
+
+# A PID is not an identity: it can be released and reissued during the wait
+# between TERM and KILL. `lstart` is an absolute start time, so unlike `etime`
+# it does not drift while we wait, and it distinguishes the process we
+# signalled from a different one that later holds the same number.
+identity_of() {
+  ps -o lstart= -p "${1:-}" 2>/dev/null | tr -s '[:space:]' '_'
+}
+
 is_vitest() {
   local pid="${1:-}" cmd
   cmd=$(ps -o command= -p "$pid" 2>/dev/null) || return 1
@@ -172,6 +194,11 @@ if [[ "$MODE" == "report" ]]; then
   fi
 else
   # Terminate exactly what was named, reporting each PID's own outcome.
+  # PIDs and their start-time identities are held in parallel indexed arrays
+  # (not an associative array - /bin/bash is 3.2 on macOS) and always walked by
+  # index, which also keeps `set -u` happy when nothing validated.
+  TARGET_PIDS=()
+  TARGET_IDS=()
   TARGETS=""
   for raw in $KILL_PIDS; do
     case "$raw" in
@@ -181,13 +208,15 @@ else
     # Canonicalise before anything compares it. `ps -p 0001` and `kill 0001`
     # both address PID 1, but "0001" does not match the " 1 " entry in
     # ANCESTRY, so a zero-padded argument would walk straight past the PID-1
-    # and ancestry protections. 10# forces base 10, so a leading zero is not
-    # read as octal.
-    pid=$((10#$raw))
+    # and ancestry protections.
+    if ! pid=$(canonical_pid "$raw"); then
+      echo "  ⏭️  $raw: not a PID, skipped"
+      continue
+    fi
     # 0 is rejected after canonicalisation, which catches "00" and "000" as
     # well as "0": `kill 0` signals the entire process group, which under the
     # pre-push hook means `git push` and the caller's own shell job.
-    if [[ "$pid" -eq 0 ]]; then
+    if [[ "$pid" == "0" ]]; then
       echo "  ⏭️  $raw: not a PID, skipped"
       continue
     fi
@@ -203,6 +232,8 @@ else
       echo "  ⏭️  $pid: not a running Vitest process, skipped"
       continue
     fi
+    TARGET_PIDS+=("$pid")
+    TARGET_IDS+=("$(identity_of "$pid")")
     TARGETS="$TARGETS $pid"
   done
   TARGETS="$(echo "$TARGETS" | xargs || true)"
@@ -221,24 +252,37 @@ else
     # KILLed: if it exited and its number were reused by a new Vitest process
     # during the sleep, that replacement would receive KILL having never
     # received TERM, breaking the graceful-before-forceful guarantee.
-    TERMED=""
-    for pid in $TARGETS; do
+    TERMED_IDX=()
+    i=0
+    while [[ $i -lt ${#TARGET_PIDS[@]} ]]; do
+      pid="${TARGET_PIDS[$i]}"
       if ! is_vitest "$pid"; then
         echo "  ⏭️  $pid: no longer a Vitest process, not signalled"
+      elif [[ "$(identity_of "$pid")" != "${TARGET_IDS[$i]}" ]]; then
+        echo "  ⏭️  $pid: a different process now holds this PID, not signalled"
       elif kill "$pid" 2>/dev/null; then
-        TERMED="$TERMED $pid"
+        TERMED_IDX+=("$i")
       else
         echo "  ⏭️  $pid: could not be signalled (owned by another user?)"
       fi
+      i=$((i + 1))
     done
-    TERMED="$(echo "$TERMED" | xargs || true)"
     sleep 2
 
     # Only PIDs that were actually sent TERM may be escalated. A process that
     # appeared during the wait has not had a chance to shut down gracefully.
     ESCALATE=""
-    for pid in $TERMED; do
-      if is_vitest "$pid"; then ESCALATE="$ESCALATE $pid"; fi
+    for i in ${TERMED_IDX[@]+"${TERMED_IDX[@]}"}; do
+      pid="${TARGET_PIDS[$i]}"
+      if ! is_vitest "$pid"; then continue; fi
+      # The number surviving is not enough. If our target exited and a new
+      # Vitest process took its PID during the wait, KILLing it here would
+      # force-kill a process that never received TERM.
+      if [[ "$(identity_of "$pid")" == "${TARGET_IDS[$i]}" ]]; then
+        ESCALATE="$ESCALATE $pid"
+      else
+        echo "  ⏭️  $pid: a different process now holds this PID, not escalated"
+      fi
     done
     ESCALATE="$(echo "$ESCALATE" | xargs || true)"
 
@@ -253,8 +297,14 @@ else
     # A surviving target sets a non-zero exit. Automation calling kill mode
     # could not otherwise distinguish a completed termination from a run that
     # left every requested process alive.
-    for pid in $TARGETS; do
-      if is_vitest "$pid"; then
+    #
+    # Identity is compared here too: if the number is live but now belongs to a
+    # different process, the process we were asked to terminate is gone, and
+    # reporting it as "still running" would be wrong in both directions.
+    i=0
+    while [[ $i -lt ${#TARGET_PIDS[@]} ]]; do
+      pid="${TARGET_PIDS[$i]}"
+      if is_vitest "$pid" && [[ "$(identity_of "$pid")" == "${TARGET_IDS[$i]}" ]]; then
         if kill -0 "$pid" 2>/dev/null; then
           echo "  ⚠️  $pid: still running"
         else
@@ -264,6 +314,7 @@ else
       else
         echo "  ✅ $pid: terminated"
       fi
+      i=$((i + 1))
     done
 
     # Killing a coordinator reparents its workers. Report them rather than

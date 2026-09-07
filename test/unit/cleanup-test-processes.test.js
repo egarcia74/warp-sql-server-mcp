@@ -51,6 +51,16 @@ case "$args" in
   *"-o etime="*)
     awk -v p="$target" '$1==p { f=1 } END { exit !f }' "$table" && echo "05:00"
     ;;
+  *"-o lstart="*)
+    awk -v p="$target" '$1==p { f=1 } END { exit !f }' "$table" || exit 1
+    # With PS_LSTART_DRIFT set, the second and later calls report a different
+    # start time: the shape of a PID released and reissued during the wait.
+    if [ -n "\${PS_LSTART_DRIFT:-}" ]; then
+      if [ -f "$PS_LSTART_DRIFT" ]; then echo "Mon Sep  7 11:11:11 2026"; exit 0; fi
+      : > "$PS_LSTART_DRIFT"
+    fi
+    echo "Mon Sep  7 09:00:00 2026"
+    ;;
   *)
     exit 1
     ;;
@@ -74,12 +84,10 @@ const writeTable = rows => {
   return table;
 };
 
-/** Run the inspector with `ps` answering from the given fixture rows. */
-const run = (args = [], processes = []) => {
-  const table = writeTable(processes);
+const invoke = (args, table, extraEnv) => {
   const result = spawnSync(SCRIPT, args, {
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${stubDir}:${process.env.PATH}`, PS_TABLE: table }
+    env: { ...process.env, PATH: `${stubDir}:${process.env.PATH}`, PS_TABLE: table, ...extraEnv }
   });
   return Object.freeze({
     status: result.status,
@@ -87,6 +95,19 @@ const run = (args = [], processes = []) => {
     stderr: text(result.stderr)
   });
 };
+
+/** Run the inspector with `ps` answering from the given fixture rows. */
+const run = (args = [], processes = []) => invoke(args, writeTable(processes), {});
+
+// `kill` is a shell builtin, so a PATH stub cannot intercept it — a test that
+// names a PID would signal whatever real process happens to hold that number.
+// Bash does import functions from the environment, and a function shadows the
+// builtin, so this replaces signalling itself for the duration of the run. No
+// real signal is sent, and the script needs no test-only seam to allow it.
+const KILL_MOCK = { 'BASH_FUNC_kill%%': '() { echo "MOCK-KILL $*"; return 0; }' };
+
+/** Run with signalling mocked out: nothing on the host is ever signalled. */
+const runWithKillMocked = (args, processes) => invoke(args, writeTable(processes), KILL_MOCK);
 
 const VITEST = '4242 1 node /repo/node_modules/.bin/vitest run test/unit';
 
@@ -177,13 +198,54 @@ describe('cleanup-test-processes.sh - PID validation', () => {
 });
 
 describe('cleanup-test-processes.sh - exit status', () => {
-  // A PID that `ps` reports as a live Vitest process but that cannot actually
-  // be signalled: the shape of another user's process. Kill mode must not
-  // report success when the requested process is still running.
+  // `ps` keeps reporting the target as a live Vitest process and signalling is
+  // mocked, so the script sees a process that refuses to die: the shape of
+  // another user's process. Kill mode must not report success then.
   it('exits non-zero when a requested target survives', () => {
-    const { status, stdout } = run(['--kill', '999991'], ['999991 1 node /repo/.bin/vitest run']);
-    expect(stdout).toMatch(/999991: (still running|could not be signalled)/);
+    const { status, stdout } = runWithKillMocked(
+      ['--kill', '4242'],
+      ['4242 1 node /repo/.bin/vitest run']
+    );
+    expect(stdout).toMatch(/4242: still running/);
     expect(status).toBe(1);
+  });
+
+  it('escalates TERM to KILL for a target that does not exit', () => {
+    const { stdout } = runWithKillMocked(['--kill', '4242'], ['4242 1 node /repo/.bin/vitest run']);
+    expect(stdout).toMatch(/Sending TERM to: 4242/);
+    expect(stdout).toMatch(/sending KILL to: 4242/);
+    // Proof no host process was signalled: every signal went to the mock.
+    expect(stdout).toMatch(/MOCK-KILL 4242/);
+    expect(stdout).toMatch(/MOCK-KILL -9 4242/);
+  });
+
+  it('rejects an all-digit PID that overflows Bash arithmetic', () => {
+    // $((10#18446744073709555859)) wraps to 4243, so this argument would
+    // otherwise validate and signal an unrelated process.
+    const { status, stdout } = runWithKillMocked(
+      ['--kill', '18446744073709555859'],
+      ['4243 1 node /repo/.bin/vitest run']
+    );
+    expect(stdout).toMatch(/18446744073709555859: not a PID, skipped/);
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(status).toBe(0);
+  });
+
+  it('does not escalate when a different process has taken the PID', () => {
+    // The start time the script recorded before TERM no longer matches, so the
+    // number surviving must not be read as "our target survived".
+    const marker = path.join(stubDir, 'drifted');
+    rmSync(marker, { force: true });
+    const { stdout } = invoke(
+      ['--kill', '4242'],
+      writeTable(['4242 1 node /repo/.bin/vitest run']),
+      {
+        ...KILL_MOCK,
+        PS_LSTART_DRIFT: marker
+      }
+    );
+    expect(stdout).toMatch(/4242: a different process now holds this PID/);
+    expect(stdout).not.toMatch(/MOCK-KILL -9/);
   });
 
   it('exits 2 on an unknown option', () => {
