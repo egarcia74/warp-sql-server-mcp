@@ -28,6 +28,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   ([#1155](https://github.com/egarcia74/warp-sql-server-mcp/pull/1155))
 
+### Fixed
+
+- **`scripts/cleanup-test-processes.sh` no longer kills anything it was not told to.** It previously selected every
+  `node.*vitest` process and killed it, with no check on parent or ownership — so running it, or the pre-push hook that
+  calls it, could tear down a working suite in any checkout, including the caller's own. It now **lists** processes with
+  their PID, parent, elapsed time and command, and exits 0; termination requires naming PIDs
+  (`npm run cleanup -- --kill <pid>`). There is deliberately no automatic orphan mode: `PPID == 1` means either
+  "reparented after the parent exited" or "a service manager started it here", and process state cannot separate them —
+  four heuristics were tried and each killed healthy processes or silently found none. Before `TERM` each PID must still be a
+  Vitest process and still be the process whose start time was recorded; before `KILL` only that start time is
+  re-checked, since a target can rewrite its own command line and would otherwise rename itself out of being
+  force-killed (this narrows, though it does not close, the window in which a recycled PID could be hit),
+  only PIDs that `TERM` actually reached can be escalated to `KILL`, liveness is checked with `ps` rather than `kill -0` — including the final outcome probe, where a
+  failed `kill -0` was being read as "alive but not ours", so a target that exited between the
+  identity read and that probe (likeliest right at the end of the post-KILL wait, i.e. on success)
+  was reported as an unsignallable survivor with exit 1; `kill -0` fails with `EPERM` for another
+  user's process indistinguishably from "gone", and was previously reported as success, and the closing status display can no
+  longer abort a push. `npm run cleanup:kill` is removed, since termination now requires arguments. Kill mode now
+  exits non-zero when a requested process is still running, so automation can tell a completed
+  termination from a run that changed nothing, and zero-padded PIDs are canonicalised before the
+  ancestry checks (`--kill 0001` previously walked past the PID-1 guard and signalled it). A `ps`
+  that exits 0 while printing a blank start time is now refused rather than accepted: the identity
+  was built by prefixing the value unconditionally, so a blank one yielded the constant `lstart_` —
+  non-empty, so it satisfied the "no identity, no signal" refusal, and equal for every PID whose
+  lookup degraded the same way, which is exactly the collision the identity check exists to
+  prevent. Classifying a target is likewise three-valued: `ps -o command=` failing — denied for
+  another user's process, or a transient error — is not evidence that the PID is not Vitest, but it
+  was reported as "not a running Vitest process, skipped" with exit 0, so automation was told a
+  request had succeeded for a live process nothing had managed to inspect; naming an already-exited
+  PID remains a benign no-op, since `ps` answering and not seeing it is real evidence. The
+  script is covered by 48 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
+  against a stubbed `ps` so the destructive path, the PID guards and the exit status are exercised
+  without depending on what happens to be running
+  ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).
+
 ### Security
 
 - npm releases are now published with provenance: `npm-publish.yml` runs `npm publish --provenance` under an OIDC

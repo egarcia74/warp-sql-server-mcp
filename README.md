@@ -185,7 +185,7 @@ npm install
 
 - **[Software Engineering Manifesto](MANIFESTO.md)** - Philosophy and engineering practices
 - **[Quality No-Compromise Case Study](docs/developer/QUALITY-NO-COMPROMISE.md)** - Real-world analysis of zero-tolerance quality standards
-- **[Testing Guide](test/README.md)** - Comprehensive test documentation (1,074 automated unit tests)
+- **[Testing Guide](test/README.md)** - Comprehensive test documentation (1,122 automated unit tests)
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and standards
 - **[Git Commit Checklist](docs/developer/GIT-COMMIT-CHECKLIST.md)** - Pre-commit quality gates and guidelines
 - **[Git Push Checklist](docs/developer/GIT-PUSH-CHECKLIST.md)** - Pre-push validation and deployment guidelines
@@ -197,8 +197,8 @@ npm install
 
 **✅ PRODUCTION-VALIDATED**: This MCP server has been **fully tested** through:
 
-- **1,141 Tests**: All MCP tools, security boundaries, error scenarios - **every one of them runs
-  automatically on every pull request** (1,074 unit + 27 integration + 40 live-database against a
+- **1,189 Tests**: All MCP tools, security boundaries, error scenarios - **every one of them runs
+  automatically on every pull request** (1,122 unit + 27 integration + 40 live-database against a
   Docker SQL Server CI starts itself)
 - **40 Live-Database Integration Tests**: Live database validation across all security phases, run in CI
 - **MCP Protocol Validation**: `test/protocol/mcp-server-startup-test.js` checks server startup and
@@ -344,8 +344,9 @@ npm run logs:audit         # Show security audit logs
 npm run logs:tail:audit    # Follow audit logs in real-time
 
 # System maintenance and cleanup
-npm run cleanup            # Clean up leftover test processes
+npm run cleanup            # List leftover test processes (reports only)
 npm run cleanup:processes  # Same as cleanup (alias)
+npm run cleanup -- --kill <pid>   # Terminate a listed process by PID
 ```
 
 ---
@@ -366,7 +367,7 @@ showcases rigorous engineering standards that can be applied to any production s
 
 **Key Engineering Highlights:**
 
-- 🔬 **1,141 Tests** covering all functionality and edge cases - every one of them runs automatically on every pull request
+- 🔬 **1,189 Tests** covering all functionality and edge cases - every one of them runs automatically on every pull request
 - 🛡️ **Multi-layered Security** with defense-in-depth architecture
 - 📊 **Production Observability** with structured logging and performance monitoring
 - ⚡ **Enterprise Reliability** featuring connection pooling and graceful error handling
