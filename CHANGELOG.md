@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`SQL_SERVER_RESPONSE_FORMAT` and the `ResponseFormatter` class.** The setting was never consumed by any code
+  path: tool responses are formatted by `base-handler.formatResults()` and `lib/utils/result-formatter.js`, and
+  nothing ever constructed `ResponseFormatter`. Setting the variable had no effect, and its two defaults disagreed
+  (`json` in `ServerConfig`, `structured` in the formatter). Removed rather than wired in, since wiring it would
+  have changed output format for every consumer to deliver a feature nobody could have been using.
+
+  **Two consumer-visible details, released as a patch deliberately — read this if you integrate against either:**
+
+  1. `get_server_info` no longer returns `logging.responseFormat`. It reported a value that controlled nothing, so
+     any client branching on it was branching on noise. If you read that field, it is now `undefined`.
+  2. `lib/utils/response-formatter.js` is gone from the published tarball. Because this package has no `exports`
+     map, `lib/` internals were technically deep-importable, so a `import '@egarcia74/warp-sql-server-mcp/lib/utils/response-formatter.js'`
+     would now fail with `ERR_MODULE_NOT_FOUND`. That path was never documented, never referenced by this package's
+     own code, and is not considered public API — the supported surface is the `warp-sql-server-mcp` binary, the MCP
+     tools, and the documented environment variables. An `exports` map will be added separately to make that
+     boundary explicit rather than incidental.
+
+  ([#1155](https://github.com/egarcia74/warp-sql-server-mcp/pull/1155))
+
 ### Security
 
 - npm releases are now published with provenance: `npm-publish.yml` runs `npm publish --provenance` under an OIDC

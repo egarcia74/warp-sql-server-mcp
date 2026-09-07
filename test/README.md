@@ -10,7 +10,7 @@ test/
 ├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
 ├── setup.js                                 # Vitest global setup and mocks
 │
-├── unit/                                    # Vitest unit suites - 26 files, 1,109 tests
+├── unit/                                    # Vitest unit suites - 25 files, 1,074 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
 │   ├── query-optimizer.test.js              # 132 - Query analysis and optimization engine
 │   ├── sql-injection-battery.test.js        # 103 - Behavioral SQL injection guard
@@ -22,7 +22,6 @@ test/
 │   ├── secret-manager.test.js               #  54 - Azure/AWS secret backends
 │   ├── logger.test.js                       #  52 - Structured logging and audit trail
 │   ├── mcp-security.test.js                 #  38 - Three-tier safety system
-│   ├── response-formatter.test.js           #  35 - Output formatting
 │   ├── connection-manager.test.js           #  33 - Pooling, retries, authentication
 │   ├── sql-batch-guard.test.js              #  30 - Whole-batch forbidden-statement scan
 │   ├── sql-construction-guard.test.js       #  30 - Dispatch-vs-escaping static guard
@@ -90,8 +89,8 @@ Get the MCP server running first, then return here to understand the testing arc
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 1,176 - **every one of them runs automatically on every pull request**
-  - 1,109 unit tests (`npm run test:unit`, 26 files, mocked)
+- **Total Tests**: 1,141 - **every one of them runs automatically on every pull request**
+  - 1,074 unit tests (`npm run test:unit`, 25 files, mocked)
   - 27 Vitest integration tests (`test/integration/*.test.js`, mocked, run by a bare `vitest run`)
   - 40 live-database tests (`test/integration/manual/`, 20 + 10 + 10, run against a Docker SQL
     Server that CI starts itself)
@@ -112,7 +111,7 @@ and the CI jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 
 | Suite                                      | Tests           | Command                                | Runs in CI?                                |
 | ------------------------------------------ | --------------- | -------------------------------------- | ------------------------------------------ |
-| `test/unit/**`                             | 1,109           | `npm run test:unit`                    | Yes - required `Tests (20)` / `(22)`       |
+| `test/unit/**`                             | 1,074           | `npm run test:unit`                    | Yes - required `Tests (20)` / `(22)`       |
 | `test/integration/*.test.js`               | 27              | `npm run test:coverage` / `npm run ci` | Yes - `coverage` job                       |
 | `test/integration/manual/phase*.js`        | 40              | `npm run test:integration:manual`      | Yes - required `Tests` job, via `npm test` |
 | `test/protocol/mcp-server-startup-test.js` | handshake check | `npm run test:integration:protocol`    | Yes - required `Tests` job                 |
@@ -169,13 +168,13 @@ The test suite has been organized into focused, modular files for better maintai
 
 #### 🎯 **Unit Suites by Area**
 
-The 1,109 unit tests are spread across 26 files. Grouped by area, the totals sum to 1,109:
+The 1,074 unit tests are spread across 25 files. Grouped by area, the totals sum to 1,074:
 
 | Area                            | Tests | Suites                                                                                                                                                                           |
 | ------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Core MCP server                 | 144   | `index` (144)                                                                                                                                                                    |
 | SQL safety and injection guards | 317   | `sql-injection-battery` (103), `where-clause-guard` (81), `mcp-security` (38), `sql-batch-guard` (30), `sql-construction-guard` (30), `query-policy` (19), `sql-identifier` (16) |
-| Infrastructure utilities        | 250   | `performance-monitor` (70), `streaming-handler` (60), `logger` (52), `response-formatter` (35), `connection-manager` (33)                                                        |
+| Infrastructure utilities        | 215   | `performance-monitor` (70), `streaming-handler` (60), `logger` (52), `connection-manager` (33)                                                                                   |
 | Query analysis                  | 154   | `query-optimizer` (132), `query-optimizer-security` (13), `bottleneck-detector` (9)                                                                                              |
 | Tools and handlers              | 141   | `tool-registry` (59), `database-tools-handler` (55), `get-server-info` (27)                                                                                                      |
 | Configuration and secrets       | 78    | `secret-manager` (54), `server-config` (24)                                                                                                                                      |

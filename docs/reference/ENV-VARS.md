@@ -338,15 +338,6 @@ accidental certificate trust in cloud production environments using private IP a
   - `true` (enable security audit logging)
   - `false` (standard security logging)
 
-### `SQL_SERVER_RESPONSE_FORMAT`
-
-- **Default**: `json`
-- **Description**: Default response format for query results
-- **Values**:
-  - `json` (JSON format)
-  - `structured` (structured objects)
-  - `pretty-json` (pretty-printed JSON)
-
 ## Secret Management Settings
 
 ### `SECRET_MANAGER_TYPE`
