@@ -126,7 +126,7 @@
     "@vitest/mocker": "^4.1.2",
     "@vitest/runner": "^4.1.2",
     "@vitest/snapshot": "^4.1.2",
-    "@vitest/spy": "^4.1.2",
+    "@vitest/spy": "^5.0.0",
     "@vitest/ui": "^4.1.2",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
