@@ -123,7 +123,7 @@
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.2",
     "@vitest/expect": "^4.1.2",
-    "@vitest/mocker": "^4.1.2",
+    "@vitest/mocker": "^5.0.0",
     "@vitest/runner": "^4.1.2",
     "@vitest/snapshot": "^4.1.2",
     "@vitest/spy": "^4.1.2",
