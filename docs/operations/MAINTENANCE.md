@@ -51,26 +51,36 @@ The cleanup is automatically integrated into:
 
 The `cleanup-test-processes.sh` script:
 
-- ✅ **Reports by default**: With no arguments the script lists what it found and exits 0. It never
-  terminates anything unless you pass `--kill` (`npm run cleanup -- --kill`, or `npm run
-cleanup:kill`). The pre-push hook calls it without arguments, so pushing can no longer kill a
-  process.
-- ✅ **Conservative selection**: `--kill` targets only processes whose parent is **PID 1**. A Vitest
-  process with a live parent is never touched - not a run in another checkout, and not the caller's
-  own suite.
-- ✅ **PID-reuse safe**: the command is re-checked immediately before `SIGKILL`, so a PID recycled
-  during the wait cannot be killed by mistake.
-- ✅ **Rescans after TERM**: killing a coordinator reparents its workers to PID 1, so the scan is
-  repeated rather than working from the original list.
-- ✅ **Honest reporting**: a kill that fails - for example a process owned by another user, which
-  `ps -e` lists but cannot be signalled - is reported, not swallowed.
+- ✅ **Lists, never selects**: With no arguments it prints every Vitest process with its **PID,
+  PPID, elapsed time and full command**, then exits 0. It terminates nothing. The pre-push hook
+  calls it this way, so pushing cannot kill a process.
+- ✅ **Kills only what you name**: `npm run cleanup -- --kill <pid> [<pid>...]`. There is no
+  "kill all orphans" mode, because there is no sound way to identify one — see below.
+- ✅ **Re-verifies before every signal**: each PID is confirmed to still be a Vitest process
+  immediately before `TERM` and again before `KILL`, so a PID recycled during the wait is never
+  signalled.
+- ✅ **Graceful before forceful**: only PIDs that actually received `TERM` can be escalated to
+  `KILL`. A process that appears during the wait is never force-killed without a chance to exit.
+- ✅ **Honest per-PID outcomes**: liveness is checked with `ps`, not `kill -0`. `kill -0` fails with
+  `EPERM` for a process owned by another user, which is indistinguishable from "gone" — so that
+  case used to be silently dropped and reported as success. Each PID now reports terminated, still
+  running, or still running and unsignallable.
+- ✅ **Cannot abort a push**: the closing system-status display can never affect the exit status.
 
-> **Known gap, deliberately not guessed at.** There is no reliable way to distinguish an _adopted_
-> orphan from a process a session manager spawned on purpose. Under `systemd --user` (which sets
-> `PR_SET_CHILD_SUBREAPER`) orphans reparent to the user manager rather than to PID 1, so `--kill`
-> will not find them. Matching on the parent's command instead would kill a Vitest run launched _as_
-> a user systemd service. Under-detecting is the failure worth having; list processes yourself with
-> `ps -ef | grep vitest` and kill by hand if needed.
+> **Why there is no automatic orphan mode.** `PPID == 1` means either "the parent exited and this
+> was reparented" or "a service manager started it here", and nothing in process state separates
+> them. Four heuristics were tried and each was wrong in a way that mattered:
+>
+> 1. Kill everything matching `node.*vitest` — killed healthy suites, including the caller's own.
+> 2. Kill only `PPID == 1` — a silent no-op under `systemd --user`, which sets
+>    `PR_SET_CHILD_SUBREAPER`, so orphans reparent to the user manager instead of PID 1.
+> 3. Also match a parent whose command contains `systemd`/`launchd`/`init` — killed a Vitest run
+>    launched _as_ a user systemd service, whose live parent is that manager.
+> 4. Back to `PPID == 1` only — still wrong: a system-wide systemd unit that execs
+>    `node .../vitest` has `PPID 1` **from birth** and is not an orphan.
+>
+> So the judgement is yours. `ELAPSED` and `COMMAND` are usually enough to tell a stale run from a
+> live one.
 
 ## 🔄 Regular Maintenance Tasks
 
@@ -78,23 +88,29 @@ cleanup:kill`). The pre-push hook calls it without arguments, so pushing can no 
 
 ```bash
 # Start development session
-npm run cleanup          # Clean slate
-npm run dev             # Development mode
+npm run cleanup          # List any leftover Vitest processes
+npm run dev              # Development mode
 
 # End development session
-npm run cleanup          # Clean up processes
+npm run cleanup          # List what is still running
+```
+
+`npm run cleanup` **only lists**. If it shows something you want gone, name it:
+
+```bash
+npm run cleanup -- --kill 12345 12346
 ```
 
 ### Before Major Operations
 
 ```bash
 # Before running comprehensive tests
-npm run cleanup          # Clean environment
-npm run test            # Run test suite
+npm run cleanup          # List leftovers, kill by PID if needed
+npm run test             # Run test suite
 
 # Before pushing to repository
-npm run cleanup          # Clean environment
-git push                # Pre-push hook includes cleanup
+npm run cleanup          # The pre-push hook runs this too - it reports only
+git push
 ```
 
 ### Performance Monitoring

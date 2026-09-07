@@ -30,16 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **`scripts/cleanup-test-processes.sh` no longer kills healthy test runs, and no longer kills anything by
-  default.** It previously selected every `node.*vitest` process and killed it, with no check on parent or
-  ownership - so running it, or the pre-push hook that calls it, could tear down a working suite in any checkout,
-  including the caller's own. It now **reports by default and exits 0**; termination requires `--kill`
-  (`npm run cleanup -- --kill`), which targets only processes whose parent is PID 1. There is no reliable way to
-  distinguish an adopted orphan from a process a session manager spawned deliberately, so the script does not
-  guess: under `systemd --user` some orphans will not be detected, which is the safer failure. The command is
-  re-checked before `SIGKILL` so a recycled PID cannot be hit, the scan is repeated after `TERM` to catch workers
-  reparented by killing their coordinator, and a kill that fails is reported rather than swallowed. Also fixes
-  `top` on Linux, which needs `-b -n 1`
+- **`scripts/cleanup-test-processes.sh` no longer kills anything it was not told to.** It previously selected every
+  `node.*vitest` process and killed it, with no check on parent or ownership — so running it, or the pre-push hook that
+  calls it, could tear down a working suite in any checkout, including the caller's own. It now **lists** processes with
+  their PID, parent, elapsed time and command, and exits 0; termination requires naming PIDs
+  (`npm run cleanup -- --kill <pid>`). There is deliberately no automatic orphan mode: `PPID == 1` means either
+  "reparented after the parent exited" or "a service manager started it here", and process state cannot separate them —
+  four heuristics were tried and each killed healthy processes or silently found none. Each PID now re-verifies as a
+  Vitest process before every signal (so a recycled PID is never hit), only PIDs that actually received `TERM` can be
+  escalated to `KILL`, liveness is checked with `ps` rather than `kill -0` (which fails with `EPERM` for another user's
+  process, indistinguishable from "gone", and was previously reported as success), and the closing status display can no
+  longer abort a push. `npm run cleanup:kill` is removed, since termination now requires arguments
   ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).
 
 ### Security

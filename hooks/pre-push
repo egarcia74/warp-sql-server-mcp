@@ -10,7 +10,7 @@ if [ -f "scripts/cleanup-test-processes.sh" ]; then
   # tell an adopted orphan from one a session manager spawned deliberately.
   echo "[pre-push] 🧹 Checking for leftover test processes..."
   ./scripts/cleanup-test-processes.sh
-  echo "[pre-push] ✅ Process check complete (run 'npm run cleanup -- --kill' to terminate any listed)."
+  echo "[pre-push] ✅ Process check complete (run 'npm run cleanup -- --kill <pid>' to terminate any listed)."
 fi
 
 # Check if we're in a Node.js project

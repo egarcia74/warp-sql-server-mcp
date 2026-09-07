@@ -1304,7 +1304,7 @@ During intensive testing sessions (like our 1,074-test unit suite), Node.js/Vite
 The project includes automated cleanup tools:
 
 ```bash
-# Quick cleanup of leftover test processes
+# List leftover test processes (reports only; kill by PID with --kill)
 npm run cleanup
 
 # Alternative alias
@@ -1317,7 +1317,10 @@ npm run cleanup:processes
 #### **Automated Integration**
 
 - **Pre-Push Hook Integration**: Cleanup runs automatically before comprehensive testing
-- **Reports, Does Not Kill**: The pre-push hook only lists leftover Vitest processes; terminating requires `npm run cleanup -- --kill`, which targets PID-1 orphans only (see [System Maintenance Guide](docs/operations/MAINTENANCE.md))
+- **Reports, Does Not Kill**: `npm run cleanup` and the pre-push hook only list leftover Vitest
+  processes. Terminating requires naming PIDs explicitly (`npm run cleanup -- --kill <pid>`),
+  because process state cannot distinguish an adopted orphan from one a service manager started
+  deliberately - see the [System Maintenance Guide](docs/operations/MAINTENANCE.md)
 - **Resource Monitoring**: Reports system load improvements after cleanup
 - **Quality Gate Protection**: Prevents system overload during testing
 
