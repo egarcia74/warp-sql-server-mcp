@@ -53,6 +53,8 @@ USAGE
 KILL_PIDS=""
 MODE="report"
 EXIT_STATUS=0
+# Depth bound for both ancestry walks; see self_ancestry.
+MAX_WALK=64
 if [[ "$#" -gt 0 ]]; then
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -90,12 +92,35 @@ self_ancestry() {
   # -- exactly the case where `--kill 1` would tear down the container. PID 1 is
   # an ancestor of everything in the namespace and is never a legitimate target
   # here, so it is excluded unconditionally.
+  #
+  # Returns non-zero if the walk could not be completed. A `ps` lookup that
+  # fails or returns nonsense halfway up leaves the remaining ancestors
+  # unknown, and silently returning a short list would hand back a guard that
+  # looks intact: PID 1 is seeded, so the "does ANCESTRY contain 1" sanity
+  # check passes even when every real ancestor above the break is missing.
   printf ' 1 '
-  local pid=$$ raw
+  local pid=$$ raw hops=0
+  # The walk is bounded. `ps` reporting a parent chain that never reaches a
+  # root -- a cycle, or a stub that always answers -- would otherwise spin
+  # forever, hanging a script the pre-push hook calls. No real process tree is
+  # anywhere near this deep, so hitting the bound means the data is wrong, and
+  # that is reported as an incomplete walk rather than trusted.
   while is_pid "$pid" && [[ "$pid" -gt 1 ]]; do
+    hops=$((hops + 1))
+    if [[ "$hops" -gt "$MAX_WALK" ]]; then
+      return 1
+    fi
     printf '%s ' "$pid"
-    raw=$(ps -o ppid= -p "$pid" 2>/dev/null)
+    if ! raw=$(ps -o ppid= -p "$pid" 2>/dev/null); then
+      return 1
+    fi
     pid="${raw//[[:space:]]/}"
+    # An empty or malformed parent is a broken lookup, not a root. A genuine
+    # root reports 0 (outside the PID namespace) or 1, both of which are
+    # numeric and end the loop through the condition above.
+    if ! is_pid "$pid"; then
+      return 1
+    fi
   done
   return 0
 }
@@ -107,12 +132,25 @@ self_ancestry() {
 # them. Walk each candidate's parents back to this script rather than matching
 # this script's own name in the command, which used to hide unrelated Vitest
 # runs that legitimately carried the string.
+#
+# Exit status: 0 is a descendant, 1 is not, 2 means the walk broke and the
+# answer is unknown. Callers treat 2 differently: the report lists the process
+# anyway (showing too much is harmless), while kill mode refuses to signal it.
 is_self_descendant() {
-  local pid="${1:-}" raw
+  local pid="${1:-}" raw hops=0
   while is_pid "$pid" && [[ "$pid" -gt 1 ]]; do
+    hops=$((hops + 1))
+    if [[ "$hops" -gt "$MAX_WALK" ]]; then
+      return 2
+    fi
     [[ "$pid" -eq $$ ]] && return 0
-    raw=$(ps -o ppid= -p "$pid" 2>/dev/null)
+    if ! raw=$(ps -o ppid= -p "$pid" 2>/dev/null); then
+      return 2
+    fi
     pid="${raw//[[:space:]]/}"
+    if ! is_pid "$pid"; then
+      return 2
+    fi
   done
   return 1
 }
@@ -121,7 +159,11 @@ is_self_descendant() {
 # where `ps` works but `tr` does not, the substitution came back empty, every
 # `case "$ANCESTRY"` test missed, and `--kill 1` sailed through both guards
 # because `set -e` is deliberately off here.
-ANCESTRY="$(self_ancestry)"
+if ANCESTRY="$(self_ancestry)"; then
+  ANCESTRY_COMPLETE=1
+else
+  ANCESTRY_COMPLETE=0
+fi
 
 # Liveness via ps, not `kill -0`: kill -0 fails with EPERM for a process owned
 # by another user, which is indistinguishable from "gone" and silently drops it
@@ -194,6 +236,8 @@ scan() {
   | while read -r pid ppid command; do
       case "$command" in *node*vitest*) ;; *) continue ;; esac
       case "$ANCESTRY" in *" $pid "*) continue ;; *) ;; esac
+      # Status 2 (walk broke, answer unknown) is falsy here on purpose: the
+      # report errs towards showing a process it cannot classify.
       is_self_descendant "$pid" && continue
       echo "$pid $ppid $command"
     done
@@ -220,6 +264,12 @@ if [[ "$MODE" == "report" ]]; then
     echo "✅ No Vitest processes found"
   else
     echo ""
+    if [[ "$ANCESTRY_COMPLETE" != "1" ]]; then
+      echo "   ⚠️  This script's own ancestry could not be walked completely, so one"
+      echo "      of the processes above may be an ancestor of this run. Kill mode"
+      echo "      refuses to signal while that is true."
+      echo ""
+    fi
     echo "   PPID 1 usually means the parent exited - but a service manager may"
     echo "   also have started the process there. Check ELAPSED and COMMAND, then:"
     echo "     npm run cleanup -- --kill <pid> [<pid>...]"
@@ -235,6 +285,16 @@ else
       exit 3
       ;;
   esac
+  # The check above cannot catch a truncated walk, because PID 1 is seeded: the
+  # list looks valid while every ancestor above a failed `ps` lookup is absent.
+  # A Vitest process that launched this script could then be named and
+  # signalled. Completeness is tracked separately for exactly that reason.
+  if [[ "$ANCESTRY_COMPLETE" != "1" ]]; then
+    echo "error: the caller's ancestry could not be walked completely, so a" >&2
+    echo "       process that launched this one might not be protected." >&2
+    echo "       Refusing to signal anything; re-run to retry." >&2
+    exit 3
+  fi
 
   # Terminate exactly what was named, reporting each PID's own outcome.
   # PIDs and their start-time identities are held in parallel indexed arrays
@@ -267,10 +327,18 @@ else
       *" $pid "*) echo "  ⏭️  $pid: is this script's own ancestor, skipped"; continue ;;
       *) ;;
     esac
-    if is_self_descendant "$pid"; then
-      echo "  ⏭️  $pid: is this script's own child, skipped"
-      continue
-    fi
+    is_self_descendant "$pid"
+    case "$?" in
+      0)
+        echo "  ⏭️  $pid: is this script's own child, skipped"
+        continue
+        ;;
+      2)
+        echo "  ⏭️  $pid: could not verify it is not this script's own child, skipped"
+        continue
+        ;;
+      *) ;;
+    esac
     if ! is_vitest "$pid"; then
       echo "  ⏭️  $pid: not a running Vitest process, skipped"
       continue

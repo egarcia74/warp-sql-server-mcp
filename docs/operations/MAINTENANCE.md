@@ -8,7 +8,7 @@ This guide covers essential maintenance tasks for the WARP SQL Server MCP projec
 
 ### Problem: Memory-Heavy Test Processes
 
-During intensive testing sessions (like our comprehensive 1,099-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
+During intensive testing sessions (like our comprehensive 1,101-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
 
 - **Symptoms**: High CPU usage (100%+), excessive memory consumption (500MB+ per process), system slowdown
 - **Root Cause**: Test worker processes not terminating cleanly after test completion

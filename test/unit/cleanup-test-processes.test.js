@@ -31,30 +31,43 @@ const writeStub = (name, body) => {
 beforeAll(() => {
   stubDir = mkdtempSync(path.join(tmpdir(), 'cleanup-stub-'));
 
-  // Fixture format, one process per line: "<pid> <ppid> <command...>"
+  // Fixture format, one process per line: "<pid> <ppid> <command...>".
+  // PIDs absent from the fixture are delegated to the real `ps`, so the
+  // script's own ancestry walk still resolves and only the simulated
+  // processes are synthetic.
   writeStub(
     'ps',
     `#!/bin/bash
 table="\${PS_TABLE:-/dev/null}"
 args="$*"
 target="\${args##*-p }"
+known() { awk -v p="$target" '$1==p { f=1 } END { exit !f }' "$table"; }
 case "$args" in
   *-eo*)
     cat "$table" 2>/dev/null
     ;;
   *"-o ppid="*)
-    awk -v p="$target" '$1==p { print $2; f=1 } END { exit !f }' "$table"
+    # With PS_PPID_BREAK set, the first lookup answers and every later one
+    # fails: an ancestry walk that stops partway up.
+    if [ -n "\${PS_PPID_BREAK:-}" ]; then
+      if [ -f "$PS_PPID_BREAK" ]; then exit 1; fi
+      : > "$PS_PPID_BREAK"
+      echo "55555"
+      exit 0
+    fi
+    known || exec /bin/ps "$@"
+    awk -v p="$target" '$1==p { print $2 }' "$table"
     ;;
   *"-o command="*)
-    awk -v p="$target" '$1==p { $1=""; $2=""; sub(/^ +/, ""); print; f=1 } END { exit !f }' "$table"
+    known || exec /bin/ps "$@"
+    awk -v p="$target" '$1==p { $1=""; $2=""; sub(/^ +/, ""); print }' "$table"
     ;;
   *"-o etime="*)
-    awk -v p="$target" '$1==p { f=1 } END { exit !f }' "$table" && echo "05:00"
+    known || exec /bin/ps "$@"
+    echo "05:00"
     ;;
   *"-o lstart="*)
-    awk -v p="$target" '$1==p { f=1 } END { exit !f }' "$table" || exit 1
-    # With PS_LSTART_DRIFT set, the second and later calls report a different
-    # start time: the shape of a PID released and reissued during the wait.
+    known || exec /bin/ps "$@"
     if [ -n "\${PS_LSTART_DRIFT:-}" ]; then
       if [ -f "$PS_LSTART_DRIFT" ]; then echo "Mon Sep  7 11:11:11 2026"; exit 0; fi
       : > "$PS_LSTART_DRIFT"
@@ -62,7 +75,7 @@ case "$args" in
     echo "Mon Sep  7 09:00:00 2026"
     ;;
   *)
-    exit 1
+    exec /bin/ps "$@"
     ;;
 esac
 `
@@ -215,6 +228,15 @@ describe('cleanup-test-processes.sh - PID validation', () => {
     expect(status).toBe(0);
   });
 
+  it('survives a garbled ps result instead of aborting silently', () => {
+    // `[[ "$pid" -gt 1 ]]` on a non-numeric value is fatal under `set -u`:
+    // bash reads the word as a variable name and exits. Every ps result is
+    // validated before any arithmetic, so a broken ps must not kill the run.
+    const { status, stdout } = run([], ['not-a-number bogus node /repo/.bin/vitest']);
+    expect(status).toBe(0);
+    expect(stdout).toMatch(/WARP Test Process Inspector/);
+  });
+
   it('processes each PID in a multi-PID request independently', () => {
     const { stdout } = run(['--kill', '0', 'abc', '4245'], ['4245 1 node /repo/index.js']);
     expect(stdout).toMatch(/0: not a PID, skipped/);
@@ -274,6 +296,27 @@ describe('cleanup-test-processes.sh - exit status', () => {
     expect(stdout).not.toMatch(/MOCK-KILL -9/);
   });
 
+  it('exits 2 on an unknown option', () => {
+    const { status, stderr } = run(['--bogus']);
+    expect(status).toBe(2);
+    expect(stderr).toMatch(/unknown option/);
+  });
+
+  it('exits 2 when --kill is given no PIDs', () => {
+    const { status, stderr } = run(['--kill']);
+    expect(status).toBe(2);
+    expect(stderr).toMatch(/needs at least one PID/);
+  });
+
+  it('documents its exit status in --help and exits 0', () => {
+    const { status, stdout } = run(['--help']);
+    expect(status).toBe(0);
+    expect(stdout).toMatch(/Exit status/);
+    expect(stdout).toMatch(/--kill PID/);
+  });
+});
+
+describe('cleanup-test-processes.sh - when `tr` fails', () => {
   // Regression: the ancestry list was assembled with `ps ... | tr`, so the
   // "unconditional" PID-1 guard was conditional on `tr` working. With `tr`
   // failing, ANCESTRY came back empty, every `case "$ANCESTRY"` test missed,
@@ -295,32 +338,34 @@ describe('cleanup-test-processes.sh - exit status', () => {
     expect(status).toBe(0);
     expect(stdout).toMatch(/^4242\s/m);
   });
+});
 
-  it('exits 2 on an unknown option', () => {
-    const { status, stderr } = run(['--bogus']);
-    expect(status).toBe(2);
-    expect(stderr).toMatch(/unknown option/);
+describe('cleanup-test-processes.sh - when the ancestry walk breaks', () => {
+  // Regression: `self_ancestry` returned success even when a `ps` lookup
+  // failed partway up, so every ancestor above the break was missing from
+  // ANCESTRY while the "does it contain PID 1" sanity check still passed --
+  // PID 1 is seeded. The previous revision then accepted `--kill` on the
+  // Vitest process that had launched it, printing "Sending TERM to: 77777".
+  it('refuses to signal when the ancestry walk cannot be completed', () => {
+    const marker = path.join(stubDir, 'ppid-break');
+    rmSync(marker, { force: true });
+    const { status, stderr, stdout } = invoke(
+      ['--kill', '77777'],
+      writeTable(['77777 55555 node /w/node_modules/.bin/vitest run']),
+      { ...KILL_MOCK, PS_PPID_BREAK: marker }
+    );
+    expect(stderr).toMatch(/ancestry could not be walked completely/);
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(stdout).not.toMatch(/Sending TERM/);
+    expect(status).toBe(3);
   });
 
-  it('exits 2 when --kill is given no PIDs', () => {
-    const { status, stderr } = run(['--kill']);
-    expect(status).toBe(2);
-    expect(stderr).toMatch(/needs at least one PID/);
-  });
-
-  it('documents its exit status in --help and exits 0', () => {
-    const { status, stdout } = run(['--help']);
+  it('still lists processes, with a warning, when the walk is incomplete', () => {
+    const marker = path.join(stubDir, 'ppid-break-report');
+    rmSync(marker, { force: true });
+    const { status, stdout } = invoke([], writeTable([VITEST]), { PS_PPID_BREAK: marker });
     expect(status).toBe(0);
-    expect(stdout).toMatch(/Exit status/);
-    expect(stdout).toMatch(/--kill PID/);
-  });
-
-  it('survives a garbled ps result instead of aborting silently', () => {
-    // `[[ "$pid" -gt 1 ]]` on a non-numeric value is fatal under `set -u`:
-    // bash reads the word as a variable name and exits. Every ps result is
-    // validated before any arithmetic, so a broken ps must not kill the run.
-    const { status, stdout } = run([], ['not-a-number bogus node /repo/.bin/vitest']);
-    expect(status).toBe(0);
-    expect(stdout).toMatch(/WARP Test Process Inspector/);
+    expect(stdout).toMatch(/^4242\s/m);
+    expect(stdout).toMatch(/ancestry could not be walked completely/);
   });
 });
