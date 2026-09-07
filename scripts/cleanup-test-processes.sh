@@ -45,13 +45,13 @@ USAGE
 
 KILL_PIDS=""
 MODE="report"
-if [ "$#" -gt 0 ]; then
+if [[ "$#" -gt 0 ]]; then
   case "$1" in
     -h|--help) usage; exit 0 ;;
     --kill)
       MODE="kill"; shift
       KILL_PIDS="$*"
-      if [ -z "$KILL_PIDS" ]; then
+      if [[ -z "$KILL_PIDS" ]]; then
         echo "error: --kill needs at least one PID (see --help)" >&2
         exit 2
       fi
@@ -59,6 +59,19 @@ if [ "$#" -gt 0 ]; then
     *) echo "error: unknown option '$1' (see --help)" >&2; exit 2 ;;
   esac
 fi
+
+# Every `ps` result is validated as a PID before any arithmetic touches it.
+# Under `set -u`, `[[ "abc" -gt 1 ]]` is not merely false: bash evaluates the
+# word as a variable name in arithmetic context, hits an unbound variable, and
+# *exits* -- silently, since the guards redirect stderr. Validating explicitly
+# also makes a garbled walk a visible stop rather than a reliance on `[`
+# returning 2.
+is_pid() {
+  case "${1:-}" in
+    '' | *[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
 
 self_ancestry() {
   # PID 1 is seeded, not discovered by the walk. Walking to it is not the same
@@ -70,10 +83,11 @@ self_ancestry() {
   # here, so it is excluded unconditionally.
   echo 1
   local pid=$$
-  while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+  while is_pid "$pid" && [[ "$pid" -gt 1 ]]; do
     echo "$pid"
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
   done
+  return 0
 }
 
 # Ancestors are excluded by PID, but this script also forks subshells -- the
@@ -84,9 +98,9 @@ self_ancestry() {
 # this script's own name in the command, which used to hide unrelated Vitest
 # runs that legitimately carried the string.
 is_self_descendant() {
-  local pid="$1"
-  while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
-    [ "$pid" -eq "$$" ] && return 0
+  local pid="${1:-}"
+  while is_pid "$pid" && [[ "$pid" -gt 1 ]]; do
+    [[ "$pid" -eq $$ ]] && return 0
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
   done
   return 1
@@ -97,28 +111,42 @@ ANCESTRY=" $(self_ancestry | tr '\n' ' ') "
 # by another user, which is indistinguishable from "gone" and silently drops it
 # from failure reporting. ps sees it regardless of signal permission.
 is_vitest() {
-  ps -o command= -p "$1" 2>/dev/null | grep -qE "node.*vitest"
+  local cmd
+  cmd=$(ps -o command= -p "${1:-}" 2>/dev/null) || return 1
+  case "$cmd" in
+    *node*vitest*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 scan() {
+  # Matching happens in the shell, with no `grep` in the pipeline. `grep -E
+  # "node.*vitest"` matches its own argument text where it appears in `ps`
+  # output, which is why a `grep -v grep` guard was there -- but that guard
+  # dropped every genuine Vitest process whose command contained "grep"
+  # anywhere: a test file named greplike.test.js, a path segment such as
+  # grep-utils/. That is the same silent-omission bug as the self-name filter
+  # removed in 375f1e8. No grep, nothing to filter, nothing hidden.
   # pgrep cannot report PPID and command together.
   # shellcheck disable=SC2009
-  ps -eo pid=,ppid=,command= 2>/dev/null | grep -E "node.*vitest" | grep -v grep \
+  ps -eo pid=,ppid=,command= 2>/dev/null \
   | while read -r pid ppid command; do
+      case "$command" in *node*vitest*) ;; *) continue ;; esac
       case "$ANCESTRY" in *" $pid "*) continue ;; esac
       is_self_descendant "$pid" && continue
       echo "$pid $ppid $command"
     done
+  return 0
 }
 
 echo "🧹 WARP Test Process Inspector"
 echo "=================================="
 
-if [ "$MODE" = "report" ]; then
+if [[ "$MODE" == "report" ]]; then
   found=0
   while read -r pid ppid command; do
-    [ -z "${pid:-}" ] && continue
-    if [ "$found" -eq 0 ]; then
+    [[ -z "${pid:-}" ]] && continue
+    if [[ "$found" -eq 0 ]]; then
       printf '%-8s %-8s %-10s %s\n' PID PPID ELAPSED COMMAND
       found=1
     fi
@@ -126,7 +154,7 @@ if [ "$MODE" = "report" ]; then
     printf '%-8s %-8s %-10s %s\n' "$pid" "$ppid" "${etime:-?}" "$command"
   done < <(scan)
 
-  if [ "$found" -eq 0 ]; then
+  if [[ "$found" -eq 0 ]]; then
     echo "✅ No Vitest processes found"
   else
     echo ""
@@ -159,7 +187,7 @@ else
   done
   TARGETS="$(echo "$TARGETS" | xargs || true)"
 
-  if [ -z "$TARGETS" ]; then
+  if [[ -z "$TARGETS" ]]; then
     echo "Nothing to terminate."
   else
     echo "🔄 Sending TERM to: $TARGETS"
@@ -167,24 +195,34 @@ else
     # and have its PID reused between validation and this loop, especially with
     # several PIDs supplied. The usage text promises a check immediately before
     # each signal, so make that true of TERM as well as KILL.
+    #
+    # Record what TERM actually reached. Escalating from TARGETS instead would
+    # mean a PID skipped here -- or one whose `kill` failed -- could still be
+    # KILLed: if it exited and its number were reused by a new Vitest process
+    # during the sleep, that replacement would receive KILL having never
+    # received TERM, breaking the graceful-before-forceful guarantee.
+    TERMED=""
     for pid in $TARGETS; do
-      if is_vitest "$pid"; then
-        kill "$pid" 2>/dev/null || true
-      else
+      if ! is_vitest "$pid"; then
         echo "  ⏭️  $pid: no longer a Vitest process, not signalled"
+      elif kill "$pid" 2>/dev/null; then
+        TERMED="$TERMED $pid"
+      else
+        echo "  ⏭️  $pid: could not be signalled (owned by another user?)"
       fi
     done
+    TERMED="$(echo "$TERMED" | xargs || true)"
     sleep 2
 
     # Only PIDs that were actually sent TERM may be escalated. A process that
     # appeared during the wait has not had a chance to shut down gracefully.
     ESCALATE=""
-    for pid in $TARGETS; do
+    for pid in $TERMED; do
       if is_vitest "$pid"; then ESCALATE="$ESCALATE $pid"; fi
     done
     ESCALATE="$(echo "$ESCALATE" | xargs || true)"
 
-    if [ -n "$ESCALATE" ]; then
+    if [[ -n "$ESCALATE" ]]; then
       echo "💥 Still running, sending KILL to: $ESCALATE"
       for pid in $ESCALATE; do
         is_vitest "$pid" && kill -9 "$pid" 2>/dev/null || true
@@ -207,7 +245,7 @@ else
     # Killing a coordinator reparents its workers. Report them rather than
     # killing anything that was not named.
     LEFT=$(scan | wc -l | tr -d ' ')
-    if [ "$LEFT" != "0" ]; then
+    if [[ "$LEFT" != "0" ]]; then
       echo ""
       echo "ℹ️  $LEFT Vitest process(es) remain (workers reparented by the kill, or"
       echo "   unrelated runs). Re-run with no arguments to list them."
@@ -229,12 +267,12 @@ echo "📈 Current System Status:"
 {
   if command -v top >/dev/null 2>&1; then
     snapshot=""
-    if probe=$(top -l 1 2>/dev/null) && [ -n "$probe" ]; then
+    if probe=$(top -l 1 2>/dev/null) && [[ -n "$probe" ]]; then
       snapshot=$probe
-    elif probe=$(top -b -n 1 2>/dev/null) && [ -n "$probe" ]; then
+    elif probe=$(top -b -n 1 2>/dev/null) && [[ -n "$probe" ]]; then
       snapshot=$probe
     fi
-    if [ -n "$snapshot" ]; then
+    if [[ -n "$snapshot" ]]; then
       printf '%s\n' "$snapshot" | head -5
     else
       echo "   (top unavailable)"

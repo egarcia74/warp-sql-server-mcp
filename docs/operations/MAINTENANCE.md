@@ -44,8 +44,9 @@ ps aux | grep -E "(node|vitest)" | grep -v grep
 # 2. Run the inspector directly (lists only)
 ./scripts/cleanup-test-processes.sh
 
-# 3. Terminate a specific process yourself (if needed)
-kill -9 <process_id>
+# 3. Terminate a specific process (if needed) - prefer the inspector, which
+#    re-verifies the PID and sends TERM before escalating to KILL
+npm run cleanup -- --kill <process_id>
 ```
 
 #### ⚙️ **Automated Prevention**
@@ -69,8 +70,9 @@ The `cleanup-test-processes.sh` script:
 - ✅ **Kills only what you name**: `npm run cleanup -- --kill <pid> [<pid>...]`. There is no
   "kill all orphans" mode, because there is no sound way to identify one — see below.
 - ✅ **Re-verifies before every signal**: each PID is confirmed to still be a Vitest process
-  immediately before `TERM` and again before `KILL`, so a PID recycled during the wait is never
-  signalled.
+  immediately before `TERM` and again before `KILL`. The check and the signal are separate
+  operations, so this narrows the recycled-PID window rather than closing it; the residual race is
+  microscopic but real.
 - ✅ **Graceful before forceful**: only PIDs that actually received `TERM` can be escalated to
   `KILL`. A process that appears during the wait is never force-killed without a chance to exit.
 - ✅ **Honest per-PID outcomes**: liveness is checked with `ps`, not `kill -0`. `kill -0` fails with

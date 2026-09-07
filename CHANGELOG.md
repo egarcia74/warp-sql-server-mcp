@@ -37,8 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`npm run cleanup -- --kill <pid>`). There is deliberately no automatic orphan mode: `PPID == 1` means either
   "reparented after the parent exited" or "a service manager started it here", and process state cannot separate them —
   four heuristics were tried and each killed healthy processes or silently found none. Each PID now re-verifies as a
-  Vitest process before every signal (so a recycled PID is never hit), only PIDs that actually received `TERM` can be
-  escalated to `KILL`, liveness is checked with `ps` rather than `kill -0` (which fails with `EPERM` for another user's
+  Vitest process before every signal (narrowing, though not closing, the window in which a recycled PID could be hit),
+  only PIDs that `TERM` actually reached can be escalated to `KILL`, liveness is checked with `ps` rather than `kill -0` (which fails with `EPERM` for another user's
   process, indistinguishable from "gone", and was previously reported as success), and the closing status display can no
   longer abort a push. `npm run cleanup:kill` is removed, since termination now requires arguments
   ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).
