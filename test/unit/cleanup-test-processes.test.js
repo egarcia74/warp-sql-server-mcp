@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from 'node:
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PS_STUB, SLEEP_STUB, TOP_STUB } from './fixtures/cleanup-inspector-stubs.js';
 
 const SCRIPT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -27,92 +28,6 @@ const writeStub = (name, body) => {
   writeFileSync(file, body);
   chmodSync(file, 0o755);
 };
-
-// Stub bodies live at module scope so the `beforeAll` hook stays small.
-const PS_STUB = `#!/bin/bash
-table="\${PS_TABLE:-/dev/null}"
-args="$*"
-target="\${args##*-p }"
-known() { awk -v p="$target" '$1==p { f=1 } END { exit !f }' "$table"; }
-case "$args" in
-  *-eo*)
-    cat "$table" 2>/dev/null
-    ;;
-  *"-o ppid="*)
-    # PS_PPID_FAIL_FOR=<pid> fails only for that PID, leaving the caller's own
-    # ancestry walk intact: a descendant check that cannot conclude.
-    if [ -n "\${PS_PPID_FAIL_FOR:-}" ] && [ "$target" = "$PS_PPID_FAIL_FOR" ]; then
-      exit 1
-    fi
-    # With PS_PPID_BREAK set, the first lookup answers and every later one
-    # fails: an ancestry walk that stops partway up.
-    if [ -n "\${PS_PPID_BREAK:-}" ]; then
-      if [ -f "$PS_PPID_BREAK" ]; then exit 1; fi
-      : > "$PS_PPID_BREAK"
-      echo "55555"
-      exit 0
-    fi
-    known || exec /bin/ps "$@"
-    awk -v p="$target" '$1==p { print $2 }' "$table"
-    ;;
-  *"-o command="*)
-    known || exec /bin/ps "$@"
-    # PS_RENAME_AFTER=<n> reports a non-Vitest command from call n+1 onward,
-    # while lstart stays put: a process that rewrites its own argv (Node's
-    # process.title) without exiting.
-    if [ -n "\${PS_RENAME_AFTER:-}" ]; then
-      n=0
-      [ -f "$PS_RENAME_COUNT" ] && n=$(cat "$PS_RENAME_COUNT")
-      n=$((n + 1)); echo "$n" > "$PS_RENAME_COUNT"
-      if [ "$n" -gt "$PS_RENAME_AFTER" ]; then
-        echo "renamed-and-still-here"
-        exit 0
-      fi
-    fi
-    awk -v p="$target" '$1==p { $1=""; $2=""; sub(/^ +/, ""); print }' "$table"
-    ;;
-  *"-o etime="*)
-    known || exec /bin/ps "$@"
-    echo "05:00"
-    ;;
-  *"-o lstart="*)
-    # PS_NO_LSTART simulates a ps without start-time support, while
-    # -o command= keeps working: a target that cannot be given an identity.
-    [ -n "\${PS_NO_LSTART:-}" ] && exit 1
-    # PS_LSTART_FAIL_AFTER=<n> succeeds for n calls then fails: an identity
-    # captured at validation whose re-read breaks later on.
-    if [ -n "\${PS_LSTART_FAIL_AFTER:-}" ]; then
-      n=0
-      [ -f "$PS_LSTART_COUNT" ] && n=$(cat "$PS_LSTART_COUNT")
-      n=$((n + 1)); echo "$n" > "$PS_LSTART_COUNT"
-      [ "$n" -gt "$PS_LSTART_FAIL_AFTER" ] && exit 1
-    fi
-    known || exec /bin/ps "$@"
-    if [ -n "\${PS_LSTART_DRIFT:-}" ]; then
-      if [ -f "$PS_LSTART_DRIFT" ]; then echo "Mon Sep  7 11:11:11 2026"; exit 0; fi
-      : > "$PS_LSTART_DRIFT"
-    fi
-    # PS_LSTART_AFTER=<n> drifts only from call n+1 onward, which lets a single
-    # comparison site be targeted rather than all of them at once.
-    if [ -n "\${PS_LSTART_AFTER:-}" ]; then
-      n=0
-      [ -f "$PS_LSTART_COUNT" ] && n=$(cat "$PS_LSTART_COUNT")
-      n=$((n + 1)); echo "$n" > "$PS_LSTART_COUNT"
-      if [ "$n" -gt "$PS_LSTART_AFTER" ]; then
-        echo "Mon Sep  7 11:11:11 2026"
-        exit 0
-      fi
-    fi
-    echo "Mon Sep  7 09:00:00 2026"
-    ;;
-  *)
-    exec /bin/ps "$@"
-    ;;
-esac
-`;
-
-const SLEEP_STUB = '#!/bin/bash\nexit 0\n';
-const TOP_STUB = '#!/bin/bash\necho "Processes: 1 total"\necho "CPU usage: 0.0% user"\n';
 
 beforeAll(() => {
   stubDir = mkdtempSync(path.join(tmpdir(), 'cleanup-stub-'));
@@ -155,6 +70,10 @@ const run = (args = [], processes = []) => invoke(args, writeTable(processes), {
 // builtin, so this replaces signalling itself for the duration of the run. No
 // real signal is sent, and the script needs no test-only seam to allow it.
 const KILL_MOCK = { 'BASH_FUNC_kill%%': '() { echo "MOCK-KILL $*"; return 0; }' };
+
+// A mock kill that fails, standing in for EPERM on another user's process:
+// both `kill` and `kill -0` are denied.
+const KILL_MOCK_DENIED = { 'BASH_FUNC_kill%%': '() { return 1; }' };
 
 /** Run with signalling mocked out: nothing on the host is ever signalled. */
 const runWithKillMocked = (args, processes) => invoke(args, writeTable(processes), KILL_MOCK);
@@ -534,6 +453,50 @@ describe('cleanup-test-processes.sh - unknown outcomes', () => {
     expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: not a running Vitest process, skipped`));
     expect(stdout).not.toMatch(/could not verify/);
     expect(status).toBe(0);
+  });
+});
+
+describe('cleanup-test-processes.sh - liveness without signal permission', () => {
+  const lateIdentityFailure = extra => {
+    const counter = path.join(stubDir, `lstart-eperm-${Math.random().toString(36).slice(2)}`);
+    rmSync(counter, { force: true });
+    return invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      {
+        ...KILL_MOCK_DENIED,
+        PS_LSTART_FAIL_AFTER: '2',
+        PS_LSTART_COUNT: counter,
+        ...extra
+      }
+    );
+  };
+
+  // Regression: the `kill -0` fallback could not tell ESRCH from EPERM, so
+  // another user's live process whose identity re-read failed was reported
+  // "✅ terminated" with exit 0 - the same permission ambiguity the script
+  // had already moved off `kill -0` to avoid.
+  it('reports unknown, not terminated, when the process is alive but unsignallable', () => {
+    const { status, stdout } = lateIdentityFailure({});
+    expect(stdout).toMatch(/still alive, but its identity could not be re-read/);
+    expect(stdout).not.toMatch(new RegExp(`✅ ${ABSENT_PID}: terminated`));
+    expect(status).toBe(1);
+  });
+
+  // ps working and unable to see the PID positively establishes that it is
+  // gone, without needing a signal permission we may not have.
+  it('reports terminated when ps works and the PID is absent', () => {
+    const { status, stdout } = lateIdentityFailure({ PS_PID_ABSENT: ABSENT_PID });
+    expect(stdout).toMatch(new RegExp(`✅ ${ABSENT_PID}: terminated`));
+    expect(stdout).not.toMatch(/outcome unknown/);
+    expect(status).toBe(0);
+  });
+
+  it('reports unknown when ps cannot answer at all', () => {
+    const { status, stdout } = lateIdentityFailure({ PS_NOT_ANSWERING: '1' });
+    expect(stdout).toMatch(/liveness could not be established/);
+    expect(stdout).not.toMatch(new RegExp(`✅ ${ABSENT_PID}: terminated`));
+    expect(status).toBe(1);
   });
 });
 

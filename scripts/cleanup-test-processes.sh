@@ -253,6 +253,23 @@ read_process_table() {
 # itself while refusing to exit would fail `is_vitest`, be dropped from
 # escalation, and be reported as terminated while still running. Start time is
 # assigned by the kernel and the process cannot change it.
+# Existence probes that do not depend on signal permission. `kill -0` cannot
+# tell ESRCH from EPERM, so using it to decide "gone" reintroduced exactly the
+# permission ambiguity `is_vitest` was moved off `kill -0` to avoid: another
+# user's live process looks identical to one that exited. `ps` can see another
+# user's process, so it can answer this; and probing our own PID establishes
+# whether `ps` is answering at all, which is what separates "the target is
+# gone" from "nothing can be determined".
+pid_exists() {
+  local out
+  out=$(ps -o pid= -p "${1:-}" 2>/dev/null) || return 1
+  [[ -n "${out//[[:space:]]/}" ]]
+}
+
+ps_answers() {
+  pid_exists $$
+}
+
 still_same_process() {
   local pid="${1:-}" want="${2:-}" now
   now=$(identity_of "$pid")
@@ -524,19 +541,23 @@ else
       elif [[ -n "$now" ]]; then
         # Readable, and it is a different process: ours is gone.
         echo "  ✅ $pid: terminated"
-      elif kill -0 "$pid" 2>/dev/null; then
+      elif pid_exists "$pid"; then
         # Unreadable is not the same as gone. The identity captured at
         # validation succeeded, so a failure only here is the lookup breaking,
-        # not the process exiting -- and the number is demonstrably still
-        # alive. Reporting "terminated" here was a false success.
+        # not the process exiting -- and the PID is demonstrably still there.
         echo "  ⚠️  $pid: still alive, but its identity could not be re-read;"
         echo "        outcome unknown"
         EXIT_STATUS=1
-      else
-        # No identity and no liveness: the process is gone. `kill -0` also
-        # fails with EPERM, but `ps` can read another user's start time, so
-        # an unreadable identity paired with a failed `kill -0` is an exit.
+      elif ps_answers; then
+        # `ps` is working and cannot see the PID, which positively establishes
+        # that it is gone -- no reliance on a signal permission we may lack.
         echo "  ✅ $pid: terminated"
+      else
+        # `ps` is not answering, so neither "gone" nor "alive" can be shown.
+        # Unknown, never success.
+        echo "  ⚠️  $pid: liveness could not be established (ps is not"
+        echo "        answering); outcome unknown"
+        EXIT_STATUS=1
       fi
       i=$((i + 1))
     done
