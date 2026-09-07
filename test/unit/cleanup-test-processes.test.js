@@ -1,140 +1,28 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { PS_STUB, SLEEP_STUB, TOP_STUB } from './fixtures/cleanup-inspector-stubs.js';
+import {
+  ABSENT_PID,
+  KILL_MOCK,
+  KILL_MOCK_DENIED,
+  KILL_MOCK_NO_PROBE,
+  VITEST,
+  installStubs,
+  invoke,
+  removeStubs,
+  run,
+  runWithBrokenTool,
+  runWithKillMocked,
+  stubFile,
+  writeTable
+} from './fixtures/cleanup-inspector-harness.js';
 
-const SCRIPT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../scripts/cleanup-test-processes.sh'
-);
-
-// The script reads process state through `ps`, so `ps` is where the tests take
-// control. A stub on PATH answers from a fixture table, which makes every case
-// below deterministic and, more importantly, lets the destructive path be
-// exercised without a real process to kill: safety cases such as a malformed
-// PID, a protected ancestor or a target that survives are precisely the ones
-// that must not depend on whatever happens to be running on the machine.
-//
-// `sleep` is stubbed to return immediately (the script waits 2s between TERM
-// and KILL) and `top` to print instantly, so the suite stays fast. Neither
-// affects the behaviour under test.
-let stubDir;
-
-const writeStub = (name, body) => {
-  const file = path.join(stubDir, name);
-  writeFileSync(file, body);
-  chmodSync(file, 0o755);
-};
-
-beforeAll(() => {
-  stubDir = mkdtempSync(path.join(tmpdir(), 'cleanup-stub-'));
-  writeStub('ps', PS_STUB);
-  writeStub('sleep', SLEEP_STUB);
-  writeStub('top', TOP_STUB);
-});
-
-afterAll(() => {
-  rmSync(stubDir, { recursive: true, force: true });
-});
-
-const text = stream => String(stream ?? '');
-
-/** Write the fixture table the stub `ps` reads, and return its path. */
-const writeTable = rows => {
-  const table = path.join(stubDir, 'ps-table');
-  writeFileSync(table, rows.length > 0 ? `${rows.join('\n')}\n` : '');
-  return table;
-};
-
-const invoke = (args, table, extraEnv) => {
-  const result = spawnSync(SCRIPT, args, {
-    encoding: 'utf8',
-    env: { ...process.env, PATH: `${stubDir}:${process.env.PATH}`, PS_TABLE: table, ...extraEnv }
-  });
-  return Object.freeze({
-    status: result.status,
-    stdout: text(result.stdout),
-    stderr: text(result.stderr)
-  });
-};
-
-/** Run the inspector with `ps` answering from the given fixture rows. */
-const run = (args = [], processes = []) => invoke(args, writeTable(processes), {});
-
-// `kill` is a shell builtin, so a PATH stub cannot intercept it — a test that
-// names a PID would signal whatever real process happens to hold that number.
-// Bash does import functions from the environment, and a function shadows the
-// builtin, so this replaces signalling itself for the duration of the run. No
-// real signal is sent, and the script needs no test-only seam to allow it.
-const KILL_MOCK = { 'BASH_FUNC_kill%%': '() { echo "MOCK-KILL $*"; return 0; }' };
-
-// A mock kill that fails, standing in for EPERM on another user's process:
-// both `kill` and `kill -0` are denied.
-const KILL_MOCK_DENIED = { 'BASH_FUNC_kill%%': '() { return 1; }' };
-
-// Signals land, but the `kill -0` existence probe fails: ESRCH, the target has
-// exited. The mirror image of KILL_MOCK_DENIED, where the same probe fails for
-// EPERM on a process that is very much alive -- `kill -0` reports both
-// identically, which is why nothing here may read it as proof of survival.
-const KILL_MOCK_NO_PROBE = {
-  'BASH_FUNC_kill%%': '() { case "${1:-}" in -0) return 1 ;; esac; echo "MOCK-KILL $*"; return 0; }'
-};
-
-/** Run with signalling mocked out: nothing on the host is ever signalled. */
-const runWithKillMocked = (args, processes, extra = {}) =>
-  invoke(args, writeTable(processes), { ...KILL_MOCK, ...extra });
-
-/** Run with one external tool replaced by a failing stub, to prove the
- *  guards do not silently depend on it. */
-const runWithBrokenTool = (tool, args, processes, extraEnv = {}) => {
-  const brokenDir = mkdtempSync(path.join(tmpdir(), `cleanup-no-${tool}-`));
-  const broken = path.join(brokenDir, tool);
-  writeFileSync(broken, '#!/bin/bash\nexit 1\n');
-  chmodSync(broken, 0o755);
-  try {
-    const result = spawnSync(SCRIPT, args, {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${brokenDir}:${stubDir}:${process.env.PATH}`,
-        PS_TABLE: writeTable(processes),
-        ...extraEnv
-      }
-    });
-    return Object.freeze({
-      status: result.status,
-      stdout: text(result.stdout),
-      stderr: text(result.stderr)
-    });
-  } finally {
-    rmSync(brokenDir, { recursive: true, force: true });
-  }
-};
-
-// `identity_of` reads /proc/<pid>/stat when it can, so a fixture PID that
-// happens to exist on a Linux runner resolves through the real procfs and the
-// stubbed `ps` is bypassed entirely -- which would make the identity tests
-// depend on unrelated host process allocation. These tests therefore use a PID
-// verified absent from this host, so /proc cannot answer for it and the stub
-// is the only source.
-const findAbsentPid = () => {
-  for (let pid = 4194303; pid > 4193000; pid -= 1) {
-    if (existsSync(`/proc/${pid}`)) continue;
-    try {
-      process.kill(pid, 0);
-    } catch (err) {
-      if (err.code === 'ESRCH') return String(pid);
-    }
-  }
-  throw new Error('could not find a PID absent from this host');
-};
-
-const ABSENT_PID = findAbsentPid();
-
-const VITEST = '4242 1 node /repo/node_modules/.bin/vitest run test/unit';
+// The harness installs stubbed `ps`, `sleep` and `top` on PATH. See
+// fixtures/cleanup-inspector-harness.js for what each runner does, and
+// fixtures/cleanup-inspector-stubs.js for the env knobs the stubs honour.
+beforeAll(installStubs);
+afterAll(removeStubs);
 
 describe('cleanup-test-processes.sh - report mode', () => {
   it('lists a leftover Vitest process with its PID, parent and elapsed time', () => {
@@ -274,7 +162,7 @@ describe('cleanup-test-processes.sh - exit status', () => {
     // the second lookup is the TERM loop's own re-check -- so this exercises the
     // guard immediately before TERM, not the later escalation decision (that one
     // is covered separately, keyed on the "not escalated" message).
-    const marker = path.join(stubDir, 'drifted');
+    const marker = stubFile('drifted');
     rmSync(marker, { force: true });
     const { stdout } = invoke(
       ['--kill', ABSENT_PID],
@@ -329,20 +217,11 @@ describe('cleanup-test-processes.sh - argument handling', () => {
   it('does not expand a glob argument against the working directory', () => {
     const cwd = mkdtempSync(path.join(tmpdir(), 'cleanup-glob-'));
     writeFileSync(path.join(cwd, '4242'), '');
-    const result = spawnSync(SCRIPT, ['--kill', '*'], {
-      cwd,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${stubDir}:${process.env.PATH}`,
-        PS_TABLE: writeTable([VITEST]),
-        ...KILL_MOCK
-      }
-    });
+    const { stdout } = invoke(['--kill', '*'], writeTable([VITEST]), KILL_MOCK, { cwd });
     rmSync(cwd, { recursive: true, force: true });
-    expect(text(result.stdout)).toMatch(/\*: not a PID, skipped/);
-    expect(text(result.stdout)).not.toMatch(/MOCK-KILL/);
-    expect(text(result.stdout)).not.toMatch(/Sending TERM/);
+    expect(stdout).toMatch(/\*: not a PID, skipped/);
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(stdout).not.toMatch(/Sending TERM/);
   });
 });
 
@@ -389,7 +268,7 @@ describe('cleanup-test-processes.sh - identity at the moment of KILL', () => {
     // pre-TERM re-check both match, so TERM goes out, and the drift lands
     // exactly on the escalation decision. Without that check the survivor
     // would be force-killed having never itself received TERM.
-    const counter = path.join(stubDir, 'lstart-escalate-count');
+    const counter = stubFile('lstart-escalate-count');
     rmSync(counter, { force: true });
     const { stdout } = invoke(
       ['--kill', ABSENT_PID],
@@ -404,7 +283,7 @@ describe('cleanup-test-processes.sh - identity at the moment of KILL', () => {
   });
 
   it('does not KILL a PID whose identity changed after escalation was decided', () => {
-    const counter = path.join(stubDir, 'lstart-count');
+    const counter = stubFile('lstart-count');
     rmSync(counter, { force: true });
     const { stdout } = invoke(
       ['--kill', ABSENT_PID],
@@ -425,7 +304,7 @@ describe('cleanup-test-processes.sh - when a target renames itself', () => {
   // for real with a Node process whose SIGTERM handler set process.title: the
   // script printed "✅ terminated" while `kill -0` still succeeded.
   it('escalates and reports honestly when the command line changes', () => {
-    const counter = path.join(stubDir, 'rename-count');
+    const counter = stubFile('rename-count');
     rmSync(counter, { force: true });
     const { status, stdout } = invoke(
       ['--kill', ABSENT_PID],
@@ -497,7 +376,7 @@ describe('cleanup-test-processes.sh - when a target cannot be classified', () =>
 
   // The re-check in the TERM loop has the same two-into-three problem.
   it('does not signal a target it can no longer re-classify', () => {
-    const counter = path.join(stubDir, 'command-count');
+    const counter = stubFile('command-count');
     rmSync(counter, { force: true });
     const { status, stdout } = invoke(
       ['--kill', ABSENT_PID],
@@ -553,7 +432,7 @@ describe('cleanup-test-processes.sh - unknown outcomes', () => {
   // final verification was reported "✅ terminated" with exit 0, because
   // unreadable was equated with gone. The process was demonstrably still alive.
   it('reports an unknown outcome, not success, when the identity cannot be re-read', () => {
-    const counter = path.join(stubDir, 'lstart-fail-count');
+    const counter = stubFile('lstart-fail-count');
     rmSync(counter, { force: true });
     const { status, stdout } = invoke(
       ['--kill', ABSENT_PID],
@@ -592,7 +471,7 @@ describe('cleanup-test-processes.sh - unknown outcomes', () => {
 
 describe('cleanup-test-processes.sh - liveness without signal permission', () => {
   const lateIdentityFailure = extra => {
-    const counter = path.join(stubDir, `lstart-eperm-${Math.random().toString(36).slice(2)}`);
+    const counter = stubFile(`lstart-eperm-${Math.random().toString(36).slice(2)}`);
     rmSync(counter, { force: true });
     return invoke(
       ['--kill', ABSENT_PID],
@@ -695,7 +574,7 @@ describe('cleanup-test-processes.sh - when the ancestry walk breaks', () => {
   // PID 1 is seeded. The previous revision then accepted `--kill` on the
   // Vitest process that had launched it, printing "Sending TERM to: 77777".
   it('refuses to signal when the ancestry walk cannot be completed', () => {
-    const marker = path.join(stubDir, 'ppid-break');
+    const marker = stubFile('ppid-break');
     rmSync(marker, { force: true });
     const { status, stderr, stdout } = invoke(
       ['--kill', '77777'],
@@ -709,7 +588,7 @@ describe('cleanup-test-processes.sh - when the ancestry walk breaks', () => {
   });
 
   it('still lists processes, with a warning, when the walk is incomplete', () => {
-    const marker = path.join(stubDir, 'ppid-break-report');
+    const marker = stubFile('ppid-break-report');
     rmSync(marker, { force: true });
     const { status, stdout } = invoke([], writeTable([VITEST]), { PS_PPID_BREAK: marker });
     expect(status).toBe(0);

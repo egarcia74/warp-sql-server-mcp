@@ -38,6 +38,7 @@ test/
 │   ├── docker-command-utils.test.js         #   4 - Docker helper argument handling
 │   ├── dependabot-config.test.js            #   2 - Dependabot config validation
 │   ├── mcp-shared-fixtures.js               # Shared fixtures and mocks (not a suite)
+│   ├── fixtures/cleanup-inspector-harness.js # Stub install + runners for the process inspector
 │   ├── fixtures/cleanup-inspector-stubs.js  # ps/sleep/top stubs for the process inspector
 │   └── fixtures/modern-fixtures.js          # Additional shared fixtures
 │
