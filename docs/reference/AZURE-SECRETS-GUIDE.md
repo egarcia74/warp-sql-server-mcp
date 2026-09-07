@@ -348,6 +348,11 @@ node test-azure-secrets.js
 
 ### 3. Test MCP Server Startup
 
+> **⚠️ Unavailable until [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152) is resolved.** Startup never constructs `SecretManager`, so none of
+> the messages below are emitted no matter how Azure Key Vault is configured. Their absence is not an
+> Azure problem and is not worth diagnosing as one. The step is kept for when the integration is
+> wired up.
+
 ```bash
 # Enable debug logging to see secret loading
 export LOG_LEVEL="debug"
@@ -458,6 +463,9 @@ npm start
 
 This will show detailed logs including:
 
+> **⚠️** The secret-manager entries below are also unavailable until [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152) is resolved: nothing
+> constructs `SecretManager` at startup, so it never initializes, authenticates or retrieves.
+
 - Secret Manager initialization
 - Authentication attempts
 - Secret retrieval operations
@@ -466,7 +474,9 @@ This will show detailed logs including:
 
 ### Health Check Endpoint
 
-The MCP server includes a health check for the secret manager:
+`SecretManager` provides a health check for Azure Key Vault. The snippet below constructs
+the class directly, which works today; the running server does not call it, since it never
+constructs `SecretManager` ([#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)).
 
 ```javascript
 // Access health check programmatically
