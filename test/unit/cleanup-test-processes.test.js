@@ -261,9 +261,11 @@ describe('cleanup-test-processes.sh - exit status', () => {
     expect(status).toBe(0);
   });
 
-  it('does not escalate when a different process has taken the PID', () => {
-    // The start time the script recorded before TERM no longer matches, so the
-    // number surviving must not be read as "our target survived".
+  it('refuses to send TERM when a different process took the PID after validation', () => {
+    // PS_LSTART_DRIFT changes the start time from the second lookup onward, and
+    // the second lookup is the TERM loop's own re-check -- so this exercises the
+    // guard immediately before TERM, not the later escalation decision (that one
+    // is covered separately, keyed on the "not escalated" message).
     const marker = path.join(stubDir, 'drifted');
     rmSync(marker, { force: true });
     const { stdout } = invoke(
@@ -274,8 +276,11 @@ describe('cleanup-test-processes.sh - exit status', () => {
         PS_LSTART_DRIFT: marker
       }
     );
-    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: a different process now holds this PID`));
-    expect(stdout).not.toMatch(/MOCK-KILL -9/);
+    expect(stdout).toMatch(
+      new RegExp(`${ABSENT_PID}: a different process now holds this PID, not signalled`)
+    );
+    // No signal at all, not merely no KILL: the target was never TERMed.
+    expect(stdout).not.toMatch(/MOCK-KILL/);
   });
 
   it('exits 2 on an unknown option', () => {
@@ -371,6 +376,25 @@ describe('cleanup-test-processes.sh - identity at the moment of KILL', () => {
   // the KILL loop re-checked only `is_vitest`. With several targets, an
   // earlier one could exit and have its number reissued in between, and the
   // replacement would take SIGKILL having never received TERM.
+  it('does not escalate a PID whose identity changed during the grace period', () => {
+    // PS_LSTART_AFTER=2 drifts from the third lookup: validation and the
+    // pre-TERM re-check both match, so TERM goes out, and the drift lands
+    // exactly on the escalation decision. Without that check the survivor
+    // would be force-killed having never itself received TERM.
+    const counter = path.join(stubDir, 'lstart-escalate-count');
+    rmSync(counter, { force: true });
+    const { stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_LSTART_AFTER: '2', PS_LSTART_COUNT: counter }
+    );
+    expect(stdout).toMatch(new RegExp(`MOCK-KILL ${ABSENT_PID}`));
+    expect(stdout).toMatch(
+      new RegExp(`${ABSENT_PID}: a different process now holds this PID, not escalated`)
+    );
+    expect(stdout).not.toMatch(/MOCK-KILL -9/);
+  });
+
   it('does not KILL a PID whose identity changed after escalation was decided', () => {
     const counter = path.join(stubDir, 'lstart-count');
     rmSync(counter, { force: true });
@@ -417,6 +441,26 @@ describe('cleanup-test-processes.sh - when no start time is available', () => {
       ['--kill', ABSENT_PID],
       writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
       { ...KILL_MOCK, PS_NO_LSTART: '1' }
+    );
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: no start time available, skipped`));
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(stdout).not.toMatch(/terminated/);
+    expect(status).toBe(1);
+  });
+});
+
+describe('cleanup-test-processes.sh - when the start time comes back blank', () => {
+  // Regression: `identity_of` printed the `lstart_` prefix unconditionally, so a
+  // ps that exited 0 while printing nothing yielded the constant identity
+  // `lstart_`. Non-empty, so the "no identity, no signal" refusal was bypassed
+  // and the target was TERMed and force-killed; worse, the same constant
+  // compares equal for EVERY PID whose lookup degrades that way, so a recycled
+  // number would pass the pre-KILL identity check.
+  it('refuses to signal when ps answers with a blank start time', () => {
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_LSTART_EMPTY: '1' }
     );
     expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: no start time available, skipped`));
     expect(stdout).not.toMatch(/MOCK-KILL/);

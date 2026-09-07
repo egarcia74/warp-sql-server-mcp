@@ -18,7 +18,9 @@
 //   PS_LSTART_FAIL_AFTER=<n>  lstart succeeds n times then fails
 //   PS_LSTART_COUNT=<file>  call counter used by the two above
 //   PS_NO_LSTART          lstart unsupported entirely
+//   PS_LSTART_EMPTY       lstart exits 0 but prints only whitespace
 //   PS_RENAME_AFTER=<n>   command= reports a non-Vitest name from call n+1
+//   PS_RENAME_COUNT=<file>  call counter used by the one above
 //   PS_STATE=<char>       process state reported by state= (Z for a zombie)
 
 export const PS_STUB = `#!/bin/bash
@@ -86,6 +88,13 @@ case "$args" in
     # PS_NO_LSTART simulates a ps without start-time support, while
     # -o command= keeps working: a target that cannot be given an identity.
     [ -n "\${PS_NO_LSTART:-}" ] && exit 1
+    # PS_LSTART_EMPTY exits 0 while printing only whitespace. A ps that answers
+    # but has nothing to say is not the same as one that fails, and the script
+    # must not treat the blank as an identity.
+    if [ -n "\${PS_LSTART_EMPTY:-}" ]; then
+      echo "   "
+      exit 0
+    fi
     # PS_LSTART_FAIL_AFTER=<n> succeeds for n calls then fails: an identity
     # captured at validation whose re-read breaks later on.
     if [ -n "\${PS_LSTART_FAIL_AFTER:-}" ]; then

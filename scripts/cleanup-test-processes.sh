@@ -225,6 +225,14 @@ identity_of() {
   # in the docs rather than papered over: failing closed instead would disable
   # kill mode entirely on macOS, which is where this script is mostly used.
   raw=$(ps -o lstart= -p "$pid" 2>/dev/null) || return 0
+  # A ps that exits 0 while printing nothing has answered without saying
+  # anything, and the bare `lstart_` prefix is not an identity: it is non-empty,
+  # so it would satisfy the "no identity, no signal" refusal below, and it
+  # compares equal for every PID whose lookup degrades the same way -- so a
+  # recycled number would pass the pre-KILL check. Return nothing and be refused.
+  if [[ -z "${raw//[[:space:]]/}" ]]; then
+    return 0
+  fi
   printf 'lstart_%s' "${raw//[[:space:]]/_}"
   return 0
 }
@@ -514,7 +522,6 @@ else
       if is_zombie "$pid"; then
         # Already exited; KILL would be a no-op and "Still running" a lie.
         # The outcome loop below reports it as terminated.
-        i=$((i + 1))
         continue
       fi
       now=$(identity_of "$pid")

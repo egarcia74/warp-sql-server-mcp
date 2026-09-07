@@ -45,8 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer abort a push. `npm run cleanup:kill` is removed, since termination now requires arguments. Kill mode now
   exits non-zero when a requested process is still running, so automation can tell a completed
   termination from a run that changed nothing, and zero-padded PIDs are canonicalised before the
-  ancestry checks (`--kill 0001` previously walked past the PID-1 guard and signalled it). The
-  script is covered by 42 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
+  ancestry checks (`--kill 0001` previously walked past the PID-1 guard and signalled it). A `ps`
+  that exits 0 while printing a blank start time is now refused rather than accepted: the identity
+  was built by prefixing the value unconditionally, so a blank one yielded the constant `lstart_` —
+  non-empty, so it satisfied the "no identity, no signal" refusal, and equal for every PID whose
+  lookup degraded the same way, which is exactly the collision the identity check exists to
+  prevent. The
+  script is covered by 44 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
   against a stubbed `ps` so the destructive path, the PID guards and the exit status are exercised
   without depending on what happens to be running
   ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).
