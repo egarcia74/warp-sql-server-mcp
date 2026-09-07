@@ -86,7 +86,6 @@
         "_SQL_SERVER_LOG_LEVEL": "info",
         "_SQL_SERVER_DEBUG": "false",
         "_ENABLE_SECURITY_AUDIT": "false",
-        "_SQL_SERVER_RESPONSE_FORMAT": "json",
 
         "_comment_secrets": "--- Secret Management for Cloud Deployments (Defaults shown) ---",
         "_SECRET_MANAGER_TYPE": "env",

@@ -34,7 +34,6 @@ describe('get_server_info Tool', () => {
     process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
     process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
     process.env.LOG_LEVEL = 'debug';
-    process.env.SQL_SERVER_RESPONSE_FORMAT = 'structured';
   };
 
   const cleanupTestEnvironment = () => {
@@ -47,7 +46,6 @@ describe('get_server_info Tool', () => {
     delete process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS;
     delete process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES;
     delete process.env.LOG_LEVEL;
-    delete process.env.SQL_SERVER_RESPONSE_FORMAT;
   };
 
   beforeEach(() => {
@@ -138,7 +136,9 @@ describe('get_server_info Tool', () => {
       const loggingConfig = data.data.configuration.logging;
       expect(loggingConfig.level).toBe('info'); // Default log level
       expect(loggingConfig.securityAudit).toBeTypeOf('boolean');
-      expect(loggingConfig.responseFormat).toBe('structured');
+      // responseFormat is deliberately absent: the setting it reported was never
+      // consumed by any code path, so get_server_info no longer advertises it.
+      expect(loggingConfig.responseFormat).toBeUndefined();
     });
 
     test('should return streaming configuration', () => {

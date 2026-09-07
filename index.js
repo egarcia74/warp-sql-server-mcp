@@ -764,7 +764,6 @@ class SqlServerMCP {
         logging: {
           level: this.logger.config.level,
           securityAudit: this.logger.config.enableSecurityAudit,
-          responseFormat: this.config.logging.responseFormat,
           logFile: this.logger.config.logFile || 'Not configured (console only)',
           securityLogFile: this.logger.config.securityLogFile || 'Not configured (console only)'
         },
