@@ -248,6 +248,49 @@ describe('cleanup-test-processes.sh - exit status', () => {
     expect(stdout).not.toMatch(/MOCK-KILL -9/);
   });
 
+  // Regression: the ancestry list was assembled with `ps ... | tr`, so the
+  // "unconditional" PID-1 guard was conditional on `tr` working. With `tr`
+  // failing, ANCESTRY came back empty, every `case "$ANCESTRY"` test missed,
+  // and in a container whose PID 1 is Vitest the previous revision printed
+  // "Sending TERM to: 1" and signalled it.
+  it('still protects PID 1 when `tr` fails', () => {
+    const brokenDir = mkdtempSync(path.join(tmpdir(), 'cleanup-notr-'));
+    const brokenTr = path.join(brokenDir, 'tr');
+    writeFileSync(brokenTr, '#!/bin/bash\nexit 1\n');
+    chmodSync(brokenTr, 0o755);
+    const result = spawnSync(SCRIPT, ['--kill', '1'], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${brokenDir}:${stubDir}:${process.env.PATH}`,
+        PS_TABLE: writeTable(['1 0 node /app/node_modules/.bin/vitest run']),
+        ...KILL_MOCK
+      }
+    });
+    rmSync(brokenDir, { recursive: true, force: true });
+    expect(text(result.stdout)).toMatch(/1: is this script's own ancestor, skipped/);
+    expect(text(result.stdout)).not.toMatch(/MOCK-KILL/);
+    expect(text(result.stdout)).not.toMatch(/Sending TERM/);
+  });
+
+  it('still reports processes when `tr` fails', () => {
+    const brokenDir = mkdtempSync(path.join(tmpdir(), 'cleanup-notr2-'));
+    const brokenTr = path.join(brokenDir, 'tr');
+    writeFileSync(brokenTr, '#!/bin/bash\nexit 1\n');
+    chmodSync(brokenTr, 0o755);
+    const result = spawnSync(SCRIPT, [], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${brokenDir}:${stubDir}:${process.env.PATH}`,
+        PS_TABLE: writeTable([VITEST])
+      }
+    });
+    rmSync(brokenDir, { recursive: true, force: true });
+    expect(result.status).toBe(0);
+    expect(text(result.stdout)).toMatch(/^4242\s/m);
+  });
+
   it('exits 2 on an unknown option', () => {
     const { status, stderr } = run(['--bogus']);
     expect(status).toBe(2);

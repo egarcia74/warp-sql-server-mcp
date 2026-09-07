@@ -44,6 +44,8 @@ service manager started deliberately, and process state cannot tell them apart.
 Exit status: 0 when a listing completes, or when every named PID is gone.
              1 when kill mode left a requested process running or unsignallable.
              2 on a usage error.
+             3 when the caller's own ancestry could not be established, in
+               which case nothing is signalled.
 USAGE
   return 0
 }
@@ -88,11 +90,12 @@ self_ancestry() {
   # -- exactly the case where `--kill 1` would tear down the container. PID 1 is
   # an ancestor of everything in the namespace and is never a legitimate target
   # here, so it is excluded unconditionally.
-  echo 1
-  local pid=$$
+  printf ' 1 '
+  local pid=$$ raw
   while is_pid "$pid" && [[ "$pid" -gt 1 ]]; do
-    echo "$pid"
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    printf '%s ' "$pid"
+    raw=$(ps -o ppid= -p "$pid" 2>/dev/null)
+    pid="${raw//[[:space:]]/}"
   done
   return 0
 }
@@ -105,14 +108,20 @@ self_ancestry() {
 # this script's own name in the command, which used to hide unrelated Vitest
 # runs that legitimately carried the string.
 is_self_descendant() {
-  local pid="${1:-}"
+  local pid="${1:-}" raw
   while is_pid "$pid" && [[ "$pid" -gt 1 ]]; do
     [[ "$pid" -eq $$ ]] && return 0
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    raw=$(ps -o ppid= -p "$pid" 2>/dev/null)
+    pid="${raw//[[:space:]]/}"
   done
   return 1
 }
-ANCESTRY=" $(self_ancestry | tr '\n' ' ') "
+# Built with builtins only. Piping this through `tr` made the "unconditional"
+# PID-1 guard conditional on `tr` being present: in a stripped environment
+# where `ps` works but `tr` does not, the substitution came back empty, every
+# `case "$ANCESTRY"` test missed, and `--kill 1` sailed through both guards
+# because `set -e` is deliberately off here.
+ANCESTRY="$(self_ancestry)"
 
 # Liveness via ps, not `kill -0`: kill -0 fails with EPERM for a process owned
 # by another user, which is indistinguishable from "gone" and silently drops it
@@ -136,7 +145,10 @@ canonical_pid() {
 # it does not drift while we wait, and it distinguishes the process we
 # signalled from a different one that later holds the same number.
 identity_of() {
-  ps -o lstart= -p "${1:-}" 2>/dev/null | tr -s '[:space:]' '_'
+  local raw
+  raw=$(ps -o lstart= -p "${1:-}" 2>/dev/null) || return 0
+  printf '%s' "${raw//[[:space:]]/_}"
+  return 0
 }
 
 is_vitest() {
@@ -180,7 +192,8 @@ if [[ "$MODE" == "report" ]]; then
       printf '%-8s %-8s %-10s %s\n' PID PPID ELAPSED COMMAND
       found=1
     fi
-    etime=$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ')
+    etime=$(ps -o etime= -p "$pid" 2>/dev/null)
+    etime="${etime//[[:space:]]/}"
     printf '%-8s %-8s %-10s %s\n' "$pid" "$ppid" "${etime:-?}" "$command"
   done < <(scan)
 
@@ -193,6 +206,17 @@ if [[ "$MODE" == "report" ]]; then
     echo "     npm run cleanup -- --kill <pid> [<pid>...]"
   fi
 else
+  # Fail closed. Everything below trusts ANCESTRY to hold at least PID 1; if
+  # collecting it went wrong, refuse to signal rather than proceed with guards
+  # that cannot fire.
+  case "$ANCESTRY" in
+    *" 1 "*) ;;
+    *)
+      echo "error: could not establish this process's ancestry, refusing to signal" >&2
+      exit 3
+      ;;
+  esac
+
   # Terminate exactly what was named, reporting each PID's own outcome.
   # PIDs and their start-time identities are held in parallel indexed arrays
   # (not an associative array - /bin/bash is 3.2 on macOS) and always walked by
@@ -236,7 +260,7 @@ else
     TARGET_IDS+=("$(identity_of "$pid")")
     TARGETS="$TARGETS $pid"
   done
-  TARGETS="$(echo "$TARGETS" | xargs || true)"
+  TARGETS="${TARGETS# }"
 
   if [[ -z "$TARGETS" ]]; then
     echo "Nothing to terminate."
@@ -284,7 +308,7 @@ else
         echo "  ⏭️  $pid: a different process now holds this PID, not escalated"
       fi
     done
-    ESCALATE="$(echo "$ESCALATE" | xargs || true)"
+    ESCALATE="${ESCALATE# }"
 
     if [[ -n "$ESCALATE" ]]; then
       echo "💥 Still running, sending KILL to: $ESCALATE"
@@ -319,7 +343,10 @@ else
 
     # Killing a coordinator reparents its workers. Report them rather than
     # killing anything that was not named.
-    LEFT=$(scan | wc -l | tr -d ' ')
+    LEFT=0
+    while read -r _line; do
+      [[ -n "$_line" ]] && LEFT=$((LEFT + 1))
+    done < <(scan)
     if [[ "$LEFT" != "0" ]]; then
       echo ""
       echo "ℹ️  $LEFT Vitest process(es) remain (workers reparented by the kill, or"
