@@ -41,6 +41,7 @@ Usage: cleanup-test-processes.sh [--kill PID...]
 Nothing is selected for you: PPID 1 can mean an adopted orphan or a process a
 service manager started deliberately, and process state cannot tell them apart.
 USAGE
+  return 0
 }
 
 KILL_PIDS=""
@@ -69,8 +70,9 @@ fi
 is_pid() {
   case "${1:-}" in
     '' | *[!0-9]*) return 1 ;;
-    *) return 0 ;;
+    *) ;;
   esac
+  return 0
 }
 
 self_ancestry() {
@@ -111,12 +113,13 @@ ANCESTRY=" $(self_ancestry | tr '\n' ' ') "
 # by another user, which is indistinguishable from "gone" and silently drops it
 # from failure reporting. ps sees it regardless of signal permission.
 is_vitest() {
-  local cmd
-  cmd=$(ps -o command= -p "${1:-}" 2>/dev/null) || return 1
+  local pid="${1:-}" cmd
+  cmd=$(ps -o command= -p "$pid" 2>/dev/null) || return 1
   case "$cmd" in
-    *node*vitest*) return 0 ;;
+    *node*vitest*) ;;
     *) return 1 ;;
   esac
+  return 0
 }
 
 scan() {
@@ -132,7 +135,7 @@ scan() {
   ps -eo pid=,ppid=,command= 2>/dev/null \
   | while read -r pid ppid command; do
       case "$command" in *node*vitest*) ;; *) continue ;; esac
-      case "$ANCESTRY" in *" $pid "*) continue ;; esac
+      case "$ANCESTRY" in *" $pid "*) continue ;; *) ;; esac
       is_self_descendant "$pid" && continue
       echo "$pid $ppid $command"
     done
@@ -171,9 +174,11 @@ else
     # `git push` and the caller's own shell job.
     case "$pid" in
       ''|0|*[!0-9]*) echo "  ⏭️  $pid: not a PID, skipped"; continue ;;
+      *) ;;
     esac
     case "$ANCESTRY" in
       *" $pid "*) echo "  ⏭️  $pid: is this script's own ancestor, skipped"; continue ;;
+      *) ;;
     esac
     if is_self_descendant "$pid"; then
       echo "  ⏭️  $pid: is this script's own child, skipped"
