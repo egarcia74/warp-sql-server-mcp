@@ -40,12 +40,17 @@ Usage: cleanup-test-processes.sh [--kill PID...]
 
 Nothing is selected for you: PPID 1 can mean an adopted orphan or a process a
 service manager started deliberately, and process state cannot tell them apart.
+
+Exit status: 0 when a listing completes, or when every named PID is gone.
+             1 when kill mode left a requested process running or unsignallable.
+             2 on a usage error.
 USAGE
   return 0
 }
 
 KILL_PIDS=""
 MODE="report"
+EXIT_STATUS=0
 if [[ "$#" -gt 0 ]]; then
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -168,14 +173,24 @@ if [[ "$MODE" == "report" ]]; then
 else
   # Terminate exactly what was named, reporting each PID's own outcome.
   TARGETS=""
-  for pid in $KILL_PIDS; do
-    # 0 is rejected explicitly, not left to the is_vitest check below: `kill 0`
-    # signals the entire process group, which under the pre-push hook means
-    # `git push` and the caller's own shell job.
-    case "$pid" in
-      ''|0|*[!0-9]*) echo "  ⏭️  $pid: not a PID, skipped"; continue ;;
+  for raw in $KILL_PIDS; do
+    case "$raw" in
+      '' | *[!0-9]*) echo "  ⏭️  $raw: not a PID, skipped"; continue ;;
       *) ;;
     esac
+    # Canonicalise before anything compares it. `ps -p 0001` and `kill 0001`
+    # both address PID 1, but "0001" does not match the " 1 " entry in
+    # ANCESTRY, so a zero-padded argument would walk straight past the PID-1
+    # and ancestry protections. 10# forces base 10, so a leading zero is not
+    # read as octal.
+    pid=$((10#$raw))
+    # 0 is rejected after canonicalisation, which catches "00" and "000" as
+    # well as "0": `kill 0` signals the entire process group, which under the
+    # pre-push hook means `git push` and the caller's own shell job.
+    if [[ "$pid" -eq 0 ]]; then
+      echo "  ⏭️  $raw: not a PID, skipped"
+      continue
+    fi
     case "$ANCESTRY" in
       *" $pid "*) echo "  ⏭️  $pid: is this script's own ancestor, skipped"; continue ;;
       *) ;;
@@ -235,6 +250,9 @@ else
       sleep 1
     fi
 
+    # A surviving target sets a non-zero exit. Automation calling kill mode
+    # could not otherwise distinguish a completed termination from a run that
+    # left every requested process alive.
     for pid in $TARGETS; do
       if is_vitest "$pid"; then
         if kill -0 "$pid" 2>/dev/null; then
@@ -242,6 +260,7 @@ else
         else
           echo "  ⚠️  $pid: still running and cannot be signalled (owned by another user?)"
         fi
+        EXIT_STATUS=1
       else
         echo "  ✅ $pid: terminated"
       fi
@@ -287,4 +306,6 @@ echo "📈 Current System Status:"
   fi
 } || true
 
-exit 0
+# Report mode always succeeds: the pre-push hook calls it, and a push must not
+# fail over a process listing. Kill mode propagates the outcome instead.
+exit "$EXIT_STATUS"

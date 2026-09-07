@@ -40,7 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Vitest process before every signal (narrowing, though not closing, the window in which a recycled PID could be hit),
   only PIDs that `TERM` actually reached can be escalated to `KILL`, liveness is checked with `ps` rather than `kill -0` (which fails with `EPERM` for another user's
   process, indistinguishable from "gone", and was previously reported as success), and the closing status display can no
-  longer abort a push. `npm run cleanup:kill` is removed, since termination now requires arguments
+  longer abort a push. `npm run cleanup:kill` is removed, since termination now requires arguments. Kill mode now
+  exits non-zero when a requested process is still running, so automation can tell a completed
+  termination from a run that changed nothing, and zero-padded PIDs are canonicalised before the
+  ancestry checks (`--kill 0001` previously walked past the PID-1 guard and signalled it). The
+  script is covered by 20 unit tests in `test/unit/cleanup-test-processes.test.js`, which drive it
+  against a stubbed `ps` so the destructive path, the PID guards and the exit status are exercised
+  without depending on what happens to be running
   ([#1156](https://github.com/egarcia74/warp-sql-server-mcp/pull/1156)).
 
 ### Security
