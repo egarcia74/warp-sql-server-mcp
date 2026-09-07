@@ -270,6 +270,21 @@ ps_answers() {
   pid_exists $$
 }
 
+# A zombie has already terminated. It keeps its PID, its start time and its
+# row in the process table, and `kill -0` still succeeds, but it cannot run,
+# consume CPU, or receive a signal -- only its parent reaping it removes the
+# entry. Every liveness signal this script has says "alive", so without this
+# check a target that exited under an unreaping parent is reported still
+# running, and kill mode fails, indefinitely.
+is_zombie() {
+  local st
+  st=$(ps -o state= -p "${1:-}" 2>/dev/null) || return 1
+  case "${st//[[:space:]]/}" in
+    Z*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 still_same_process() {
   local pid="${1:-}" want="${2:-}" now
   now=$(identity_of "$pid")
@@ -492,6 +507,12 @@ else
       # The number surviving is not enough. If our target exited and a new
       # process took its PID during the wait, KILLing it here would force-kill
       # something that never received TERM.
+      if is_zombie "$pid"; then
+        # Already exited; KILL would be a no-op and "Still running" a lie.
+        # The outcome loop below reports it as terminated.
+        i=$((i + 1))
+        continue
+      fi
       now=$(identity_of "$pid")
       if [[ -n "$now" && "$now" == "${TARGET_IDS[$i]}" ]]; then
         ESCALATE_IDX+=("$i")
@@ -532,12 +553,17 @@ else
       pid="${TARGET_PIDS[$i]}"
       now=$(identity_of "$pid")
       if [[ -n "$now" && "$now" == "${TARGET_IDS[$i]}" ]]; then
-        if kill -0 "$pid" 2>/dev/null; then
-          echo "  ⚠️  $pid: still running"
+        if is_zombie "$pid"; then
+          # Terminated, so this must not set the failure status.
+          echo "  ✅ $pid: terminated (exited; its parent has not reaped it yet)"
         else
-          echo "  ⚠️  $pid: still running and cannot be signalled (owned by another user?)"
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "  ⚠️  $pid: still running"
+          else
+            echo "  ⚠️  $pid: still running and cannot be signalled (owned by another user?)"
+          fi
+          EXIT_STATUS=1
         fi
-        EXIT_STATUS=1
       elif [[ -n "$now" ]]; then
         # Readable, and it is a different process: ours is gone.
         echo "  ✅ $pid: terminated"

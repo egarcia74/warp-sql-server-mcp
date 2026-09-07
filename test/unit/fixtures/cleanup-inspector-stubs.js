@@ -19,6 +19,7 @@
 //   PS_LSTART_COUNT=<file>  call counter used by the two above
 //   PS_NO_LSTART          lstart unsupported entirely
 //   PS_RENAME_AFTER=<n>   command= reports a non-Vitest name from call n+1
+//   PS_STATE=<char>       process state reported by state= (Z for a zombie)
 
 export const PS_STUB = `#!/bin/bash
 table="\${PS_TABLE:-/dev/null}"
@@ -28,6 +29,10 @@ known() { awk -v p="$target" '$1==p { f=1 } END { exit !f }' "$table"; }
 case "$args" in
   *-eo*)
     cat "$table" 2>/dev/null
+    ;;
+  *"-o state="*)
+    known || exec /bin/ps "$@"
+    echo "\${PS_STATE:-S}"
     ;;
   *"-o pid="*)
     # PS_NOT_ANSWERING makes every existence probe fail, including the one for

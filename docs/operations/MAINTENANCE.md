@@ -8,7 +8,7 @@ This guide covers essential maintenance tasks for the WARP SQL Server MCP projec
 
 ### Problem: Memory-Heavy Test Processes
 
-During intensive testing sessions (like our comprehensive 1,113-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
+During intensive testing sessions (like our comprehensive 1,115-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources:
 
 - **Symptoms**: High CPU usage (100%+), excessive memory consumption (500MB+ per process), system slowdown
 - **Root Cause**: Test worker processes not terminating cleanly after test completion
@@ -69,10 +69,13 @@ The `cleanup-test-processes.sh` script:
   calls it this way, so pushing cannot kill a process.
 - ✅ **Kills only what you name**: `npm run cleanup -- --kill <pid> [<pid>...]`. There is no
   "kill all orphans" mode, because there is no sound way to identify one — see below.
-- ✅ **Re-verifies before every signal**: each PID is confirmed to still be a Vitest process
-  immediately before `TERM` and again before `KILL`. The check and the signal are separate
-  operations, so this narrows the recycled-PID window rather than closing it; the residual race is
-  microscopic but real.
+- ✅ **Re-verifies before every signal**, but not with the same check each time. Before `TERM` a
+  PID must still be a Vitest process **and** still be the process whose start time was recorded.
+  Before `KILL` only the start time is re-checked, deliberately: a target can rewrite its own
+  command line, so requiring it to still look like Vitest would let a `SIGTERM` handler rename
+  itself out of being force-killed. The check and the signal are separate operations either way, so
+  this narrows the recycled-PID window rather than closing it; the residual race is microscopic but
+  real.
 - ✅ **Checks identity, not just the number**: a PID can be released and reissued during the wait
   between `TERM` and `KILL`, so each target's start time is recorded before signalling and compared
   before signalling, before escalating and before reporting its outcome. On Linux that start time

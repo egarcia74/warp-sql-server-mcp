@@ -76,7 +76,8 @@ const KILL_MOCK = { 'BASH_FUNC_kill%%': '() { echo "MOCK-KILL $*"; return 0; }' 
 const KILL_MOCK_DENIED = { 'BASH_FUNC_kill%%': '() { return 1; }' };
 
 /** Run with signalling mocked out: nothing on the host is ever signalled. */
-const runWithKillMocked = (args, processes) => invoke(args, writeTable(processes), KILL_MOCK);
+const runWithKillMocked = (args, processes, extra = {}) =>
+  invoke(args, writeTable(processes), { ...KILL_MOCK, ...extra });
 
 /** Run with one external tool replaced by a failing stub, to prove the
  *  guards do not silently depend on it. */
@@ -496,6 +497,35 @@ describe('cleanup-test-processes.sh - liveness without signal permission', () =>
     const { status, stdout } = lateIdentityFailure({ PS_NOT_ANSWERING: '1' });
     expect(stdout).toMatch(/liveness could not be established/);
     expect(stdout).not.toMatch(new RegExp(`✅ ${ABSENT_PID}: terminated`));
+    expect(status).toBe(1);
+  });
+});
+
+describe('cleanup-test-processes.sh - when a target becomes a zombie', () => {
+  // Regression: a target that exits under a parent that does not reap it keeps
+  // its PID, its start time and its process-table row, and `kill -0` still
+  // succeeds - verified on a real zombie: state=Z, lstart unchanged,
+  // `ps -o pid=` sees it. Every liveness signal said "alive", so a completed
+  // termination was reported as still running and kill mode failed forever.
+  it('reports a zombie as terminated, not still running', () => {
+    const { status, stdout } = runWithKillMocked(
+      ['--kill', ABSENT_PID],
+      [`${ABSENT_PID} 1 node /repo/.bin/vitest run`],
+      { PS_STATE: 'Z' }
+    );
+    expect(stdout).toMatch(/terminated \(exited; its parent has not reaped it yet\)/);
+    expect(stdout).not.toMatch(/still running/);
+    expect(stdout).not.toMatch(/sending KILL/);
+    expect(status).toBe(0);
+  });
+
+  it('still reports a running target as running', () => {
+    const { status, stdout } = runWithKillMocked(
+      ['--kill', ABSENT_PID],
+      [`${ABSENT_PID} 1 node /repo/.bin/vitest run`],
+      { PS_STATE: 'S' }
+    );
+    expect(stdout).toMatch(/still running/);
     expect(status).toBe(1);
   });
 });
