@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -122,12 +122,13 @@ const KILL_MOCK = { 'BASH_FUNC_kill%%': '() { echo "MOCK-KILL $*"; return 0; }' 
 /** Run with signalling mocked out: nothing on the host is ever signalled. */
 const runWithKillMocked = (args, processes) => invoke(args, writeTable(processes), KILL_MOCK);
 
-/** Run with a `tr` that fails, to prove the guards do not depend on it. */
-const runWithBrokenTr = (args, processes, extraEnv = {}) => {
-  const brokenDir = mkdtempSync(path.join(tmpdir(), 'cleanup-notr-'));
-  const brokenTr = path.join(brokenDir, 'tr');
-  writeFileSync(brokenTr, '#!/bin/bash\nexit 1\n');
-  chmodSync(brokenTr, 0o755);
+/** Run with one external tool replaced by a failing stub, to prove the
+ *  guards do not silently depend on it. */
+const runWithBrokenTool = (tool, args, processes, extraEnv = {}) => {
+  const brokenDir = mkdtempSync(path.join(tmpdir(), `cleanup-no-${tool}-`));
+  const broken = path.join(brokenDir, tool);
+  writeFileSync(broken, '#!/bin/bash\nexit 1\n');
+  chmodSync(broken, 0o755);
   try {
     const result = spawnSync(SCRIPT, args, {
       encoding: 'utf8',
@@ -147,6 +148,26 @@ const runWithBrokenTr = (args, processes, extraEnv = {}) => {
     rmSync(brokenDir, { recursive: true, force: true });
   }
 };
+
+// `identity_of` reads /proc/<pid>/stat when it can, so a fixture PID that
+// happens to exist on a Linux runner resolves through the real procfs and the
+// stubbed `ps` is bypassed entirely -- which would make the identity tests
+// depend on unrelated host process allocation. These tests therefore use a PID
+// verified absent from this host, so /proc cannot answer for it and the stub
+// is the only source.
+const findAbsentPid = () => {
+  for (let pid = 4194303; pid > 4193000; pid -= 1) {
+    if (existsSync(`/proc/${pid}`)) continue;
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      if (err.code === 'ESRCH') return String(pid);
+    }
+  }
+  throw new Error('could not find a PID absent from this host');
+};
+
+const ABSENT_PID = findAbsentPid();
 
 const VITEST = '4242 1 node /repo/node_modules/.bin/vitest run test/unit';
 
@@ -251,20 +272,23 @@ describe('cleanup-test-processes.sh - exit status', () => {
   // another user's process. Kill mode must not report success then.
   it('exits non-zero when a requested target survives', () => {
     const { status, stdout } = runWithKillMocked(
-      ['--kill', '4242'],
-      ['4242 1 node /repo/.bin/vitest run']
+      ['--kill', ABSENT_PID],
+      [`${ABSENT_PID} 1 node /repo/.bin/vitest run`]
     );
-    expect(stdout).toMatch(/4242: still running/);
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: still running`));
     expect(status).toBe(1);
   });
 
   it('escalates TERM to KILL for a target that does not exit', () => {
-    const { stdout } = runWithKillMocked(['--kill', '4242'], ['4242 1 node /repo/.bin/vitest run']);
-    expect(stdout).toMatch(/Sending TERM to: 4242/);
-    expect(stdout).toMatch(/sending KILL to: 4242/);
+    const { stdout } = runWithKillMocked(
+      ['--kill', ABSENT_PID],
+      [`${ABSENT_PID} 1 node /repo/.bin/vitest run`]
+    );
+    expect(stdout).toMatch(new RegExp(`Sending TERM to: ${ABSENT_PID}`));
+    expect(stdout).toMatch(new RegExp(`sending KILL to: ${ABSENT_PID}`));
     // Proof no host process was signalled: every signal went to the mock.
-    expect(stdout).toMatch(/MOCK-KILL 4242/);
-    expect(stdout).toMatch(/MOCK-KILL -9 4242/);
+    expect(stdout).toMatch(new RegExp(`MOCK-KILL ${ABSENT_PID}`));
+    expect(stdout).toMatch(new RegExp(`MOCK-KILL -9 ${ABSENT_PID}`));
   });
 
   it('rejects an all-digit PID that overflows Bash arithmetic', () => {
@@ -285,14 +309,14 @@ describe('cleanup-test-processes.sh - exit status', () => {
     const marker = path.join(stubDir, 'drifted');
     rmSync(marker, { force: true });
     const { stdout } = invoke(
-      ['--kill', '4242'],
-      writeTable(['4242 1 node /repo/.bin/vitest run']),
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
       {
         ...KILL_MOCK,
         PS_LSTART_DRIFT: marker
       }
     );
-    expect(stdout).toMatch(/4242: a different process now holds this PID/);
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: a different process now holds this PID`));
     expect(stdout).not.toMatch(/MOCK-KILL -9/);
   });
 
@@ -316,6 +340,49 @@ describe('cleanup-test-processes.sh - exit status', () => {
   });
 });
 
+describe('cleanup-test-processes.sh - argument handling', () => {
+  // Regression: PID arguments were held in a string and iterated unquoted, so
+  // the shell applied pathname expansion to them. `--kill '*'` run in a
+  // directory holding a file named 4242 turned that filename into an
+  // explicitly named PID -- exactly what this script promises never to do.
+  it('does not expand a glob argument against the working directory', () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'cleanup-glob-'));
+    writeFileSync(path.join(cwd, '4242'), '');
+    const result = spawnSync(SCRIPT, ['--kill', '*'], {
+      cwd,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${stubDir}:${process.env.PATH}`,
+        PS_TABLE: writeTable([VITEST]),
+        ...KILL_MOCK
+      }
+    });
+    rmSync(cwd, { recursive: true, force: true });
+    expect(text(result.stdout)).toMatch(/\*: not a PID, skipped/);
+    expect(text(result.stdout)).not.toMatch(/MOCK-KILL/);
+    expect(text(result.stdout)).not.toMatch(/Sending TERM/);
+  });
+});
+
+describe('cleanup-test-processes.sh - when `sleep` fails', () => {
+  // Regression: the grace period between TERM and KILL is the `sleep`. With
+  // `set -e` off, a failed `sleep` let execution continue straight into
+  // escalation, collapsing TERM-then-KILL into an immediate KILL.
+  it('sends TERM but refuses to escalate to KILL', () => {
+    const { stdout } = runWithBrokenTool(
+      'sleep',
+      ['--kill', ABSENT_PID],
+      [`${ABSENT_PID} 1 node /repo/.bin/vitest run`],
+      KILL_MOCK
+    );
+    expect(stdout).toMatch(new RegExp(`MOCK-KILL ${ABSENT_PID}`));
+    expect(stdout).toMatch(/grace period could not be waited out/);
+    expect(stdout).not.toMatch(/MOCK-KILL -9/);
+    expect(stdout).not.toMatch(/sending KILL/);
+  });
+});
+
 describe('cleanup-test-processes.sh - when `tr` fails', () => {
   // Regression: the ancestry list was assembled with `ps ... | tr`, so the
   // "unconditional" PID-1 guard was conditional on `tr` working. With `tr`
@@ -323,7 +390,8 @@ describe('cleanup-test-processes.sh - when `tr` fails', () => {
   // and in a container whose PID 1 is Vitest the previous revision printed
   // "Sending TERM to: 1" and signalled it.
   it('still protects PID 1 when `tr` fails', () => {
-    const { stdout } = runWithBrokenTr(
+    const { stdout } = runWithBrokenTool(
+      'tr',
       ['--kill', '1'],
       ['1 0 node /app/node_modules/.bin/vitest run'],
       KILL_MOCK
@@ -334,7 +402,7 @@ describe('cleanup-test-processes.sh - when `tr` fails', () => {
   });
 
   it('still reports processes when `tr` fails', () => {
-    const { status, stdout } = runWithBrokenTr([], [VITEST]);
+    const { status, stdout } = runWithBrokenTool('tr', [], [VITEST]);
     expect(status).toBe(0);
     expect(stdout).toMatch(/^4242\s/m);
   });

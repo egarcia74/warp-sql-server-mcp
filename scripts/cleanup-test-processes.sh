@@ -50,7 +50,11 @@ USAGE
   return 0
 }
 
-KILL_PIDS=""
+# PID arguments are kept in an array, never a string. `for raw in $KILL_PIDS`
+# subjected them to pathname expansion, so `--kill '*'` run in a directory
+# containing a file named 4242 turned that filename into an explicitly named
+# PID -- the one thing this script promises never to do.
+KILL_ARGS=()
 MODE="report"
 EXIT_STATUS=0
 # Depth bound for both ancestry walks; see self_ancestry.
@@ -60,11 +64,11 @@ if [[ "$#" -gt 0 ]]; then
     -h|--help) usage; exit 0 ;;
     --kill)
       MODE="kill"; shift
-      KILL_PIDS="$*"
-      if [[ -z "$KILL_PIDS" ]]; then
+      if [[ "$#" -eq 0 ]]; then
         echo "error: --kill needs at least one PID (see --help)" >&2
         exit 2
       fi
+      KILL_ARGS=("$@")
       ;;
     *) echo "error: unknown option '$1' (see --help)" >&2; exit 2 ;;
   esac
@@ -303,7 +307,7 @@ else
   TARGET_PIDS=()
   TARGET_IDS=()
   TARGETS=""
-  for raw in $KILL_PIDS; do
+  for raw in ${KILL_ARGS[@]+"${KILL_ARGS[@]}"}; do
     case "$raw" in
       '' | *[!0-9]*) echo "  ⏭️  $raw: not a PID, skipped"; continue ;;
       *) ;;
@@ -378,12 +382,23 @@ else
       fi
       i=$((i + 1))
     done
-    sleep 2
+    # The wait is the whole grace period. If `sleep` is missing from a
+    # restricted PATH or fails for any other reason, execution would carry on
+    # -- `set -e` is off here -- and TERM-then-KILL would collapse into an
+    # immediate KILL, denying Vitest the teardown the docs promise it.
+    if sleep 2; then
+      GRACE_OK=1
+    else
+      GRACE_OK=0
+      echo "  ⚠️  the grace period could not be waited out (sleep failed);"
+      echo "      nothing will be force-killed. Re-run to escalate."
+    fi
 
     # Only PIDs that were actually sent TERM may be escalated. A process that
     # appeared during the wait has not had a chance to shut down gracefully.
     ESCALATE=""
     for i in ${TERMED_IDX[@]+"${TERMED_IDX[@]}"}; do
+      if [[ "$GRACE_OK" != "1" ]]; then break; fi
       pid="${TARGET_PIDS[$i]}"
       if ! is_vitest "$pid"; then continue; fi
       # The number surviving is not enough. If our target exited and a new
