@@ -195,8 +195,13 @@ npm run cleanup -- --kill <pid> [<pid>...]
 ### System Unresponsive
 
 ```bash
-# Force cleanup of all Node test processes
-sudo pkill -f "vitest"
+# List every Vitest process, then terminate the ones you judged stale
+npm run cleanup
+npm run cleanup -- --kill <pid> [<pid>...]
+
+# Do NOT reach for `sudo pkill -f vitest`. That is failed attempt #1 from the
+# list above: it kills healthy suites in every checkout on the machine - other
+# users' included, under sudo - and cannot tell a stale run from a live one.
 
 # Clean Docker containers if using
 docker system prune -f
@@ -248,10 +253,11 @@ Load Average: 11.43 (trending down)
 
 This maintenance approach aligns with our **no-compromise quality** mission:
 
-1. ✅ **Proactive**: Prevents issues rather than reacting
-2. ✅ **Automated**: Reduces manual overhead
-3. ✅ **Integrated**: Part of existing workflows
-4. ✅ **Measurable**: Clear before/after metrics
-5. ✅ **Reliable**: Tested under extreme load (138% CPU)
+1. ✅ **Visible**: surfaces the problem with the evidence needed to judge it
+2. ✅ **Deliberate**: terminating is an explicit `--kill`, never a side effect of a hook
+3. ✅ **Integrated**: part of existing workflows
+4. ✅ **Measurable**: clear before/after metrics
+5. ✅ **Reliable**: tested under extreme load (138% CPU)
 
-The cleanup infrastructure proved resilient even during our most intensive testing sessions, maintaining quality standards while managing system resources effectively.
+The inspector reports accurately under load; deciding what to terminate stays with the operator,
+because process state cannot make that call correctly.

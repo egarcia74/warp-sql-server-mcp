@@ -21,7 +21,8 @@
 # PPID 1 means "reparented" or "born there" and nothing distinguishes the two.
 # So the heuristic is gone. This reports what exists, with the evidence needed
 # to judge (parent, elapsed time, full command), and kills only what you ask
-# for by PID. Its own process ancestry is always excluded.
+# for by PID. It never reports or signals itself: its ancestors are excluded by
+# PID, its descendants by walking each candidate's parents back to this script.
 
 set -uo pipefail
 
@@ -33,7 +34,9 @@ Usage: cleanup-test-processes.sh [--kill PID...]
                  Exits 0. Safe to call from a hook.
   --kill PID...  Terminate exactly these PIDs (TERM, then KILL if needed).
                  Each is re-verified as a Vitest process immediately before
-                 each signal, so a recycled PID is never signalled.
+                 each signal. The check and the signal are still two separate
+                 operations, so a PID recycled inside that window could be hit;
+                 the window is microscopic, but it is not zero.
 
 Nothing is selected for you: PPID 1 can mean an adopted orphan or a process a
 service manager started deliberately, and process state cannot tell them apart.
@@ -58,16 +61,35 @@ if [ "$#" -gt 0 ]; then
 fi
 
 self_ancestry() {
+  # PID 1 is seeded, not discovered by the walk. Walking to it is not the same
+  # as guaranteeing it: after `docker exec` into a container whose PID 1 *is*
+  # the Vitest process, the exec'd shell's parent lives outside the PID
+  # namespace, `ps -o ppid=` reports 0, and the walk ends without ever seeing 1
+  # -- exactly the case where `--kill 1` would tear down the container. PID 1 is
+  # an ancestor of everything in the namespace and is never a legitimate target
+  # here, so it is excluded unconditionally.
+  echo 1
   local pid=$$
-  # PID 1 is recorded, not merely walked past: in a container whose PID 1 *is*
-  # the Vitest process that launched this inspector, stopping short of it would
-  # offer the caller's own ancestor as a kill candidate, and `--kill 1` would
-  # then pass the ancestry guard.
-  while [ -n "$pid" ] && [ "$pid" -ge 1 ] 2>/dev/null; do
+  while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
     echo "$pid"
-    [ "$pid" -eq 1 ] && break
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
   done
+}
+
+# Ancestors are excluded by PID, but this script also forks subshells -- the
+# `while read` pipeline stage and the `< <(scan)` process substitution -- which
+# are descendants, not ancestors. An invocation path that happens to match
+# `node.*vitest` (a worktree named `node-vitest-fix`, say) would otherwise list
+# them. Walk each candidate's parents back to this script rather than matching
+# this script's own name in the command, which used to hide unrelated Vitest
+# runs that legitimately carried the string.
+is_self_descendant() {
+  local pid="$1"
+  while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+    [ "$pid" -eq "$$" ] && return 0
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+  done
+  return 1
 }
 ANCESTRY=" $(self_ancestry | tr '\n' ' ') "
 
@@ -81,13 +103,10 @@ is_vitest() {
 scan() {
   # pgrep cannot report PPID and command together.
   # shellcheck disable=SC2009
-  # Self-exclusion is by ancestry (below), never by matching this script's own
-  # name in the command: a Vitest process legitimately carrying the string -- a
-  # worktree named after this fix, or a focused test for this script -- would be
-  # silently withheld from the report, and with it the PID needed for --kill.
   ps -eo pid=,ppid=,command= 2>/dev/null | grep -E "node.*vitest" | grep -v grep \
   | while read -r pid ppid command; do
       case "$ANCESTRY" in *" $pid "*) continue ;; esac
+      is_self_descendant "$pid" && continue
       echo "$pid $ppid $command"
     done
 }
@@ -119,12 +138,19 @@ else
   # Terminate exactly what was named, reporting each PID's own outcome.
   TARGETS=""
   for pid in $KILL_PIDS; do
+    # 0 is rejected explicitly, not left to the is_vitest check below: `kill 0`
+    # signals the entire process group, which under the pre-push hook means
+    # `git push` and the caller's own shell job.
     case "$pid" in
-      ''|*[!0-9]*) echo "  ⏭️  $pid: not a PID, skipped"; continue ;;
+      ''|0|*[!0-9]*) echo "  ⏭️  $pid: not a PID, skipped"; continue ;;
     esac
     case "$ANCESTRY" in
       *" $pid "*) echo "  ⏭️  $pid: is this script's own ancestor, skipped"; continue ;;
     esac
+    if is_self_descendant "$pid"; then
+      echo "  ⏭️  $pid: is this script's own child, skipped"
+      continue
+    fi
     if ! is_vitest "$pid"; then
       echo "  ⏭️  $pid: not a running Vitest process, skipped"
       continue
@@ -195,11 +221,19 @@ echo ""
 echo "📈 Current System Status:"
 # Capture before truncating: `head` closes the pipe, `top` dies of SIGPIPE, and
 # `pipefail` reports 141 for a run that in fact succeeded -- which sent both
-# fallbacks down the `||` chain and printed "(top unavailable)" under real output.
+# fallbacks down the `||` chain and printed "(top unavailable)" beneath real
+# output. Truncating a captured string still yields 141 from the same pipefail
+# rule, so the `|| true` below remains load-bearing: do not remove it as dead.
+# Each probe is judged on its exit status as well as its output, so a `top` that
+# writes a usage error to stdout cannot pass for a successful sample.
 {
   if command -v top >/dev/null 2>&1; then
-    snapshot=$(top -l 1 2>/dev/null || true)
-    [ -z "$snapshot" ] && snapshot=$(top -b -n 1 2>/dev/null || true)
+    snapshot=""
+    if probe=$(top -l 1 2>/dev/null) && [ -n "$probe" ]; then
+      snapshot=$probe
+    elif probe=$(top -b -n 1 2>/dev/null) && [ -n "$probe" ]; then
+      snapshot=$probe
+    fi
     if [ -n "$snapshot" ]; then
       printf '%s\n' "$snapshot" | head -5
     else

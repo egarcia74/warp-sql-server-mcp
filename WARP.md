@@ -1301,7 +1301,7 @@ The project includes comprehensive system maintenance tools to manage developmen
 
 During intensive testing sessions (like our 1,074-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
 
-The project includes automated cleanup tools:
+The project includes tools to inspect them:
 
 ```bash
 # List leftover test processes (reports only; terminate by PID with --kill)
@@ -1326,15 +1326,16 @@ npm run cleanup -- --kill <pid> [<pid>...]
   because process state cannot distinguish an adopted orphan from one a service manager started
   deliberately - see the [System Maintenance Guide](docs/operations/MAINTENANCE.md)
 - **Resource Monitoring**: reports current system load after the run
-- **Quality Gate Protection**: Prevents system overload during testing
+- **Quality Gate Protection**: surfaces overload before a test run; acting on it is a deliberate
+  `--kill`
 
 #### **Real-World Validation**
 
-The cleanup infrastructure has been validated under extreme conditions:
+A point-in-time record from one session, kept for the scale of the problem:
 
-- **Tested under 138% CPU load** during comprehensive test execution
-- **Freed 1.8GB RAM** from 3 orphaned Vitest processes
-- **Maintained quality standards** while managing system resources
+- **Observed under 138% CPU load** during comprehensive test execution
+- **1.8GB RAM recovered** by terminating 3 named PIDs - `npm run cleanup` on its own would have
+  listed them and changed nothing
 - **Integrated seamlessly** with existing quality gates
 
 > **📋 Complete Guide**: See [System Maintenance Guide](docs/operations/MAINTENANCE.md) for comprehensive
