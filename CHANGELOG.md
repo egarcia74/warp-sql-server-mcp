@@ -41,7 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gets today's date. The guard takes the previously committed content as an argument rather than
   reading the file, because `writeDocsHtml` writes the unformatted markup before formatting it —
   reading the path would compare against that raw write, differ on whitespace alone, and silently
-  do nothing.
+  do nothing. The pattern is anchored on the full generated footer text rather than a bare
+  `Last updated:`, since tool descriptions on that page come from JSDoc in the registry and can
+  legitimately contain the phrase — an unanchored first match would mask page content instead,
+  leaving the footer date to churn and, worse, letting a same-day edit to the text after the phrase
+  be read as a timestamp-only change and reverted.
 
 - **`scripts/cleanup-test-processes.sh` no longer kills anything it was not told to.** It previously selected every
   `node.*vitest` process and killed it, with no check on parent or ownership — so running it, or the pre-push hook that

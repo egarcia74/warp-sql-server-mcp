@@ -12,7 +12,14 @@ import prettier from 'prettier';
 // `extract-docs.js` already solves this for docs-data/tools.json: if the only
 // change is its `generatedAt`, it keeps the previous value. This is the same
 // guard for the HTML.
-const TIMESTAMP_PATTERN = /(Last updated: )([^<]*)/;
+// Anchored on the full generated footer text, not a bare `Last updated:`. Tool
+// descriptions and examples on this page come from JSDoc in the tool registry,
+// so the bare phrase can legitimately appear in page content ahead of the
+// footer. An unanchored first-match regex would then mask that content instead:
+// the footer date would never be carried over (the churn resumes), and worse, a
+// same-day edit to the text after that phrase could be read as a
+// timestamp-only change and silently reverted to the old text.
+const TIMESTAMP_PATTERN = /(Generated automatically from code • Last updated: )([^<]*)/;
 
 /**
  * Returns `next`, except that a `Last updated:` date is rolled back to the one
@@ -96,16 +103,25 @@ export async function writeDocsHtml(fileName, html, label) {
   }
 
   const outPath = path.join(docsDir, fileName);
-  // Captured before the raw write below overwrites it.
-  const committed = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : null;
+  // Captured before the raw write below overwrites it. Read directly rather
+  // than existsSync-then-read: the latter is a check-then-use pair on a path
+  // that is then written, which CodeQL flags as a file-system race (js/
+  // file-system-race). A missing file is the first-build case, not an error.
+  let committed = null;
+  try {
+    committed = fs.readFileSync(outPath, 'utf8');
+  } catch {
+    // First build, or an unreadable file: there is no committed date to carry.
+  }
   fs.writeFileSync(outPath, html);
 
   try {
     const options = await prettier.resolveConfig(outPath);
-    const formatted = await prettier.format(html, { ...options, filepath: outPath });
+    let formatted = await prettier.format(html, { ...options, filepath: outPath });
     // Compared against the committed content, not the file, which currently
     // holds the raw write above.
-    fs.writeFileSync(outPath, preserveUnchangedTimestamp(committed, formatted));
+    formatted = preserveUnchangedTimestamp(committed, formatted);
+    fs.writeFileSync(outPath, formatted);
     console.log(`✅ ${label} generated and formatted: ${outPath}`);
   } catch (formatError) {
     console.log(`✅ ${label} generated: ${outPath} (formatting skipped: ${formatError.message})`);

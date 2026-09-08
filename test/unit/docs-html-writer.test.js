@@ -12,6 +12,11 @@ describe('preserveUnchangedTimestamp', () => {
   const page = (date, body = '<p>one tool</p>') =>
     `<html><body>${body}<footer><p>Generated automatically from code • Last updated: ${date}</p></footer></body></html>`;
 
+  // A page whose CONTENT contains the bare phrase ahead of the footer. Tool
+  // descriptions come from JSDoc in the registry, so this is reachable.
+  const pageWithPhraseInBody = (bodyDate, footerDate) =>
+    page(footerDate, `<p>Docs Last updated: ${bodyDate} per the registry</p>`);
+
   it('keeps the committed date when only the date changed', () => {
     const result = preserveUnchangedTimestamp(page('9/6/2026'), page('9/8/2026'));
     expect(result).toBe(page('9/6/2026'));
@@ -37,6 +42,28 @@ describe('preserveUnchangedTimestamp', () => {
     expect(preserveUnchangedTimestamp(landing, landing)).toBe(landing);
     const changed = '<html><body><p>Built with care</p></body></html>';
     expect(preserveUnchangedTimestamp(landing, changed)).toBe(changed);
+  });
+
+  it('masks only the generated footer, not the phrase in page content', () => {
+    // Regression: the pattern was an unanchored `/(Last updated: )([^<]*)/`, so
+    // a first match inside tool content masked THAT instead of the footer. Two
+    // consequences: the footer date was never carried over, so the daily churn
+    // continued; and a same-day edit to the text after the phrase could be read
+    // as a timestamp-only change and silently reverted to the previous text.
+    const committed = pageWithPhraseInBody('1/1/2020', '9/6/2026');
+    const next = pageWithPhraseInBody('1/1/2020', '9/8/2026');
+    // Only the footer date differs, so the footer date is carried over and the
+    // body phrase is untouched.
+    expect(preserveUnchangedTimestamp(committed, next)).toBe(committed);
+  });
+
+  it('does not silently revert page content that follows the phrase', () => {
+    // The dangerous direction: content after the phrase changed. That is a real
+    // documentation change and must be kept, not masked away.
+    const committed = pageWithPhraseInBody('1/1/2020', '9/6/2026');
+    const next = pageWithPhraseInBody('2/2/2022', '9/6/2026');
+    expect(preserveUnchangedTimestamp(committed, next)).toBe(next);
+    expect(preserveUnchangedTimestamp(committed, next)).toMatch(/2\/2\/2022/);
   });
 
   it('carries a date containing $ without treating it as a backreference', () => {
