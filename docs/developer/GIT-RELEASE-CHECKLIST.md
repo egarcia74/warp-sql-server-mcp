@@ -75,9 +75,14 @@ Publishing is automatic and should stay that way: merging the version-bump PR pu
 to `main`, which triggers `.github/workflows/npm-publish.yml`. It publishes with
 `--provenance` under an OIDC `id-token`, so the tarball carries a Sigstore attestation.
 
-- Verify it ran: `gh run list --workflow=npm-publish.yml --limit 3`
-- Verify the registry: `npm view @egarcia74/warp-sql-server-mcp version`
-- Verify provenance: `npm audit signatures`
+Order matters here — the merge is the trigger, so it comes first:
+
+1. Merge the `chore/release/vX.Y.Z` PR. This pushes `package.json` to `main` and starts the workflow.
+2. Verify it ran: `gh run list --workflow=npm-publish.yml --limit 3`
+3. Verify the registry: `npm view @egarcia74/warp-sql-server-mcp version` (must report `X.Y.Z`)
+4. Verify provenance: `npm view @egarcia74/warp-sql-server-mcp@X.Y.Z dist.attestations` (must be
+   non-empty). Not `npm audit signatures` — from a checkout that audits the installed dependency
+   tree, not the released package, and so succeeds regardless of what shipped.
 
 **Publishing by hand is a last resort, not an option.** `npm publish --access public` produces a
 release with **no** provenance attestation, which `.github/SECURITY.md` and the CHANGELOG both
@@ -88,7 +93,8 @@ not a silent gap.
 ## 🔍 Post-Release
 
 - [ ] Verify Release page artifacts and notes
-- [ ] Merge `chore/release/vX.Y.Z` PR to sync `package.json` and `package-lock.json`
+- [ ] Confirm the `chore/release/vX.Y.Z` PR merged and the npm publish verified (see "Publish to
+      npm" above — that merge is the publish trigger, not just a `package.json` sync)
 - [ ] Docs: confirm site updated, fix links if needed
 - [ ] Monitor errors/issues after release
 

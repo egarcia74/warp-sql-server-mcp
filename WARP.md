@@ -1464,8 +1464,13 @@ after the merge means the publish fires once, finds no tag, skips, and never fir
 #### 5. Create and Push Git Tag
 
 Tag `main` at the commit being released - **not** the version-bump branch, and before that bump
-lands. `package.json` catches up in step 7. This is exactly what `release.yml` does, whose tag step
-is named "Create Git tag (without committing version bump)".
+lands. `package.json` catches up in step 7. This mirrors `release.yml`, whose tag step is named
+"Create Git tag (without committing version bump)".
+
+`release.yml` tags whatever ref it was dispatched on, not `main` specifically: it is
+`workflow_dispatch`-only with no branch restriction, and none of its checkouts pin a `ref:`. So
+`gh workflow run release.yml --ref some-branch` tags that branch's SHA and bases the version-bump PR
+on it, releasing code that is not on `main`. **Always dispatch it from `main`.**
 
 > **The tag does not determine what gets published.** `npm-publish.yml` checks out with no `ref:`,
 > so it packs `main` as it stands when the step 7 merge fires - not the tagged tree. If another PR
@@ -1553,9 +1558,16 @@ run and the registry:
 
 ```bash
 gh run list --workflow=npm-publish.yml --limit 3
-npm view @egarcia74/warp-sql-server-mcp version   # must report X.Y.Z
-npm audit signatures                              # provenance attestation present
+npm view @egarcia74/warp-sql-server-mcp version              # must report X.Y.Z
+npm view @egarcia74/warp-sql-server-mcp@X.Y.Z dist.attestations
 ```
+
+Do **not** use `npm audit signatures` for this. Run from a checkout it audits the installed
+dependency tree - 506 packages, none of them the one being released - so it reports success no matter
+what the published tarball contains. `dist.attestations` inspects that exact version in the registry
+instead, and must come back non-empty. Nothing published before 1.7.21 carries an attestation
+(`1.7.20`'s `dist` has `signatures` but no `attestations`), so the first release this check can pass
+on is the first one published after provenance was enabled.
 
 ### Alternative: Automated Release Workflow
 
