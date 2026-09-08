@@ -4,6 +4,50 @@ import fs from 'fs';
 import path from 'path';
 import prettier from 'prettier';
 
+// The generated footer carries `Last updated: <date>`, which is date-only, so
+// the file differs from the committed copy on the first build of any new
+// calendar day even when no tool documentation changed. That opened a
+// throwaway `docs: auto-update API documentation` PR per day.
+//
+// `extract-docs.js` already solves this for docs-data/tools.json: if the only
+// change is its `generatedAt`, it keeps the previous value. This is the same
+// guard for the HTML.
+const TIMESTAMP_PATTERN = /(Last updated: )([^<]*)/;
+
+/**
+ * Returns `next`, except that a `Last updated:` date is rolled back to the one
+ * already committed when nothing else on the page changed.
+ *
+ * Compares with the date masked out, so a real content change still adopts
+ * today's date. A page with no such footer (index.html) is returned untouched:
+ * masking is then the identity, and there is no date to carry over.
+ *
+ * Takes the previous content rather than a path, deliberately. `writeDocsHtml`
+ * writes the unformatted markup before it formats, so by the time this runs the
+ * file on disk is that raw write, not the committed copy - comparing against
+ * the path would never match and would silently disable the guard. The
+ * committed content must be captured before any write.
+ *
+ * @param {string|null} previous - Committed content, or null if none exists.
+ * @param {string} next - Newly generated content.
+ * @returns {string} Content to write.
+ */
+export function preserveUnchangedTimestamp(previous, next) {
+  if (previous === null || previous === undefined) {
+    return next;
+  }
+  const mask = text => text.replace(TIMESTAMP_PATTERN, '$1');
+  if (mask(previous) !== mask(next)) {
+    return next;
+  }
+  const carried = TIMESTAMP_PATTERN.exec(previous);
+  if (!carried) {
+    return next;
+  }
+  // Function replacement, so a `$` in the carried value is not a backreference.
+  return next.replace(TIMESTAMP_PATTERN, (_match, label) => `${label}${carried[2]}`);
+}
+
 /**
  * Writes generated HTML into docs/, formatted with Prettier.
  *
@@ -52,12 +96,16 @@ export async function writeDocsHtml(fileName, html, label) {
   }
 
   const outPath = path.join(docsDir, fileName);
+  // Captured before the raw write below overwrites it.
+  const committed = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : null;
   fs.writeFileSync(outPath, html);
 
   try {
     const options = await prettier.resolveConfig(outPath);
     const formatted = await prettier.format(html, { ...options, filepath: outPath });
-    fs.writeFileSync(outPath, formatted);
+    // Compared against the committed content, not the file, which currently
+    // holds the raw write above.
+    fs.writeFileSync(outPath, preserveUnchangedTimestamp(committed, formatted));
     console.log(`✅ ${label} generated and formatted: ${outPath}`);
   } catch (formatError) {
     console.log(`✅ ${label} generated: ${outPath} (formatting skipped: ${formatError.message})`);
