@@ -69,10 +69,21 @@ If checks are stuck on the version-bump PR
 - Branch: `chore/release/vX.Y.Z`
 - Include `package.json` and CHANGELOG updates
 
-## 📦 Publish to npm (optional)
+## 📦 Publish to npm
 
-- Preview: `npm publish --dry-run`
-- Publish: `npm publish --access public` (add `--otp <CODE>` if 2FA)
+Publishing is automatic and should stay that way: merging the version-bump PR pushes `package.json`
+to `main`, which triggers `.github/workflows/npm-publish.yml`. It publishes with
+`--provenance` under an OIDC `id-token`, so the tarball carries a Sigstore attestation.
+
+- Verify it ran: `gh run list --workflow=npm-publish.yml --limit 3`
+- Verify the registry: `npm view @egarcia74/warp-sql-server-mcp version`
+- Verify provenance: `npm audit signatures`
+
+**Publishing by hand is a last resort, not an option.** `npm publish --access public` produces a
+release with **no** provenance attestation, which `.github/SECURITY.md` and the CHANGELOG both
+advertise as present from every published version. If the workflow fails, fix the workflow. If a
+manual publish is genuinely unavoidable, say so in the release notes so the missing attestation is
+not a silent gap.
 
 ## 🔍 Post-Release
 

@@ -1464,9 +1464,15 @@ after the merge means the publish fires once, finds no tag, skips, and never fir
 #### 5. Create and Push Git Tag
 
 Tag `main` at the commit being released - **not** the version-bump branch, and before that bump
-lands. The tag marks the code the release contains; `package.json` catches up in step 7. This is
-exactly what `release.yml` does, whose tag step is named "Create Git tag (without committing version
-bump)".
+lands. `package.json` catches up in step 7. This is exactly what `release.yml` does, whose tag step
+is named "Create Git tag (without committing version bump)".
+
+> **The tag does not determine what gets published.** `npm-publish.yml` checks out with no `ref:`,
+> so it packs `main` as it stands when the step 7 merge fires - not the tagged tree. If another PR
+> lands on `main` between step 5 and step 7, the npm tarball contains code the tag and the GitHub
+> Release do not. Land nothing else on `main` during a release, or treat the tag as marking the
+> intended contents rather than the published ones. This is a property of the automated path too:
+> `release.yml` tags `main` and its version-bump PR merges later, leaving the same window.
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z
@@ -1539,6 +1545,16 @@ Confirm the release was created successfully:
 ```bash
 gh release view vX.Y.Z
 git tag --list | grep vX.Y.Z
+```
+
+The tag and the Release existing does **not** mean the package shipped - step 7 only starts
+`npm-publish.yml`, whose tests, tag gate, authentication or publish step can each fail. Check the
+run and the registry:
+
+```bash
+gh run list --workflow=npm-publish.yml --limit 3
+npm view @egarcia74/warp-sql-server-mcp version   # must report X.Y.Z
+npm audit signatures                              # provenance attestation present
 ```
 
 ### Alternative: Automated Release Workflow
@@ -1619,7 +1635,8 @@ The release process includes several automated quality gates:
 3. **Use conventional commit messages** to help with automated changelog generation
 4. **Version dependencies carefully** - security updates should be released promptly
 5. **Document breaking changes clearly** in both changelog and release notes
-6. **Tag releases immediately** after version commits to maintain consistency
+6. **Tag before the version bump lands** - `npm-publish.yml` publishes only if the tag already
+   exists when `package.json` reaches `main` (steps 5 and 7)
 7. **Verify release artifacts** before announcing to users
 
 ### Troubleshooting
