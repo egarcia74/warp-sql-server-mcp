@@ -30,6 +30,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The API-documentation job no longer opens a pull request just because the date changed.**
+  `scripts/docs/generate-tools-html.js` renders `Last updated: <date>` into the page footer via
+  `toLocaleDateString()`. Being date-only, the generated `docs/tools.html` differed from the
+  committed copy on the first build of any new calendar day even when no tool documentation had
+  changed, so the `docs.yml` job opened a throwaway `docs: auto-update API documentation` PR per
+  day. `scripts/docs/extract-docs.js` already solved this for `docs-data/tools.json` by keeping the
+  previous `generatedAt` when nothing else changed; the same guard now applies to the HTML, so the
+  footer date is carried over unless the page itself changed. A real documentation change still
+  gets today's date. The guard takes the previously committed content as an argument rather than
+  reading the file, because `writeDocsHtml` writes the unformatted markup before formatting it —
+  reading the path would compare against that raw write, differ on whitespace alone, and silently
+  do nothing. The pattern is anchored on the full generated footer text rather than a bare
+  `Last updated:`, since tool descriptions on that page come from JSDoc in the registry and can
+  legitimately contain the phrase — an unanchored first match would mask page content instead,
+  leaving the footer date to churn and, worse, letting a same-day edit to the text after the phrase
+  be read as a timestamp-only change and reverted.
+
 - **`scripts/cleanup-test-processes.sh` no longer kills anything it was not told to.** It previously selected every
   `node.*vitest` process and killed it, with no check on parent or ownership — so running it, or the pre-push hook that
   calls it, could tear down a working suite in any checkout, including the caller's own. It now **lists** processes with
