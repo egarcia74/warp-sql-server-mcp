@@ -1456,31 +1456,28 @@ npm version X.Y.Z --no-git-tag-version
 ```
 
 `--no-git-tag-version` suppresses the commit and tag `npm version` would otherwise create, leaving
-the commit to step 5 and the tag to step 6 - after the bump has landed on `main`.
+the tag to step 5 and the commit to step 7. The tag must exist **before** the version bump lands on
+`main`: `npm-publish.yml` has no `tags:` trigger - it fires on a push to `main` that touches
+`package.json` and then publishes only if a tag matching the new version already exists. Tagging
+after the merge means the publish fires once, finds no tag, skips, and never fires again.
 
-#### 5. Land the Version Changes via Pull Request
+#### 5. Create and Push Git Tag
 
-`main` is protected and requires a reviewed pull request, so the version bump cannot be pushed
-to `main` directly. Put it on a branch and merge it:
+Tag `main` at the commit being released - **not** the version-bump branch, and before that bump
+lands. `package.json` catches up in step 7. This mirrors `release.yml`, whose tag step is named
+"Create Git tag (without committing version bump)".
 
-```bash
-git checkout -b chore/release/vX.Y.Z
-git add CHANGELOG.md package.json package-lock.json
-git commit -m "chore(release): bump version to vX.Y.Z
+`release.yml` tags whatever ref it was dispatched on, not `main` specifically: it is
+`workflow_dispatch`-only with no branch restriction, and none of its checkouts pin a `ref:`. So
+`gh workflow run release.yml --ref some-branch` tags that branch's SHA and bases the version-bump PR
+on it, releasing code that is not on `main`. **Always dispatch it from `main`.**
 
-- Update CHANGELOG.md with vX.Y.Z release notes
-- Update package.json and package-lock.json version to X.Y.Z
-- Include summary of key changes"
-git push -u origin chore/release/vX.Y.Z
-gh pr create --base main --title "chore(release): bump version to vX.Y.Z" --fill
-# Merge once required checks and review pass
-```
-
-**Note**: Pre-commit hooks run automatically and must pass. Both `package.json` and
-`package-lock.json` must be staged; step 4's `npm version` command is what keeps them in step
-([#1112](https://github.com/egarcia74/warp-sql-server-mcp/issues/1112)).
-
-#### 6. Create and Push Git Tag
+> **The tag does not determine what gets published.** `npm-publish.yml` checks out with no `ref:`,
+> so it packs `main` as it stands when the step 7 merge fires - not the tagged tree. If another PR
+> lands on `main` between step 5 and step 7, the npm tarball contains code the tag and the GitHub
+> Release do not. Land nothing else on `main` during a release, or treat the tag as marking the
+> intended contents rather than the published ones. This is a property of the automated path too:
+> `release.yml` tags `main` and its version-bump PR merges later, leaving the same window.
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z
@@ -1500,7 +1497,7 @@ git tag -a vX.Y.Z -m "Release vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-#### 7. Create GitHub Release
+#### 6. Create GitHub Release
 
 ```bash
 gh release create vX.Y.Z --title "Release vX.Y.Z" --notes "## vX.Y.Z - YYYY-MM-DD
@@ -1520,6 +1517,32 @@ gh release create vX.Y.Z --title "Release vX.Y.Z" --notes "## vX.Y.Z - YYYY-MM-D
 **Full Changelog**: https://github.com/egarcia74/warp-sql-server-mcp/compare/vPREV...vX.Y.Z"
 ```
 
+#### 7. Land the Version Changes via Pull Request
+
+`main` is protected and requires a reviewed pull request, so the version bump cannot be pushed
+to `main` directly. Put it on a branch and merge it.
+
+**Merging this PR is what publishes to npm.** The push to `main` touching `package.json` triggers
+`npm-publish.yml`, which finds the tag from step 5 and publishes with provenance. Do not run
+`npm publish` by hand - that bypasses the OIDC Sigstore attestation the release advertises.
+
+```bash
+git checkout -b chore/release/vX.Y.Z
+git add CHANGELOG.md package.json package-lock.json
+git commit -m "chore(release): bump version to vX.Y.Z
+
+- Update CHANGELOG.md with vX.Y.Z release notes
+- Update package.json and package-lock.json version to X.Y.Z
+- Include summary of key changes"
+git push -u origin chore/release/vX.Y.Z
+gh pr create --base main --title "chore(release): bump version to vX.Y.Z" --fill
+# Merge once required checks and review pass
+```
+
+**Note**: Pre-commit hooks run automatically and must pass. Both `package.json` and
+`package-lock.json` must be staged; step 4's `npm version` command is what keeps them in step
+([#1112](https://github.com/egarcia74/warp-sql-server-mcp/issues/1112)).
+
 #### 8. Verify Release
 
 Confirm the release was created successfully:
@@ -1528,6 +1551,23 @@ Confirm the release was created successfully:
 gh release view vX.Y.Z
 git tag --list | grep vX.Y.Z
 ```
+
+The tag and the Release existing does **not** mean the package shipped - step 7 only starts
+`npm-publish.yml`, whose tests, tag gate, authentication or publish step can each fail. Check the
+run and the registry:
+
+```bash
+gh run list --workflow=npm-publish.yml --limit 3
+npm view @egarcia74/warp-sql-server-mcp version              # must report X.Y.Z
+npm view @egarcia74/warp-sql-server-mcp@X.Y.Z dist.attestations
+```
+
+Do **not** use `npm audit signatures` for this. Run from a checkout it audits the installed
+dependency tree - 506 packages, none of them the one being released - so it reports success no matter
+what the published tarball contains. `dist.attestations` inspects that exact version in the registry
+instead, and must come back non-empty. Nothing published before 1.7.21 carries an attestation
+(`1.7.20`'s `dist` has `signatures` but no `attestations`), so the first release this check can pass
+on is the first one published after provenance was enabled.
 
 ### Alternative: Automated Release Workflow
 
@@ -1607,7 +1647,8 @@ The release process includes several automated quality gates:
 3. **Use conventional commit messages** to help with automated changelog generation
 4. **Version dependencies carefully** - security updates should be released promptly
 5. **Document breaking changes clearly** in both changelog and release notes
-6. **Tag releases immediately** after version commits to maintain consistency
+6. **Tag before the version bump lands** - `npm-publish.yml` publishes only if the tag already
+   exists when `package.json` reaches `main` (steps 5 and 7)
 7. **Verify release artifacts** before announcing to users
 
 ### Troubleshooting
