@@ -1456,31 +1456,17 @@ npm version X.Y.Z --no-git-tag-version
 ```
 
 `--no-git-tag-version` suppresses the commit and tag `npm version` would otherwise create, leaving
-the commit to step 5 and the tag to step 6 - after the bump has landed on `main`.
+the tag to step 5 and the commit to step 7. The tag must exist **before** the version bump lands on
+`main`: `npm-publish.yml` has no `tags:` trigger - it fires on a push to `main` that touches
+`package.json` and then publishes only if a tag matching the new version already exists. Tagging
+after the merge means the publish fires once, finds no tag, skips, and never fires again.
 
-#### 5. Land the Version Changes via Pull Request
+#### 5. Create and Push Git Tag
 
-`main` is protected and requires a reviewed pull request, so the version bump cannot be pushed
-to `main` directly. Put it on a branch and merge it:
-
-```bash
-git checkout -b chore/release/vX.Y.Z
-git add CHANGELOG.md package.json package-lock.json
-git commit -m "chore(release): bump version to vX.Y.Z
-
-- Update CHANGELOG.md with vX.Y.Z release notes
-- Update package.json and package-lock.json version to X.Y.Z
-- Include summary of key changes"
-git push -u origin chore/release/vX.Y.Z
-gh pr create --base main --title "chore(release): bump version to vX.Y.Z" --fill
-# Merge once required checks and review pass
-```
-
-**Note**: Pre-commit hooks run automatically and must pass. Both `package.json` and
-`package-lock.json` must be staged; step 4's `npm version` command is what keeps them in step
-([#1112](https://github.com/egarcia74/warp-sql-server-mcp/issues/1112)).
-
-#### 6. Create and Push Git Tag
+Tag `main` at the commit being released - **not** the version-bump branch, and before that bump
+lands. The tag marks the code the release contains; `package.json` catches up in step 7. This is
+exactly what `release.yml` does, whose tag step is named "Create Git tag (without committing version
+bump)".
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z
@@ -1500,7 +1486,7 @@ git tag -a vX.Y.Z -m "Release vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-#### 7. Create GitHub Release
+#### 6. Create GitHub Release
 
 ```bash
 gh release create vX.Y.Z --title "Release vX.Y.Z" --notes "## vX.Y.Z - YYYY-MM-DD
@@ -1519,6 +1505,32 @@ gh release create vX.Y.Z --title "Release vX.Y.Z" --notes "## vX.Y.Z - YYYY-MM-D
 
 **Full Changelog**: https://github.com/egarcia74/warp-sql-server-mcp/compare/vPREV...vX.Y.Z"
 ```
+
+#### 7. Land the Version Changes via Pull Request
+
+`main` is protected and requires a reviewed pull request, so the version bump cannot be pushed
+to `main` directly. Put it on a branch and merge it.
+
+**Merging this PR is what publishes to npm.** The push to `main` touching `package.json` triggers
+`npm-publish.yml`, which finds the tag from step 5 and publishes with provenance. Do not run
+`npm publish` by hand - that bypasses the OIDC Sigstore attestation the release advertises.
+
+```bash
+git checkout -b chore/release/vX.Y.Z
+git add CHANGELOG.md package.json package-lock.json
+git commit -m "chore(release): bump version to vX.Y.Z
+
+- Update CHANGELOG.md with vX.Y.Z release notes
+- Update package.json and package-lock.json version to X.Y.Z
+- Include summary of key changes"
+git push -u origin chore/release/vX.Y.Z
+gh pr create --base main --title "chore(release): bump version to vX.Y.Z" --fill
+# Merge once required checks and review pass
+```
+
+**Note**: Pre-commit hooks run automatically and must pass. Both `package.json` and
+`package-lock.json` must be staged; step 4's `npm version` command is what keeps them in step
+([#1112](https://github.com/egarcia74/warp-sql-server-mcp/issues/1112)).
 
 #### 8. Verify Release
 
