@@ -1,6 +1,12 @@
 # AWS Secrets Manager Configuration Guide
 
 > **Audience**: Operators putting credentials in AWS Secrets Manager
+>
+> **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
+> unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
+> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE` or `AWS_REGION` currently has
+> **no effect** - a deployment with credentials only in AWS Secrets Manager will not connect. Use plain
+> environment variables ([ENV-VARS.md](ENV-VARS.md)) until this is resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
 
 This guide provides comprehensive instructions for configuring AWS Secrets Manager with the Warp SQL Server MCP project.
 
@@ -328,7 +334,7 @@ const user = await secretManager.getSecret('sql-mcp/SQL_SERVER_USER');
 ```bash
 export SECRET_MANAGER_TYPE="aws"
 export AWS_REGION="us-east-1"
-# Individual secrets will be automatically retrieved
+# Individual secrets are intended to be automatically retrieved once #1152 is resolved; today they are not
 ```
 
 ### Strategy 2: Structured JSON Secrets
@@ -672,6 +678,11 @@ node test-aws-secrets.js
 
 ### 3. Test MCP Server Startup
 
+> **⚠️ Unavailable until [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152) is resolved.** Startup never constructs `SecretManager`, so none of
+> the messages below are emitted no matter how AWS Secrets Manager is configured. Their absence is not an
+> AWS problem and is not worth diagnosing as one. The step is kept for when the integration is
+> wired up.
+
 ```bash
 # Enable debug logging to see secret loading
 export LOG_LEVEL="debug"
@@ -809,6 +820,9 @@ npm start
 
 This will show detailed logs including:
 
+> **⚠️** The secret-manager entries below are also unavailable until [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152) is resolved: nothing
+> constructs `SecretManager` at startup, so it never initializes, authenticates or retrieves.
+
 - Secret Manager initialization
 - AWS authentication attempts
 - Secret retrieval operations
@@ -817,7 +831,9 @@ This will show detailed logs including:
 
 ### Health Check Validation
 
-The MCP server includes health checks for AWS Secrets Manager:
+`SecretManager` provides a health check for AWS Secrets Manager. The snippet below constructs
+the class directly, which works today; the running server does not call it, since it never
+constructs `SecretManager` ([#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)).
 
 ```javascript
 // Access health check programmatically
@@ -933,6 +949,7 @@ Resources:
             Resource: !Ref SQLMCPDatabaseSecret
 ```
 
-This completes the comprehensive AWS Secrets Manager configuration guide. The secret manager
-handles both individual secrets and JSON-structured secrets automatically, providing maximum
-flexibility for different deployment scenarios.
+This completes the comprehensive AWS Secrets Manager configuration guide. Once the integration is
+wired into startup ([#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)), the secret manager will handle both individual secrets and
+JSON-structured secrets automatically. **Until then none of the above takes effect at runtime** -
+use plain environment variables ([ENV-VARS.md](ENV-VARS.md)).
