@@ -12,6 +12,14 @@ describe('preserveUnchangedTimestamp', () => {
   const page = (date, body = '<p>one tool</p>') =>
     `<html><body>${body}<footer><p>Generated automatically from code • Last updated: ${date}</p></footer></body></html>`;
 
+  // A description carrying the EXACT footer markup. Descriptions are
+  // interpolated unescaped, so this is possible content, not a hypothetical.
+  const pageWithFooterMarkupInBody = (bodyDate, footerDate) =>
+    page(
+      footerDate,
+      `<p>Generated automatically from code • Last updated: ${bodyDate}</p><p>a tool</p>`
+    );
+
   // A page whose CONTENT contains the bare phrase ahead of the footer. Tool
   // descriptions come from JSDoc in the registry, so this is reachable.
   const pageWithPhraseInBody = (bodyDate, footerDate) =>
@@ -62,6 +70,25 @@ describe('preserveUnchangedTimestamp', () => {
     // documentation change and must be kept, not masked away.
     const committed = pageWithPhraseInBody('1/1/2020', '9/6/2026');
     const next = pageWithPhraseInBody('2/2/2022', '9/6/2026');
+    expect(preserveUnchangedTimestamp(committed, next)).toBe(next);
+    expect(preserveUnchangedTimestamp(committed, next)).toMatch(/2\/2\/2022/);
+  });
+
+  it('is not fooled by a description containing the exact footer markup', () => {
+    // Regression: the pattern was first-match with only a distinctive prefix,
+    // so a description carrying the exact footer markup was selected instead of
+    // the footer. Keying on the LAST occurrence makes that structurally
+    // impossible -- all tool content is emitted before the footer.
+    const committed = pageWithFooterMarkupInBody('1/1/2020', '9/6/2026');
+    const next = pageWithFooterMarkupInBody('1/1/2020', '9/8/2026');
+    expect(preserveUnchangedTimestamp(committed, next)).toBe(committed);
+  });
+
+  it('keeps a body change even when it sits inside footer-shaped markup', () => {
+    // The dangerous direction for that same case: the body's own date changed.
+    // That is real content and must survive.
+    const committed = pageWithFooterMarkupInBody('1/1/2020', '9/6/2026');
+    const next = pageWithFooterMarkupInBody('2/2/2022', '9/6/2026');
     expect(preserveUnchangedTimestamp(committed, next)).toBe(next);
     expect(preserveUnchangedTimestamp(committed, next)).toMatch(/2\/2\/2022/);
   });

@@ -14,8 +14,8 @@ project. It serves as both a testament to what's possible and a warning about th
 > **Every figure in this section and the rest of this document is a September 2025 snapshot**,
 > preserved so the case study's before/after reasoning still reads correctly. None of it is current —
 > the test, coverage, file and link counts have all moved since. For today's numbers see the
-> [Testing Guide](TESTING-GUIDE.md) and [`test/README.md`](../../test/README.md): 1,197 tests
-> (1,130 unit, 27 Vitest integration, 40 live-database) across 55 tracked markdown files.
+> [Testing Guide](TESTING-GUIDE.md) and [`test/README.md`](../../test/README.md): 1,199 tests
+> (1,132 unit, 27 Vitest integration, 40 live-database) across 55 tracked markdown files.
 >
 > Note the snapshot is internally inconsistent — "525 automated tests" and "492/492 tests passing"
 > below cannot both be true. Reproduced as written rather than silently corrected.

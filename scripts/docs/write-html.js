@@ -12,22 +12,52 @@ import prettier from 'prettier';
 // `extract-docs.js` already solves this for docs-data/tools.json: if the only
 // change is its `generatedAt`, it keeps the previous value. This is the same
 // guard for the HTML.
-// Anchored on the full generated footer text, not a bare `Last updated:`. Tool
-// descriptions and examples on this page come from JSDoc in the tool registry,
-// so the bare phrase can legitimately appear in page content ahead of the
-// footer. An unanchored first-match regex would then mask that content instead:
-// the footer date would never be carried over (the churn resumes), and worse, a
-// same-day edit to the text after that phrase could be read as a
-// timestamp-only change and silently reverted to the old text.
-const TIMESTAMP_PATTERN = /(Generated automatically from code • Last updated: )([^<]*)/;
+// The generated footer carries `Last updated: <date>`, which is date-only, so
+// the file differs from the committed copy on the first build of any new
+// calendar day even when no tool documentation changed. That opened a
+// throwaway `docs: auto-update API documentation` PR per day.
+//
+// `extract-docs.js` already solves this for docs-data/tools.json: if the only
+// change is its `generatedAt`, it keeps the previous value. This is the same
+// guard for the HTML.
+//
+// Matched on the footer's own markup and, critically, on the LAST occurrence.
+// Tool descriptions are interpolated into this page unescaped
+// (generate-tools-html.js lines 207/228/259), so a description could in
+// principle contain any markup at all, footer included. Taking the last match
+// makes a collision structurally impossible rather than merely unlikely: all
+// tool content is emitted before the footer, so the final occurrence is always
+// the footer regardless of what any description contains.
+const FOOTER_DATE_PATTERN =
+  /(<p>Generated automatically from code \u2022 Last updated: )([^<]*)(<\/p>)/g;
+
+/**
+ * Splits `text` around the footer date, or returns null if there is no footer.
+ *
+ * @param {string} text - Page markup.
+ * @returns {{before: string, date: string, after: string}|null}
+ */
+function splitAtFooterDate(text) {
+  const matches = [...text.matchAll(FOOTER_DATE_PATTERN)];
+  if (matches.length === 0) {
+    return null;
+  }
+  const footer = matches[matches.length - 1];
+  const start = footer.index + footer[1].length;
+  return {
+    before: text.slice(0, start),
+    date: footer[2],
+    after: text.slice(start + footer[2].length)
+  };
+}
 
 /**
  * Returns `next`, except that a `Last updated:` date is rolled back to the one
  * already committed when nothing else on the page changed.
  *
- * Compares with the date masked out, so a real content change still adopts
- * today's date. A page with no such footer (index.html) is returned untouched:
- * masking is then the identity, and there is no date to carry over.
+ * Everything outside the footer date is compared as an exact string, so a real
+ * content change still adopts today's date and no comparison can absorb one. A
+ * page with no such footer (index.html) is returned untouched.
  *
  * Takes the previous content rather than a path, deliberately. `writeDocsHtml`
  * writes the unformatted markup before it formats, so by the time this runs the
@@ -43,16 +73,18 @@ export function preserveUnchangedTimestamp(previous, next) {
   if (previous === null || previous === undefined) {
     return next;
   }
-  const mask = text => text.replace(TIMESTAMP_PATTERN, '$1');
-  if (mask(previous) !== mask(next)) {
+  const before = splitAtFooterDate(previous);
+  const after = splitAtFooterDate(next);
+  if (before === null || after === null) {
     return next;
   }
-  const carried = TIMESTAMP_PATTERN.exec(previous);
-  if (!carried) {
+  // Everything outside the footer date is compared as an exact string, so no
+  // masked region can absorb a real content change. If anything else differs
+  // at all, the new page is returned untouched, date included.
+  if (before.before !== after.before || before.after !== after.after) {
     return next;
   }
-  // Function replacement, so a `$` in the carried value is not a backreference.
-  return next.replace(TIMESTAMP_PATTERN, (_match, label) => `${label}${carried[2]}`);
+  return after.before + before.date + after.after;
 }
 
 /**
