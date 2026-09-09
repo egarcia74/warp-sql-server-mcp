@@ -138,7 +138,7 @@
   },
   "overrides": {
     "flatted": "3.4.2",
-    "smol-toml": "1.6.1"
+    "smol-toml": "1.8.0"
   },
   "engines": {
     "node": ">=20.19.0"
