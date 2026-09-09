@@ -89,8 +89,12 @@ It prints only the boolean `secrets.RELEASE_TOKEN != ''`, never the secret.
 - ✅ **Fine-grained access** limited to specific operations
 - ✅ **Repository-scoped** token (not account-wide)
 - ✅ **Token rotation and revocation** under your control
-- ✅ **Audit separation**: release commits and tags are attributable to the token, not to
-  the ambient workflow identity
+- ✅ **Audit separation** for the operations it authenticates: the tag **push** and the
+  GitHub **Release** are performed as the PAT's owner rather than the ambient workflow
+  identity. Note the limits - `RELEASE_TOKEN` creates no commit, and the git author on both
+  the tag and the version-bump commit is hard-coded to `GitHub Action`
+  (`user.name`/`user.email` are set in the workflow), so commit metadata is identical
+  either way. The version-bump commit is a separate job authenticated by `RELEASE_PR_TOKEN`
 - ⚠️ **Job permissions unchanged**: the job still declares `contents: write`
 
 ### Without RELEASE_TOKEN (Fallback)

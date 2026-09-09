@@ -171,9 +171,15 @@ module-level singleton and reloaded at startup.
 
 **Responsibilities**:
 
-- Parses every **supported** environment variable and checks it against a min/max band; an
-  out-of-range value is rejected in favor of the default rather than clamped to the nearest
-  bound (`_safeParseInt`, `_safeParseFloat`)
+- Parses every **supported** environment variable, but range-checks only the **numeric**
+  ones: the 14 `_safeParseInt` / `_safeParseFloat` calls take a min/max band and reject an
+  out-of-range value in favor of the default rather than clamping it to the nearest bound.
+  Booleans (`SQL_SERVER_READ_ONLY`, `ENABLE_PERFORMANCE_MONITORING`, `ENABLE_STREAMING`,
+  `TRACK_POOL_METRICS`, `ENABLE_SECURITY_AUDIT`, the two `SQL_SERVER_ALLOW_*` flags) are
+  bare `=== 'true'` / `!== 'false'` comparisons and strings (`SQL_SERVER_LOG_LEVEL`, host,
+  database, credentials) are taken as given - a malformed value in either group silently
+  takes the default with **no warning**. The boolean defaults fail safe (read-only on,
+  destructive and schema changes off), which is what makes the silence tolerable
 - Groups configuration into connection, security, performance, streaming and logging
   sections. The connection, security and logging sections are consumed by the components
   above; the streaming section is **not** - see the notice below

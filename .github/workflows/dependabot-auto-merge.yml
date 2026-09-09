@@ -159,6 +159,20 @@ jobs:
           pr_number=$PR_NUMBER
           gh pr merge "$pr_number" --auto --squash --delete-branch
 
+      # A "false" verdict has to *revoke* auto-merge, not just decline to grant it.
+      # `gh pr merge --auto` is sticky: once queued, GitHub merges the PR as soon as the
+      # required checks pass. So a PR queued by an earlier run - before these hold rules
+      # existed, by the re-triage workflow, or by hand - stays queued while the
+      # notify-manual-review job tells reviewers auto-merge is disabled. Idempotent: it is
+      # a no-op when auto-merge was never enabled.
+      - name: Disable auto-merge when held for manual review
+        if: steps.analyze.outputs.auto_merge == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr merge "$PR_NUMBER" --disable-auto || echo "Note: auto-merge was not enabled"
+
       - name: Add security notice for critical updates
         if: steps.analyze.outputs.auto_merge == 'true' && (contains(github.event.pull_request.title, 'security') || contains(github.event.pull_request.title, 'vulnerability'))
         env:
