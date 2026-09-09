@@ -222,13 +222,16 @@ certificate.
 
 This works today. It is documented step by step in
 [QUICKSTART-VSCODE.md](QUICKSTART-VSCODE.md) - follow that guide rather than duplicating
-the settings here. In short, enable MCP support under `copilot.chat.experimental.mcp` and
-add the server to `settings.json`:
+the steps here. In short, MCP servers are registered in an `mcp.json` file: run
+**MCP: Add Server** from the Command Palette, or write the file yourself - `.vscode/mcp.json`
+for one project, or the user-level file opened by **MCP: Open User Configuration** for all
+of them:
 
 ```json
 {
-  "github.copilot.chat.experimental.mcp.servers": {
+  "servers": {
     "sql-server": {
+      "type": "stdio",
       "command": "warp-sql-server-mcp",
       "args": ["start"]
     }
@@ -236,11 +239,11 @@ add the server to `settings.json`:
 }
 ```
 
-Requires a GitHub Copilot subscription. Note the settings key is
-`github.copilot.chat.experimental.mcp.servers` - it is an experimental Copilot setting, so
-confirm the current key against
-[QUICKSTART-VSCODE.md](QUICKSTART-VSCODE.md) before filing a bug if the server does not
-appear.
+Requires a GitHub Copilot subscription. Two things to note: this is **not** a `settings.json`
+key - earlier Copilot builds used an experimental
+`github.copilot.chat.experimental.mcp.servers` setting, which is no longer registered, so a
+block copied from an older guide silently does nothing. And the tools surface only in chat's
+**Agent** mode, unchecked by default: tick `sql-server` in the tools picker before asking.
 
 ### Option 3: Development Mode Setup
 

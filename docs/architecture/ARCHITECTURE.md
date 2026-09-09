@@ -146,8 +146,9 @@ module-level singleton and reloaded at startup.
 
 **Responsibilities**:
 
-- Parses and range-clamps every **supported** environment variable
-  (`_safeParseInt`, `_safeParseFloat`)
+- Parses every **supported** environment variable and checks it against a min/max band; an
+  out-of-range value is rejected in favor of the default rather than clamped to the nearest
+  bound (`_safeParseInt`, `_safeParseFloat`)
 - Groups configuration into connection, security, performance, streaming and logging
   sections consumed by the components above
 - Derives the context-aware `SQL_SERVER_TRUST_CERT` default and records why it chose what
@@ -252,7 +253,7 @@ are the intended control - see [SECURITY.md](SECURITY.md).
 ### 3. **Business Logic Execution**
 
 - Tool-specific processing in the handler
-- Error handling and normalisation into `McpError`
+- Error handling and normalization into `McpError`
 - Result formatting (text table or CSV)
 
 Tools issue statements **or multi-statement T-SQL batches** against the pool -
@@ -278,7 +279,7 @@ explicit transaction-management layer.
 
 ### As Implemented
 
-There is no error class hierarchy. Every failure that leaves a tool is normalised into the
+There is no error class hierarchy. Every failure that leaves a tool is normalized into the
 MCP SDK's `McpError` with an `ErrorCode`, so the client sees a protocol-level error and
 never a raw `mssql` or Node error object. Connection failures are retried with backoff in
 `ConnectionManager.connect()`; a safety-policy rejection is raised immediately by
@@ -299,21 +300,30 @@ never a raw `mssql` or Node error object. Connection failures are retried with b
 
 ### As Implemented
 
-Configuration comes from the process environment, loaded via `dotenv` and parsed by
-`ServerConfig` at startup (`ServerConfig.reload()`). Each value is range-clamped to a safe
-band rather than schema-validated, and there is no file-based or runtime configuration
-layer: changing a variable requires restarting the server.
+`ServerConfig` reads configuration from the process environment at startup
+(`ServerConfig.reload()`), with `dotenv` loading `.env` first. Values are checked against a
+min/max band rather than a schema, and an out-of-range value is rejected in favor of the
+default rather than clamped. There is no runtime layer - changing a variable requires
+restarting the server - but the CLI does put a file layer in front of the environment:
+`warp-sql-server-mcp start` calls `loadConfigToEnv()` in `cli.js`, which reads
+`~/.warp-sql-server-mcp.json` and copies each key into `process.env`, skipping any variable
+that is already set. So a file-based layer exists for the recommended global-install path,
+the ambient environment wins over the file, and `ServerConfig` itself still only ever sees
+environment variables.
 
 ```text
-Environment variables (.env or process env) → ServerConfig.reload() → component configs
+CLI:    ~/.warp-sql-server-mcp.json → loadConfigToEnv() ┐
+                                                        ├→ process.env → ServerConfig.reload() → component configs
+Direct: .env / ambient environment → dotenv ────────────┘
 ```
 
 ### Aspirational Patterns
 
-> **Not implemented.** Schema validation, a file configuration layer and hot reload do not
-> exist today.
+> **Not implemented.** Schema validation and hot reload do not exist today. A file
+> configuration layer does exist, but only as the CLI's file-to-environment adapter
+> described above - not as something `ServerConfig` reads.
 
-1. **Schema Validation**: All configuration validated against schema - _aspirational_ (values are range-clamped)
+1. **Schema Validation**: All configuration validated against schema - _aspirational_ (values get min/max band checks with fallback to defaults)
 2. **Environment Parity**: Same configuration structure across environments - _implemented_
 3. **Secure Defaults**: Safe operational defaults - _implemented_ (read-only by default)
 4. **Hot Reload**: Runtime configuration updates where safe - _aspirational_
@@ -436,7 +446,7 @@ Development → Testing → Staging → Production
 
 1. **Plugin Architecture**: Modular tool additions
 2. **Event System**: Extensible event handling
-3. **Configuration Providers**: Multiple configuration sources - the unwired `SecretManager` is the closest thing
+3. **Configuration Providers**: Multiple configuration sources - the not-yet-wired-up `SecretManager` is the closest thing
 4. **Monitoring Backends**: Pluggable monitoring systems
 5. **Authentication Providers**: Multiple auth mechanisms - SQL and Windows auth are supported today
 

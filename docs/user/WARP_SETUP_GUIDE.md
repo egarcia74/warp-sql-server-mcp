@@ -137,10 +137,18 @@ Here's a typical performance monitoring workflow in Warp:
 ### Performance Monitoring Settings
 
 - `ENABLE_PERFORMANCE_MONITORING`: Enable/disable monitoring (default: true)
-- `SLOW_QUERY_THRESHOLD`: Milliseconds to consider a query "slow" (default: 5000, clamped to 100-60000)
-- `MAX_METRICS_HISTORY`: Maximum number of metrics to keep in memory (default: 1000, clamped to 100-10000)
+- `SLOW_QUERY_THRESHOLD`: Milliseconds to consider a query "slow" (default: 5000; valid range
+  100-60000)
+- `MAX_METRICS_HISTORY`: Maximum number of metrics to keep in memory (default: 1000; valid
+  range 100-10000)
 - `PERFORMANCE_SAMPLING_RATE`: Fraction of queries to monitor (0.0-1.0, default: 1.0)
 - `TRACK_POOL_METRICS`: Enable connection pool monitoring (default: true)
+
+> **A value outside the valid range falls back to the default, it is not clamped to the
+> nearest bound.** `_safeParseInt` warns and returns the default, so
+> `MAX_METRICS_HISTORY=50` yields `1000` rather than `100`, and `SLOW_QUERY_THRESHOLD=50`
+> yields `5000` rather than `100` - more history retained and a much less sensitive
+> slow-query threshold than the value implies.
 
 ### Example Configurations
 

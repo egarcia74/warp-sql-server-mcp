@@ -13,8 +13,11 @@ npm run docker:test
 # Phase 1 only, against a freshly rebuilt container
 npm run docker:test:clean
 
-# Every phase against a freshly rebuilt container (full clean validation)
+# Phases 1-3 plus the protocol test, against a freshly rebuilt container
 npm run docker:test -- all --clean
+
+# The whole integration suite, including the performance tests
+npm run docker:clean && npm run test:integration
 ```
 
 > **⚠️ Both npm shortcuts run Phase 1 only.** `docker:test` and `docker:test:clean` invoke
@@ -23,7 +26,16 @@ npm run docker:test -- all --clean
 > `No phase specified, defaulting to phase1`). Phase 1 is the read-only security suite, so
 > neither shortcut exercises DML (Phase 2) or DDL (Phase 3). Pass `all` explicitly - via
 > `npm run docker:test -- all --clean` or `./scripts/docker-test-runner.sh all --clean` -
-> whenever you mean "full validation".
+> to get all three phases.
+>
+> **⚠️ `all` is not the full integration suite.** The runner's `all` branch runs Phase 1,
+> Phase 2, Phase 3 and the protocol startup test, and stops there. It does **not** run
+> `test:integration:performance` (`test/manual/improved-performance-test.js`), which
+> `npm run test:integration` includes via `test:integration:run` - and `test:integration`
+> is what the `npm test` chain in `hooks/pre-commit` runs, so `all` is a narrower check
+> than the commit gate. Use `npm run test:integration` (or
+> `npm run docker:clean && npm run test:integration` for a clean slate) when you want
+> everything; reach for `all` when you want the three security phases quickly.
 
 ## 📋 Available Commands
 
@@ -44,7 +56,7 @@ npm run docker:test -- all --clean
 | `npm run docker:test`                | Docker test runner - **Phase 1 only**       |
 | `npm run docker:test:clean`          | Docker test, clean slate - **Phase 1 only** |
 | `npm run docker:test -- all`         | All phases, reusing the existing container  |
-| `npm run docker:test -- all --clean` | All phases, clean slate (full validation)   |
+| `npm run docker:test -- all --clean` | Phases 1-3 + protocol, clean slate          |
 | `npm run docker:start`               | Start SQL Server container                  |
 | `npm run docker:stop`                | Stop SQL Server container                   |
 | `npm run docker:clean`               | Clean containers and volumes                |

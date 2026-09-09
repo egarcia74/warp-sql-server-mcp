@@ -51,7 +51,11 @@ jobs:
           if echo "$PR_TITLE" | grep -qiE 'bump .+ from [0-9]'; then
             dep_name=$(echo "$PR_TITLE" | sed -E 's/.*bump ([^ ]+) from .*/\1/i')
             from_ver=$(echo "$PR_TITLE" | sed -nE 's/.* from ([0-9][^ ]*) to .*/\1/ip' | head -n1)
-            to_ver=$(echo "$PR_TITLE" | sed -nE 's/.* to ([0-9][^ ]*)\s*$/\1/ip' | head -n1)
+            # Anchored to the from-version rather than end-of-line: Dependabot appends
+            # " in the <group> group across 1 directory" to grouped single-dependency
+            # titles, and an end-of-line anchor left to_ver empty for all of them, so the
+            # bump type came out "unknown" and classification fell through to keywords.
+            to_ver=$(echo "$PR_TITLE" | sed -nE 's/.* from [0-9][^ ]* to ([0-9][^ ]*).*/\1/ip' | head -n1)
           fi
 
           bump_type="unknown"
@@ -91,6 +95,19 @@ jobs:
             echo "🔒 Core database/authentication dependency - manual review required"
             auto_merge=false
             reason="a core database or authentication dependency, held at every bump level"
+
+          # Block auto-merge for grouped updates whose title names no dependency.
+          # "bump the <group> group with N updates" carries neither a package name nor a
+          # version pair, so every title-based rule above misses it and it used to reach
+          # the generic "security" keyword branch below - which matched the literal group
+          # names "security-actions" and "security-critical" and enabled auto-merge on
+          # exactly the CodeQL/step-security actions and mssql/tedious/Azure/AWS packages
+          # this workflow claims to hold. #1071 and #1136 ("bump the security-actions group
+          # with 4 updates") both merged that way. An unclassifiable update gets a human.
+          elif [ "$bump_type" = "unknown" ] && echo "$PR_TITLE" | grep -qiE 'the [^ ]+ group'; then
+            echo "📦 Grouped update with no per-dependency version - manual review required"
+            auto_merge=false
+            reason="a grouped update whose title names no dependency or version, so its contents cannot be classified from the title"
 
           # Block auto-merge for major updates
           elif [ "$bump_type" = "major" ]; then
