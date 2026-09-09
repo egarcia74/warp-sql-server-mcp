@@ -141,9 +141,17 @@ Here's a typical performance monitoring workflow in Warp:
   100-60000)
 - `MAX_METRICS_HISTORY`: Maximum number of metrics to keep in memory (default: 1000; valid
   range 100-10000)
-- `PERFORMANCE_SAMPLING_RATE`: Fraction of queries to monitor (0.0-1.0, default: 1.0)
+- `PERFORMANCE_SAMPLING_RATE`: Fraction of queries to monitor (0.0-1.0, default: 1.0) -
+  **currently has no effect, see below**
 - `TRACK_POOL_METRICS`: Enable connection pool monitoring (default: true)
 
+> **⚠️ `PERFORMANCE_SAMPLING_RATE` is not yet wired up.** Every production call site
+> records through `PerformanceMonitor.recordQuery()`, which checks only whether monitoring
+> is enabled; the sampling check lives in `startQuery()`, which no production path calls.
+> Lowering the rate does not reduce per-query work or the number of retained samples - use
+> `MAX_METRICS_HISTORY` to bound memory, or `ENABLE_PERFORMANCE_MONITORING=false` to turn
+> recording off entirely.
+>
 > **A value outside the valid range falls back to the default, it is not clamped to the
 > nearest bound.** `_safeParseInt` warns and returns the default, so
 > `MAX_METRICS_HISTORY=50` yields `1000` rather than `100`, and `SLOW_QUERY_THRESHOLD=50`
@@ -155,6 +163,9 @@ Here's a typical performance monitoring workflow in Warp:
 These go inside the `env` object of the Warp MCP server entry shown above.
 
 #### Production (Conservative)
+
+The `PERFORMANCE_SAMPLING_RATE` of `0.1` below is aspirational - it is kept so the example
+still reads as intended once sampling is wired up, but today it records every query.
 
 ```json
 {
@@ -201,8 +212,9 @@ If you see "Performance monitoring is disabled", check:
 If tools return empty results:
 
 - Run some queries first to generate performance data
-- Check that `PERFORMANCE_SAMPLING_RATE` is > 0
 - Verify `MAX_METRICS_HISTORY` is sufficient
+- `PERFORMANCE_SAMPLING_RATE` is **not** a possible cause - it is not consulted on any
+  production path, so even `0.0` records every query
 
 ### Connection Issues
 

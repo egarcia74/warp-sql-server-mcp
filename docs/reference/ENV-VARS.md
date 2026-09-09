@@ -275,7 +275,21 @@ accidental certificate trust in cloud production environments using private IP a
   - `0.5` (monitor 50% of queries)
   - `1.0` (monitor all queries)
 
+> **⚠️ Not yet wired up.** Every production call site records through
+> `PerformanceMonitor.recordQuery()`, which never consults `shouldSample()`; the sampling
+> check lives in `startQuery()`, which only the unit tests call. Setting this below `1.0`
+> has no effect - every query is still recorded.
+
 ## Streaming Configuration
+
+> **⚠️ Not yet wired up.** All four settings below are parsed, range-checked and reported
+> by `get_server_info`, but nothing acts on them: `DatabaseToolsHandler` constructs its
+> `StreamingHandler` with hard-coded literals at
+> `lib/tools/handlers/database-tools.js:21` and never receives `serverConfig.streaming`.
+> Setting them changes what the server _reports_, not what it _does_. The literals in
+> force are `enableStreaming: true`, batch size `1000`, `maxMemoryMB: 50` and
+> `maxResponseSize: 1000000` (1 MB) - note the last two differ from the defaults
+> documented here.
 
 ### `ENABLE_STREAMING`
 

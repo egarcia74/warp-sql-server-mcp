@@ -75,8 +75,8 @@ This tool provides:
 
 > **⚠️ File logging is opt-in - by default there are no log files to read.** `index.js`
 > passes a file path to `Logger` **only** when the corresponding environment variable is
-> set, so without them the server logs to the console (stderr) and your MCP client's own
-> log capture is the only record. The log viewer commands below have nothing to show until
+> set, so without them the console transport is the only record and your MCP client's log
+> capture is where it ends up. The log viewer commands below have nothing to show until
 > you set at least one of:
 >
 > ```bash
@@ -92,6 +92,19 @@ This tool provides:
 > the viewer work out of the box. Run `get_server_info` to confirm: the
 > `configuration.logging.logFile` field reads `Not configured (console only)` until a path
 > is set.
+>
+> **⚠️ Console-only logging writes to stdout for most clients, which is the same stream as
+> JSON-RPC.** `Logger` sets Winston's `stderrLevels` only when
+> `Logger._isMcpEnvironment()` returns true, and that helper tests just three variables -
+> `VSCODE_MCP=true`, `VSCODE_PID`, `VSCODE_IPC_HOOK`. It does **not** apply the broader
+> detection `index.js:43-48` uses (`MCP_TRANSPORT=stdio`, or a non-TTY stdio pair), so
+> under Warp or any other stdio client that sets none of the VS Code variables the
+> transport falls through to `console._stdout.write` for every level
+> (`winston/lib/winston/transports/console.js:85-87` - an unset `stderrLevels` maps no
+> level to stderr). The security-audit console transport never sets `stderrLevels` at all,
+> so with `ENABLE_SECURITY_AUDIT=true` and no `SECURITY_LOG_FILE` its lines go to stdout
+> even under VS Code. **Set `LOG_FILE` (and `SECURITY_LOG_FILE`) when debugging a stdio
+> client** rather than relying on the console stream.
 
 ### Smart Log Viewer (Recommended)
 

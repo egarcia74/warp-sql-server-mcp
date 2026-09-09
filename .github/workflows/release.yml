@@ -132,13 +132,25 @@ jobs:
     permissions:
       # CodeQL Token-Permissions: Write permissions required for release operations
       # This job needs contents:write for both RELEASE_TOKEN and GITHUB_TOKEN fallback scenarios:
-      # - git push tags (line 231): requires repository write access
-      # - actions/create-release (line 237): requires contents write to create GitHub releases
+      # - the "Create Git tag" step's git push: requires repository write access
+      # - the "Create GitHub Release" step (actions/create-release): requires contents write
       # Without write permissions, repositories lacking RELEASE_TOKEN configuration would fail
       # during tag creation and release publishing, breaking automated release workflows.
       # This is an intentional security trade-off for release pipeline functionality.
       contents: write  # Required for fallback GITHUB_TOKEN to push tags and create releases
     steps:
+      # Tag creation and release creation both use
+      # `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`, which resolves a missing,
+      # expired or misnamed secret to the empty string and falls through to GITHUB_TOKEN
+      # with no diagnostic. Because either credential can create the tag, a successful
+      # release is not evidence the PAT was used - so report the selection up front.
+      # Prints only the boolean, never the secret.
+      - name: Report release credential
+        env:
+          HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
+        run: |
+          echo "🔑 RELEASE_TOKEN configured: $HAS_RELEASE_TOKEN"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

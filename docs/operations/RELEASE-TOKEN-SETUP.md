@@ -48,10 +48,23 @@ The release workflow is designed to work in both scenarios:
 
 ### Step 3: Verify Setup
 
-The workflow will automatically use `RELEASE_TOKEN` if available, falling back to `GITHUB_TOKEN` if not. You can verify by checking the workflow logs for:
+The workflow uses `RELEASE_TOKEN` if available and falls back to `GITHUB_TOKEN` if not. The
+selection is a bare expression - `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}` at
+the `Create Git tag` and `Create GitHub Release` steps of
+`.github/workflows/release.yml` - so a missing, expired or misnamed secret
+resolves to the empty string and falls through **silently**.
 
-- "Using RELEASE_TOKEN for authenticated operations" (when token is set)
-- Standard behavior (when falling back to GITHUB_TOKEN)
+Because both credentials can create the tag, a successful release proves only that _one_ of
+them worked; it is not evidence the PAT was picked up. Use the dedicated report step
+instead: the `release` job runs
+
+```text
+🔑 RELEASE_TOKEN configured: true
+```
+
+before it does anything else. It prints only the boolean `secrets.RELEASE_TOKEN != ''`,
+never the secret. `false` there means every subsequent step is running on `GITHUB_TOKEN`,
+whatever the outcome of the release.
 
 ## Security Benefits
 
@@ -107,12 +120,11 @@ the token. `release.yml` carries an inline comment recording this as a deliberat
 trade-off: without the write permission, any repository lacking a `RELEASE_TOKEN` would
 fail at tag creation.
 
-To confirm the token itself is being picked up: `release.yml` logs nothing about which
-credential it resolved, so there is no log line to grep for. The expression
-`${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}` is evaluated at
-`.github/workflows/release.yml:254` and `:268`; a missing secret resolves to the empty
-string and silently falls through to `GITHUB_TOKEN`. Confirm by whether the tag-creation
-step succeeds, not by reading the log.
+To confirm the token itself is being picked up, read the `Report release credential` step's
+`RELEASE_TOKEN configured:` line (see Step 3). Do **not** infer it from the tag-creation
+step succeeding: `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}` means either
+credential can create the tag, so success is compatible with the PAT never having been
+read.
 
 ### Token Access Issues
 

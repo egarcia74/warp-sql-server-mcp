@@ -11,10 +11,18 @@ architecture demonstrates advanced software engineering principles through pract
 > **How to read this document.** "System Architecture" and "Core Components" describe the
 > code as it exists - every component named there maps to a file in this repository. From
 > "Error Handling Architecture" onward the document **mixes implemented behavior with
-> design aspiration**, and every numbered item in that half carries its own `_implemented_`
-> or `_aspirational_` marker. Read the markers, not the section titles. The patterns marked
+> design aspiration**. Read the markers, not the section titles. The patterns marked
 > aspirational (circuit breakers, distributed tracing, blue-green deployment, hot reload,
 > schema-validated configuration) are **not implemented**.
+>
+> **Markers do not cover the whole second half.** Five numbered lists carry per-item
+> `_implemented_` / `_aspirational_` markers: "Aspirational Patterns" under Error Handling
+> and under Configuration, "Observability Patterns", "Horizontal Scaling Patterns" and
+> "Deployment Patterns". Five do **not**: "Testing Patterns", "Security Patterns",
+> "Performance Optimization", "Extension Points" and "Design for Change". Those five mix
+> real behavior with design goals - intelligent caching and versioned APIs among them -
+> so treat an unmarked item as unverified and check it against the code before relying on
+> it.
 
 ## Architectural Philosophy
 
@@ -150,10 +158,22 @@ module-level singleton and reloaded at startup.
   out-of-range value is rejected in favor of the default rather than clamped to the nearest
   bound (`_safeParseInt`, `_safeParseFloat`)
 - Groups configuration into connection, security, performance, streaming and logging
-  sections consumed by the components above
+  sections. The connection, security and logging sections are consumed by the components
+  above; the streaming section is **not** - see the notice below
 - Derives the context-aware `SQL_SERVER_TRUST_CERT` default and records why it chose what
   it chose
 - Renders the startup configuration summary, with the password masked
+
+> **⚠️ The streaming section is reported but never applied.** `DatabaseToolsHandler`
+> constructs its `StreamingHandler` with literals (`enableStreaming: true`, batch size
+> `1000`, `maxMemoryMB: 50`, `maxResponseSize: 1000000`) at
+> `lib/tools/handlers/database-tools.js:21` and never receives `serverConfig.streaming`,
+> whose only readers are `get_server_info` (`index.js:770-775`) and the startup summary
+> (`server-config.js:676-681`). So
+> `ENABLE_STREAMING=false`, `STREAMING_BATCH_SIZE`, `STREAMING_MAX_MEMORY_MB` and
+> `STREAMING_MAX_RESPONSE_SIZE` are parsed, range-checked and displayed back to you while
+> having no effect on any export - and two of the reported defaults (`100` MB memory,
+> 10 MB response) do not even match the literals the handler runs with.
 
 ### 4. Tool Handlers (Business Logic Layer)
 
@@ -184,10 +204,17 @@ enter its history.
 **Files**: `lib/utils/performance-monitor.js`, `lib/utils/logger.js`
 
 **`PerformanceMonitor`** records per-query timings and pool statistics, bounded by
-`MAX_METRICS_HISTORY` (default `1000`) and sampled at `PERFORMANCE_SAMPLING_RATE`. It
-classifies a query as slow past `SLOW_QUERY_THRESHOLD` (default `5000` ms) and backs
-`get_performance_stats` and `get_query_performance`. It is an in-memory ring of samples -
-there is no alert manager and no external metrics backend.
+`MAX_METRICS_HISTORY` (default `1000`). It classifies a query as slow past
+`SLOW_QUERY_THRESHOLD` (default `5000` ms) and backs `get_performance_stats` and
+`get_query_performance`. It is an in-memory ring of samples - there is no alert manager and
+no external metrics backend.
+
+> **⚠️ `PERFORMANCE_SAMPLING_RATE` has no effect.** Every production call site records
+> through `recordQuery()`, which checks `config.enabled` and nothing else. `shouldSample()`
+> is consulted only by `startQuery()`, and `startQuery()` is called exclusively from
+> `test/unit/performance-monitor.test.js` - no production path invokes it. Setting the rate
+> below `1.0` therefore reduces neither the work done per query nor the number of retained
+> observations; every query is recorded.
 
 **`Logger`** wraps Winston to provide levelled structured logging plus a separate security
 audit channel. File transports are **opt-in**: `index.js` passes a path only when
