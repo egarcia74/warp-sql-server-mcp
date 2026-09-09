@@ -125,11 +125,23 @@ PR without anyone revisiting it.
 > - `classify_pr` plus its rule chain in `.github/workflows/dependabot-retriage.yml`
 >   (manual `workflow_dispatch`, used to re-classify a backlog)
 >
-> They agree as of this commit. They have not always: until the re-triage copy was
-> corrected it lacked the core-dependency and grouped-title rules and queued
-> `gh pr merge --auto` on exactly the packages the other one holds, while stripping the
-> `manual-review-required` label. Extracting both to a shared script is tracked separately;
-> until then, **a change to either rule set has to be made in both files**.
+> **Their hold rules agree; their eligibility rules do not.** All four blocking branches -
+> security-critical action, core dependency, grouped title, major bump - are present in
+> both, so nothing this document lists as held can be auto-merged by either workflow. The
+> branches that mark a PR _eligible_ still differ: `dependabot-auto-merge.yml` has three
+> fallbacks that re-triage has no equivalent for - `ossf/scorecard-action` inside its
+> security-keyword branch, a build/utility action list (`actions/checkout`,
+> `actions/setup-node`, `actions/upload-artifact`, `actions/cache`, cspell-action,
+> markdown-link-check), and a bare `\bpatch\b`/`\bminor\b` keyword fallback. A
+> non-grouped `ossf/scorecard-action` title with no parseable version pair is therefore
+> marked auto-mergeable by the event workflow and left untouched by re-triage.
+>
+> That divergence is safe in direction - re-triage is the more conservative of the two -
+> but it is still divergence, and it is how the dangerous drift started: until the
+> re-triage copy was corrected it lacked the core-dependency and grouped-title rules and
+> queued `gh pr merge --auto` on exactly the packages the other one holds, while stripping
+> the `manual-review-required` label. Extracting both to a shared script is tracked
+> separately; until then, **a change to either rule set has to be made in both files**.
 
 ## 📊 Security Alert Triage
 

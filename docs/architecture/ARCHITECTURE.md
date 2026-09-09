@@ -166,10 +166,14 @@ demand from the live pool, and failure handling is bounded retry plus a surfaced
 
 **File**: `lib/config/server-config.js`
 
-**Purpose**: Derives all configuration from the process environment, exported as a
-module-level singleton and reloaded at startup. It is the single _class_ through which
-configuration is read, but not a single _instance_ - `ConnectionManager` builds its own,
-as the Core Components note above records.
+**Purpose**: Derives the grouped configuration objects the components consume, exported as
+a module-level singleton and reloaded at startup.
+
+It is **not** the only reader of the environment, and not a single instance either.
+`ConnectionManager` builds its own `ServerConfig` (see the Core Components note above) and
+additionally reads `process.env` directly in `_buildConnectionConfig()`; `Logger` reads its
+own environment defaults too. Changing `ServerConfig` therefore does not cover every
+configuration path - grep for `process.env` before assuming it does.
 
 **Responsibilities**:
 
@@ -181,11 +185,11 @@ as the Core Components note above records.
   bare `=== 'true'` / `!== 'false'` comparisons, so a malformed boolean silently takes the
   default with **no warning** - though those defaults fail safe (read-only on, destructive
   and schema changes off), which is what makes the silence tolerable. Strings
-  (`SQL_SERVER_LOG_LEVEL`, host, database, credentials) do **not** fall back at all: they
-  are passed through without validation. `SQL_SERVER_LOG_LEVEL || 'info'` substitutes only when the
-  value is _empty_, not when it is misspelled, and host, database and credentials go
-  straight to the driver - so a typo in a hostname is attempted and fails at connect time
-  rather than quietly becoming `localhost`
+  (`SQL_SERVER_LOG_LEVEL`, host, database, credentials) get an `||` default when the value
+  is **empty or unset** - `localhost`, `master`, `info` - but are otherwise passed through
+  without validation. The distinction matters: unset `SQL_SERVER_HOST` quietly becomes
+  `localhost`, while a _misspelled_ host is attempted as given and fails at connect time.
+  No malformed string is ever corrected or warned about
 - Groups configuration into connection, security, performance, streaming and logging
   sections. The connection, security and logging sections are consumed by the components
   above; the streaming section is **not** - see the notice below
@@ -251,10 +255,14 @@ no external metrics backend.
 > **⚠️ Pool metrics and connection events are never recorded.** `recordPoolMetrics()` and
 > `recordConnectionEvent()` are implemented (`performance-monitor.js:241`, `:269`) but
 > called only from `test/unit/performance-monitor.test.js` - no production path invokes
-> either. The pool block that `get_performance_stats` and part of `get_connection_health`
-> return therefore stays at its initialized zero counters; live pool state comes from
-> `ConnectionManager.getPoolStats()` instead, which reads the driver directly and does not
-> pass through the monitor. `TRACK_POOL_METRICS` gates nothing as a result.
+> either. The `PerformanceMonitor.getPoolStats()` block that `get_performance_stats` and
+> `get_connection_health` return therefore stays at its initialized zero counters. Live
+> pool state reaches `get_connection_health` by a different route -
+> `ConnectionManager.getConnectionHealth()` reads `size`, `available`, `pending` and
+> `borrowed` straight off the driver pool and never passes through the monitor. So
+> `TRACK_POOL_METRICS` does not gate recording (nothing records); what it gates is whether
+> the monitor's block is returned at all, since `getPoolStats()` short-circuits to
+> `{ enabled: false }` when it is off.
 
 **`Logger`** wraps Winston to provide levelled structured logging plus a separate security
 audit channel. File transports are **opt-in**: `index.js` passes a path only when
@@ -352,12 +360,14 @@ never a raw `mssql` or Node error object. Connection failures are retried with b
 `ConnectionManager.connect()`; a safety-policy rejection is raised immediately by
 `validateQuery` / `validateWhereClause`.
 
-> **⚠️ Rejections are audit-logged only when `ENABLE_SECURITY_AUDIT=true`, which is not the
-> default.** With it off, `Logger` never constructs a `securityLogger`, and `Logger.security()`
-> returns early after emitting a generic `"Security logging is disabled"` warning to the main
-> log - so the blocked query, the reason, the tool and the severity are never written
-> anywhere. A reviewer looking for a record of blocked attempts on a default install will
-> not find one.
+> **⚠️ Rejections get a _detailed_ audit entry only when `ENABLE_SECURITY_AUDIT=true`, which
+> is not the default.** With it off, `Logger` never constructs a `securityLogger`, so
+> `Logger.security()` returns early - but not silently: it first calls
+> `this.warn('Security logging is disabled', { event, message })`, which puts
+> `event: "QUERY_BLOCKED"` and the policy message into the main log. So a coarse record of
+> _that_ a query was blocked survives on a default install; the blocked SQL, the specific
+> reason, the tool and the severity do not. Do not plan an audit trail around the default
+> configuration.
 
 ### Aspirational Patterns
 
