@@ -166,8 +166,10 @@ demand from the live pool, and failure handling is bounded retry plus a surfaced
 
 **File**: `lib/config/server-config.js`
 
-**Purpose**: Single source of truth for environment-derived configuration, exported as a
-module-level singleton and reloaded at startup.
+**Purpose**: Derives all configuration from the process environment, exported as a
+module-level singleton and reloaded at startup. It is the single _class_ through which
+configuration is read, but not a single _instance_ - `ConnectionManager` builds its own,
+as the Core Components note above records.
 
 **Responsibilities**:
 

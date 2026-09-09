@@ -99,9 +99,12 @@ Auto-merge is **disabled** for, in the order the workflow evaluates them:
 - 📦 **Grouped updates** whose title names no dependency or version pair
 - 🚨 **Major version updates** on any dependency
 
-Each of these sets `auto_merge=false`, labels the PR `manual-review-required` and posts the
-manual-review comment. The order matters: the core-dependency rule is checked before the
-patch/minor rule, so a patch bump of one of those packages is held.
+Each of these sets `auto_merge=false`, labels the PR `manual-review-required`, posts the
+manual-review comment, and runs `gh pr merge --disable-auto` to **revoke** any auto-merge
+already queued - declining to grant it is not enough, because `--auto` is sticky and a PR
+queued by an earlier run or by the re-triage workflow would otherwise merge on the next
+green check. The order matters: the core-dependency rule is checked before the patch/minor
+rule, so a patch bump of one of those packages is held.
 
 ### Failed checks are not a manual-review trigger
 
@@ -113,10 +116,20 @@ a later run goes green. No `manual-review-required` label and no comment are pro
 a red check as blocking the queued merge, not as disabling auto-merge - a rerun merges the
 PR without anyone revisiting it.
 
-> **The `notify-manual-review` job no longer carries its own pattern to keep in sync.** It
-> reads `auto_merge` and `reason` from the classifier through `needs`, so there is exactly
-> one place where the rules above live: the `analyze` step in
-> `.github/workflows/dependabot-auto-merge.yml`.
+> **There are two copies of these rules, and they must be kept in sync by hand.**
+> `notify-manual-review` is not one of them - it reads `auto_merge` and `reason` from the
+> classifier through `needs`, so it cannot drift. The two that can are:
+>
+> - the `analyze` step in `.github/workflows/dependabot-auto-merge.yml` (runs on every
+>   Dependabot PR event)
+> - `classify_pr` plus its rule chain in `.github/workflows/dependabot-retriage.yml`
+>   (manual `workflow_dispatch`, used to re-classify a backlog)
+>
+> They agree as of this commit. They have not always: until the re-triage copy was
+> corrected it lacked the core-dependency and grouped-title rules and queued
+> `gh pr merge --auto` on exactly the packages the other one holds, while stripping the
+> `manual-review-required` label. Extracting both to a shared script is tracked separately;
+> until then, **a change to either rule set has to be made in both files**.
 
 ## 📊 Security Alert Triage
 
