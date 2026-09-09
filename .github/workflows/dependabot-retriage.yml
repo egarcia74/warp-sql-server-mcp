@@ -65,13 +65,41 @@ jobs:
             if [ "$state" = "absent" ]; then return 0; fi
             if [ -z "$state" ]; then
               echo "::warning::Could not read auto-merge state for #$n"
-              revoke_failures=$((revoke_failures+1)); return 0
+              revoke_failures=$((revoke_failures+1)); return 1
             fi
             if ! gh pr merge "$n" --disable-auto; then
               echo "::error::Failed to revoke auto-merge on #$n - it is still queued"
-              revoke_failures=$((revoke_failures+1)); return 0
+              revoke_failures=$((revoke_failures+1)); return 1
             fi
             echo "      auto-merge revoked on #$n"
+          }
+
+          # One place for "hold this PR": label it, revoke any queued auto-merge, then
+          # comment. The comment depends on whether the revocation worked - posting the
+          # routine "held for manual review" notice after a failed revocation tells the
+          # reader the opposite of the truth, and the workflow_dispatch run's own failure
+          # is not a status check on that PR, so nothing else would correct it.
+          hold_pr() {
+            local n="$1" reason="$2" revoked=0
+            if [ "$DRY_RUN" = "false" ]; then
+              gh pr edit "$n" --add-label "manual-review-required" || true
+              gh pr edit "$n" --remove-label "auto-merge-eligible" || true
+              revoke_auto_merge "$n" || revoked=1
+            fi
+            [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] || return 0
+            if [ "$revoked" -eq 1 ]; then
+              gh pr comment "$n" --body "**Automated triage: held for manual review - and auto-merge may still be active**
+
+          This PR is ${reason}
+
+          Revoking its queued auto-merge FAILED, so the hold may not have taken effect. This
+          workflow is a manual dispatch, not a status check on this PR, so its failure does
+          not block the merge: if auto-merge is still queued GitHub will merge as soon as the
+          required checks pass. Check the merge box or run
+          gh pr merge $n --disable-auto, then review as normal." || true
+            else
+              gh pr comment "$n" --body "Automated triage: ${reason}" || true
+            fi
           }
 
           classify_pr() {
@@ -114,12 +142,7 @@ jobs:
             # Security-critical action patterns
             if echo "$title" | grep -qi "github/codeql-action\|step-security"; then
               echo " - Security-critical action: manual review required"
-              if [ "$DRY_RUN" = "false" ]; then
-                gh pr edit "$number" --add-label "manual-review-required" || true
-                gh pr edit "$number" --remove-label "auto-merge-eligible" || true
-                revoke_auto_merge "$number"
-              fi
-              [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: security-critical action detected (CodeQL/StepSecurity). Marking as manual review required." || true
+              hold_pr "$number" "a security-critical action (CodeQL/StepSecurity), held for manual review."
               continue
             fi
 
@@ -128,12 +151,7 @@ jobs:
             # it this workflow queues `--auto` on exactly the packages that one holds.
             if echo "$title" | grep -qiE 'bump (@?[^ ]*(mssql|tedious)|@azure/[^ ]+|aws-sdk|@aws-sdk/[^ ]+) '; then
               echo " - Core database/authentication dependency: manual review required"
-              if [ "$DRY_RUN" = "false" ]; then
-                gh pr edit "$number" --add-label "manual-review-required" || true
-                gh pr edit "$number" --remove-label "auto-merge-eligible" || true
-                revoke_auto_merge "$number"
-              fi
-              [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: core database or authentication dependency. Held for manual review at every bump level." || true
+              hold_pr "$number" "a core database or authentication dependency, held for manual review at every bump level."
               continue
             fi
 
@@ -143,24 +161,14 @@ jobs:
             # queued for auto-merge. Mirrors dependabot-auto-merge.yml.
             if [ "$bump_type" = "unknown" ] && echo "$title" | grep -qiE 'the [^ ]+ group'; then
               echo " - Grouped update with no per-dependency version: manual review required"
-              if [ "$DRY_RUN" = "false" ]; then
-                gh pr edit "$number" --add-label "manual-review-required" || true
-                gh pr edit "$number" --remove-label "auto-merge-eligible" || true
-                revoke_auto_merge "$number"
-              fi
-              [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: grouped update whose title names no dependency or version, so its contents cannot be classified from the title. Held for manual review." || true
+              hold_pr "$number" "a grouped update whose title names no dependency or version, so its contents cannot be classified from the title. Held for manual review."
               continue
             fi
 
             # Block auto-merge for any major bump regardless of keywords
             if [ "$bump_type" = "major" ]; then
               echo " - Major bump: manual review required (takes precedence over security keywords)"
-              if [ "$DRY_RUN" = "false" ]; then
-                gh pr edit "$number" --add-label "manual-review-required" || true
-                gh pr edit "$number" --remove-label "auto-merge-eligible" || true
-                revoke_auto_merge "$number"
-              fi
-              [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] && gh pr comment "$number" --body "Automated triage: major version bump detected via title parsing. Manual review required even if security-related." || true
+              hold_pr "$number" "a major version bump detected via title parsing, held for manual review even if security-related."
               continue
             fi
 
