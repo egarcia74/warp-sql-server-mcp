@@ -140,10 +140,12 @@ jobs:
       contents: write  # Required for fallback GITHUB_TOKEN to push tags and create releases
     steps:
       # Tag creation and release creation both use
-      # `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`, which resolves a missing,
-      # expired or misnamed secret to the empty string and falls through to GITHUB_TOKEN
-      # with no diagnostic. Because either credential can create the tag, a successful
-      # release is not evidence the PAT was used - so report the selection up front.
+      # `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`. `||` falls through only on
+      # an empty string - an unset or differently-named secret - and does so with no
+      # diagnostic. Because either credential can create the tag, a successful release is
+      # not evidence the PAT was used, so report the selection up front. This is presence,
+      # NOT validity: an expired or wrongly scoped PAT is still a non-empty string, so it
+      # is selected, reported true, and the release fails rather than falling back.
       # Prints only the boolean, never the secret.
       - name: Report release credential
         env:

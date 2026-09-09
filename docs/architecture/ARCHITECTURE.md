@@ -75,7 +75,7 @@ The system is built on several key architectural principles:
 │                          Data Layer                             │
 │  ┌─────────────────┐  ┌─────────────────┐                       │
 │  │   SQL Server    │  │   File System   │                       │
-│  │  (mssql pool)   │  │  (logs, CSV)    │                       │
+│  │  (mssql pool)   │  │   (logs only)   │                       │
 │  └─────────────────┘  └─────────────────┘                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -85,7 +85,12 @@ The system is built on several key architectural principles:
 > Every component below maps to a file in this repository. The list is exhaustive for the
 > startup path: `index.js` constructs exactly `Logger`, `ConnectionManager`,
 > `PerformanceMonitor`, `DatabaseToolsHandler`, `QueryOptimizer` and `BottleneckDetector`,
-> against the module-level `serverConfig` singleton. One implemented module -
+> from the module-level `serverConfig` singleton. **`ConnectionManager` is the exception:**
+> `index.js:105` passes it `serverConfig.getConnectionConfig()`, a plain object of four
+> timeout/retry values with no `serverConfig` property, and its constructor falls back to
+> `config.serverConfig || new ServerConfig()` - so a **second** `ServerConfig` instance
+> exists at runtime and a `serverConfig.reload()` on the singleton does not reach it.
+> One implemented module -
 > `SecretManager` (`lib/config/secret-manager.js`) - is **not** constructed anywhere and
 > takes no part in request handling; see
 > [ENV-VARS.md](../reference/ENV-VARS.md) for what that means for its environment
@@ -103,8 +108,13 @@ each call to a handler.
 
 - Registers the tool catalogue from `lib/tools/tool-registry.js`
 - Dispatches `CallToolRequest` to the matching handler method
-- Applies the safety policy before any SQL reaches the database
-  (`validateQuery`, `validateWhereClause`)
+- Applies the safety policy to **caller-supplied** SQL: `validateQuery` on `execute_query`
+  and `explain_query`, `validateWhereClause` on the `where` argument of `get_table_data`
+  and `export_table_csv`. Server-assembled SQL does **not** pass through them -
+  `list_databases`, `list_tables`, `describe_table` and `list_foreign_keys` build fixed
+  statements and call `executeQuery` directly, relying on the identifier and literal
+  escapers (`escapeBracketIdentifier`, `escapeSqlStringLiteral`) for the values they
+  interpolate. Two different controls, not one boundary
 - Converts failures into `McpError` so no raw driver error escapes
 - Exposes runtime diagnostics through `get_server_info`
 
@@ -138,8 +148,15 @@ server.
 - Builds the driver config from `ServerConfig.getConnectionConfig()`, including the
   context-aware SSL decision (`_buildConnectionConfig`, `_isLikelyDevEnvironment`)
 - Connects with retry (`connect`) and hands the pool to callers (`getPool`)
-- Reports pool and TLS state for `get_connection_health`
-  (`getConnectionHealth`, `_extractSSLInfo`)
+- Reports pool state for `get_connection_health` (`getConnectionHealth`), plus a TLS
+  block that describes **configured intent, not the negotiated connection**:
+  `_extractSSLInfo()` rebuilds its fields from `_buildConnectionConfig()` and hard-codes
+  `connection_status: "Encrypted connection established"` and `protocol: "TLS/SSL"`
+  without inspecting the socket or certificate - its own `note` says certificate details
+  are not available through the `mssql` abstraction. The block is also usually absent:
+  `getConnectionHealth` adds it only when `SQL_SERVER_ENCRYPT === "true"`, while
+  `_buildConnectionConfig` enables encryption on `!== "false"`, so the **default**
+  configuration is encrypted and reports no TLS information at all
 - Closes the pool on shutdown (`close`)
 
 There is no separate health-monitor object and no circuit breaker: health is computed on
@@ -172,8 +189,11 @@ module-level singleton and reloaded at startup.
 > (`server-config.js:676-681`). So
 > `ENABLE_STREAMING=false`, `STREAMING_BATCH_SIZE`, `STREAMING_MAX_MEMORY_MB` and
 > `STREAMING_MAX_RESPONSE_SIZE` are parsed, range-checked and displayed back to you while
-> having no effect on any export - and two of the reported defaults (`100` MB memory,
-> 10 MB response) do not even match the literals the handler runs with.
+> having no effect on any export. Nor are the handler's own literals a safety net:
+> `maxMemoryMB` and `maxResponseSize` are stored at construction and never read again, and
+> the streaming path accumulates every chunk before `reconstructFromChunks` joins them into
+> one string - so **no memory or response-size limit is enforced at all**. Only
+> `enableStreaming` and `batchSize` are actually consulted.
 
 ### 4. Tool Handlers (Business Logic Layer)
 

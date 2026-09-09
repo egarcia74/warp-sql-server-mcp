@@ -102,9 +102,17 @@ This tool provides:
 > transport falls through to `console._stdout.write` for every level
 > (`winston/lib/winston/transports/console.js:85-87` - an unset `stderrLevels` maps no
 > level to stderr). The security-audit console transport never sets `stderrLevels` at all,
-> so with `ENABLE_SECURITY_AUDIT=true` and no `SECURITY_LOG_FILE` its lines go to stdout
-> even under VS Code. **Set `LOG_FILE` (and `SECURITY_LOG_FILE`) when debugging a stdio
-> client** rather than relying on the console stream.
+> so with `ENABLE_SECURITY_AUDIT=true` its lines go to stdout even under VS Code.
+>
+> **Setting `LOG_FILE` does not fix this.** `createLogger()` pushes the console transport
+> whenever `NODE_ENV !== "test"` and only _then_ adds the file transport if a path is set;
+> `createSecurityLogger()` does the same. A log file therefore **duplicates** output to
+> disk - it does not redirect it away from stdout. What does work today is
+> **`VSCODE_MCP=true`**: it forces `_isMcpEnvironment()` true regardless of client, and the
+> main console transport then sends every level to stderr. There is no equivalent for the
+> audit channel, so under a stdio client leave `ENABLE_SECURITY_AUDIT` at its default
+> (`false`) until that transport is fixed. Set `LOG_FILE` for a readable record, not as a
+> containment measure.
 
 ### Smart Log Viewer (Recommended)
 

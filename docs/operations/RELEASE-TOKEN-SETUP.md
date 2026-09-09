@@ -51,20 +51,27 @@ The release workflow is designed to work in both scenarios:
 The workflow uses `RELEASE_TOKEN` if available and falls back to `GITHUB_TOKEN` if not. The
 selection is a bare expression - `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}` at
 the `Create Git tag` and `Create GitHub Release` steps of
-`.github/workflows/release.yml` - so a missing, expired or misnamed secret
-resolves to the empty string and falls through **silently**.
+`.github/workflows/release.yml`.
 
 Because both credentials can create the tag, a successful release proves only that _one_ of
-them worked; it is not evidence the PAT was picked up. Use the dedicated report step
-instead: the `release` job runs
+them worked; it is not evidence the PAT was picked up. The `release` job's first step
+reports which way the expression will resolve:
 
 ```text
 🔑 RELEASE_TOKEN configured: true
 ```
 
-before it does anything else. It prints only the boolean `secrets.RELEASE_TOKEN != ''`,
-never the secret. `false` there means every subsequent step is running on `GITHUB_TOKEN`,
-whatever the outcome of the release.
+It prints only the boolean `secrets.RELEASE_TOKEN != ''`, never the secret.
+
+> **This is a presence check, not a validity check.** `||` falls through only on an **empty
+> string** - a secret that was never set, or set under a different name. A secret holding an
+> **expired, revoked, or wrongly scoped PAT is still a non-empty string**, so the
+> expression selects it, `configured: true` is reported, no fallback to `GITHUB_TOKEN`
+> happens, and the release fails at tag creation. Read the two signals together:
+> `configured: false` means you are definitely on `GITHUB_TOKEN`; `configured: true` plus
+> an auth failure at `Create Git tag` means the PAT is present but unusable - check its
+> expiry and its `Contents: Write` permission rather than assuming the fallback covered
+> you.
 
 ## Security Benefits
 

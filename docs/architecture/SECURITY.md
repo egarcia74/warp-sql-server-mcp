@@ -436,17 +436,43 @@ Every query response includes current security status:
 The MCP server includes comprehensive security tests:
 
 ```bash
-# Run all security-related unit tests
-npm run test:unit -- -t "safety|security|validation"
+# Run the security suites - name the files, do not filter by test name
+npx vitest run \
+  test/unit/query-policy.test.js \
+  test/unit/sql-batch-guard.test.js \
+  test/unit/where-clause-guard.test.js \
+  test/unit/sql-construction-guard.test.js \
+  test/unit/sql-injection-battery.test.js \
+  test/unit/mcp-security.test.js \
+  test/unit/query-optimizer-security.test.js
 
-# Test a specific behavior
-npm run test:unit -- -t "validateQuery"
+# Or just run everything - the unit suite takes about 16 seconds
+npm run test:unit
 ```
 
-> Vitest filters by test name with `-t` / `--testNamePattern` (the value is a regular
-> expression), not `--grep`. Use `npm run test:unit`, not `npm test`: `npm test` is a shell
-> chain ending in the summary script, so extra arguments are appended to the wrong command
-> and never reach Vitest.
+That file list is 314 tests across 7 files.
+
+> **⚠️ Do not select these tests with `-t`.** The guard suites are named after the
+> functions they cover - `stripWhereClauseLiterals`, `tokenizeWhereClause`,
+> `findForbiddenWhereClauseSyntax` - so a name filter like
+> `-t "safety|security|validation"` matches **none** of them. Measured: that pattern
+> selects 57 of 1,159 tests and **zero** from `sql-batch-guard`, `where-clause-guard`,
+> `sql-construction-guard` or `sql-injection-battery`, while pulling in unrelated
+> query-optimizer, cleanup-script, server-config and logger tests that happen to contain
+> the word "validation". A contributor using it to check for injection regressions is
+> testing none of the guards.
+>
+> **⚠️ `npm run test:unit -- <paths>` does not narrow the run either.** `test:unit` is
+> `vitest run test/unit`, so paths are _appended_ to the directory argument and Vitest
+> runs the whole directory - all 1,132 tests. Call `npx vitest run <paths>` directly. Same
+> class of trap as `npm test`, which is a shell chain ending in the summary script, so
+> appended arguments never reach Vitest at all.
+
+To exercise one behavior by name, filter within a known file:
+
+```bash
+npx vitest run test/unit/query-policy.test.js -t "validateQuery"
+```
 
 ### Manual Security Testing
 

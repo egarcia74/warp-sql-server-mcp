@@ -286,10 +286,16 @@ accidental certificate trust in cloud production environments using private IP a
 > by `get_server_info`, but nothing acts on them: `DatabaseToolsHandler` constructs its
 > `StreamingHandler` with hard-coded literals at
 > `lib/tools/handlers/database-tools.js:21` and never receives `serverConfig.streaming`.
-> Setting them changes what the server _reports_, not what it _does_. The literals in
-> force are `enableStreaming: true`, batch size `1000`, `maxMemoryMB: 50` and
-> `maxResponseSize: 1000000` (1 MB) - note the last two differ from the defaults
-> documented here.
+> Setting them changes what the server _reports_, not what it _does_.
+>
+> Of the four hard-coded literals the handler runs with, only two do anything:
+> `enableStreaming: true` (checked at `streaming-handler.js:55`) and batch size `1000`
+> (checked at `:163`). **`maxMemoryMB: 50` and `maxResponseSize: 1000000` are never read
+> after construction** - repo-wide, both names appear only in constructors, the config
+> parser and the two display paths, never in a comparison. The streaming path pushes every
+> chunk into an array and `reconstructFromChunks` joins them into one complete string for
+> the MCP response, so **no memory or response-size bound is enforced anywhere**, by
+> environment variable or by default. A large export is held in memory in full.
 
 ### `ENABLE_STREAMING`
 
