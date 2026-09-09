@@ -77,13 +77,18 @@ jobs:
           classify_pr() {
             local title="$1"
             local dep from to fv tv fmaj fmin fpat tmaj tmin tpat bump="unknown"
-            if echo "$title" | grep -qiE 'bump .+ from v?[0-9]'; then
+            # No `v?` here, matching dependabot-auto-merge.yml. Accepting a leading v
+            # made this copy the LESS conservative of the two: `bump foo from v1.2.3 to
+            # v1.2.4` parsed as a patch here and queued --auto, while the event workflow
+            # left it unclassified and sent it to manual review. Both now treat a
+            # v-prefixed title as unclassifiable, which is the safe direction.
+            if echo "$title" | grep -qiE 'bump .+ from [0-9]'; then
               dep=$(echo "$title" | sed -E 's/.*bump ([^ ]+) from .*/\1/i')
-              from=$(echo "$title" | sed -nE 's/.* from v?([0-9][^ ]*) to .*/\1/ip' | head -n1)
+              from=$(echo "$title" | sed -nE 's/.* from ([0-9][^ ]*) to .*/\1/ip' | head -n1)
               # Anchored to the from-version, not end-of-line: Dependabot appends
               # " in the <group> group across 1 directory" to grouped single-dependency
               # titles, and an end-of-line anchor left this empty for all of them.
-              to=$(echo "$title" | sed -nE 's/.* from v?[0-9][^ ]* to v?([0-9][^ ]*).*/\1/ip' | head -n1)
+              to=$(echo "$title" | sed -nE 's/.* from [0-9][^ ]* to ([0-9][^ ]*).*/\1/ip' | head -n1)
             fi
             if [ -n "${from:-}" ] && [ -n "${to:-}" ]; then
               fv=$(echo "$from" | sed -E 's/^v//' | cut -d- -f1 | cut -d+ -f1)

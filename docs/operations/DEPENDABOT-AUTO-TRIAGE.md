@@ -138,8 +138,16 @@ PR without anyone revisiting it.
 > non-grouped `ossf/scorecard-action` title with no parseable version pair is therefore
 > marked auto-mergeable by the event workflow and left untouched by re-triage.
 >
-> That divergence is safe in direction - re-triage is the more conservative of the two -
-> but it is still divergence, and it is how the dangerous drift started: until the
+> Those three make re-triage the more conservative copy - but only those three, and
+> "conservative" is not a property to lean on. A fourth divergence ran the other way until
+> this commit: the event workflow required a bare digit after `from`, while re-triage
+> accepted `v?[0-9]`, so `bump foo from v1.2.3 to v1.2.4` was unclassifiable (and held) by
+> one and an auto-mergeable patch by the other. Re-triage now uses the same bare-digit pattern,
+> which makes a v-prefixed title unclassifiable in both - the safe direction - and the two
+> parsers agree again.
+>
+> Divergence is the hazard whichever way it points, and it is how the dangerous drift
+> started: until the
 > re-triage copy was corrected it lacked the core-dependency and grouped-title rules and
 > queued `gh pr merge --auto` on exactly the packages the other one holds, while stripping
 > the `manual-review-required` label. Extracting both to a shared script is tracked
