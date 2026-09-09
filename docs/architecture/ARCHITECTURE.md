@@ -8,6 +8,22 @@ This document describes the architectural design of what appears to be an MCP (M
 fundamentally **a comprehensive framework for building production-ready, enterprise-grade software systems**. The
 architecture demonstrates advanced software engineering principles through practical implementation.
 
+> **How to read this document.** "System Architecture" and "Core Components" describe the
+> code as it exists - every component named there maps to a file in this repository. From
+> "Error Handling Architecture" onward the document **mixes implemented behavior with
+> design aspiration**. Read the markers, not the section titles. The patterns marked
+> aspirational (circuit breakers, distributed tracing, blue-green deployment, hot reload,
+> schema-validated configuration) are **not implemented**.
+>
+> **Markers do not cover the whole second half.** Five numbered lists carry per-item
+> `_implemented_` / `_aspirational_` markers: "Aspirational Patterns" under Error Handling
+> and under Configuration, "Observability Patterns", "Horizontal Scaling Patterns" and
+> "Deployment Patterns". Five do **not**: "Testing Patterns", "Security Patterns",
+> "Performance Optimization", "Extension Points" and "Design for Change". Those five mix
+> real behavior with design goals - intelligent caching and versioned APIs among them -
+> so treat an unmarked item as unverified and check it against the code before relying on
+> it.
+
 ## Architectural Philosophy
 
 The system is built on several key architectural principles:
@@ -23,181 +39,213 @@ The system is built on several key architectural principles:
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                          MCP Layer                              │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │             SqlServerMCP (Orchestrator)                │   │
-│  │  • Tool registration and dispatch                      │   │
-│  │  • Request/response handling                           │   │
-│  │  • Error boundary management                           │   │
-│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │        SqlServerMCP  (index.js, orchestrator)           │    │
+│  │  • Tool registration and dispatch                       │    │
+│  │  • Request/response handling                            │    │
+│  │  • Error boundary management (McpError)                 │    │
+│  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Business Logic Layer                     │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │ Query Execution │  │  Schema Query   │  │   Data Export   │ │
-│  │     Service     │  │    Service      │  │    Service      │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│                        Tool Handler Layer                       │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │ DatabaseTools   │  │  QueryOptimizer │  │   Bottleneck    │  │
+│  │    Handler      │  │                 │  │    Detector     │  │
+│  │ (BaseToolHandler)│ │                 │  │                 │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Infrastructure Layer                     │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │   Database      │  │    Security     │  │  Performance    │ │
-│  │   Manager       │  │    Manager      │  │    Monitor      │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │     Logger      │  │ Secret Manager  │  │ Query Validator │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│                       Infrastructure Layer                      │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │   Connection    │  │  Query Safety   │  │  Performance    │  │
+│  │    Manager      │  │     Guards      │  │    Monitor      │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │     Logger      │  │  ServerConfig   │  │   Streaming     │  │
+│  │                 │  │                 │  │    Handler      │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                          Data Layer                            │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │   SQL Server    │  │   File System   │  │    External     │ │
-│  │   Connection    │  │     (Logs)      │  │    Services     │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│                          Data Layer                             │
+│  ┌─────────────────┐  ┌─────────────────┐                       │
+│  │   SQL Server    │  │   File System   │                       │
+│  │  (mssql pool)   │  │   (logs only)   │                       │
+│  └─────────────────┘  └─────────────────┘                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Core Components
 
+> Every component below maps to a file in this repository. The list is exhaustive for the
+> startup path: `index.js` constructs exactly `Logger`, `ConnectionManager`,
+> `PerformanceMonitor`, `DatabaseToolsHandler`, `QueryOptimizer` and `BottleneckDetector`,
+> from the module-level `serverConfig` singleton. **`ConnectionManager` is the exception:**
+> `index.js:105` passes it `serverConfig.getConnectionConfig()`, a plain object of four
+> timeout/retry values with no `serverConfig` property, and its constructor falls back to
+> `config.serverConfig || new ServerConfig()` - so a **second** `ServerConfig` instance
+> exists at runtime and a `serverConfig.reload()` on the singleton does not reach it.
+> One implemented module -
+> `SecretManager` (`lib/config/secret-manager.js`) - is **not** constructed anywhere and
+> takes no part in request handling; see
+> [ENV-VARS.md](../reference/ENV-VARS.md) for what that means for its environment
+> variables, and [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)
+> for the wiring work.
+
 ### 1. SqlServerMCP (Orchestration Layer)
 
-**Purpose**: Central orchestrator that handles MCP protocol compliance and coordinates all system operations.
+**File**: `index.js`
 
-**Key Responsibilities**:
+**Purpose**: Central orchestrator that owns the MCP `Server`, registers tools and routes
+each call to a handler.
 
-- Tool registration and lifecycle management
-- Request routing and response formatting
-- Error boundary management
-- Resource lifecycle coordination
+**Responsibilities**:
 
-**Design Patterns**:
+- Registers the tool catalogue from `lib/tools/tool-registry.js`
+- Dispatches `CallToolRequest` to the matching handler method
+- Applies the safety policy to **caller-supplied** SQL: `validateQuery` on `execute_query`
+  and `explain_query`, `validateWhereClause` on the `where` argument of `get_table_data`
+  and `export_table_csv`. Server-assembled SQL does **not** pass through them -
+  `list_databases`, `list_tables`, `describe_table` and `list_foreign_keys` build fixed
+  statements and call `executeQuery` directly, relying on the identifier and literal
+  escapers (`escapeBracketIdentifier`, `escapeSqlStringLiteral`) for the values they
+  interpolate. Two different controls, not one boundary
+- Converts failures into `McpError` so no raw driver error escapes
+- Exposes runtime diagnostics through `get_server_info`
 
-- **Facade Pattern**: Provides unified interface to complex subsystem
-- **Command Pattern**: Encapsulates requests as objects for queuing and logging
-- **Observer Pattern**: Notifies monitoring components of system events
+Its constructor is the whole dependency graph:
 
 ```javascript
 class SqlServerMCP {
-  constructor(config = {}) {
-    this.initializeComponents(config);
-    this.registerTools();
-    this.setupEventHandlers();
-  }
-
-  async handleRequest(request) {
-    // Pre-processing: validation, logging, metrics
-    // Execution: delegate to appropriate handler
-    // Post-processing: response formatting, cleanup
-  }
-}
-```
-
-### 2. DatabaseManager (Data Access Layer)
-
-**Purpose**: Manages all database connectivity, connection pooling, and transaction management.
-
-**Key Responsibilities**:
-
-- Connection pool management
-- Transaction lifecycle management
-- Query execution with retry logic
-- Connection health monitoring
-
-**Design Patterns**:
-
-- **Singleton Pattern**: Single instance manages all connections
-- **Object Pool Pattern**: Efficient connection reuse
-- **Proxy Pattern**: Transparent connection management
-- **Circuit Breaker Pattern**: Fault tolerance for database failures
-
-```javascript
-class DatabaseManager {
-  constructor(config) {
-    this.connectionPool = this.createConnectionPool(config);
-    this.healthMonitor = new ConnectionHealthMonitor();
-    this.retryPolicy = new ExponentialBackoffRetry();
-  }
-}
-```
-
-### 3. Security Manager (Security Layer)
-
-**Purpose**: Enforces comprehensive security policies across all system operations.
-
-**Key Responsibilities**:
-
-- Multi-layered query validation
-- Access control enforcement
-- Security audit logging
-- Threat detection and mitigation
-
-**Design Patterns**:
-
-- **Chain of Responsibility**: Sequential security policy evaluation
-- **Strategy Pattern**: Pluggable security policy implementations
-- **Decorator Pattern**: Layered security controls
-- **Template Method**: Standardized security check procedures
-
-```javascript
-class SecurityManager {
   constructor() {
-    this.policyChain = this.buildSecurityPolicyChain();
-    this.auditLogger = new SecurityAuditLogger();
-    this.threatDetector = new ThreatDetectionEngine();
+    this.config = serverConfig; // module-level ServerConfig singleton
+    this.config.reload();
+    this.logger = new Logger({ ... });
+    this.connectionManager = new ConnectionManager(this.config.getConnectionConfig());
+    this.performanceMonitor = new PerformanceMonitor(this.config.getPerformanceConfig());
+    this.databaseTools = new DatabaseToolsHandler(this.connectionManager, this.performanceMonitor);
+    this.queryOptimizer = new QueryOptimizer(this.connectionManager);
+    this.bottleneckDetector = new BottleneckDetector(this.connectionManager);
+    this.setupToolHandlers();
   }
 }
 ```
 
-### 4. PerformanceMonitor (Observability Layer)
+### 2. ConnectionManager (Data Access Layer)
 
-**Purpose**: Provides comprehensive system observability and performance metrics.
+**File**: `lib/database/connection-manager.js`
 
-**Key Responsibilities**:
+**Purpose**: Owns the single `mssql` connection pool and everything about reaching the
+server.
 
-- Query performance tracking
-- Resource utilization monitoring
-- System health assessment
-- Metrics aggregation and reporting
+**Responsibilities**:
 
-**Design Patterns**:
+- Builds the driver config from `ServerConfig.getConnectionConfig()`, including the
+  context-aware SSL decision (`_buildConnectionConfig`, `_isLikelyDevEnvironment`)
+- Connects with retry (`connect`) and hands the pool to callers (`getPool`)
+- Reports pool state for `get_connection_health` (`getConnectionHealth`), plus a TLS
+  block that describes **configured intent, not the negotiated connection**:
+  `_extractSSLInfo()` rebuilds its fields from `_buildConnectionConfig()` and hard-codes
+  `connection_status: "Encrypted connection established"` and `protocol: "TLS/SSL"`
+  without inspecting the socket or certificate - its own `note` says certificate details
+  are not available through the `mssql` abstraction. The block is also usually absent:
+  `getConnectionHealth` adds it only when `SQL_SERVER_ENCRYPT === "true"`, while
+  `_buildConnectionConfig` enables encryption on `!== "false"`, so the **default**
+  configuration is encrypted and reports no TLS information at all
+- Closes the pool on shutdown (`close`)
 
-- **Observer Pattern**: Event-driven metrics collection
-- **Strategy Pattern**: Configurable monitoring strategies
-- **Flyweight Pattern**: Efficient metric storage
-- **Command Pattern**: Deferred metric processing
+There is no separate health-monitor object and no circuit breaker: health is computed on
+demand from the live pool, and failure handling is bounded retry plus a surfaced error.
 
-```javascript
-class PerformanceMonitor {
-  constructor(config) {
-    this.metricsCollector = new MetricsCollector();
-    this.healthAssessor = new HealthAssessor();
-    this.alertManager = new AlertManager(config);
-  }
-}
-```
+### 3. ServerConfig (Configuration Layer)
 
-### 5. Logger (Logging Layer)
+**File**: `lib/config/server-config.js`
 
-**Purpose**: Provides structured, searchable logging with security audit capabilities.
+**Purpose**: Single source of truth for environment-derived configuration, exported as a
+module-level singleton and reloaded at startup.
 
-**Key Responsibilities**:
+**Responsibilities**:
 
-- Structured log generation
-- Security event auditing
-- Log level management
-- Output formatting and routing
+- Parses every **supported** environment variable, but range-checks only the **numeric**
+  ones: the 14 `_safeParseInt` / `_safeParseFloat` calls take a min/max band and reject an
+  out-of-range value in favor of the default rather than clamping it to the nearest bound.
+  Booleans (`SQL_SERVER_READ_ONLY`, `ENABLE_PERFORMANCE_MONITORING`, `ENABLE_STREAMING`,
+  `TRACK_POOL_METRICS`, `ENABLE_SECURITY_AUDIT`, the two `SQL_SERVER_ALLOW_*` flags) are
+  bare `=== 'true'` / `!== 'false'` comparisons and strings (`SQL_SERVER_LOG_LEVEL`, host,
+  database, credentials) are taken as given - a malformed value in either group silently
+  takes the default with **no warning**. The boolean defaults fail safe (read-only on,
+  destructive and schema changes off), which is what makes the silence tolerable
+- Groups configuration into connection, security, performance, streaming and logging
+  sections. The connection, security and logging sections are consumed by the components
+  above; the streaming section is **not** - see the notice below
+- Derives the context-aware `SQL_SERVER_TRUST_CERT` default and records why it chose what
+  it chose
+- Renders the startup configuration summary, with the password masked
 
-**Design Patterns**:
+> **⚠️ The streaming section is reported but never applied.** `DatabaseToolsHandler`
+> constructs its `StreamingHandler` with literals (`enableStreaming: true`, batch size
+> `1000`, `maxMemoryMB: 50`, `maxResponseSize: 1000000`) at
+> `lib/tools/handlers/database-tools.js:21` and never receives `serverConfig.streaming`,
+> whose only readers are `get_server_info` (`index.js:770-775`) and the startup summary
+> (`server-config.js:676-681`). So
+> `ENABLE_STREAMING=false`, `STREAMING_BATCH_SIZE`, `STREAMING_MAX_MEMORY_MB` and
+> `STREAMING_MAX_RESPONSE_SIZE` are parsed, range-checked and displayed back to you while
+> having no effect on any export. Nor are the handler's own literals a safety net:
+> `maxMemoryMB` and `maxResponseSize` are stored at construction and never read again, and
+> the streaming path accumulates every chunk before `reconstructFromChunks` joins them into
+> one string - so **no memory or response-size limit is enforced at all**. Only
+> `enableStreaming` and `batchSize` are actually consulted.
 
-- **Factory Pattern**: Creates appropriate loggers for different contexts
-- **Decorator Pattern**: Adds metadata to log entries
-- **Strategy Pattern**: Configurable output formats
-- **Template Method**: Standardized logging procedures
+### 4. Tool Handlers (Business Logic Layer)
+
+**Files**: `lib/tools/handlers/base-handler.js`, `lib/tools/handlers/database-tools.js`,
+`lib/tools/tool-registry.js`
+
+**Purpose**: Implement the individual MCP tools.
+
+- **`BaseToolHandler`** holds the shared plumbing: acquiring the pool
+  (`getConnection`), running a query while recording metrics (`executeQuery`), and
+  rendering results as a text table or CSV (`formatResults`, `formatAsTable`,
+  `formatAsCsv`).
+- **`DatabaseToolsHandler`** extends it with the schema and data tools -
+  `listDatabases`, `listTables`, `describeTable`, `listForeignKeys`, `getTableData`,
+  `exportTableCsv`, `explainQuery`.
+- **`tool-registry.js`** is the declarative catalogue (`getAllTools`, `getTool`,
+  `getToolsByCategory`) that `index.js` registers with the MCP server.
+
+Analysis tools live beside these: `QueryOptimizer` (`lib/analysis/query-optimizer.js`)
+and `BottleneckDetector` (`lib/analysis/bottleneck-detector.js`) query DMVs through the
+same `ConnectionManager`. `BottleneckDetector.detectBottlenecks()` backs
+`detect_query_bottlenecks`; both are constructed **without** a `PerformanceMonitor`, so
+their findings come from live DMV queries rather than the monitor's samples and never
+enter its history.
+
+### 5. PerformanceMonitor and Logger (Observability Layer)
+
+**Files**: `lib/utils/performance-monitor.js`, `lib/utils/logger.js`
+
+**`PerformanceMonitor`** records per-query timings and pool statistics, bounded by
+`MAX_METRICS_HISTORY` (default `1000`). It classifies a query as slow past
+`SLOW_QUERY_THRESHOLD` (default `5000` ms) and backs `get_performance_stats` and
+`get_query_performance`. It is an in-memory ring of samples - there is no alert manager and
+no external metrics backend.
+
+> **⚠️ `PERFORMANCE_SAMPLING_RATE` has no effect.** Every production call site records
+> through `recordQuery()`, which checks `config.enabled` and nothing else. `shouldSample()`
+> is consulted only by `startQuery()`, and `startQuery()` is called exclusively from
+> `test/unit/performance-monitor.test.js` - no production path invokes it. Setting the rate
+> below `1.0` therefore reduces neither the work done per query nor the number of retained
+> observations; every query is recorded.
+
+**`Logger`** wraps Winston to provide levelled structured logging plus a separate security
+audit channel. File transports are **opt-in**: `index.js` passes a path only when
+`LOG_FILE` or `SECURITY_LOG_FILE` is set, so the default is console-only. See
+[DEBUG-LOGGING.md](../developer/DEBUG-LOGGING.md).
 
 ### 6. Query Safety Guards (Validation Layer)
 
@@ -247,17 +295,24 @@ Request → Validation → Security Check → Business Logic → Data Access →
 
 ### 2. **Security Processing**
 
-- Authentication verification
-- Authorization checks
-- Query safety validation
-- Audit event generation
+- Query safety validation against the active tier (`validateQuery`, `validateWhereClause`)
+- Audit event generation (`Logger.security`)
+
+There is no per-request authentication or authorization layer in the MCP server itself: the
+process holds one set of database credentials, and access control is whatever the SQL
+Server login is granted plus the read-only/DML/DDL tier. Least-privilege database accounts
+are the intended control - see [SECURITY.md](SECURITY.md).
 
 ### 3. **Business Logic Execution**
 
-- Tool-specific processing
-- Transaction management
-- Error handling
-- Result formatting
+- Tool-specific processing in the handler
+- Error handling and normalization into `McpError`
+- Result formatting (text table or CSV)
+
+Tools issue statements **or multi-statement T-SQL batches** against the pool -
+`lib/security/sql-batch-guard.js` exists precisely to scan every statement in a batch - and
+passing `database` to `execute_query` runs a separate `USE [...]` query first. There is no
+explicit transaction-management layer.
 
 ### 4. **Data Layer Operations**
 
@@ -275,45 +330,56 @@ Request → Validation → Security Check → Business Logic → Data Access →
 
 ## Error Handling Architecture
 
-### Error Classification Hierarchy
+### As Implemented
 
-```text
-SystemError
-├── DatabaseError
-│   ├── ConnectionError
-│   ├── QueryExecutionError
-│   └── TransactionError
-├── SecurityError
-│   ├── AuthenticationError
-│   ├── AuthorizationError
-│   └── ValidationError
-├── ConfigurationError
-├── ResourceError
-└── NetworkError
-```
+There is no error class hierarchy. Every failure that leaves a tool is normalized into the
+MCP SDK's `McpError` with an `ErrorCode`, so the client sees a protocol-level error and
+never a raw `mssql` or Node error object. Connection failures are retried with backoff in
+`ConnectionManager.connect()`; a safety-policy rejection is raised immediately by
+`validateQuery` / `validateWhereClause` and audit-logged before it is thrown.
 
-### Error Handling Patterns
+### Aspirational Patterns
 
-1. **Fail Fast**: Detect errors as early as possible
-2. **Error Boundaries**: Prevent error propagation between layers
-3. **Graceful Degradation**: Maintain partial functionality during failures
-4. **Circuit Breaker**: Prevent cascade failures
-5. **Retry with Backoff**: Handle transient failures
+> **Partly implemented - read the per-item markers.** There is no circuit breaker and no
+> graceful-degradation path: a database that is unreachable produces an error per call.
+
+1. **Fail Fast**: Detect errors as early as possible - _implemented_ for query validation
+2. **Error Boundaries**: Prevent error propagation between layers - _implemented_ via `McpError`
+3. **Graceful Degradation**: Maintain partial functionality during failures - _aspirational_
+4. **Circuit Breaker**: Prevent cascade failures - _aspirational_
+5. **Retry with Backoff**: Handle transient failures - _implemented_ for connection setup only
 
 ## Configuration Architecture
 
-### Configuration Hierarchy
+### As Implemented
+
+`ServerConfig` reads configuration from the process environment at startup
+(`ServerConfig.reload()`), with `dotenv` loading `.env` first. Values are checked against a
+min/max band rather than a schema, and an out-of-range value is rejected in favor of the
+default rather than clamped. There is no runtime layer - changing a variable requires
+restarting the server - but the CLI does put a file layer in front of the environment:
+`warp-sql-server-mcp start` calls `loadConfigToEnv()` in `cli.js`, which reads
+`~/.warp-sql-server-mcp.json` and copies each key into `process.env`, skipping any variable
+that is already set. So a file-based layer exists for the recommended global-install path,
+the ambient environment wins over the file, and `ServerConfig` itself still only ever sees
+environment variables.
 
 ```text
-Default Config → Environment Config → File Config → Runtime Config
+CLI:    ~/.warp-sql-server-mcp.json → loadConfigToEnv() ┐
+                                                        ├→ process.env → ServerConfig.reload() → component configs
+Direct: .env / ambient environment → dotenv ────────────┘
 ```
 
-### Configuration Management
+### Aspirational Patterns
 
-1. **Schema Validation**: All configuration validated against schema
-2. **Environment Parity**: Same configuration structure across environments
-3. **Secure Defaults**: Safe operational defaults
-4. **Hot Reload**: Runtime configuration updates where safe
+> **Not implemented.** Schema validation and hot reload do not exist today. A file
+> configuration layer does exist, but only as the CLI's file-to-environment adapter
+> described above - not as something `ServerConfig` reads.
+
+1. **Schema Validation**: All configuration validated against schema - _aspirational_ (values get min/max band checks with fallback to defaults)
+2. **Environment Parity**: Same configuration structure across environments - _implemented_
+3. **Secure Defaults**: Safe operational defaults - _implemented_ (read-only by default)
+4. **Hot Reload**: Runtime configuration updates where safe - _aspirational_
 
 ## Monitoring and Observability
 
@@ -329,11 +395,14 @@ Application Metrics → Aggregation → Storage → Visualization/Alerting
 
 ### Observability Patterns
 
-1. **Structured Logging**: Consistent, searchable log format
-2. **Distributed Tracing**: Request flow across components
-3. **Metrics Collection**: Quantitative system measurements
-4. **Health Checks**: Automated system health assessment
-5. **Alerting**: Automated incident response
+> **Partly aspirational.** There is no metrics backend, no tracing and no alerting: metrics
+> live in an in-memory ring inside `PerformanceMonitor` and are read back through MCP tools.
+
+1. **Structured Logging**: Consistent, searchable log format - _implemented_ (`Logger`, Winston)
+2. **Distributed Tracing**: Request flow across components - _aspirational_
+3. **Metrics Collection**: Quantitative system measurements - _implemented_, in-memory only
+4. **Health Checks**: Automated system health assessment - _implemented_ (`get_connection_health`)
+5. **Alerting**: Automated incident response - _aspirational_
 
 ## Testing Architecture
 
@@ -378,10 +447,17 @@ Data Access Control → Audit Logging → Threat Detection
 
 ### Horizontal Scaling Patterns
 
-1. **Connection Pooling**: Efficient database connection reuse
-2. **Stateless Design**: No server-side session state
-3. **Load Balancing**: Request distribution across instances
-4. **Circuit Breaker**: Fault isolation and recovery
+> **Partly aspirational.** The server is a single stdio process launched by one MCP client;
+> load balancing and circuit breaking are design goals for a future deployment shape, not
+> current behavior.
+
+1. **Connection Pooling**: Efficient database connection reuse - _implemented_ (`mssql` pool)
+2. **Stateless Design**: No per-request session state - _partial_. `PerformanceMonitor`
+   holds process-local state (bounded query history, aggregates, connection metrics, start
+   time), so `get_performance_stats` and `get_query_performance` return instance-specific
+   data and two instances are **not** interchangeable for them.
+3. **Load Balancing**: Request distribution across instances - _aspirational_
+4. **Circuit Breaker**: Fault isolation and recovery - _aspirational_
 
 ### Performance Optimization
 
@@ -404,20 +480,28 @@ Development → Testing → Staging → Production
 
 ### Deployment Patterns
 
-1. **Blue-Green Deployment**: Zero-downtime deployments
-2. **Configuration Management**: Environment-specific configuration
-3. **Health Checks**: Automated deployment validation
-4. **Rollback Capability**: Quick failure recovery
+> **Aspirational.** The server ships as an npm package that an MCP client spawns locally.
+> There is no deployment pipeline of its own beyond the release workflow, so blue-green
+> deployment and rollback describe a target shape rather than anything implemented here.
+
+1. **Blue-Green Deployment**: Zero-downtime deployments - _aspirational_
+2. **Configuration Management**: Environment-specific configuration - _implemented_
+3. **Health Checks**: Automated deployment validation - _implemented_ (`get_connection_health`)
+4. **Rollback Capability**: Quick failure recovery - _aspirational_ (npm version pinning only)
 
 ## Future Extensibility
 
 ### Extension Points
 
+> **Aspirational.** None of these extension points exists yet. Adding a tool today means
+> editing `lib/tools/tool-registry.js` and a handler; there is no plugin loader, event bus
+> or provider interface.
+
 1. **Plugin Architecture**: Modular tool additions
 2. **Event System**: Extensible event handling
-3. **Configuration Providers**: Multiple configuration sources
+3. **Configuration Providers**: Multiple configuration sources - the not-yet-wired-up `SecretManager` is the closest thing
 4. **Monitoring Backends**: Pluggable monitoring systems
-5. **Authentication Providers**: Multiple auth mechanisms
+5. **Authentication Providers**: Multiple auth mechanisms - SQL and Windows auth are supported today
 
 ### Design for Change
 

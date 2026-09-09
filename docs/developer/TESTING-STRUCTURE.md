@@ -11,7 +11,8 @@ confusing deprecated scripts. The new structure makes Docker the default for int
 
 ### Primary Test Commands
 
-- **`npm test`** - Runs both unit and integration tests (recommended)
+- **`npm test`** - Runs unit tests, then integration tests (starts and stops Docker), then
+  the summary script
 - **`npm run test:unit`** - Unit tests only (fast, no external dependencies)
 - **`npm run test:integration`** - Integration tests with Docker (default setup)
 - **`npm run test:coverage`** - Generate test coverage reports
@@ -126,4 +127,7 @@ npm run test:integration
 | `test:performance:improved`    | `test:integration:performance` | General performance   |
 | `test:manual:warp-performance` | `test:integration:warp`        | Warp-specific testing |
 
-All deprecated commands still work but show warnings to guide migration.
+The old commands in the left column **no longer exist** - they were removed from
+`package.json`, not deprecated in place. Running one now fails with npm's
+"Missing script" error. The table is a lookup for translating old instructions, muscle
+memory or stale branches, not a list of still-working aliases.

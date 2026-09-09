@@ -42,15 +42,19 @@ This enables:
 
 The server includes a comprehensive diagnostics tool accessible through the MCP interface:
 
+MCP tool call:
+
 ```json
-// MCP tool call
 {
   "name": "get_server_info",
   "arguments": {
-    "include_logs": true // Optional: include logging context
+    "include_logs": true
   }
 }
 ```
+
+`include_logs` is optional and defaults to `false`; set it to `true` to include logging
+context in the response.
 
 This tool provides:
 
@@ -68,6 +72,47 @@ This tool provides:
 - Debugging MCP connectivity problems
 
 ## Log Analysis Tools
+
+> **⚠️ File logging is opt-in - by default there are no log files to read.** `index.js`
+> passes a file path to `Logger` **only** when the corresponding environment variable is
+> set, so without them the console transport is the only record and your MCP client's log
+> capture is where it ends up. The log viewer commands below have nothing to show until
+> you set at least one of:
+>
+> ```bash
+> # Main server log
+> LOG_FILE=./logs/server.log
+>
+> # Security audit log (also needs ENABLE_SECURITY_AUDIT=true to emit audit events)
+> SECURITY_LOG_FILE=./logs/security-audit.log
+> ENABLE_SECURITY_AUDIT=true
+> ```
+>
+> `npm run logs` defaults to `./logs/server.log`, so setting `LOG_FILE` to that path makes
+> the viewer work out of the box. Run `get_server_info` to confirm: the
+> `configuration.logging.logFile` field reads `Not configured (console only)` until a path
+> is set.
+>
+> **⚠️ Console-only logging writes to stdout for most clients, which is the same stream as
+> JSON-RPC.** `Logger` sets Winston's `stderrLevels` only when
+> `Logger._isMcpEnvironment()` returns true, and that helper tests just three variables -
+> `VSCODE_MCP=true`, `VSCODE_PID`, `VSCODE_IPC_HOOK`. It does **not** apply the broader
+> detection `index.js:43-48` uses (`MCP_TRANSPORT=stdio`, or a non-TTY stdio pair), so
+> under Warp or any other stdio client that sets none of the VS Code variables the
+> transport falls through to `console._stdout.write` for every level
+> (`winston/lib/winston/transports/console.js:85-87` - an unset `stderrLevels` maps no
+> level to stderr). The security-audit console transport never sets `stderrLevels` at all,
+> so with `ENABLE_SECURITY_AUDIT=true` its lines go to stdout even under VS Code.
+>
+> **Setting `LOG_FILE` does not fix this.** `createLogger()` pushes the console transport
+> whenever `NODE_ENV !== "test"` and only _then_ adds the file transport if a path is set;
+> `createSecurityLogger()` does the same. A log file therefore **duplicates** output to
+> disk - it does not redirect it away from stdout. What does work today is
+> **`VSCODE_MCP=true`**: it forces `_isMcpEnvironment()` true regardless of client, and the
+> main console transport then sends every level to stderr. There is no equivalent for the
+> audit channel, so under a stdio client leave `ENABLE_SECURITY_AUDIT` at its default
+> (`false`) until that transport is fixed. Set `LOG_FILE` for a readable record, not as a
+> containment measure.
 
 ### Smart Log Viewer (Recommended)
 
@@ -124,6 +169,10 @@ This is especially useful for:
 - Analyzing logs from different environments
 
 **Smart Path Detection:**
+
+These are the paths `show-logs.sh` _looks in_ when you do not pass `--file`. They are not
+paths the server writes to on its own - point `LOG_FILE` / `SECURITY_LOG_FILE` at one of
+them (or anywhere else) to actually produce a file there.
 
 - **Development**: `./logs/server.log`, `./logs/security-audit.log`
 - **Production**: `~/.local/state/warp-sql-server-mcp/server.log`, `~/.local/state/warp-sql-server-mcp/security-audit.log`

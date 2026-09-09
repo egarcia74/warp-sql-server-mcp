@@ -35,22 +35,24 @@ warp-sql-server-mcp init
 > [Complete Environment Variables Reference](../reference/ENV-VARS.md) for SSL settings, security
 > configuration, performance tuning, and cloud deployment options.
 
-## Step 2: Configure VS Code MCP Settings
+## Step 2: Register the MCP Server with VS Code
 
-1. **Open VS Code Settings**: `Cmd+,` (or `Ctrl+,` on Windows)
+MCP servers live in an `mcp.json` file, **not** in `settings.json`. There are two routes to
+the same result.
 
-2. **Search for**: `copilot.chat.experimental.mcp`
+**Guided (recommended)**: `Cmd+Shift+P` (`Ctrl+Shift+P` on Windows/Linux) → **MCP: Add
+Server** → **Command (stdio)** → command `warp-sql-server-mcp`, arguments `start` → server
+ID `sql-server` → then pick **Global** (available in every workspace) or **Workspace**
+(this project only, written to `.vscode/mcp.json`).
 
-3. **Enable MCP**: Check the box for "Enable MCP support"
-
-4. **Add MCP Server Configuration**:
-   - Click "Edit in settings.json"
-   - Add the MCP server configuration:
+**Manual**: run **MCP: Open User Configuration** for the user-level `mcp.json`, or create
+`.vscode/mcp.json` at the root of your project, and add:
 
 ```json
 {
-  "github.copilot.chat.experimental.mcp.servers": {
+  "servers": {
     "sql-server": {
+      "type": "stdio",
       "command": "warp-sql-server-mcp",
       "args": ["start"]
     }
@@ -58,30 +60,36 @@ warp-sql-server-mcp init
 }
 ```
 
-## Step 3: Restart VS Code
+## Step 3: Start the Server
 
-**Important**: Restart VS Code completely to load the MCP server.
+Open `mcp.json` and select the **Start** action shown above the `sql-server` entry; the
+label changes to **Running**. If you edit the file later, use **Restart** rather than
+restarting VS Code.
 
 ## Step 4: Test Copilot Integration
 
-1. **Open GitHub Copilot Chat**: `Cmd+Shift+I` (or click the chat icon)
+1. **Open Chat**: `Cmd+Shift+I` (or click the chat icon) and switch the mode selector to
+   **Agent** - MCP tools are surfaced in agent mode, not in Ask mode.
 
-2. **Test database connectivity**:
+2. **Enable the tools**: click the tools icon in the prompt box and tick the `sql-server`
+   entry. Newly added MCP tools start unchecked.
+
+3. **Test database connectivity** - ask in natural language, or name a tool with `#`:
 
 ```text
-@sql-server List all databases
+List all databases on the SQL Server
 ```
 
 1. **Try schema exploration**:
 
 ```text
-@sql-server Show me tables in the AdventureWorks database
+Show me the tables in the AdventureWorks database
 ```
 
 1. **Ask for query help**:
 
 ```text
-@sql-server Generate a query to find the top 10 customers by sales
+Find the top 10 customers by sales
 ```
 
 ## 🎉 You're All Set
@@ -100,7 +108,7 @@ Now GitHub Copilot can:
 **Ask Copilot:**
 
 ```text
-@sql-server What's the structure of the Users table?
+What's the structure of the Users table?
 ```
 
 ### Query Generation
@@ -108,7 +116,7 @@ Now GitHub Copilot can:
 **Ask Copilot:**
 
 ```text
-@sql-server Create a query to find users who registered in the last 30 days
+Create a query to find users who registered in the last 30 days
 ```
 
 ### Performance Analysis
@@ -116,7 +124,7 @@ Now GitHub Copilot can:
 **Ask Copilot:**
 
 ```text
-@sql-server Analyze the performance of this query: SELECT * FROM Orders WHERE OrderDate > '2023-01-01'
+Analyze the performance of this query: SELECT * FROM Orders WHERE OrderDate > '2023-01-01'
 ```
 
 ### Data Export
@@ -124,12 +132,13 @@ Now GitHub Copilot can:
 **Ask Copilot:**
 
 ```text
-@sql-server Export the top 100 products to CSV format
+Export the top 100 products to CSV format
 ```
 
 ## Available MCP Tools (16 Total)
 
-You can use these with `@sql-server` in natural language or directly:
+Ask for these in natural language, or reference one directly in the prompt with `#`
+(for example `#list_databases`):
 
 ### 📊 Database Operations
 
@@ -181,16 +190,18 @@ To modify security settings, edit your config file:
 **📋 Get comprehensive help:**
 
 ```bash
-npm run help               # Show all available commands with descriptions
+warp-sql-server-mcp help   # Show all available commands
 ```
 
 **📊 Monitor server activity:**
 
-```bash
-npm run logs               # Show recent server logs
-npm run logs:tail          # Follow logs in real-time for debugging
-npm run logs:audit         # Show security audit logs
-```
+You installed the server globally, so the `npm run logs*` scripts are not available -
+they live in the git repository, and `scripts/` is not part of the published package.
+VS Code captures the MCP server's output for you: open the **Output** panel
+(`View` → `Output`) and select the GitHub Copilot channel.
+
+To get log files of your own, set `LOG_FILE` (and `SECURITY_LOG_FILE` with
+`ENABLE_SECURITY_AUDIT=true`) in the server's `env` block, then read that path directly.
 
 **Copilot not finding the MCP server?**
 
@@ -198,14 +209,14 @@ npm run logs:audit         # Show security audit logs
 2. Check VS Code settings have the correct MCP configuration
 3. Restart VS Code completely
 4. Check VS Code Developer Console (`Help` → `Toggle Developer Tools`)
-5. Monitor MCP server logs: `npm run logs:tail` in a separate terminal
+5. Watch the Copilot **Output** channel while you send a query
 
 **Connection issues?**
 
 - Verify SQL Server is running: `telnet localhost 1433`
 - Check your config file credentials: `warp-sql-server-mcp config`
 - Test the MCP server directly: `warp-sql-server-mcp start`
-- Review server logs for errors: `npm run logs`
+- Review the Copilot **Output** channel for errors
 
 **Permission errors?**
 

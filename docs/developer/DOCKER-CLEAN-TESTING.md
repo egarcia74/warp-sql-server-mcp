@@ -7,12 +7,35 @@ This guide explains the various testing options available for running Docker tes
 ## 🚀 Quick Start
 
 ```bash
-# Fast iteration (reuses existing data)
+# Fast iteration - Phase 1 only, reuses existing data
 npm run docker:test
 
-# Clean slate testing (guarantees fresh environment)
+# Phase 1 only, against a freshly rebuilt container
 npm run docker:test:clean
+
+# Phases 1-3 plus the protocol test, against a freshly rebuilt container
+npm run docker:test -- all --clean
+
+# The whole integration suite, including the performance tests
+npm run docker:clean && npm run test:integration
 ```
+
+> **⚠️ Both npm shortcuts run Phase 1 only.** `docker:test` and `docker:test:clean` invoke
+> the same `scripts/docker-test-runner.sh`; `docker:test:clean` passes only `--clean`, and
+> the runner defaults to `phase1` when no phase is given (it prints
+> `No phase specified, defaulting to phase1`). Phase 1 is the read-only security suite, so
+> neither shortcut exercises DML (Phase 2) or DDL (Phase 3). Pass `all` explicitly - via
+> `npm run docker:test -- all --clean` or `./scripts/docker-test-runner.sh all --clean` -
+> to get all three phases.
+>
+> **⚠️ `all` is not the full integration suite.** The runner's `all` branch runs Phase 1,
+> Phase 2, Phase 3 and the protocol startup test, and stops there. It does **not** run
+> `test:integration:performance` (`test/manual/improved-performance-test.js`), which
+> `npm run test:integration` includes via `test:integration:run` - and `test:integration`
+> is what the `npm test` chain in `hooks/pre-commit` runs, so `all` is a narrower check
+> than the commit gate. Use `npm run test:integration` (or
+> `npm run docker:clean && npm run test:integration` for a clean slate) when you want
+> everything; reach for `all` when you want the three security phases quickly.
 
 ## 📋 Available Commands
 
@@ -28,13 +51,15 @@ npm run docker:test:clean
 
 ### Docker Container Management
 
-| Command                     | Description                  |
-| --------------------------- | ---------------------------- |
-| `npm run docker:test`       | Docker test runner script    |
-| `npm run docker:test:clean` | Docker test with clean slate |
-| `npm run docker:start`      | Start SQL Server container   |
-| `npm run docker:stop`       | Stop SQL Server container    |
-| `npm run docker:clean`      | Clean containers and volumes |
+| Command                              | Description                                 |
+| ------------------------------------ | ------------------------------------------- |
+| `npm run docker:test`                | Docker test runner - **Phase 1 only**       |
+| `npm run docker:test:clean`          | Docker test, clean slate - **Phase 1 only** |
+| `npm run docker:test -- all`         | All phases, reusing the existing container  |
+| `npm run docker:test -- all --clean` | Phases 1-3 + protocol, clean slate          |
+| `npm run docker:start`               | Start SQL Server container                  |
+| `npm run docker:stop`                | Stop SQL Server container                   |
+| `npm run docker:clean`               | Clean containers and volumes                |
 
 > **Note**: Many of the granular `test:manual:docker:*` commands have been consolidated into the simpler `test:integration:*` structure for better maintainability.
 
@@ -98,8 +123,8 @@ npm run test:integration         # Full integration test suite
 **Use for**: CI/CD, production validation, troubleshooting
 
 ```bash
-npm run docker:test:clean        # Clean docker test
-npm run docker:clean && npm run test:integration # Full clean test suite
+npm run docker:test -- all --clean               # All phases, clean slate
+npm run docker:clean && npm run test:integration # Full integration suite, clean slate
 ```
 
 **Pros**:
@@ -138,12 +163,20 @@ npm run docker:reset            # Reset with fresh data
 ./scripts/docker-test-runner.sh phase1 --clean  # Clean specific test
 ```
 
-### Cleanup Issues in Read-Only Mode
+### Leftover Test Data Between Runs
 
-The test cleanup may fail when in read-only mode. This is expected behavior and doesn't affect test results. Use clean flag for guaranteed cleanup:
+Read-only mode does **not** block cleanup: `cleanupDatabase` in
+`test/integration/manual/test-database-helper.js` saves the three safety flags, sets them
+all permissive, calls `serverConfig.reload()`, and restores them afterwards. Leftover data
+comes from elsewhere - a phase that failed before reaching its cleanup, or the pre-seeded
+Phase 1 and Phase 2 databases, which are not in the helper's cleanup list (both phases
+report "Cleaning up 0 test databases"). Do not assume it is harmless: rows from a previous
+run can change what a later phase sees, and a phase asserting on row counts or on a table
+being empty will produce a misleading pass or failure. Rebuild the container:
 
 ```bash
-npm run docker:clean && npm run test:integration  # Forces cleanup
+npm run docker:test -- all --clean                # Rebuild, then run every phase
+npm run docker:clean && npm run test:integration  # Rebuild, then the full suite
 ```
 
 ### Performance Issues
@@ -187,8 +220,8 @@ npm run docker:start
 npm run docker:test              # Fast tests
 npm run docker:test              # Repeat as needed
 
-# Final validation
-npm run docker:test:clean        # Clean slate verification
+# Final validation - all phases, not just Phase 1
+npm run docker:test -- all --clean
 ```
 
 **CI/CD Workflow:**
@@ -197,16 +230,16 @@ npm run docker:test:clean        # Clean slate verification
 # Guaranteed clean testing
 npm run docker:clean && npm run test:integration
 
-# Or just use the built-in clean docker test
-npm run docker:test:clean
+# Or drive the runner directly (note the explicit "all")
+npm run docker:test -- all --clean
 ```
 
 ## 🎯 Summary
 
 The clean flag system provides flexibility:
 
-- **🚀 Fast by default**: Optimal for development and iteration
-- **🧹 Clean when needed**: Guaranteed fresh environment for validation
+- **🚀 Fast by default**: Phase 1 against the existing container - optimal for iteration
+- **🧹 Clean when needed**: `--clean` rebuilds the container; add `all` for every phase
 - **🎛️ Granular control**: Choose clean flag per test phase
 - **📜 Multiple interfaces**: npm scripts, shell script, or manual commands
 

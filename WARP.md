@@ -159,28 +159,16 @@ lib/
 
 **Multi-Provider Secret Management**:
 
-- **Environment Variables** (default and fallback)
-- **AWS Secrets Manager** for AWS deployments
-- **Azure Key Vault** for Azure deployments
-- **Credential caching** with configurable TTL
-- **Health monitoring** for secret providers
+> **⚠️ Cloud providers are not wired in.** `lib/config/secret-manager.js` implements a
+> `SecretManager` with AWS Secrets Manager and Azure Key Vault backends, credential caching
+> and provider health checks, and it is covered by unit tests - but nothing constructs it.
+> `index.js` builds `ServerConfig` and `ConnectionManager` directly, and `ServerConfig` never
+> reads `SECRET_MANAGER_TYPE`. Setting `SECRET_MANAGER_TYPE=aws` or `=azure` has **no effect**:
+> the server connects with the ordinary environment values and never contacts the vault. Wiring
+> the provider into startup is outstanding work; treat the guides below as preparation for the
+> cloud side only.
 
-#### Configuration
-
-```bash
-# Use AWS Secrets Manager
-SECRET_MANAGER_TYPE=aws
-AWS_REGION=us-east-1
-
-# Use Azure Key Vault
-SECRET_MANAGER_TYPE=azure
-AZURE_KEY_VAULT_URL=https://your-vault.vault.azure.net/
-
-# Use environment variables (default)
-SECRET_MANAGER_TYPE=env
-```
-
-**📋 Detailed Cloud Secret Management**:
+**📋 Cloud Secret Management guides** (setup on the AWS/Azure side; server integration pending):
 
 - **Azure Key Vault**: [Azure Secrets Configuration Guide](docs/reference/AZURE-SECRETS-GUIDE.md) - Complete setup with authentication, secret naming, and troubleshooting
 - **AWS Secrets Manager**: [AWS Secrets Configuration Guide](docs/reference/AWS-SECRETS-GUIDE.md) - Comprehensive guide with IAM roles, JSON secrets, and multi-environment deployment

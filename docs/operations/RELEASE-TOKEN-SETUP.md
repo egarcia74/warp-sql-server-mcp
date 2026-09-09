@@ -48,26 +48,63 @@ The release workflow is designed to work in both scenarios:
 
 ### Step 3: Verify Setup
 
-The workflow will automatically use `RELEASE_TOKEN` if available, falling back to `GITHUB_TOKEN` if not. You can verify by checking the workflow logs for:
+The workflow uses `RELEASE_TOKEN` if available and falls back to `GITHUB_TOKEN` if not. The
+selection is a bare expression - `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}` at
+the `Create Git tag` and `Create GitHub Release` steps of
+`.github/workflows/release.yml`.
 
-- "Using RELEASE_TOKEN for authenticated operations" (when token is set)
-- Standard behavior (when falling back to GITHUB_TOKEN)
+Because both credentials can create the tag, a successful release proves only that _one_ of
+them worked; it is not evidence the PAT was picked up. The `release` job's first step
+reports which way the expression will resolve:
+
+```text
+🔑 RELEASE_TOKEN configured: true
+```
+
+It prints only the boolean `secrets.RELEASE_TOKEN != ''`, never the secret.
+
+> **This is a presence check, not a validity check.** `||` falls through only on an **empty
+> string** - a secret that was never set, or set under a different name. A secret holding an
+> **expired, revoked, or wrongly scoped PAT is still a non-empty string**, so the
+> expression selects it, `configured: true` is reported, no fallback to `GITHUB_TOKEN`
+> happens, and the release fails at tag creation. Read the two signals together:
+> `configured: false` means you are definitely on `GITHUB_TOKEN`; `configured: true` plus
+> an auth failure at `Create Git tag` means the PAT is present but unusable - check its
+> expiry and its `Contents: Write` permission rather than assuming the fallback covered
+> you.
 
 ## Security Benefits
 
+> **⚠️ `RELEASE_TOKEN` does not remove the job's write permission.** The `release` job in
+> `.github/workflows/release.yml` declares `permissions: contents: write` **unconditionally**
+>
+> - the declaration is static YAML and cannot depend on whether a secret is set. It is there
+>   so the `GITHUB_TOKEN` fallback can push tags and create releases when no `RELEASE_TOKEN`
+>   is configured. Setting `RELEASE_TOKEN` changes which credential performs those operations,
+>   not what the job is granted, so Token-Permissions scanner findings on that job persist
+>   either way.
+
 ### With RELEASE_TOKEN
 
-- ✅ **Zero job-level write permissions** in workflow
 - ✅ **Fine-grained access** limited to specific operations
 - ✅ **Repository-scoped** token (not account-wide)
-- ✅ **Eliminates Token-Permissions alerts** from security scanners
-- ✅ **Token rotation** under your control
+- ✅ **Token rotation and revocation** under your control
+- ✅ **Audit separation** for the operations it authenticates: the tag **push** and the
+  GitHub **Release** are performed as the PAT's owner rather than the ambient workflow
+  identity. Note the limits - `RELEASE_TOKEN` creates no commit, and the git author on both
+  the tag and the version-bump commit is hard-coded to `GitHub Action`
+  (`user.name`/`user.email` are set in the workflow), so commit metadata is identical
+  either way. The version-bump commit is a separate job authenticated by `RELEASE_PR_TOKEN`
+- ⚠️ **Job permissions unchanged**: the job still declares `contents: write`
 
 ### Without RELEASE_TOKEN (Fallback)
 
 - ✅ **Still secure** using default GitHub mechanisms
-- ⚠️ **May trigger scanner alerts** due to `contents: write` permission
 - ✅ **Zero setup required** - works out of the box
+- ⚠️ **No separate identity**: operations run as the job's `GITHUB_TOKEN` - a short-lived,
+  repository-scoped installation token bounded by the job's declared `permissions`. It is
+  `RELEASE_TOKEN`, a personal access token, that carries the broader account-level scope
+- ⚠️ **No independent rotation**: the credential's lifecycle is GitHub's, not yours
 
 ## Token Rotation
 
@@ -88,9 +125,17 @@ For security best practices:
 
 ### Scanner Still Shows Alerts
 
-- Allow 24-48 hours for security scanners to re-evaluate
-- Verify the workflow file shows `contents: read` in job permissions
-- Check that token fallback logic is working: `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`
+Expected. The `release` job declares `contents: write` whether or not `RELEASE_TOKEN` is
+set, so a Token-Permissions finding on that job is accurate and will not clear by adding
+the token. `release.yml` carries an inline comment recording this as a deliberate
+trade-off: without the write permission, any repository lacking a `RELEASE_TOKEN` would
+fail at tag creation.
+
+To confirm the token itself is being picked up, read the `Report release credential` step's
+`RELEASE_TOKEN configured:` line (see Step 3). Do **not** infer it from the tag-creation
+step succeeding: `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}` means either
+credential can create the tag, so success is compatible with the PAT never having been
+read.
 
 ### Token Access Issues
 
@@ -100,12 +145,15 @@ For security best practices:
 
 ## Migration
 
-If migrating from `contents: write` permissions:
+To adopt `RELEASE_TOKEN` on a repository that currently relies on `GITHUB_TOKEN`:
 
 1. Set up `RELEASE_TOKEN` following this guide
 2. Workflow automatically detects and uses the token
 3. Monitor next release to ensure functionality
-4. Security alerts should resolve within 24-48 hours
+
+The job's `contents: write` declaration stays as it is, so Token-Permissions alerts on the
+`release` job will not resolve. Removing them would mean dropping the `GITHUB_TOKEN`
+fallback and making `RELEASE_TOKEN` mandatory.
 
 ## Best Practices
 

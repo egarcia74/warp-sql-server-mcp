@@ -137,31 +137,56 @@ Here's a typical performance monitoring workflow in Warp:
 ### Performance Monitoring Settings
 
 - `ENABLE_PERFORMANCE_MONITORING`: Enable/disable monitoring (default: true)
-- `SLOW_QUERY_THRESHOLD`: Milliseconds to consider a query "slow" (default: 1000)
-- `MAX_METRICS_HISTORY`: Maximum number of metrics to keep in memory (default: 500)
-- `PERFORMANCE_SAMPLING_RATE`: Fraction of queries to monitor (0.0-1.0, default: 1.0)
+- `SLOW_QUERY_THRESHOLD`: Milliseconds to consider a query "slow" (default: 5000; valid range
+  100-60000)
+- `MAX_METRICS_HISTORY`: Maximum number of metrics to keep in memory (default: 1000; valid
+  range 100-10000)
+- `PERFORMANCE_SAMPLING_RATE`: Fraction of queries to monitor (0.0-1.0, default: 1.0) -
+  **currently has no effect, see below**
 - `TRACK_POOL_METRICS`: Enable connection pool monitoring (default: true)
+
+> **⚠️ `PERFORMANCE_SAMPLING_RATE` is not yet wired up.** Every production call site
+> records through `PerformanceMonitor.recordQuery()`, which checks only whether monitoring
+> is enabled; the sampling check lives in `startQuery()`, which no production path calls.
+> Lowering the rate does not reduce per-query work or the number of retained samples - use
+> `MAX_METRICS_HISTORY` to bound memory, or `ENABLE_PERFORMANCE_MONITORING=false` to turn
+> recording off entirely.
+>
+> **A value outside the valid range falls back to the default, it is not clamped to the
+> nearest bound.** `_safeParseInt` warns and returns the default, so
+> `MAX_METRICS_HISTORY=50` yields `1000` rather than `100`, and `SLOW_QUERY_THRESHOLD=50`
+> yields `5000` rather than `100` - more history retained and a much less sensitive
+> slow-query threshold than the value implies.
 
 ### Example Configurations
 
+These go inside the `env` object of the Warp MCP server entry shown above.
+
 #### Production (Conservative)
 
+The `PERFORMANCE_SAMPLING_RATE` of `0.1` below is aspirational - it is kept so the example
+still reads as intended once sampling is wired up, but today it records every query.
+
 ```json
-"ENABLE_PERFORMANCE_MONITORING": "true",
-"SLOW_QUERY_THRESHOLD": "2000",
-"MAX_METRICS_HISTORY": "1000",
-"PERFORMANCE_SAMPLING_RATE": "0.1",
-"TRACK_POOL_METRICS": "true"
+{
+  "ENABLE_PERFORMANCE_MONITORING": "true",
+  "SLOW_QUERY_THRESHOLD": "2000",
+  "MAX_METRICS_HISTORY": "1000",
+  "PERFORMANCE_SAMPLING_RATE": "0.1",
+  "TRACK_POOL_METRICS": "true"
+}
 ```
 
 #### Development (Detailed)
 
 ```json
-"ENABLE_PERFORMANCE_MONITORING": "true",
-"SLOW_QUERY_THRESHOLD": "500",
-"MAX_METRICS_HISTORY": "100",
-"PERFORMANCE_SAMPLING_RATE": "1.0",
-"TRACK_POOL_METRICS": "true"
+{
+  "ENABLE_PERFORMANCE_MONITORING": "true",
+  "SLOW_QUERY_THRESHOLD": "500",
+  "MAX_METRICS_HISTORY": "100",
+  "PERFORMANCE_SAMPLING_RATE": "1.0",
+  "TRACK_POOL_METRICS": "true"
+}
 ```
 
 ## 🎯 Key Benefits
@@ -187,8 +212,9 @@ If you see "Performance monitoring is disabled", check:
 If tools return empty results:
 
 - Run some queries first to generate performance data
-- Check that `PERFORMANCE_SAMPLING_RATE` is > 0
 - Verify `MAX_METRICS_HISTORY` is sufficient
+- `PERFORMANCE_SAMPLING_RATE` is **not** a possible cause - it is not consulted on any
+  production path, so even `0.0` records every query
 
 ### Connection Issues
 

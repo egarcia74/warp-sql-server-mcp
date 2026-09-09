@@ -15,8 +15,13 @@ Dependencies are automatically classified into security risk categories:
 #### 🔒 **Security-Critical** (Manual Review Required)
 
 - **Database Libraries**: `mssql`, `tedious`
-- **Authentication**: `@azure/identity`, `@azure/keyvault-secrets`, `aws-sdk`, `@aws-sdk/*`
+- **Authentication**: `@azure/*` (including `@azure/identity`, `@azure/keyvault-secrets`),
+  `aws-sdk`, `@aws-sdk/*`
 - **Impact**: Core functionality, potential breaking changes
+- **Applies at every bump level**: these are held back from auto-merge for patch and minor
+  updates too, not just majors. `dependabot-auto-merge.yml` evaluates this class **before**
+  the patch/minor rule, so a `mssql` patch is labelled `manual-review-required` rather than
+  queued for auto-merge.
 - **SLA**: Review within 24-48 hours
 
 #### 🔧 **Development Dependencies** (Auto-Merge Eligible)
@@ -34,6 +39,17 @@ Dependencies are automatically classified into security risk categories:
 - **Impact**: Non-critical functionality
 - **SLA**: Auto-merge after tests pass
 
+> **⚠️ "Auto-merge eligible" applies per dependency, not per group.** Dependabot opens a
+> single-dependency PR with a parseable title
+> (`bump eslint from 10.9.1 to 10.10.0 in the dev-dependencies group across 1 directory`),
+> and those auto-merge as described. When it batches several updates into one PR the title
+> becomes `bump the dev-dependencies group with N updates` - no package, no version pair -
+> and the workflow cannot tell a patch from a major, so it holds the PR for review no
+> matter how low-risk the group is. Expect grouped `dev-dependencies`,
+> `testing-dependencies`, `docs-dependencies` and `utility-dependencies` PRs to wait on
+> you. Classifying them from `dependabot/fetch-metadata` instead of the title is what
+> would restore auto-merge for these.
+
 ## 🚀 Auto-Merge Workflow
 
 ### Trigger Conditions
@@ -41,28 +57,66 @@ Dependencies are automatically classified into security risk categories:
 Auto-merge is enabled when **ALL** conditions are met:
 
 1. ✅ **PR Author**: Created by `dependabot[bot]`
-2. ✅ **Tests**: Full test suite passes (508 tests)
-3. ✅ **Dependency Type**: Development/utility/docs dependencies
-4. ✅ **Update Type**: Patch or minor versions only
-5. ✅ **No Breaking Changes**: No major version bumps
+2. ✅ **Dependency Type**: Not a core database/auth dependency and not a security-critical
+   GitHub Action (`github/codeql-action`, `step-security/*`)
+3. ✅ **Update Type**: Patch or minor versions only
+4. ✅ **No Breaking Changes**: No major version bumps
+5. ✅ **Named in the title**: The title carries a `from X to Y` pair the workflow can parse.
+   A grouped multi-dependency update - `bump the <group> group with N updates` - names no
+   package and no versions, so its contents cannot be classified and it is held regardless
+   of which group it belongs to, `dev-dependencies` and the docs/build groups included
+
+Tests are **not** one of these conditions. Auto-merge is enabled purely from the
+classifier's verdict; GitHub then holds the merge until every required check is green (see
+"Failed checks" below).
 
 ### Security Update Priority
 
-**Security updates are ALWAYS auto-merged** regardless of dependency type if:
+A PR whose title contains `security`, `vulnerability`, `cve` or `ossf/scorecard-action` is
+auto-merge eligible even when its bump type could not be parsed from the title - **unless
+the title is a grouped one**, which is now caught before this branch is reached.
 
-- Tests pass
-- Contains keywords: `security`, `vulnerability`, `cve`
-- No test failures or regressions
+That exclusion is the point of the grouped-title rule. The group _names_ `security-actions`
+and `security-critical` contain the literal substring `security`, so before the rule existed
+`bump the security-actions group with 4 updates` matched this keyword branch and auto-merged
+the CodeQL and step-security actions the first manual-review rule claims to hold - PRs #1071
+and #1136 both merged that way.
+
+This branch is **not** an override of the manual-review rules above: it is evaluated after
+them, so a security update to `mssql`, `tedious`, `@azure/*` or an AWS SDK package is still
+held, as is any major bump. Those are the packages whose regressions break the server
+outright, so they get a human plus the 24-48 hour SLA rather than a queue-and-forget merge.
+What remains for this branch is the narrow case of a non-grouped title with no parseable
+version pair.
 
 ### Manual Review Triggers
 
-Auto-merge is **disabled** for:
+Auto-merge is **disabled** for, in the order the workflow evaluates them:
 
-- 🚨 **Major version updates** on production dependencies
-- 🔒 **Core database libraries** (`mssql`, `tedious`)
-- 🔑 **Authentication libraries** (Azure, AWS)
-- ❌ **Failed tests** or CI checks
-- 🔧 **Breaking changes** detected
+- 🔒 **Security-critical GitHub Actions** (`github/codeql-action`, `step-security/*`)
+- 🔒 **Core database libraries** (`mssql`, `tedious`) - at any bump level
+- 🔑 **Authentication libraries** (`@azure/*`, `aws-sdk`, `@aws-sdk/*`) - at any bump level
+- 📦 **Grouped updates** whose title names no dependency or version pair
+- 🚨 **Major version updates** on any dependency
+
+Each of these sets `auto_merge=false`, labels the PR `manual-review-required` and posts the
+manual-review comment. The order matters: the core-dependency rule is checked before the
+patch/minor rule, so a patch bump of one of those packages is held.
+
+### Failed checks are not a manual-review trigger
+
+A failing required check does **not** put a PR in the class above. The `Enable auto-merge`
+step is gated only on the classifier's verdict and runs `gh pr merge --auto` regardless of
+current check state, so on an otherwise eligible PR auto-merge stays **enabled** and the
+merge sits queued: GitHub holds it while a required check is red and completes it as soon as
+a later run goes green. No `manual-review-required` label and no comment are produced. Treat
+a red check as blocking the queued merge, not as disabling auto-merge - a rerun merges the
+PR without anyone revisiting it.
+
+> **The `notify-manual-review` job no longer carries its own pattern to keep in sync.** It
+> reads `auto_merge` and `reason` from the classifier through `needs`, so there is exactly
+> one place where the rules above live: the `analyze` step in
+> `.github/workflows/dependabot-auto-merge.yml`.
 
 ## 📊 Security Alert Triage
 
@@ -172,7 +226,7 @@ For critical vulnerabilities:
 #### Auto-Merge Not Working
 
 1. **Check PR labels**: Ensure correct classification
-2. **Verify tests**: All 508 tests must pass
+2. **Verify tests**: Every required CI check must pass
 3. **Review permissions**: GitHub token needs write access
 4. **Check workflow logs**: Look for errors in auto-merge workflow
 

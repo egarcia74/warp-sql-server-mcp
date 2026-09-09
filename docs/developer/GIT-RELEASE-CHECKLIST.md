@@ -56,7 +56,10 @@ If checks are stuck on the version-bump PR
 1. Update CHANGELOG.md and `package.json` version
 
 - Edit `CHANGELOG.md` ([WARP.md] Release Process details)
-- `npm version <patch|minor|major>` (no tag push)
+- `npm version X.Y.Z --no-git-tag-version` - bumps `package.json` and `package-lock.json`
+  only. **Do not use plain `npm version <patch|minor|major>`**: it also creates a commit
+  and an annotated tag, so the explicit tag step below then fails with
+  `fatal: tag 'vX.Y.Z' already exists`.
 
 1. Tag and GitHub Release
 
