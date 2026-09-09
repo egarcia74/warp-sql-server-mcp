@@ -171,7 +171,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr merge "$PR_NUMBER" --disable-auto || echo "Note: auto-merge was not enabled"
+          set -euo pipefail
+
+          # Fail closed. `|| echo` here would turn a transient API, auth or permission
+          # failure into a green step, and notify-manual-review would then tell reviewers
+          # auto-merge is disabled while the sticky request was still live. So tolerate
+          # only the verified "was never enabled" case: read the state, act, re-read.
+          state=$(gh pr view "$PR_NUMBER" --json autoMergeRequest --jq 'if .autoMergeRequest then "enabled" else "absent" end')
+          if [ "$state" = "absent" ]; then
+            echo "Auto-merge was not enabled - nothing to revoke"
+            exit 0
+          fi
+
+          echo "Auto-merge is enabled on #$PR_NUMBER - revoking"
+          gh pr merge "$PR_NUMBER" --disable-auto
+
+          after=$(gh pr view "$PR_NUMBER" --json autoMergeRequest --jq 'if .autoMergeRequest then "enabled" else "absent" end')
+          if [ "$after" != "absent" ]; then
+            echo "::error::Failed to revoke auto-merge on #$PR_NUMBER - it is still queued and will merge when checks pass"
+            exit 1
+          fi
+          echo "Auto-merge revoked"
 
       - name: Add security notice for critical updates
         if: steps.analyze.outputs.auto_merge == 'true' && (contains(github.event.pull_request.title, 'security') || contains(github.event.pull_request.title, 'vulnerability'))

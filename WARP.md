@@ -344,7 +344,10 @@ STREAMING_MAX_RESPONSE_SIZE=1000000
 **Comprehensive Performance Tracking**: Enterprise-grade monitoring and alerting:
 
 - **Query Execution Tracking**: Duration, memory usage, row counts
-- **Connection Pool Monitoring**: Health, utilization, error rates
+- **Connection Pool Monitoring**: Health and pool counters read live from the driver via
+  `ConnectionManager.getPoolStats()`. Utilization history and connection-error rates are
+  **not** recorded - `PerformanceMonitor.recordPoolMetrics()` and `recordConnectionEvent()`
+  have no production call sites, so `TRACK_POOL_METRICS` gates nothing
 - **Slow Query Detection**: Configurable thresholds with alerting
 - **Performance Recommendations**: AI-powered optimization suggestions
 - **Historical Analytics**: Trend analysis and performance insights
