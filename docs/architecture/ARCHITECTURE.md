@@ -260,9 +260,11 @@ no external metrics backend.
 > called only from `test/unit/performance-monitor.test.js` - no production path invokes
 > either, so the monitor's pool counters stay at their initialized zeros wherever they
 > surface. The two tools reach them differently: `get_performance_stats` calls
-> `getStats()`, which always includes `pool: this.metrics.poolStats` and never consults
+> `getStats()`, which includes `pool: this.metrics.poolStats` without consulting
 > `trackPoolMetrics`, while `get_connection_health` calls `getPoolStats()`, which
-> short-circuits to `{ enabled: false }` when the setting is off. Live
+> short-circuits to `{ enabled: false }` when that setting is off. Both are additionally
+> gated on `ENABLE_PERFORMANCE_MONITORING`: with it `false`, each method returns
+> `{ enabled: false }` at its first line and neither tool reports a `pool` field at all. Live
 > pool state reaches `get_connection_health` by a different route -
 > `ConnectionManager.getConnectionHealth()` reads `size`, `available`, `pending` and
 > `borrowed` straight off the driver pool and never passes through the monitor. So

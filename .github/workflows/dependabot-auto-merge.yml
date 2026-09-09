@@ -223,10 +223,13 @@ jobs:
     name: Notify Manual Review Required
     runs-on: ubuntu-latest
     needs: auto-merge
-    # Gate on the classifier having actually run and returned a definite "no". Supplying a
-    # job-level `if` drops the implicit success() guard, so `!= 'true'` would fire on a
-    # skipped auto-merge job - i.e. on every non-Dependabot PR - where the output is empty.
-    if: needs.auto-merge.result == 'success' && needs.auto-merge.outputs.auto_merge == 'false'
+    # Fire whenever the classifier returned a definite "no", INCLUDING when the auto-merge
+    # job then failed. Gating on result == 'success' meant a failed revocation - the one
+    # case where a PR is held on paper but still queued to merge - suppressed the only
+    # warning reviewers get. always() is required because a job-level `if` otherwise
+    # carries an implicit success(); the auto_merge == 'false' test still excludes the
+    # skipped job on non-Dependabot PRs, where every output is empty.
+    if: always() && needs.auto-merge.outputs.auto_merge == 'false'
     permissions:
       pull-requests: write
     steps:
@@ -239,7 +242,27 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REASON: ${{ needs.auto-merge.outputs.reason }}
+          CLASSIFIER_RESULT: ${{ needs.auto-merge.result }}
         run: |
+          # A failed auto-merge job most likely failed in the revocation step, which
+          # means the PR is held on paper but may still be queued to merge. Say that
+          # instead of posting the routine notice: this workflow is not a required
+          # status check, so its failure blocks nothing and nothing else will warn.
+          if [ "$CLASSIFIER_RESULT" != "success" ]; then
+            gh pr comment "$PR_NUMBER" --body "**Manual Review Required - and auto-merge may still be active**
+
+          This update is ${REASON}, so it must not merge unattended. The run that
+          classified it FAILED (${CLASSIFIER_RESULT}), most likely while revoking a
+          queued auto-merge.
+
+          Check the PR's auto-merge state by hand before relying on this hold. This
+          workflow is not a required status check, so its failure does not block the
+          merge; if auto-merge is still queued GitHub will merge this PR as soon as
+          the required checks pass. Clear it with the merge box or
+          gh pr merge $PR_NUMBER --disable-auto, then review as normal."
+            exit 0
+          fi
+
           gh pr comment "$PR_NUMBER" --body "🔍 **Manual Review Required**
 
           Auto-merge was declined because this update is ${REASON}.
