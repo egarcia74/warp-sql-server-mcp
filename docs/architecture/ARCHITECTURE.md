@@ -258,19 +258,15 @@ no external metrics backend.
 > **⚠️ Pool metrics and connection events are never recorded.** `recordPoolMetrics()` and
 > `recordConnectionEvent()` are implemented (`performance-monitor.js:241`, `:269`) but
 > called only from `test/unit/performance-monitor.test.js` - no production path invokes
-> either, so the monitor's pool counters stay at their initialized zeros wherever they
-> surface. The two tools reach them differently: `get_performance_stats` calls
-> `getStats()`, which includes `pool: this.metrics.poolStats` without consulting
-> `trackPoolMetrics`, while `get_connection_health` calls `getPoolStats()`, which
-> short-circuits to `{ enabled: false }` when that setting is off. Both are additionally
-> gated on `ENABLE_PERFORMANCE_MONITORING`: with it `false`, each method returns
-> `{ enabled: false }` at its first line and neither tool reports a `pool` field at all. Live
-> pool state reaches `get_connection_health` by a different route -
+> either, so the monitor's pool counters are always at their initialized zeros. Live pool
+> state does reach `get_connection_health`, by a different route:
 > `ConnectionManager.getConnectionHealth()` reads `size`, `available`, `pending` and
-> `borrowed` straight off the driver pool and never passes through the monitor. So
-> `TRACK_POOL_METRICS` does not gate recording (nothing records) - it only suppresses the
-> monitor's block inside `get_connection_health`. `get_performance_stats` returns the
-> zeroed `pool` object either way.
+> `borrowed` straight off the driver pool without passing through the monitor.
+> `TRACK_POOL_METRICS` therefore gates nothing about recording - it only affects the shape
+> of the monitor's own block. Exactly which tool emits that block, and under which of
+> `ENABLE_PERFORMANCE_MONITORING` / `TRACK_POOL_METRICS`, is response-shape detail rather
+> than architecture: read `getStats()` and `getPoolStats()` in `performance-monitor.js`
+> and their call sites at `index.js:547`, `:609` and `:720`.
 
 **`Logger`** wraps Winston to provide levelled structured logging plus a separate security
 audit channel. File transports are **opt-in**: `index.js` passes a path only when
