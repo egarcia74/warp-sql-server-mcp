@@ -184,12 +184,15 @@ configuration path - grep for `process.env` before assuming it does.
   `TRACK_POOL_METRICS`, `ENABLE_SECURITY_AUDIT`, the two `SQL_SERVER_ALLOW_*` flags) are
   bare `=== 'true'` / `!== 'false'` comparisons, so a malformed boolean silently takes the
   default with **no warning** - though those defaults fail safe (read-only on, destructive
-  and schema changes off), which is what makes the silence tolerable. Strings
-  (`SQL_SERVER_LOG_LEVEL`, host, database, credentials) get an `||` default when the value
-  is **empty or unset** - `localhost`, `master`, `info` - but are otherwise passed through
-  without validation. The distinction matters: unset `SQL_SERVER_HOST` quietly becomes
-  `localhost`, while a _misspelled_ host is attempted as given and fails at connect time.
-  No malformed string is ever corrected or warned about
+  and schema changes off), which is what makes the silence tolerable. Three strings get an
+  `||` default when empty or unset - `SQL_SERVER_HOST` to `localhost`, `SQL_SERVER_DATABASE`
+  to `master`, `SQL_SERVER_LOG_LEVEL` to `info` - and are otherwise passed through without
+  validation, so an unset host quietly becomes `localhost` while a _misspelled_ one is
+  attempted as given and fails at connect time. **Credentials are not in that group**:
+  `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD` are read raw with no fallback, and in
+  `_buildConnectionConfig()` both being falsy selects NTLM and drops the fields entirely,
+  so an empty credential changes the _authentication mode_ rather than defaulting. No
+  malformed string is ever corrected or warned about
 - Groups configuration into connection, security, performance, streaming and logging
   sections. The connection, security and logging sections are consumed by the components
   above; the streaming section is **not** - see the notice below
@@ -255,14 +258,17 @@ no external metrics backend.
 > **⚠️ Pool metrics and connection events are never recorded.** `recordPoolMetrics()` and
 > `recordConnectionEvent()` are implemented (`performance-monitor.js:241`, `:269`) but
 > called only from `test/unit/performance-monitor.test.js` - no production path invokes
-> either. The `PerformanceMonitor.getPoolStats()` block that `get_performance_stats` and
-> `get_connection_health` return therefore stays at its initialized zero counters. Live
+> either, so the monitor's pool counters stay at their initialized zeros wherever they
+> surface. The two tools reach them differently: `get_performance_stats` calls
+> `getStats()`, which always includes `pool: this.metrics.poolStats` and never consults
+> `trackPoolMetrics`, while `get_connection_health` calls `getPoolStats()`, which
+> short-circuits to `{ enabled: false }` when the setting is off. Live
 > pool state reaches `get_connection_health` by a different route -
 > `ConnectionManager.getConnectionHealth()` reads `size`, `available`, `pending` and
 > `borrowed` straight off the driver pool and never passes through the monitor. So
-> `TRACK_POOL_METRICS` does not gate recording (nothing records); what it gates is whether
-> the monitor's block is returned at all, since `getPoolStats()` short-circuits to
-> `{ enabled: false }` when it is off.
+> `TRACK_POOL_METRICS` does not gate recording (nothing records) - it only suppresses the
+> monitor's block inside `get_connection_health`. `get_performance_stats` returns the
+> zeroed `pool` object either way.
 
 **`Logger`** wraps Winston to provide levelled structured logging plus a separate security
 audit channel. File transports are **opt-in**: `index.js` passes a path only when

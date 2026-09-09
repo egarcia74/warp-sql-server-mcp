@@ -120,8 +120,10 @@ PR without anyone revisiting it.
 > `notify-manual-review` is not one of them - it reads `auto_merge` and `reason` from the
 > classifier through `needs`, so it cannot drift. The two that can are:
 >
-> - the `analyze` step in `.github/workflows/dependabot-auto-merge.yml` (runs on every
->   Dependabot PR event)
+> - the `analyze` step in `.github/workflows/dependabot-auto-merge.yml` (triggered by
+>   `pull_request` types `opened`, `synchronize` and `reopened` - **not** `edited`, so a
+>   title corrected after auto-merge was queued does not reclassify until another of those
+>   events fires)
 > - `classify_pr` plus its rule chain in `.github/workflows/dependabot-retriage.yml`
 >   (manual `workflow_dispatch`, used to re-classify a backlog)
 >
