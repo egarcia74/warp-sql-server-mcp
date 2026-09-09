@@ -77,7 +77,9 @@ The workflow will automatically use `RELEASE_TOKEN` if available, falling back t
 
 - ✅ **Still secure** using default GitHub mechanisms
 - ✅ **Zero setup required** - works out of the box
-- ⚠️ **Account-wide identity**: operations run as the ambient `GITHUB_TOKEN`
+- ⚠️ **No separate identity**: operations run as the job's `GITHUB_TOKEN` - a short-lived,
+  repository-scoped installation token bounded by the job's declared `permissions`. It is
+  `RELEASE_TOKEN`, a personal access token, that carries the broader account-level scope
 - ⚠️ **No independent rotation**: the credential's lifecycle is GitHub's, not yours
 
 ## Token Rotation
@@ -105,10 +107,12 @@ the token. `release.yml` carries an inline comment recording this as a deliberat
 trade-off: without the write permission, any repository lacking a `RELEASE_TOKEN` would
 fail at tag creation.
 
-To confirm the token itself is being picked up:
-
-- Check the workflow logs for "Using RELEASE_TOKEN for authenticated operations"
-- Check the fallback expression resolves: `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`
+To confirm the token itself is being picked up: `release.yml` logs nothing about which
+credential it resolved, so there is no log line to grep for. The expression
+`${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}` is evaluated at
+`.github/workflows/release.yml:254` and `:268`; a missing secret resolves to the empty
+string and silently falls through to `GITHUB_TOKEN`. Confirm by whether the tag-creation
+step succeeds, not by reading the log.
 
 ### Token Access Issues
 

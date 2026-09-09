@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     # Only run for Dependabot PRs
     if: github.actor == 'dependabot[bot]'
+    outputs:
+      auto_merge: ${{ steps.analyze.outputs.auto_merge }}
+      reason: ${{ steps.analyze.outputs.reason }}
     permissions:
       contents: write
       pull-requests: write
@@ -78,6 +81,7 @@ jobs:
           if echo "$PR_TITLE" | grep -qi "github/codeql-action\|step-security"; then
             echo "🔒 Security-critical action - manual review required"
             auto_merge=false
+            reason="a security-critical GitHub Action"
 
           # Block auto-merge for core database/auth dependencies at ANY bump level.
           # This must be evaluated before the patch/minor branch below, otherwise a
@@ -86,11 +90,13 @@ jobs:
           elif echo "$PR_TITLE" | grep -qiE 'bump (@?[^ ]*(mssql|tedious)|@azure/[^ ]+|aws-sdk|@aws-sdk/[^ ]+) '; then
             echo "🔒 Core database/authentication dependency - manual review required"
             auto_merge=false
+            reason="a core database or authentication dependency, held at every bump level"
 
           # Block auto-merge for major updates
           elif [ "$bump_type" = "major" ]; then
             echo "🚨 Major version bump detected - manual review required"
             auto_merge=false
+            reason="a major version bump"
 
           # Auto-merge for patch/minor bumps (subject to other checks below)
           elif [ "$bump_type" = "patch" ] || [ "$bump_type" = "minor" ]; then
@@ -114,9 +120,11 @@ jobs:
           
           else
             echo "🔍 Manual review required for this update"
+            reason="the update could not be classified automatically"
           fi
           
           echo "auto_merge=$auto_merge" >> $GITHUB_OUTPUT
+          echo "reason=${reason:-unclassified}" >> $GITHUB_OUTPUT
           
           # Add auto-merge label if eligible
           if [ "$auto_merge" = "true" ]; then
@@ -155,49 +163,41 @@ jobs:
           
           ⚡ **Auto-merge enabled** - will merge automatically once all CI checks pass."
 
+  # Posts the counterpart notice whenever the auto-merge job declined to merge. It reads
+  # that job's decision rather than re-deriving one from the PR title: a duplicate title
+  # regex here could never cover the major-version class (Dependabot titles carry version
+  # numbers, not the word "major") and would drift from the classifier it is meant to
+  # mirror, so a PR could be told "auto-merge disabled" while it was merging.
   notify-manual-review:
     name: Notify Manual Review Required
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    needs: auto-merge
+    # Gate on the classifier having actually run and returned a definite "no". Supplying a
+    # job-level `if` drops the implicit success() guard, so `!= 'true'` would fire on a
+    # skipped auto-merge job - i.e. on every non-Dependabot PR - where the output is empty.
+    if: needs.auto-merge.result == 'success' && needs.auto-merge.outputs.auto_merge == 'false'
     permissions:
       pull-requests: write
     steps:
-      - name: Check if manual review needed
+      - name: Post the manual-review notice
         env:
           GH_TOKEN: ${{ github.token }}
           # This job has no checkout, so `gh` has no git remote to infer the repository
-          # from and every `gh pr` call here failed with "not a git repository" - but only
-          # on the PRs that matched below, because that is the only branch that runs one.
-          # The notice has therefore never been posted. GH_REPO supplies the context
-          # without fetching the tree.
+          # from, and every `gh pr` call here used to fail with "not a git repository".
+          # GH_REPO supplies the context without fetching the tree.
           GH_REPO: ${{ github.repository }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REASON: ${{ needs.auto-merge.outputs.reason }}
         run: |
-          pr_number=$PR_NUMBER
-          
-          # Check if this is a major version update or security-critical dependency.
-          # Keep this pattern in sync with the auto-merge job's core-dependency
-          # block, so a PR is never told "auto-merge disabled" while it is merging.
-          if echo "$PR_TITLE" | grep -qiE 'major|bump (@?[^ ]*(mssql|tedious)|@azure/[^ ]+|aws-sdk|@aws-sdk/[^ ]+) '; then
-            gh pr comment $pr_number --body "🔍 **Manual Review Required**
+          gh pr comment "$PR_NUMBER" --body "🔍 **Manual Review Required**
 
-            This Dependabot update requires manual review because:
-            - Major version update or security-critical dependency
-            - Potential breaking changes
-            - Enhanced testing may be needed
+          Auto-merge was declined because this update is ${REASON}.
 
-            📋 **Review checklist:**
-            - [ ] Review CHANGELOG for breaking changes
-            - [ ] Test MCP server functionality locally
-            - [ ] Verify database connection stability
-            - [ ] Check for API changes in dependencies
-            - [ ] Run full test suite with new versions
+          📋 **Review checklist:**
+          - [ ] Review CHANGELOG for breaking changes
+          - [ ] Test MCP server functionality locally
+          - [ ] Verify database connection stability
+          - [ ] Check for API changes in dependencies
+          - [ ] Run the full test suite with the new versions
 
-            🔒 **Security note:** This update affects core database connectivity - thorough testing recommended.
-            
-            ⏸️ **Auto-merge disabled** - manual merge required after review."
-            
-            # Add manual review label
-            gh pr edit $pr_number --add-label "manual-review-required" --add-label "security-critical"
-          fi
+          ⏸️ **Auto-merge disabled** - merge manually after review."

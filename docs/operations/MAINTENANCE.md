@@ -62,19 +62,7 @@ Terminating is never automatic; it always takes an explicit `--kill PID`.
 
 ### Script Features
 
-The `cleanup-test-processes.sh` script terminates a Vitest process only when **all three**
-scoping rules hold:
-
-1. **Repository-scoped**: its command line references this checkout's `node_modules`, so
-   Vitest runs in another checkout - or in an unrelated project - are never touched.
-2. **Not an ancestor**: it is not the script's own parent chain, so a run that invoked the
-   cleanup (pre-push hook, npm lifecycle script) cannot kill itself.
-3. **Older than the orphan threshold**: it has been alive longer than
-   `CLEANUP_MIN_AGE_MINUTES` (default `10`). The unit suite finishes in well under a
-   minute, so an actively running suite falls below the threshold and is reported as
-   "left running" rather than killed.
-
-Other behaviour:
+The `cleanup-test-processes.sh` script:
 
 - ✅ **Lists, never selects**: With no arguments it prints every Vitest process with its **PID,
   PPID, elapsed time and full command**, then exits 0. It terminates nothing. The pre-push hook

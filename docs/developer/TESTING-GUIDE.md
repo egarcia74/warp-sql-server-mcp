@@ -118,8 +118,8 @@ test/
 For most development and testing scenarios:
 
 ```bash
-# Run unit tests first
-npm test
+# Run unit tests first (fast, no Docker)
+npm run test:unit
 
 # Run performance validation
 npm run test:integration:performance

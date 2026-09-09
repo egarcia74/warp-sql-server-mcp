@@ -439,7 +439,7 @@ The MCP server includes comprehensive security tests:
 # Run all security-related unit tests
 npm run test:unit -- -t "safety|security|validation"
 
-# Test a specific behaviour
+# Test a specific behavior
 npm run test:unit -- -t "validateQuery"
 ```
 

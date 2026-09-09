@@ -151,13 +151,16 @@ npm run docker:reset            # Reset with fresh data
 ./scripts/docker-test-runner.sh phase1 --clean  # Clean specific test
 ```
 
-### Cleanup Issues in Read-Only Mode
+### Leftover Test Data Between Runs
 
-Post-test cleanup statements are blocked when the server is in read-only mode, so test
-data survives the run. Do not assume this is harmless: leftover rows from a previous run
-can change what a later phase sees, and a phase that asserts on row counts or on a table
-being empty will produce a misleading pass or failure. Rebuild the container rather than
-ignoring it:
+Read-only mode does **not** block cleanup: `cleanupDatabase` in
+`test/integration/manual/test-database-helper.js` saves the three safety flags, sets them
+all permissive, calls `serverConfig.reload()`, and restores them afterwards. Leftover data
+comes from elsewhere - a phase that failed before reaching its cleanup, or the pre-seeded
+Phase 1 and Phase 2 databases, which are not in the helper's cleanup list (both phases
+report "Cleaning up 0 test databases"). Do not assume it is harmless: rows from a previous
+run can change what a later phase sees, and a phase asserting on row counts or on a table
+being empty will produce a misleading pass or failure. Rebuild the container:
 
 ```bash
 npm run docker:test -- all --clean                # Rebuild, then run every phase

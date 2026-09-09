@@ -9,12 +9,12 @@ fundamentally **a comprehensive framework for building production-ready, enterpr
 architecture demonstrates advanced software engineering principles through practical implementation.
 
 > **How to read this document.** "System Architecture" and "Core Components" describe the
-> code as it exists - every component named there maps to a file in this repository. The
-> sections from "Error Handling Architecture" onward are a **design rationale and
-> aspiration**: they set out the patterns the project is built toward, and they name
-> patterns (circuit breakers, distributed tracing, blue-green deployment, hot reload,
-> schema-validated configuration) that are **not implemented**. Sections in that half carry
-> an explicit marker. Do not read them as a description of runtime behaviour.
+> code as it exists - every component named there maps to a file in this repository. From
+> "Error Handling Architecture" onward the document **mixes implemented behavior with
+> design aspiration**, and every numbered item in that half carries its own `_implemented_`
+> or `_aspirational_` marker. Read the markers, not the section titles. The patterns marked
+> aspirational (circuit breakers, distributed tracing, blue-green deployment, hot reload,
+> schema-validated configuration) are **not implemented**.
 
 ## Architectural Philosophy
 
@@ -146,7 +146,7 @@ module-level singleton and reloaded at startup.
 
 **Responsibilities**:
 
-- Parses and range-clamps every environment variable
+- Parses and range-clamps every **supported** environment variable
   (`_safeParseInt`, `_safeParseFloat`)
 - Groups configuration into connection, security, performance, streaming and logging
   sections consumed by the components above
@@ -173,7 +173,10 @@ module-level singleton and reloaded at startup.
 
 Analysis tools live beside these: `QueryOptimizer` (`lib/analysis/query-optimizer.js`)
 and `BottleneckDetector` (`lib/analysis/bottleneck-detector.js`) query DMVs through the
-same `ConnectionManager`.
+same `ConnectionManager`. `BottleneckDetector.detectBottlenecks()` backs
+`detect_query_bottlenecks`; both are constructed **without** a `PerformanceMonitor`, so
+their findings come from live DMV queries rather than the monitor's samples and never
+enter its history.
 
 ### 5. PerformanceMonitor and Logger (Observability Layer)
 
@@ -182,8 +185,8 @@ same `ConnectionManager`.
 **`PerformanceMonitor`** records per-query timings and pool statistics, bounded by
 `MAX_METRICS_HISTORY` (default `1000`) and sampled at `PERFORMANCE_SAMPLING_RATE`. It
 classifies a query as slow past `SLOW_QUERY_THRESHOLD` (default `5000` ms) and backs
-`get_performance_stats`, `get_query_performance` and `detect_query_bottlenecks`. It is an
-in-memory ring of samples - there is no alert manager and no external metrics backend.
+`get_performance_stats` and `get_query_performance`. It is an in-memory ring of samples -
+there is no alert manager and no external metrics backend.
 
 **`Logger`** wraps Winston to provide levelled structured logging plus a separate security
 audit channel. File transports are **opt-in**: `index.js` passes a path only when
@@ -252,8 +255,10 @@ are the intended control - see [SECURITY.md](SECURITY.md).
 - Error handling and normalisation into `McpError`
 - Result formatting (text table or CSV)
 
-Tools issue single statements against the pool; there is no explicit transaction
-management layer.
+Tools issue statements **or multi-statement T-SQL batches** against the pool -
+`lib/security/sql-batch-guard.js` exists precisely to scan every statement in a batch - and
+passing `database` to `execute_query` runs a separate `USE [...]` query first. There is no
+explicit transaction-management layer.
 
 ### 4. **Data Layer Operations**
 
@@ -281,9 +286,8 @@ never a raw `mssql` or Node error object. Connection failures are retried with b
 
 ### Aspirational Patterns
 
-> **Not implemented.** The following are design goals, not current behaviour. In
-> particular there is no circuit breaker and no graceful-degradation path: a database that
-> is unreachable produces an error per call.
+> **Partly implemented - read the per-item markers.** There is no circuit breaker and no
+> graceful-degradation path: a database that is unreachable produces an error per call.
 
 1. **Fail Fast**: Detect errors as early as possible - _implemented_ for query validation
 2. **Error Boundaries**: Prevent error propagation between layers - _implemented_ via `McpError`
@@ -382,10 +386,13 @@ Data Access Control → Audit Logging → Threat Detection
 
 > **Partly aspirational.** The server is a single stdio process launched by one MCP client;
 > load balancing and circuit breaking are design goals for a future deployment shape, not
-> current behaviour.
+> current behavior.
 
 1. **Connection Pooling**: Efficient database connection reuse - _implemented_ (`mssql` pool)
-2. **Stateless Design**: No server-side session state - _implemented_
+2. **Stateless Design**: No per-request session state - _partial_. `PerformanceMonitor`
+   holds process-local state (bounded query history, aggregates, connection metrics, start
+   time), so `get_performance_stats` and `get_query_performance` return instance-specific
+   data and two instances are **not** interchangeable for them.
 3. **Load Balancing**: Request distribution across instances - _aspirational_
 4. **Circuit Breaker**: Fault isolation and recovery - _aspirational_
 

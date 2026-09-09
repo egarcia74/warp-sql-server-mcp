@@ -353,7 +353,7 @@ accidental certificate trust in cloud production environments using private IP a
 - **Default**: `env`
 - **Description**: Secret provider intended for credential management
 - **Values**:
-  - `env` (environment variables) - the only behaviour available today
+  - `env` (environment variables) - the only behavior available today
   - `aws` (AWS Secrets Manager) - not wired in
   - `azure` (Azure Key Vault) - not wired in
 
