@@ -42,15 +42,19 @@ This enables:
 
 The server includes a comprehensive diagnostics tool accessible through the MCP interface:
 
+MCP tool call:
+
 ```json
-// MCP tool call
 {
   "name": "get_server_info",
   "arguments": {
-    "include_logs": true // Optional: include logging context
+    "include_logs": true
   }
 }
 ```
+
+`include_logs` is optional and defaults to `false`; set it to `true` to include logging
+context in the response.
 
 This tool provides:
 
@@ -68,6 +72,26 @@ This tool provides:
 - Debugging MCP connectivity problems
 
 ## Log Analysis Tools
+
+> **⚠️ File logging is opt-in - by default there are no log files to read.** `index.js`
+> passes a file path to `Logger` **only** when the corresponding environment variable is
+> set, so without them the server logs to the console (stderr) and your MCP client's own
+> log capture is the only record. The log viewer commands below have nothing to show until
+> you set at least one of:
+>
+> ```bash
+> # Main server log
+> LOG_FILE=./logs/server.log
+>
+> # Security audit log (also needs ENABLE_SECURITY_AUDIT=true to emit audit events)
+> SECURITY_LOG_FILE=./logs/security-audit.log
+> ENABLE_SECURITY_AUDIT=true
+> ```
+>
+> `npm run logs` defaults to `./logs/server.log`, so setting `LOG_FILE` to that path makes
+> the viewer work out of the box. Run `get_server_info` to confirm: the
+> `configuration.logging.logFile` field reads `Not configured (console only)` until a path
+> is set.
 
 ### Smart Log Viewer (Recommended)
 
@@ -124,6 +148,10 @@ This is especially useful for:
 - Analyzing logs from different environments
 
 **Smart Path Detection:**
+
+These are the paths `show-logs.sh` _looks in_ when you do not pass `--file`. They are not
+paths the server writes to on its own - point `LOG_FILE` / `SECURITY_LOG_FILE` at one of
+them (or anywhere else) to actually produce a file there.
 
 - **Development**: `./logs/server.log`, `./logs/security-audit.log`
 - **Production**: `~/.local/state/warp-sql-server-mcp/server.log`, `~/.local/state/warp-sql-server-mcp/security-audit.log`

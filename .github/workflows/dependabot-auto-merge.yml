@@ -79,6 +79,14 @@ jobs:
             echo "🔒 Security-critical action - manual review required"
             auto_merge=false
 
+          # Block auto-merge for core database/auth dependencies at ANY bump level.
+          # This must be evaluated before the patch/minor branch below, otherwise a
+          # patch bump of mssql/tedious/Azure/AWS would auto-merge while the
+          # notify-manual-review job simultaneously tells reviewers it did not.
+          elif echo "$PR_TITLE" | grep -qiE 'bump (@?[^ ]*(mssql|tedious)|@azure/[^ ]+|aws-sdk|@aws-sdk/[^ ]+) '; then
+            echo "🔒 Core database/authentication dependency - manual review required"
+            auto_merge=false
+
           # Block auto-merge for major updates
           elif [ "$bump_type" = "major" ]; then
             echo "🚨 Major version bump detected - manual review required"
@@ -157,13 +165,21 @@ jobs:
       - name: Check if manual review needed
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job has no checkout, so `gh` has no git remote to infer the repository
+          # from and every `gh pr` call here failed with "not a git repository" - but only
+          # on the PRs that matched below, because that is the only branch that runs one.
+          # The notice has therefore never been posted. GH_REPO supplies the context
+          # without fetching the tree.
+          GH_REPO: ${{ github.repository }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           pr_number=$PR_NUMBER
           
-          # Check if this is a major version update or security-critical dependency
-          if echo "$PR_TITLE" | grep -qi "major\|mssql\|tedious\|azure.*identity\|aws-sdk"; then
+          # Check if this is a major version update or security-critical dependency.
+          # Keep this pattern in sync with the auto-merge job's core-dependency
+          # block, so a PR is never told "auto-merge disabled" while it is merging.
+          if echo "$PR_TITLE" | grep -qiE 'major|bump (@?[^ ]*(mssql|tedious)|@azure/[^ ]+|aws-sdk|@aws-sdk/[^ ]+) '; then
             gh pr comment $pr_number --body "🔍 **Manual Review Required**
 
             This Dependabot update requires manual review because:

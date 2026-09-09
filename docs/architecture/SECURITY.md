@@ -436,20 +436,25 @@ Every query response includes current security status:
 The MCP server includes comprehensive security tests:
 
 ```bash
-# Run all security-related tests
-npm test -- --grep "safety\|security\|validation"
+# Run all security-related unit tests
+npm run test:unit -- -t "safety|security|validation"
 
-# Test security configuration
-npm test -- --grep "validateQuery"
+# Test a specific behaviour
+npm run test:unit -- -t "validateQuery"
 ```
+
+> Vitest filters by test name with `-t` / `--testNamePattern` (the value is a regular
+> expression), not `--grep`. Use `npm run test:unit`, not `npm test`: `npm test` is a shell
+> chain ending in the summary script, so extra arguments are appended to the wrong command
+> and never reach Vitest.
 
 ### Manual Security Testing
 
 #### Test Read-Only Mode
 
 ```sql
--- This should work in read-only mode
-SELECT * FROM Users LIMIT 10;
+-- This should work in read-only mode (T-SQL has no LIMIT; use TOP)
+SELECT TOP 10 * FROM Users;
 
 -- These should be blocked in read-only mode
 INSERT INTO Users (name) VALUES ('test');

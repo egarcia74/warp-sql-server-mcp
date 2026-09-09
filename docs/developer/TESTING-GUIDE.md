@@ -9,10 +9,14 @@ This document explains how to run the various tests in this project and when to 
 ### Unit Tests (Automated)
 
 ```bash
-npm test              # Run all unit tests
-npm run test:watch    # Run tests in watch mode
-npm run test:coverage # Run with coverage report
+npm run test:unit       # Run all unit tests (fast, no Docker)
+npm run test:unit:watch # Run unit tests in watch mode
+npm run test:coverage   # Run with coverage report
 ```
+
+> **`npm test` is not the unit suite.** It chains `test:unit && test:integration` plus the
+> summary script, and `test:integration` starts and tears down a Docker SQL Server
+> container. Use `npm run test:unit` for the fast inner loop.
 
 ### Integration Tests - Complete Suite
 

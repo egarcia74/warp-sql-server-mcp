@@ -106,23 +106,31 @@ Your SQL Server is now connected to Warp's AI! 🤖
 **📋 Get comprehensive help:**
 
 ```bash
-npm run help               # Show all available commands with descriptions
+warp-sql-server-mcp help   # Show all available commands
 ```
 
 **📊 Monitor server activity:**
 
-```bash
-npm run logs               # Show recent server logs
-npm run logs:tail          # Follow logs in real-time
-npm run logs:audit         # Show security audit logs
-```
+You installed the server globally, so the `npm run logs*` scripts are not available -
+they live in the git repository, and `scripts/` is not part of the published package.
+Read the logs your MCP client captured instead:
+
+- **Warp** (macOS): `~/Library/Application Support/dev.warp.Warp-Stable/mcp/[MCP_ID].log`
+- **Warp** (Windows): `%APPDATA%\dev.warp.Warp-Stable\mcp\[MCP_ID].log`
+- **Warp** (Linux): `~/.local/share/dev.warp.Warp-Stable/mcp/[MCP_ID].log`
+
+In Warp you can also open **Settings → MCP → sql-server → Logs**.
+
+To get log files of your own, set `LOG_FILE` (and `SECURITY_LOG_FILE` with
+`ENABLE_SECURITY_AUDIT=true`) in the server's environment, then read that path directly.
 
 **Not connecting?**
 
 - Check that SQL Server is running: `telnet localhost 1433`
 - Verify your username/password in the config file
 - Review SSL settings if using remote servers
-- Check server logs: `npm run logs` for detailed error information
+- Ask the server what it thinks its configuration is: run the `get_server_info` tool
+- Check the MCP client log paths above for detailed error information
 
 > **🔧 Advanced configuration?** Check the [Environment Variables Reference](../reference/ENV-VARS.md) for detailed troubleshooting, SSL settings, security configuration, and performance tuning options.
 

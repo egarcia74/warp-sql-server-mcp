@@ -471,8 +471,31 @@ With Warp MCP integration, you can validate functionality by:
 
 **Solution**:
 
-- For testing modifications, set `SQL_SERVER_READ_ONLY=false`
 - For production, keep security restrictions active
+- For testing modifications, `SQL_SERVER_READ_ONLY=false` on its own is **not enough**. The
+  three tiers are independent, and leaving read-only mode only drops you to the next tier
+  up. Set the flag that matches what you want to test:
+
+  ```bash
+  # DML only (INSERT / UPDATE / DELETE) - reports "MEDIUM (DML Allowed)"
+  SQL_SERVER_READ_ONLY=false
+  SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true
+
+  # DDL only (CREATE / ALTER / DROP) - reports "MINIMAL (Full Access)"
+  SQL_SERVER_READ_ONLY=false
+  SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
+
+  # Both, e.g. a DDL + DML batch - reports "MINIMAL (Full Access)"
+  SQL_SERVER_READ_ONLY=false
+  SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true
+  SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
+  ```
+
+  With `SQL_SERVER_READ_ONLY=false` alone the server reports "HIGH (DDL Blocked)" and still
+  rejects both DML and DDL. Note the batch guard consults the same flags, so a batch mixing
+  DDL and DML needs both flags even though each statement type has its own. Run
+  `get_server_info` to confirm the reported security level before concluding a block is a
+  bug.
 
 ## Validation Criteria
 

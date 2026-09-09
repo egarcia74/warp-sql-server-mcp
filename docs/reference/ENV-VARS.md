@@ -349,30 +349,31 @@ accidental certificate trust in cloud production environments using private IP a
 
 ### `SECRET_MANAGER_TYPE`
 
+- **Status**: Reserved - currently ignored by the server
 - **Default**: `env`
-- **Description**: Secret provider to use for credential management
+- **Description**: Secret provider intended for credential management
 - **Values**:
-  - `env` (environment variables)
-  - `aws` (AWS Secrets Manager)
-  - `azure` (Azure Key Vault)
+  - `env` (environment variables) - the only behaviour available today
+  - `aws` (AWS Secrets Manager) - not wired in
+  - `azure` (Azure Key Vault) - not wired in
 
 ### AWS Secrets Manager Settings
 
-When `SECRET_MANAGER_TYPE=aws`:
+Intended for `SECRET_MANAGER_TYPE=aws` (not wired in):
 
 #### `AWS_REGION`
 
-- **Required**: Yes
+- **Status**: Reserved - currently ignored by the server
 - **Description**: AWS region for Secrets Manager
 - **Examples**: `us-east-1`, `eu-west-1`, `ap-southeast-2`
 
 ### Azure Key Vault Settings
 
-When `SECRET_MANAGER_TYPE=azure`:
+Intended for `SECRET_MANAGER_TYPE=azure` (not wired in):
 
 #### `AZURE_KEY_VAULT_URL`
 
-- **Required**: Yes
+- **Status**: Reserved - currently ignored by the server
 - **Description**: Azure Key Vault URL
 - **Format**: `https://your-vault.vault.azure.net/`
 

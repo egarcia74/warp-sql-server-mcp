@@ -88,7 +88,9 @@ code .
 
    # SSL settings (secure by default)
    SQL_SERVER_ENCRYPT=true
-   SQL_SERVER_TRUST_CERT=false
+   # Leave SQL_SERVER_TRUST_CERT unset for localhost: the context-aware default trusts a
+   # local self-signed certificate. Setting it to false here makes the connection fail
+   # against a stock local SQL Server. Set it to false explicitly for remote servers.
    ```
 
 ### Step 4: Test the Server
@@ -194,13 +196,17 @@ Install these extensions for the best development experience:
     "SQL_SERVER_USER": "your_username",
     "SQL_SERVER_PASSWORD": "your_password",
     "SQL_SERVER_ENCRYPT": "true",
-    "SQL_SERVER_TRUST_CERT": "false",
     "SQL_SERVER_READ_ONLY": "true",
     "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
     "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false"
   }
 }
 ```
+
+`SQL_SERVER_TRUST_CERT` is deliberately omitted: for a `localhost` host the context-aware
+default already trusts the local self-signed certificate. Add
+`"SQL_SERVER_TRUST_CERT": "false"` only when pointing at a remote server with a CA-signed
+certificate.
 
 1. **Open Warp in VS Code**:
    - Use integrated terminal: `View → Terminal`
@@ -210,25 +216,31 @@ Install these extensions for the best development experience:
    List all databases on the server
    ```
 
-### Option 2: Direct VS Code MCP Integration
+### Option 2: GitHub Copilot MCP Integration
 
-**Coming Soon**: VS Code will support MCP directly. When available:
+**Best for**: Querying your database from Copilot Chat, without Warp in the loop
 
-1. **Install MCP Extension** (when released)
-2. **Configure MCP Server** in VS Code settings:
-   ```json
-   {
-     "mcp.servers": {
-       "sql-server": {
-         "command": "node",
-         "args": ["/path/to/warp-sql-server-mcp/index.js"],
-         "env": {
-           // Environment variables here
-         }
-       }
-     }
-   }
-   ```
+This works today. It is documented step by step in
+[QUICKSTART-VSCODE.md](QUICKSTART-VSCODE.md) - follow that guide rather than duplicating
+the settings here. In short, enable MCP support under `copilot.chat.experimental.mcp` and
+add the server to `settings.json`:
+
+```json
+{
+  "github.copilot.chat.experimental.mcp.servers": {
+    "sql-server": {
+      "command": "warp-sql-server-mcp",
+      "args": ["start"]
+    }
+  }
+}
+```
+
+Requires a GitHub Copilot subscription. Note the settings key is
+`github.copilot.chat.experimental.mcp.servers` - it is an experimental Copilot setting, so
+confirm the current key against
+[QUICKSTART-VSCODE.md](QUICKSTART-VSCODE.md) before filing a bug if the server does not
+appear.
 
 ### Option 3: Development Mode Setup
 
@@ -311,7 +323,6 @@ Create `.vscode/launch.json` for debugging:
         "SQL_SERVER_USER": "your_username",
         "SQL_SERVER_PASSWORD": "your_password",
         "SQL_SERVER_ENCRYPT": "true",
-        "SQL_SERVER_TRUST_CERT": "false",
         "SQL_SERVER_READ_ONLY": "true",
         "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "false",
         "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false",
@@ -536,17 +547,24 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 
 ### Database User Permissions
 
-Create a dedicated database user for MCP access:
+Create a dedicated database user for MCP access. Generate a unique random password for
+each login - never reuse a literal from documentation, and never paste one into a file you
+might commit:
+
+```bash
+# Generate a password to paste into the statements below
+openssl rand -base64 24
+```
 
 ```sql
 -- For development (read/write without schema changes)
-CREATE LOGIN mcp_dev_user WITH PASSWORD = 'SecurePassword123!';
+CREATE LOGIN mcp_dev_user WITH PASSWORD = '<generated-password>';
 CREATE USER mcp_dev_user FOR LOGIN mcp_dev_user;
 ALTER ROLE db_datareader ADD MEMBER mcp_dev_user;
 ALTER ROLE db_datawriter ADD MEMBER mcp_dev_user;
 
--- For production monitoring (read-only)
-CREATE LOGIN mcp_read_user WITH PASSWORD = 'SecurePassword123!';
+-- For production monitoring (read-only) - use a different generated password
+CREATE LOGIN mcp_read_user WITH PASSWORD = '<generated-password>';
 CREATE USER mcp_read_user FOR LOGIN mcp_read_user;
 ALTER ROLE db_datareader ADD MEMBER mcp_read_user;
 ```

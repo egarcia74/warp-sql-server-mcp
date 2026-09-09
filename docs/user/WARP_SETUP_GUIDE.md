@@ -137,31 +137,37 @@ Here's a typical performance monitoring workflow in Warp:
 ### Performance Monitoring Settings
 
 - `ENABLE_PERFORMANCE_MONITORING`: Enable/disable monitoring (default: true)
-- `SLOW_QUERY_THRESHOLD`: Milliseconds to consider a query "slow" (default: 1000)
-- `MAX_METRICS_HISTORY`: Maximum number of metrics to keep in memory (default: 500)
+- `SLOW_QUERY_THRESHOLD`: Milliseconds to consider a query "slow" (default: 5000, clamped to 100-60000)
+- `MAX_METRICS_HISTORY`: Maximum number of metrics to keep in memory (default: 1000, clamped to 100-10000)
 - `PERFORMANCE_SAMPLING_RATE`: Fraction of queries to monitor (0.0-1.0, default: 1.0)
 - `TRACK_POOL_METRICS`: Enable connection pool monitoring (default: true)
 
 ### Example Configurations
 
+These go inside the `env` object of the Warp MCP server entry shown above.
+
 #### Production (Conservative)
 
 ```json
-"ENABLE_PERFORMANCE_MONITORING": "true",
-"SLOW_QUERY_THRESHOLD": "2000",
-"MAX_METRICS_HISTORY": "1000",
-"PERFORMANCE_SAMPLING_RATE": "0.1",
-"TRACK_POOL_METRICS": "true"
+{
+  "ENABLE_PERFORMANCE_MONITORING": "true",
+  "SLOW_QUERY_THRESHOLD": "2000",
+  "MAX_METRICS_HISTORY": "1000",
+  "PERFORMANCE_SAMPLING_RATE": "0.1",
+  "TRACK_POOL_METRICS": "true"
+}
 ```
 
 #### Development (Detailed)
 
 ```json
-"ENABLE_PERFORMANCE_MONITORING": "true",
-"SLOW_QUERY_THRESHOLD": "500",
-"MAX_METRICS_HISTORY": "100",
-"PERFORMANCE_SAMPLING_RATE": "1.0",
-"TRACK_POOL_METRICS": "true"
+{
+  "ENABLE_PERFORMANCE_MONITORING": "true",
+  "SLOW_QUERY_THRESHOLD": "500",
+  "MAX_METRICS_HISTORY": "100",
+  "PERFORMANCE_SAMPLING_RATE": "1.0",
+  "TRACK_POOL_METRICS": "true"
+}
 ```
 
 ## 🎯 Key Benefits

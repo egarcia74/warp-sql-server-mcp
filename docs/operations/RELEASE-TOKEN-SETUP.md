@@ -55,19 +55,30 @@ The workflow will automatically use `RELEASE_TOKEN` if available, falling back t
 
 ## Security Benefits
 
+> **⚠️ `RELEASE_TOKEN` does not remove the job's write permission.** The `release` job in
+> `.github/workflows/release.yml` declares `permissions: contents: write` **unconditionally**
+>
+> - the declaration is static YAML and cannot depend on whether a secret is set. It is there
+>   so the `GITHUB_TOKEN` fallback can push tags and create releases when no `RELEASE_TOKEN`
+>   is configured. Setting `RELEASE_TOKEN` changes which credential performs those operations,
+>   not what the job is granted, so Token-Permissions scanner findings on that job persist
+>   either way.
+
 ### With RELEASE_TOKEN
 
-- ✅ **Zero job-level write permissions** in workflow
 - ✅ **Fine-grained access** limited to specific operations
 - ✅ **Repository-scoped** token (not account-wide)
-- ✅ **Eliminates Token-Permissions alerts** from security scanners
-- ✅ **Token rotation** under your control
+- ✅ **Token rotation and revocation** under your control
+- ✅ **Audit separation**: release commits and tags are attributable to the token, not to
+  the ambient workflow identity
+- ⚠️ **Job permissions unchanged**: the job still declares `contents: write`
 
 ### Without RELEASE_TOKEN (Fallback)
 
 - ✅ **Still secure** using default GitHub mechanisms
-- ⚠️ **May trigger scanner alerts** due to `contents: write` permission
 - ✅ **Zero setup required** - works out of the box
+- ⚠️ **Account-wide identity**: operations run as the ambient `GITHUB_TOKEN`
+- ⚠️ **No independent rotation**: the credential's lifecycle is GitHub's, not yours
 
 ## Token Rotation
 
@@ -88,9 +99,16 @@ For security best practices:
 
 ### Scanner Still Shows Alerts
 
-- Allow 24-48 hours for security scanners to re-evaluate
-- Verify the workflow file shows `contents: read` in job permissions
-- Check that token fallback logic is working: `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`
+Expected. The `release` job declares `contents: write` whether or not `RELEASE_TOKEN` is
+set, so a Token-Permissions finding on that job is accurate and will not clear by adding
+the token. `release.yml` carries an inline comment recording this as a deliberate
+trade-off: without the write permission, any repository lacking a `RELEASE_TOKEN` would
+fail at tag creation.
+
+To confirm the token itself is being picked up:
+
+- Check the workflow logs for "Using RELEASE_TOKEN for authenticated operations"
+- Check the fallback expression resolves: `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`
 
 ### Token Access Issues
 
@@ -100,12 +118,15 @@ For security best practices:
 
 ## Migration
 
-If migrating from `contents: write` permissions:
+To adopt `RELEASE_TOKEN` on a repository that currently relies on `GITHUB_TOKEN`:
 
 1. Set up `RELEASE_TOKEN` following this guide
 2. Workflow automatically detects and uses the token
 3. Monitor next release to ensure functionality
-4. Security alerts should resolve within 24-48 hours
+
+The job's `contents: write` declaration stays as it is, so Token-Permissions alerts on the
+`release` job will not resolve. Removing them would mean dropping the `GITHUB_TOKEN`
+fallback and making `RELEASE_TOKEN` mandatory.
 
 ## Best Practices
 
