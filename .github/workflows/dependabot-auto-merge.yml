@@ -10,12 +10,26 @@ on:
 permissions:
   contents: read
 
+# A regroup or rebase emits `synchronize` and `edited` close together, and the two
+# runs would otherwise proceed concurrently against their own immutable copies of
+# the title. The older run could then call `gh pr merge --auto` on a title it read
+# as eligible *after* the newer run called `--disable-auto` on the corrected one,
+# silently re-queuing a held update. Newest run wins, and it applies the verdict
+# for the title that is actually current.
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   auto-merge:
     name: Auto-merge Dependabot PRs
     runs-on: ubuntu-latest
-    # Only run for Dependabot PRs
-    if: github.actor == 'dependabot[bot]'
+    # Filter on the PR's AUTHOR, not `github.actor`. `github.actor` is whoever
+    # triggered this particular event, so a maintainer correcting the title of a
+    # queued Dependabot PR - the case `edited` exists to catch - would skip the
+    # job entirely and leave the previous auto-merge request live. The same held
+    # for a human `reopened` before this change.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     outputs:
       auto_merge: ${{ steps.analyze.outputs.auto_merge }}
       reason: ${{ steps.analyze.outputs.reason }}
@@ -49,10 +63,17 @@ jobs:
           cat "$RUNNER_TEMP/classification" >> "$GITHUB_OUTPUT"
 
           auto_merge=$(grep '^auto_merge=' "$RUNNER_TEMP/classification" | cut -d= -f2)
+          # Both directions, because a retitle can move a PR either way and a stale
+          # label contradicts the merge state: a regrouped PR that becomes a
+          # parseable patch would otherwise queue for auto-merge still wearing
+          # manual-review-required, and the reverse leaves auto-merge-eligible on a
+          # held PR. The re-triage workflow already clears the opposing label.
           if [ "$auto_merge" = "true" ]; then
             gh pr edit "$PR_NUMBER" --add-label "auto-merge-eligible" || echo "Warning: Could not add label (may not exist yet)"
+            gh pr edit "$PR_NUMBER" --remove-label "manual-review-required" || true
           else
             gh pr edit "$PR_NUMBER" --add-label "manual-review-required" || echo "Warning: Could not add label (may not exist yet)"
+            gh pr edit "$PR_NUMBER" --remove-label "auto-merge-eligible" || true
           fi
 
       - name: Enable auto-merge

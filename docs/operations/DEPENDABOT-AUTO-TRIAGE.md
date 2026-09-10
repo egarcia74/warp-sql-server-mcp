@@ -56,7 +56,9 @@ Dependencies are automatically classified into security risk categories:
 
 Auto-merge is enabled when **ALL** conditions are met:
 
-1. ✅ **PR Author**: Created by `dependabot[bot]`
+1. ✅ **PR Author**: Created by `dependabot[bot]` - the PR's _author_, not whoever
+   triggered the event. A maintainer correcting the title of a queued Dependabot PR must
+   still reclassify it, and gating on `github.actor` would have skipped exactly that case
 2. ✅ **Dependency Type**: Not a core database/auth dependency and not a security-critical
    GitHub Action (`github/codeql-action`, `step-security/*`)
 3. ✅ **Update Type**: Patch or minor versions only
@@ -108,6 +110,19 @@ already queued - declining to grant it is not enough, because `--auto` is sticky
 queued by an earlier run or by the re-triage workflow would otherwise merge on the next
 green check. The order matters: the core-dependency rule is checked before the patch/minor
 rule, so a patch bump of one of those packages is held.
+
+### Only the newest run for a PR takes effect
+
+The workflow serializes per pull request (`concurrency: dependabot-auto-merge-<number>`,
+`cancel-in-progress: true`). A regroup or rebase emits `synchronize` and `edited` close
+together, and each run reads the title from its own immutable event payload - so without
+this an older run could call `gh pr merge --auto` on a title it read as eligible _after_
+the newer run had called `--disable-auto` on the corrected one, silently re-queuing a held
+update.
+
+Expect to see superseded runs marked **cancelled** on busy PRs. That is the mechanism
+working, not a failure: the surviving run is the one that read the current title, and its
+verdict is the one applied.
 
 ### Failed checks are not a manual-review trigger
 
