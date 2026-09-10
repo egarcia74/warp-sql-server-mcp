@@ -16,14 +16,17 @@ permissions:
 # as eligible *after* the newer run called `--disable-auto` on the corrected one,
 # silently re-queuing a held update. Newest run wins, and it applies the verdict
 # for the title that is actually current.
+#
+# Runs the job will SKIP - a body- or base-only `edited` - go in a separate group.
+# They must not touch the classification group at all: GitHub allows only one
+# pending run per group, so a skip-run joining it would evict a queued
+# reclassification even while not cancelling the in-flight one.
 concurrency:
-  group: dependabot-auto-merge-${{ github.event.pull_request.number || github.ref }}
-  # Only a run that will actually re-classify may cancel one in flight. `edited`
-  # also fires for body and base edits, and the job below skips those - so with an
-  # unconditional `true` a body edit would cancel a live classification and then do
-  # nothing, which is worse than not running at all. This mirrors the job's own
-  # title-change condition, so the two cannot drift into that gap again.
-  cancel-in-progress: ${{ github.event.action != 'edited' || github.event.changes.title.from != null }}
+  group: >-
+    dependabot-auto-merge-${{ github.event.pull_request.number || github.ref }}-${{
+    (github.event.action == 'edited' && github.event.changes.title.from == null)
+    && 'skip' || 'classify' }}
+  cancel-in-progress: true
 
 jobs:
   auto-merge:
@@ -94,13 +97,17 @@ jobs:
           # parseable patch would otherwise queue for auto-merge still wearing
           # manual-review-required, and the reverse leaves auto-merge-eligible on a
           # held PR. The re-triage workflow already clears the opposing label.
+          # One `gh pr edit` call, not two: add and remove in the same request so a
+          # run cancelled between them cannot leave the PR wearing both labels or
+          # neither. Concurrency already keeps two classification runs for one PR
+          # from overlapping, but cancellation is exactly what that mechanism does.
           if [ "$auto_merge" = "true" ]; then
-            gh pr edit "$PR_NUMBER" --add-label "auto-merge-eligible" || echo "Warning: Could not add label (may not exist yet)"
-            gh pr edit "$PR_NUMBER" --remove-label "manual-review-required" || true
+            add="auto-merge-eligible"; drop="manual-review-required"
           else
-            gh pr edit "$PR_NUMBER" --add-label "manual-review-required" || echo "Warning: Could not add label (may not exist yet)"
-            gh pr edit "$PR_NUMBER" --remove-label "auto-merge-eligible" || true
+            add="manual-review-required"; drop="auto-merge-eligible"
           fi
+          gh pr edit "$PR_NUMBER" --add-label "$add" --remove-label "$drop" \
+            || echo "Warning: Could not set labels (they may not exist yet)"
 
       - name: Enable auto-merge
         if: steps.analyze.outputs.auto_merge == 'true'
