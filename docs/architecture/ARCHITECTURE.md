@@ -36,48 +36,33 @@ The system is built on several key architectural principles:
 
 ## System Architecture
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                          MCP Layer                              │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │        SqlServerMCP  (index.js, orchestrator)           │    │
-│  │  • Tool registration and dispatch                       │    │
-│  │  • Request/response handling                            │    │
-│  │  • Error boundary management (McpError)                 │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        Tool Handler Layer                       │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │ DatabaseTools   │  │  QueryOptimizer │  │   Bottleneck    │  │
-│  │    Handler      │  │                 │  │    Detector     │  │
-│  │ (BaseToolHandler)│ │                 │  │                 │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Infrastructure Layer                      │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │   Connection    │  │  Query Safety   │  │  Performance    │  │
-│  │    Manager      │  │     Guards      │  │    Monitor      │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
-│  │     Logger      │  │  ServerConfig   │  │   Streaming     │  │
-│  │                 │  │                 │  │    Handler      │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                          Data Layer                             │
-│  ┌─────────────────┐  ┌─────────────────┐                       │
-│  │   SQL Server    │  │   File System   │                       │
-│  │  (mssql pool)   │  │   (logs only)   │                       │
-│  └─────────────────┘  └─────────────────┘                       │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph MCPL["MCP Layer"]
+        SRV["SqlServerMCP (index.js, orchestrator)<br/>• Tool registration and dispatch<br/>• Request/response handling<br/>• Error boundary management (McpError)"]
+    end
+
+    subgraph TOOLL["Tool Handler Layer"]
+        DTH["DatabaseTools Handler<br/>(BaseToolHandler)"]
+        QOP["QueryOptimizer"]
+        BND["Bottleneck Detector"]
+    end
+
+    subgraph INFRAL["Infrastructure Layer"]
+        CONN["Connection Manager"]
+        GUARD["Query Safety Guards"]
+        PERF["Performance Monitor"]
+        LOGR["Logger"]
+        SCFG["ServerConfig"]
+        STRM["Streaming Handler"]
+    end
+
+    subgraph DATAL["Data Layer"]
+        SQLS["SQL Server<br/>(mssql pool)"]
+        FSYS["File System<br/>(logs only)"]
+    end
+
+    MCPL --> TOOLL --> INFRAL --> DATAL
 ```
 
 ## Core Components
@@ -305,11 +290,17 @@ T-SQL dialect coverage is partial.
 
 ### Request Processing Flow
 
-```text
-Request → Validation → Security Check → Business Logic → Data Access → Response
-    ↓         ↓             ↓              ↓              ↓           ↓
-  Logging  Metrics    Audit Log    Performance   Connection   Response
-                                   Monitoring      Pool       Formatting
+```mermaid
+flowchart LR
+    REQ[Request] --> VAL[Validation] --> SEC[Security Check]
+    SEC --> BUS[Business Logic] --> DAT[Data Access] --> RES[Response]
+
+    REQ -.-> LOG[Logging]
+    VAL -.-> MET[Metrics]
+    SEC -.-> AUD[Audit Log]
+    BUS -.-> PMON["Performance<br/>Monitoring"]
+    DAT -.-> POOL["Connection<br/>Pool"]
+    RES -.-> FMT["Response<br/>Formatting"]
 ```
 
 ### 1. **Request Ingress**
@@ -399,10 +390,14 @@ that is already set. So a file-based layer exists for the recommended global-ins
 the ambient environment wins over the file, and `ServerConfig` itself still only ever sees
 environment variables.
 
-```text
-CLI:    ~/.warp-sql-server-mcp.json → loadConfigToEnv() ┐
-                                                        ├→ process.env → ServerConfig.reload() → component configs
-Direct: .env / ambient environment → dotenv ────────────┘
+```mermaid
+flowchart LR
+    JSON["CLI:<br/>~/.warp-sql-server-mcp.json"] --> LCE["loadConfigToEnv()"]
+    ENVF["Direct:<br/>.env / ambient environment"] --> DOTENV["dotenv"]
+
+    LCE --> PENV["process.env"]
+    DOTENV --> PENV
+    PENV --> RELOAD["ServerConfig.reload()"] --> COMP["component configs"]
 ```
 
 ### Aspirational Patterns
@@ -420,12 +415,13 @@ Direct: .env / ambient environment → dotenv ───────────�
 
 ### Metrics Architecture
 
-```text
-Application Metrics → Aggregation → Storage → Visualization/Alerting
-       ↓
-   System Metrics → Collection → Processing → Analysis
-       ↓
-  Business Metrics → Calculation → Reporting → Decision Support
+```mermaid
+flowchart LR
+    APPM["Application Metrics"] --> AGG[Aggregation] --> STO[Storage] --> VIZ["Visualization/Alerting"]
+    SYSM["System Metrics"] --> COL[Collection] --> PROC[Processing] --> ANA[Analysis]
+    BIZM["Business Metrics"] --> CALC[Calculation] --> REP[Reporting] --> DEC["Decision Support"]
+
+    APPM --> SYSM --> BIZM
 ```
 
 ### Observability Patterns
@@ -465,9 +461,11 @@ Application Metrics → Aggregation → Storage → Visualization/Alerting
 
 ### Security Layers
 
-```text
-Network Security → Authentication → Authorization → Input Validation →
-Data Access Control → Audit Logging → Threat Detection
+```mermaid
+flowchart LR
+    NET["Network Security"] --> AUTHN[Authentication] --> AUTHZ[Authorization]
+    AUTHZ --> INVAL["Input Validation"] --> DAC["Data Access Control"]
+    DAC --> AUDIT["Audit Logging"] --> THREAT["Threat Detection"]
 ```
 
 ### Security Patterns
@@ -505,12 +503,16 @@ Data Access Control → Audit Logging → Threat Detection
 
 ### Environment Progression
 
-```text
-Development → Testing → Staging → Production
-     ↓           ↓        ↓          ↓
-   Local DB → Test DB → Staging → Production
-              Mock     Database   Database
-              Services
+```mermaid
+flowchart LR
+    DEV[Development] --> TST[Testing] --> STG[Staging] --> PRD[Production]
+
+    DEV --> LDB["Local DB"]
+    TST --> TDB["Test DB<br/>Mock Services"]
+    STG --> SDB["Staging Database"]
+    PRD --> PDB["Production Database"]
+
+    LDB --> TDB --> SDB --> PDB
 ```
 
 ### Deployment Patterns
