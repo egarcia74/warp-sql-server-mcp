@@ -180,6 +180,38 @@ ps aux | grep node
 ps aux | sort -nr -k 4 | head -10
 ```
 
+## 📦 npm `overrides`
+
+`package.json` carries an `overrides` block. Each entry forces a version on a **transitive**
+dependency, so each one is a standing decision that needs a reason - and a pin with no
+reason left is not neutral. It holds a package back, and it can trap that package inside a
+range that later turns out to be vulnerable. An override has caused an advisory in this
+repository as readily as it has cleared one.
+
+Current entries:
+
+| Package     | Pin     | Why it exists                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `smol-toml` | `1.8.0` | **Load-bearing - do not remove.** `markdownlint-cli2` depends on `smol-toml` at an exact `1.7.0`, which carries an advisory. Without this override `npm audit` fails, and because the pre-push hook runs `npm audit`, **every push is blocked**. The alternative npm suggests - downgrading `markdownlint-cli2` - was rejected: the linter baseline is 0 issues in 54 files and downgrading risks changing it. |
+
+When reviewing this block, for each entry ask what the consumers actually require:
+
+```bash
+npm ls <package> --all          # who depends on it, and is it "overridden"?
+npm view <package> version      # what is current?
+node -e "const l=require('./package-lock.json');
+  for (const [k, v] of Object.entries(l.packages || {}))
+    if (v.dependencies && v.dependencies['<package>'])
+      console.log(k, 'requires', v.dependencies['<package>']);"
+```
+
+A pin **at or below** the floor of every consumer's range, with no advisory behind it, is
+doing nothing except blocking upgrades - remove it. A pin **above** an exact-version
+dependency, like `smol-toml` above, is the thing keeping a gate green - leave it, and record
+why here. After removing one, `npm install` alone will not re-resolve (the lockfile still
+satisfies it); use `npm update <package>`, then re-run `npm audit` and the linters that
+consume it.
+
 ## 🎯 Best Practices
 
 ### Process Management
