@@ -109,6 +109,19 @@ jobs:
           done
 
           auto_merge=$(grep -m1 '^auto_merge=' "$RUNNER_TEMP/classification" | cut -d= -f2)
+
+          # Whether to post the security notice is decided from the LIVE title too.
+          # It used to be `contains(github.event.pull_request.title, 'security')` on
+          # the notice step, which is the immutable event snapshot this step stopped
+          # trusting - so in the window where a title changes between event and run,
+          # the notice could describe a title that was never classified. Case
+          # -insensitive to match the `contains()` it replaces. Cosmetic either way,
+          # but there is no reason for two steps in one job to read different titles.
+          if printf '%s' "$PR_TITLE" | grep -qiE 'security|vulnerability'; then
+            echo "contains_security=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "contains_security=false" >> "$GITHUB_OUTPUT"
+          fi
           # Both directions, because a retitle can move a PR either way and a stale
           # label contradicts the merge state: a regrouped PR that becomes a
           # parseable patch would otherwise queue for auto-merge still wearing
@@ -170,7 +183,7 @@ jobs:
           echo "Auto-merge revoked"
 
       - name: Add security notice for critical updates
-        if: steps.analyze.outputs.auto_merge == 'true' && (contains(github.event.pull_request.title, 'security') || contains(github.event.pull_request.title, 'vulnerability'))
+        if: steps.analyze.outputs.auto_merge == 'true' && steps.analyze.outputs.contains_security == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
