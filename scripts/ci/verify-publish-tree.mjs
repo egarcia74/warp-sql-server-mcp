@@ -62,19 +62,39 @@ const BUMP_FILES = new Set(['package.json', 'package-lock.json']);
 const RELEASE_FILES = new Set(['CHANGELOG.md']);
 
 /**
- * Serialise with object keys sorted, so a re-ordered but otherwise identical file is
- * not reported as a change. Re-ordering keys cannot alter what npm installs; treating
- * it as divergence would only train maintainers to bypass this gate.
+ * Content equality that ignores object key order, since re-ordering keys cannot alter
+ * what npm installs and reporting it as divergence would only train maintainers to
+ * bypass this gate.
+ *
+ * Compared structurally rather than by sorting keys into a canonical string. Sorting
+ * needs a comparator, and both available spellings are worse: the default one orders by
+ * code unit but is flagged, and `localeCompare` can rank two distinct keys as equal -
+ * `"\u00e4"` against `"a\u0308"`, say - leaving their relative order to fall out of
+ * whichever order they happened to arrive in, so two files with identical content could
+ * canonicalise differently and fail the gate. Comparing key sets sidesteps the question.
+ *
+ * JSON has no cycles, no NaN and no undefined values, so a plain recursive walk is total
+ * over what JSON.parse can return.
  */
-function canonical(value) {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value !== null && typeof value === 'object') {
-    return `{${Object.keys(value)
-      .sort()
-      .map(key => `${JSON.stringify(key)}:${canonical(value[key])}`)
-      .join(',')}}`;
+function sameContent(left, right) {
+  if (left === right) return true;
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => sameContent(item, right[index]))
+    );
   }
-  return JSON.stringify(value) ?? 'null';
+
+  if (left !== null && right !== null && typeof left === 'object' && typeof right === 'object') {
+    const keys = Object.keys(left);
+    if (keys.length !== Object.keys(right).length) return false;
+    return keys.every(key => Object.hasOwn(right, key) && sameContent(left[key], right[key]));
+  }
+
+  return false;
 }
 
 /**
@@ -112,25 +132,70 @@ const CAPTURE = {
 // absolute path would protect nothing. An absolute path is also not portable across
 // the runner images, and resolving one via `which` reintroduces the same dependency.
 
+/** The complete set of dash-prefixed arguments this file ever passes to git. */
+const GIT_ARGUMENTS = new Set(['--name-status', '-z']);
+
 /** Reads blobs and diffs out of a real repository. */
 export function gitReader(cwd = process.cwd()) {
-  const run = args => execFileSync('git', args, { cwd, ...CAPTURE });
+  const run = args => {
+    // execFileSync spawns git directly, with no shell, so nothing here is exposed to
+    // shell metacharacters. The check below is about git's own argument parsing: a
+    // value that begins with a dash would be read as an option rather than as the
+    // revision or path it is meant to be. Every argument is already either a literal
+    // from this file or a version matched against VERSION, but asserting it here keeps
+    // the guarantee local to the call instead of an invariant a reader has to trace
+    // back - and a later edit that passes something new fails loudly rather than
+    // quietly handing git an option.
+    const offending = args.filter(
+      arg => typeof arg !== 'string' || (arg.startsWith('-') && !GIT_ARGUMENTS.has(arg))
+    );
+    if (offending.length > 0) {
+      throw new Error(`refusing to pass ${JSON.stringify(offending)} to git as an argument`);
+    }
+    return execFileSync('git', args, { cwd, ...CAPTURE });
+  };
   return {
     /**
      * [{ status, file, from? }] between `tag` and HEAD; status is git's A/M/D/R letter.
      * A rename reports both paths: `file` is the destination, which is what exists at
      * HEAD, and `from` the source, which is what left the tree.
+     *
+     * `-z` is not optional. Without it `core.quotePath` - on by default - renders a
+     * non-ASCII path as a C-quoted, escaped string: `docs/café.md` comes back as
+     * `"docs/caf\303\251.md"`, which matches nothing in npm's packlist, so a changed
+     * *packed* file would be silently downgraded to an unpacked notice. Measured, not
+     * assumed. `-z` emits raw pathnames NUL-terminated instead, which also removes any
+     * question of tabs or newlines inside a filename.
      */
-    changes: tag =>
-      run(['diff', '--name-status', tag, 'HEAD'])
-        .split('\n')
-        .filter(Boolean)
-        .map(line => {
-          const [status, ...paths] = line.split('\t');
-          const change = { status: status[0], file: paths[paths.length - 1] };
-          if (change.status === 'R' && paths.length > 1) change.from = paths[0];
-          return change;
-        }),
+    changes: tag => {
+      // Fields run `<status>\0<path>\0`, except a rename or copy, which carries
+      // `<status>\0<source>\0<destination>\0`. The trailing NUL leaves a final empty.
+      const fields = run(['diff', '--name-status', '-z', tag, 'HEAD']).split('\0');
+      const changes = [];
+      let index = 0;
+
+      while (index < fields.length) {
+        const status = fields[index];
+        if (!status) {
+          index += 1;
+          continue;
+        }
+        const letter = status[0];
+
+        if (letter === 'R' || letter === 'C') {
+          const [from, file] = [fields[index + 1], fields[index + 2]];
+          // A copy leaves its source in place, so only a rename records `from` - which
+          // is what marks the change as having removed something from the tarball.
+          changes.push(letter === 'R' ? { status: letter, file, from } : { status: letter, file });
+          index += 3;
+        } else {
+          changes.push({ status: letter, file: fields[index + 1] });
+          index += 2;
+        }
+      }
+
+      return changes;
+    },
     show: (rev, file) => run(['show', `${rev}:${file}`])
   };
 }
@@ -178,7 +243,7 @@ function checkBumpFiles(version, tag, changes, git) {
 
     if (head.version !== version) {
       problems.push({ kind: 'wrong-version', file, expected: version, actual: head.version });
-    } else if (canonical(withVersion(tagged, file, version)) !== canonical(head)) {
+    } else if (!sameContent(withVersion(tagged, file, version), head)) {
       problems.push({ kind: 'unexpected-change', file });
     }
   }

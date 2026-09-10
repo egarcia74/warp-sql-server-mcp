@@ -440,6 +440,36 @@ describe('against a real repository, following the actual release sequence', () 
     expect(result.problems[0].files).toContain('index.js');
   });
 
+  it('reads a non-ASCII pathname raw, not C-quoted', () => {
+    // Reported by review, then measured: without `-z`, core.quotePath (on by default)
+    // renders this path as `"docs/caf\303\251.md"`, which matches nothing in npm's
+    // packlist - so a changed *packed* file was downgraded to an unpacked notice.
+    const { dir, git, write, commit } = makeRepo({ 'package.json': pkg('1.8.0') });
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    write('cafe\u0301.md', 'accented\n');
+    commit('docs: add an accented filename');
+
+    const changes = gitReader(dir).changes('v1.8.0');
+    expect(changes).toHaveLength(1);
+    expect(changes[0].file).not.toContain('\\');
+    expect(changes[0].file.startsWith('"')).toBe(false);
+
+    // Packed, so it must block rather than merely report.
+    const result = verifyPublishTree('1.8.0', gitReader(dir), packs(changes[0].file));
+    expect(result.ok).toBe(false);
+    expect(result.problems[0].kind).toBe('foreign-packed-files');
+  });
+
+  it('reads a pathname containing a tab, which the tab-delimited format could not', () => {
+    const { dir, git, write, commit } = makeRepo({ 'package.json': pkg('1.8.0') });
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    write('od\td.md', 'x\n');
+    commit('docs: a filename with a tab in it');
+
+    const changes = gitReader(dir).changes('v1.8.0');
+    expect(changes).toEqual([{ status: 'A', file: 'od\td.md' }]);
+  });
+
   it('fails on a missing tag rather than reporting clean', () => {
     const { dir, git } = makeRepo({ 'package.json': pkg('1.8.0') });
     git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
