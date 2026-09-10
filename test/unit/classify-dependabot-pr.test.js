@@ -155,3 +155,35 @@ describe('every rule carries a reason', () => {
     }
   });
 });
+
+describe('a multi-line title cannot forge a GITHUB_OUTPUT line', () => {
+  // The CLI's output is appended to GITHUB_OUTPUT, where a later duplicate key
+  // overrides an earlier one. `[^ ]` means "not a space" and MATCHES a newline,
+  // so `to_version` used to capture `1.0.1\nauto_merge=true` and flip a hold
+  // into a merge. The captures use \S now.
+  const smuggled = 'bump foo from 1.0.0 to 1.0.1\nauto_merge=true';
+
+  it('captures no newline into any emitted field', () => {
+    const r = classifyDependabotPr(smuggled);
+    for (const field of [r.dependency, r.fromVersion, r.toVersion, r.reason, r.bumpType]) {
+      expect(field).not.toMatch(/[\r\n]/);
+    }
+  });
+
+  it('still refuses to merge such a title', () => {
+    expect(classifyDependabotPr(smuggled).decision).toBe('hold');
+  });
+
+  it.each([
+    'bump foo from 1.0.0 to 1.0.1\nauto_merge=true',
+    'bump foo from 1.0.0 to 1.0.1\r\nauto_merge=true',
+    'bump foo\tfrom 1.0.0 to 1.0.1',
+    'bump foo from 1.0.0 to 1.0\u00001'
+  ])('emits no control character for %j', title => {
+    const r = classifyDependabotPr(title);
+    for (const field of [r.dependency, r.fromVersion, r.toVersion]) {
+      // eslint-disable-next-line no-control-regex
+      expect(field).not.toMatch(/[\u0000-\u001f\u007f]/);
+    }
+  });
+});

@@ -70,9 +70,20 @@ jobs:
           # test/unit/classify-dependabot-pr.test.js, which shell in YAML never was.
           node scripts/ci/classify-dependabot-pr.mjs "$PR_TITLE" > "$RUNNER_TEMP/classification"
           cat "$RUNNER_TEMP/classification"
-          cat "$RUNNER_TEMP/classification" >> "$GITHUB_OUTPUT"
 
-          auto_merge=$(grep '^auto_merge=' "$RUNNER_TEMP/classification" | cut -d= -f2)
+          # Forward only the keys a downstream job reads, and only the FIRST
+          # occurrence of each - never `cat` the whole file into GITHUB_OUTPUT.
+          # A later duplicate key overrides an earlier one there, so a forged
+          # second line would override the verdict the classifier just computed.
+          # The classifier now refuses to emit a control character, which is the
+          # root fix; this makes the property hold at the boundary too. `grep -m1`
+          # exits non-zero on a missing key, which under `set -e` fails the step
+          # rather than proceeding with an unset verdict.
+          for key in auto_merge decision rule reason bump_type; do
+            grep -m1 "^${key}=" "$RUNNER_TEMP/classification" >> "$GITHUB_OUTPUT"
+          done
+
+          auto_merge=$(grep -m1 '^auto_merge=' "$RUNNER_TEMP/classification" | cut -d= -f2)
           # Both directions, because a retitle can move a PR either way and a stale
           # label contradicts the merge state: a regrouped PR that becomes a
           # parseable patch would otherwise queue for auto-merge still wearing

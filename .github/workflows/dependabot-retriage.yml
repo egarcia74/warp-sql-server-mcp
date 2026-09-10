@@ -118,10 +118,14 @@ jobs:
             # title, and eval would make that a command-injection surface in a job
             # holding contents:write.
             node scripts/ci/classify-dependabot-pr.mjs "$title" > "$RUNNER_TEMP/cls"
-            decision=$(grep '^decision=' "$RUNNER_TEMP/cls" | cut -d= -f2)
-            reason=$(grep '^reason=' "$RUNNER_TEMP/cls" | cut -d= -f2-)
-            bump_type=$(grep '^bump_type=' "$RUNNER_TEMP/cls" | cut -d= -f2)
-            classifier_rule=$(grep '^rule=' "$RUNNER_TEMP/cls" | cut -d= -f2)
+            # -m1 throughout: take the first occurrence only, so a forged second
+            # line could not override a verdict. (The classifier refuses to emit
+            # control characters, which is the root fix - this holds the property
+            # at the boundary as well.)
+            decision=$(grep -m1 '^decision=' "$RUNNER_TEMP/cls" | cut -d= -f2)
+            reason=$(grep -m1 '^reason=' "$RUNNER_TEMP/cls" | cut -d= -f2-)
+            bump_type=$(grep -m1 '^bump_type=' "$RUNNER_TEMP/cls" | cut -d= -f2)
+            classifier_rule=$(grep -m1 '^rule=' "$RUNNER_TEMP/cls" | cut -d= -f2)
 
             echo "PR #$number ($bump_type, $classifier_rule): $title"
 

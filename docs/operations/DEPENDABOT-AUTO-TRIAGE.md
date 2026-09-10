@@ -65,7 +65,11 @@ Auto-merge is enabled when **ALL** conditions are met:
 4. ✅ **No Breaking Changes**: No major version bumps
 5. ✅ **Named in the title**: The title carries a `from X to Y` pair the classifier can
    parse. This is a hard requirement, not a heuristic - a title with no parseable version
-   pair is held, whatever else it says. A grouped multi-dependency update -
+   pair is held, whatever else it says. The version must start with a **digit**: a
+   `v`-prefixed title such as `bump foo from v1.2.3 to v1.2.4` does not parse and is
+   therefore held. That is deliberate and predates the shared classifier - both workflows
+   already required a bare digit - and none of the 400 Dependabot PRs this repository has
+   opened has ever used a `v` prefix. A grouped multi-dependency update -
    `bump the <group> group with N updates` - names no package and no versions, so it is
    held regardless of which group it belongs to, `dev-dependencies` and the docs/build
    groups included

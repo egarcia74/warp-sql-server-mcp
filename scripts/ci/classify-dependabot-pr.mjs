@@ -62,10 +62,16 @@ const GROUPED = /the [^ ]+ group/i;
 // Gate, then extract. Leading `.*` is greedy in both sed and JS, so where a
 // title contains more than one " from X to Y" the LAST is taken - matching the
 // shell this replaces.
+// `\S`, not `[^ ]`. "Not a space" MATCHES a newline, so `to_version` could
+// capture `1.0.1\nauto_merge=true` from a multi-line title - and since the CLI
+// writes these into GITHUB_OUTPUT, that injected line overrode the real verdict
+// (last value wins). `\S` excludes all whitespace. Layer 1 of 3; the CLI also
+// refuses to emit a control character, and the workflow reads only the first
+// occurrence of each key.
 const HAS_VERSION_PAIR = /bump .+ from [0-9]/i;
-const DEPENDENCY = /^.*bump ([^ ]+) from .*$/i;
-const FROM_VERSION = /^.* from ([0-9][^ ]*) to .*$/i;
-const TO_VERSION = /^.* from [0-9][^ ]* to ([0-9][^ ]*).*$/i;
+const DEPENDENCY = /^.*bump (\S+) from .*$/i;
+const FROM_VERSION = /^.* from ([0-9]\S*) to .*$/i;
+const TO_VERSION = /^.* from [0-9]\S* to ([0-9]\S*).*$/i;
 
 /** Drop prerelease and build metadata: 1.2.3-rc.1+build -> 1.2.3 */
 const core = v => v.split('-')[0].split('+')[0];
@@ -87,13 +93,30 @@ export function bumpTypeOf(fromVersion, toVersion) {
 }
 
 /**
+ * True when a value contains anything that could start a new GITHUB_OUTPUT line
+ * or hide inside one. A codepoint test rather than a regex, so this does not
+ * need a no-control-regex suppression.
+ */
+function hasControlCharacter(value) {
+  for (const ch of String(value)) {
+    const c = ch.codePointAt(0);
+    if (c < 0x20 || c === 0x7f) return true;
+  }
+  return false;
+}
+
+/**
  * Pull the dependency name and version pair out of a Dependabot title.
  * Returns empty strings when the title carries no parseable pair - the caller
  * treats that as `unknown`, which is a hold.
  * @param {string} title
  */
 function parseVersionPair(title) {
-  if (!HAS_VERSION_PAIR.test(title)) {
+  // `\S` excludes whitespace but still matches NUL and the other non-printing
+  // controls, so a capture could carry one into a field the CLI emits. Nothing
+  // legitimate in a Dependabot title contains one; a title that does is
+  // malformed, and malformed means unclassifiable, which means held.
+  if (!HAS_VERSION_PAIR.test(title) || hasControlCharacter(title)) {
     return { dependency: '', fromVersion: '', toVersion: '' };
   }
   return {
@@ -150,19 +173,32 @@ function main() {
     process.exit(2);
   }
   const r = classifyDependabotPr(title);
-  process.stdout.write(
-    [
-      `auto_merge=${r.decision === 'merge'}`,
-      `decision=${r.decision}`,
-      `rule=${r.rule}`,
-      `reason=${r.reason}`,
-      `bump_type=${r.bumpType}`,
-      `dependency=${r.dependency}`,
-      `from_version=${r.fromVersion}`,
-      `to_version=${r.toVersion}`,
-      ''
-    ].join('\n')
-  );
+  const fields = [
+    ['auto_merge', String(r.decision === 'merge')],
+    ['decision', r.decision],
+    ['rule', r.rule],
+    ['reason', r.reason],
+    ['bump_type', r.bumpType],
+    ['dependency', r.dependency],
+    ['from_version', r.fromVersion],
+    ['to_version', r.toVersion]
+  ];
+
+  // Fail closed rather than emit a value that could forge a line. A caller
+  // appends this to GITHUB_OUTPUT, where a later duplicate key overrides an
+  // earlier one - so a smuggled newline in a title-derived field would let the
+  // title override the verdict this script just computed. Nothing legitimate
+  // here contains a control character.
+  for (const [key, value] of fields) {
+    if (hasControlCharacter(value)) {
+      console.error(
+        `refusing to emit ${key}: value contains a control character - the PR title is malformed`
+      );
+      process.exit(3);
+    }
+  }
+
+  process.stdout.write(fields.map(([k, v]) => `${k}=${v}`).join('\n') + '\n');
 }
 
 // Only run as a CLI when invoked directly, so importing it in tests is inert.
