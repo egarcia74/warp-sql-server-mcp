@@ -133,7 +133,7 @@ const CAPTURE = {
 // the runner images, and resolving one via `which` reintroduces the same dependency.
 
 /** The complete set of dash-prefixed arguments this file ever passes to git. */
-const GIT_ARGUMENTS = new Set(['--name-status', '-z']);
+const GIT_ARGUMENTS = new Set(['--name-status', '-z', '--porcelain=v1', '--untracked-files=all']);
 
 /** Reads blobs and diffs out of a real repository. */
 export function gitReader(cwd = process.cwd()) {
@@ -196,6 +196,34 @@ export function gitReader(cwd = process.cwd()) {
 
       return changes;
     },
+    /**
+     * [{ status, file }] for anything in the worktree that differs from HEAD, with
+     * untracked files included. `git diff <tag> HEAD` compares two commits, but npm
+     * packs the working directory - so an uncommitted edit, or an untracked file
+     * matching the `files` globs, reaches the tarball while being invisible to a
+     * commit-to-commit comparison.
+     *
+     * Porcelain v1 with `-z` emits `XY<space><path>\0`, and for a rename a second
+     * NUL-separated field carrying the original path. `--untracked-files=all` lists
+     * files individually instead of collapsing them into a directory entry.
+     */
+    worktreeChanges: () => {
+      const fields = run(['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+        .split('\0')
+        .filter(Boolean);
+      const changes = [];
+      let index = 0;
+
+      while (index < fields.length) {
+        const entry = fields[index];
+        const code = entry.slice(0, 2);
+        changes.push({ status: code, file: entry.slice(3) });
+        // A rename carries its original path in the following field.
+        index += code.startsWith('R') || code.startsWith('C') ? 2 : 1;
+      }
+
+      return changes;
+    },
     show: (rev, file) => run(['show', `${rev}:${file}`])
   };
 }
@@ -252,8 +280,8 @@ function checkBumpFiles(version, tag, changes, git) {
 }
 
 /** Splits everything that is not a bump or release file into blocking and reportable. */
-function classifyOtherChanges(changes, readPackedFiles) {
-  const others = changes.filter(
+function classifyOtherChanges(changes, worktree, readPackedFiles) {
+  const others = [...changes, ...worktree].filter(
     change => !BUMP_FILES.has(change.file) && !RELEASE_FILES.has(change.file)
   );
   if (others.length === 0) return { problems: [], notices: [] };
@@ -277,8 +305,14 @@ function classifyOtherChanges(changes, readPackedFiles) {
   // report a move of a shipped file out of the package as harmless. Verified against a
   // real repository - `git mv lib/packed.js docs/notes.txt` reports `R100`, while the
   // same move after a separate modifying commit is reported as `D` plus `A`.
+  // A path that is gone cannot be looked up in the packlist, which npm builds from the
+  // worktree, so whether it used to be packed is unknowable here and is assumed. That
+  // covers a commit-level deletion or rename and equally a worktree deletion. An
+  // untracked file needs no special case: npm packs the worktree, so if it matches the
+  // `files` globs the packlist already contains it.
+  const removesSomething = status => status.includes('D') || status.startsWith('R');
   const affectsTarball = change =>
-    packed === null || change.status === 'D' || change.status === 'R' || packed.has(change.file);
+    packed === null || removesSomething(change.status) || packed.has(change.file);
 
   const name = change => (change.from ? `${change.from} -> ${change.file}` : change.file);
   const shipped = others.filter(affectsTarball).map(name);
@@ -318,7 +352,7 @@ export function verifyPublishTree(version, git, readPackedFiles) {
     };
   }
 
-  const other = classifyOtherChanges(changes, readPackedFiles);
+  const other = classifyOtherChanges(changes, git.worktreeChanges(), readPackedFiles);
   const problems = [...checkBumpFiles(version, tag, changes, git), ...other.problems];
 
   return { ok: problems.length === 0, tag, problems, notices: other.notices };

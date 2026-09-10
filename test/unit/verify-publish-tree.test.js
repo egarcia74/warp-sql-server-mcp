@@ -11,8 +11,9 @@ import {
 } from '../../scripts/ci/verify-publish-tree.mjs';
 
 /** A git reader backed by plain objects, so the logic is testable without a repository. */
-function fakeGit({ changes = [], blobs = {}, tagError } = {}) {
+function fakeGit({ changes = [], blobs = {}, tagError, worktree = [] } = {}) {
   return {
+    worktreeChanges: () => worktree,
     changes: () => {
       if (tagError) throw new Error(tagError);
       // Accept a bare filename as shorthand for a modification.
@@ -220,6 +221,49 @@ describe('verifyPublishTree', () => {
       expect(result.problems).toEqual([
         { kind: 'foreign-packed-files', files: ['lib/packed.js -> docs/notes.txt'] }
       ]);
+    });
+
+    it('blocks an untracked packed file, invisible to a commit-level diff', () => {
+      // npm packs the worktree, so a generated file matching the `files` globs reaches
+      // the tarball while `git diff <tag> HEAD` shows nothing at all.
+      const result = verifyPublishTree(
+        '1.8.0',
+        fakeGit({ changes: [], worktree: [{ status: '??', file: 'generated.js' }] }),
+        packs('generated.js')
+      );
+      expect(result.ok).toBe(false);
+      expect(result.problems).toEqual([{ kind: 'foreign-packed-files', files: ['generated.js'] }]);
+    });
+
+    it('blocks an uncommitted edit to a packed file', () => {
+      const result = verifyPublishTree(
+        '1.8.0',
+        fakeGit({ changes: [], worktree: [{ status: ' M', file: 'index.js' }] }),
+        packs('index.js')
+      );
+      expect(result.ok).toBe(false);
+      expect(result.problems).toEqual([{ kind: 'foreign-packed-files', files: ['index.js'] }]);
+    });
+
+    it('blocks a worktree deletion, spelled with D in either status column', () => {
+      for (const status of [' D', 'D ']) {
+        const result = verifyPublishTree(
+          '1.8.0',
+          fakeGit({ changes: [], worktree: [{ status, file: 'lib/gone.js' }] }),
+          packs('untouched.js')
+        );
+        expect(result.ok).toBe(false);
+      }
+    });
+
+    it('reports an untracked file that npm would not pack', () => {
+      const result = verifyPublishTree(
+        '1.8.0',
+        fakeGit({ changes: [], worktree: [{ status: '??', file: 'scratch.log' }] }),
+        packs('index.js')
+      );
+      expect(result.ok).toBe(true);
+      expect(result.notices).toEqual([{ kind: 'foreign-unpacked-files', files: ['scratch.log'] }]);
     });
 
     it('fails closed when the packlist cannot be read at all', () => {
@@ -468,6 +512,19 @@ describe('against a real repository, following the actual release sequence', () 
 
     const changes = gitReader(dir).changes('v1.8.0');
     expect(changes).toEqual([{ status: 'A', file: 'od\td.md' }]);
+  });
+
+  it('sees an untracked packed file that no commit contains', () => {
+    const { dir, git, write } = makeRepo({ 'package.json': pkg('1.8.0') });
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    write('generated.js', 'export const evil = 1;\n'); // never committed
+
+    expect(gitReader(dir).changes('v1.8.0')).toEqual([]); // the commit diff sees nothing
+    expect(gitReader(dir).worktreeChanges()).toEqual([{ status: '??', file: 'generated.js' }]);
+
+    const result = verifyPublishTree('1.8.0', gitReader(dir), packs('generated.js'));
+    expect(result.ok).toBe(false);
+    expect(result.problems[0].files).toContain('generated.js');
   });
 
   it('fails on a missing tag rather than reporting clean', () => {
