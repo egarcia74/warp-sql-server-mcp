@@ -157,6 +157,11 @@ this an older run could call `gh pr merge --auto` on a title it read as eligible
 the newer run had called `--disable-auto` on the corrected one, silently re-queuing a held
 update.
 
+Only a run that will actually re-classify may cancel one - `cancel-in-progress` carries the
+same title-change condition as the job itself. Without that, a body-only edit would start a
+run, cancel a live classification, and then skip its own job, which is worse than not
+running at all.
+
 Expect to see superseded runs marked **cancelled** on busy PRs. That is the mechanism
 working, not a failure: the surviving run is the one that read the current title, and its
 verdict is the one applied.

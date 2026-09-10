@@ -18,7 +18,12 @@ permissions:
 # for the title that is actually current.
 concurrency:
   group: dependabot-auto-merge-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only a run that will actually re-classify may cancel one in flight. `edited`
+  # also fires for body and base edits, and the job below skips those - so with an
+  # unconditional `true` a body edit would cancel a live classification and then do
+  # nothing, which is worse than not running at all. This mirrors the job's own
+  # title-change condition, so the two cannot drift into that gap again.
+  cancel-in-progress: ${{ github.event.action != 'edited' || github.event.changes.title.from != null }}
 
 jobs:
   auto-merge:
