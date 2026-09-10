@@ -1467,12 +1467,19 @@ lands. `package.json` catches up in step 7. This mirrors `release.yml`, whose ta
 `gh workflow run release.yml --ref some-branch` tags that branch's SHA and bases the version-bump PR
 on it, releasing code that is not on `main`. **Always dispatch it from `main`.**
 
-> **The tag does not determine what gets published.** `npm-publish.yml` checks out with no `ref:`,
-> so it packs `main` as it stands when the step 7 merge fires - not the tagged tree. If another PR
-> lands on `main` between step 5 and step 7, the npm tarball contains code the tag and the GitHub
-> Release do not. Land nothing else on `main` during a release, or treat the tag as marking the
-> intended contents rather than the published ones. This is a property of the automated path too:
-> `release.yml` tags `main` and its version-bump PR merges later, leaving the same window.
+> **The tag does not determine what gets published, so the publish verifies it.**
+> `npm-publish.yml` checks out with no `ref:`, so it packs `main` as it stands when the step 7
+> merge fires - not the tagged tree. If another PR lands on `main` between step 5 and step 7, that
+> code is in the tarball but in neither the tag nor the GitHub Release. This is a property of the
+> automated path too: `release.yml` tags `main` and its version-bump PR merges later, leaving the
+> same window.
+>
+> The window is not closed, but it is no longer silent. `scripts/ci/verify-publish-tree.mjs` runs
+> before the publish and compares the tree against the tag: it **fails** the publish if any file
+> npm packs differs by anything other than the version bump, and **reports** a difference in a file
+> that is not packed. `CHANGELOG.md` is exempt - it documents the release and lands separately.
+> If it fails, the version number is spent: cut a new release from the current tip rather than
+> trying to republish.
 
 ```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z

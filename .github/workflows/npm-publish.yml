@@ -55,6 +55,15 @@ jobs:
           echo "should_publish=true" >> "$GITHUB_OUTPUT"
           echo "Will publish @egarcia74/warp-sql-server-mcp@$PKG_VERSION"
 
+      # The tag is created before the version bump (release.yml tags main as it stands,
+      # then opens the bump PR), so HEAD here is the bump merge commit and never the
+      # tagged commit. What must hold is that nothing else landed in between - see #1189.
+      - name: Verify this tree matches the release tag
+        if: steps.check.outputs.should_publish == 'true'
+        env:
+          PKG_VERSION: ${{ steps.check.outputs.version }}
+        run: node scripts/ci/verify-publish-tree.mjs "$PKG_VERSION"
+
       - name: Run tests
         if: steps.check.outputs.should_publish == 'true'
         run: npm run test:unit
