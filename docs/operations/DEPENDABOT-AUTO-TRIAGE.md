@@ -148,25 +148,28 @@ The title is passed to the classifier through the step's `env:` block and quoted
 call site, never interpolated into the shell with `${{ }}`, so a title cannot inject a
 command whoever wrote it.
 
-### Only the newest run for a PR takes effect
+### The verdict comes from the live title, not the event payload
 
-The workflow serializes per pull request (`concurrency: dependabot-auto-merge-<number>`,
-`cancel-in-progress: true`). A regroup or rebase emits `synchronize` and `edited` close
-together, and each run reads the title from its own immutable event payload - so without
-this an older run could call `gh pr merge --auto` on a title it read as eligible _after_
-the newer run had called `--disable-auto` on the corrected one, silently re-queuing a held
-update.
+Each workflow run carries an **immutable snapshot** of the PR title as it was when its event
+fired, and GitHub documents that the order of runs within a concurrency group is **not
+guaranteed**. So a stale `synchronize` run can be admitted after a newer `edited` run and,
+on its own, would apply an obsolete verdict - re-enabling auto-merge on an update that
+should be held.
 
-Runs the job will skip - a body- or base-only `edited` - are keyed into a **separate**
-group. Keeping them out of the classification group matters for two distinct reasons:
-`cancel-in-progress` would let such a run cancel a live classification, and, separately,
-GitHub allows only **one pending run per group**, so a skip-run joining the queue would
-evict a title reclassification that was waiting its turn - leaving the old verdict, and any
-auto-merge request it granted, in place.
+The classifier therefore reads the title with `gh pr view --json title` immediately before
+deciding, and logs a notice when that differs from the event payload. Whichever run goes
+last, it classifies what the PR actually says now.
+
+Concurrency is still configured, but only to cut redundant runs - correctness no longer
+depends on which run finishes last:
+
+- runs are grouped per PR with `cancel-in-progress: true`;
+- runs the job will skip (a body- or base-only `edited`) are keyed into a **separate**
+  group, because GitHub allows only one pending run per group, so a skip-run joining the
+  queue would evict a title reclassification that was waiting its turn.
 
 Expect to see superseded runs marked **cancelled** on busy PRs. That is the mechanism
-working, not a failure: the surviving run is the one that read the current title, and its
-verdict is the one applied.
+working, not a failure.
 
 ### Failed checks are not a manual-review trigger
 

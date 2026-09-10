@@ -14,8 +14,9 @@ permissions:
 # runs would otherwise proceed concurrently against their own immutable copies of
 # the title. The older run could then call `gh pr merge --auto` on a title it read
 # as eligible *after* the newer run called `--disable-auto` on the corrected one,
-# silently re-queuing a held update. Newest run wins, and it applies the verdict
-# for the title that is actually current.
+# silently re-queuing a held update. This only cuts redundant runs: GitHub does
+# NOT guarantee the order of runs in a group, so correctness comes from the
+# analyze step reading the live title, not from which run happens to go last.
 #
 # Runs the job will SKIP - a body- or base-only `edited` - go in a separate group.
 # They must not touch the classification group at all: GitHub allows only one
@@ -63,13 +64,29 @@ jobs:
         id: analyze
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          GH_REPO: ${{ github.repository }}
+          # The title from the event payload, kept only to report drift. The
+          # verdict is derived from the LIVE title read below - see why there.
+          EVENT_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
 
+          # Read the title NOW rather than trusting the event payload. Each run
+          # carries an immutable snapshot of the title as it was when the event
+          # fired, and GitHub documents that the order of runs within a
+          # concurrency group is NOT guaranteed - so a stale `synchronize` run can
+          # be admitted after a newer `edited` run and apply an obsolete verdict,
+          # re-enabling auto-merge on an update that should be held. The
+          # concurrency group still cuts redundant runs, but correctness must not
+          # depend on which run happens to go last.
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq .title)
+
           echo "PR:    #$PR_NUMBER"
           echo "Title: $PR_TITLE"
+          if [ "$PR_TITLE" != "$EVENT_TITLE" ]; then
+            echo "::notice::Title changed since this run was queued - classifying the live title, not \"$EVENT_TITLE\""
+          fi
 
           # ONE classifier, shared with dependabot-retriage.yml. This logic used to
           # be written twice - once here and once there - and every time the two
