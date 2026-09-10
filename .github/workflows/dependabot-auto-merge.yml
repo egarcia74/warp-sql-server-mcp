@@ -2,17 +2,53 @@ name: Dependabot Auto-Merge
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    # `edited` matters: Dependabot rewrites a PR title when it regroups or
+    # rebases an update, and without it the classification from the original
+    # title stands - including an auto-merge granted before a retitle.
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
+
+# A regroup or rebase emits `synchronize` and `edited` close together, and the two
+# runs would otherwise proceed concurrently against their own immutable copies of
+# the title. The older run could then call `gh pr merge --auto` on a title it read
+# as eligible *after* the newer run called `--disable-auto` on the corrected one,
+# silently re-queuing a held update. This only cuts redundant runs: GitHub does
+# NOT guarantee the order of runs in a group, so correctness comes from the
+# analyze step reading the live title, not from which run happens to go last.
+#
+# Runs the job will SKIP - a body- or base-only `edited` - go in a separate group.
+# They must not touch the classification group at all: GitHub allows only one
+# pending run per group, so a skip-run joining it would evict a queued
+# reclassification even while not cancelling the in-flight one.
+concurrency:
+  group: >-
+    dependabot-auto-merge-${{ github.event.pull_request.number || github.ref }}-${{
+    (github.event.action == 'edited' && github.event.changes.title.from == null)
+    && 'skip' || 'classify' }}
+  cancel-in-progress: true
 
 jobs:
   auto-merge:
     name: Auto-merge Dependabot PRs
     runs-on: ubuntu-latest
-    # Only run for Dependabot PRs
-    if: github.actor == 'dependabot[bot]'
+    # Two conditions.
+    #
+    # Filter on the PR's AUTHOR, not `github.actor`. `github.actor` is whoever
+    # triggered this particular event, so a maintainer correcting the title of a
+    # queued Dependabot PR - the case `edited` exists to catch - would skip the
+    # job entirely and leave the previous auto-merge request live. The same held
+    # for a human `reopened` before this change.
+    #
+    # And for `edited`, require that the TITLE actually changed. `edited` also
+    # fires for body and base-branch edits, and this job re-grants auto-merge
+    # every time it runs - so an unrelated body edit on an eligible PR whose
+    # auto-merge a human had deliberately turned off would silently turn it back
+    # on. `github.event.changes.title` is present only on a title change.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]'
+      && (github.event.action != 'edited' || github.event.changes.title.from != null)
     outputs:
       auto_merge: ${{ steps.analyze.outputs.auto_merge }}
       reason: ${{ steps.analyze.outputs.reason }}
@@ -28,127 +64,80 @@ jobs:
         id: analyze
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          GH_REPO: ${{ github.repository }}
+          # The title from the event payload, kept only to report drift. The
+          # verdict is derived from the LIVE title read below - see why there.
+          EVENT_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          # Get PR details (safely)
-          pr_number=$PR_NUMBER
-          pr_labels=$(gh pr view $pr_number --json labels --jq '.labels[].name' | tr '\n' ' ')
-          
-          echo "PR: #$pr_number"
+          set -euo pipefail
+
+          # Read the title NOW rather than trusting the event payload. Each run
+          # carries an immutable snapshot of the title as it was when the event
+          # fired, and GitHub documents that the order of runs within a
+          # concurrency group is NOT guaranteed - so a stale `synchronize` run can
+          # be admitted after a newer `edited` run and apply an obsolete verdict,
+          # re-enabling auto-merge on an update that should be held. The
+          # concurrency group still cuts redundant runs, but correctness must not
+          # depend on which run happens to go last.
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq .title)
+
+          echo "PR:    #$PR_NUMBER"
           echo "Title: $PR_TITLE"
-          echo "Labels: $pr_labels"
-          
-          # Determine if this is an auto-mergeable update
-          auto_merge=false
-
-          # Extract semver bump from standard Dependabot titles, e.g.:
-          # "bump <name> from 1.2.3 to 1.3.0"
-          from_ver=""
-          to_ver=""
-          dep_name=""
-
-          if echo "$PR_TITLE" | grep -qiE 'bump .+ from [0-9]'; then
-            dep_name=$(echo "$PR_TITLE" | sed -E 's/.*bump ([^ ]+) from .*/\1/i')
-            from_ver=$(echo "$PR_TITLE" | sed -nE 's/.* from ([0-9][^ ]*) to .*/\1/ip' | head -n1)
-            # Anchored to the from-version rather than end-of-line: Dependabot appends
-            # " in the <group> group across 1 directory" to grouped single-dependency
-            # titles, and an end-of-line anchor left to_ver empty for all of them, so the
-            # bump type came out "unknown" and classification fell through to keywords.
-            to_ver=$(echo "$PR_TITLE" | sed -nE 's/.* from [0-9][^ ]* to ([0-9][^ ]*).*/\1/ip' | head -n1)
+          if [ "$PR_TITLE" != "$EVENT_TITLE" ]; then
+            echo "::notice::Title changed since this run was queued - classifying the live title, not \"$EVENT_TITLE\""
           fi
 
-          bump_type="unknown"
-          if [ -n "$from_ver" ] && [ -n "$to_ver" ]; then
-            # Strip leading 'v' and pre-release/build metadata
-            fv=$(echo "$from_ver" | sed -E 's/^v//' | cut -d- -f1 | cut -d+ -f1)
-            tv=$(echo "$to_ver"   | sed -E 's/^v//' | cut -d- -f1 | cut -d+ -f1)
-            fmaj=$(echo "$fv" | cut -d. -f1)
-            fmin=$(echo "$fv" | cut -d. -f2)
-            fpat=$(echo "$fv" | cut -d. -f3)
-            tmaj=$(echo "$tv" | cut -d. -f1)
-            tmin=$(echo "$tv" | cut -d. -f2)
-            tpat=$(echo "$tv" | cut -d. -f3)
-            if [ "$tmaj" != "$fmaj" ]; then
-              bump_type="major"
-            elif [ "$tmin" != "$fmin" ]; then
-              bump_type="minor"
-            elif [ "$tpat" != "$fpat" ]; then
-              bump_type="patch"
-            else
-              bump_type="none"
-            fi
-            echo "Detected dependency: $dep_name | $from_ver -> $to_ver ($bump_type)"
-          fi
-          
-          # Check if it's a security-critical action (require manual review)
-          if echo "$PR_TITLE" | grep -qi "github/codeql-action\|step-security"; then
-            echo "🔒 Security-critical action - manual review required"
-            auto_merge=false
-            reason="a security-critical GitHub Action"
+          # ONE classifier, shared with dependabot-retriage.yml. This logic used to
+          # be written twice - once here and once there - and every time the two
+          # drifted, the copy missing a rule was the one that queued --auto. It now
+          # lives in scripts/ci/classify-dependabot-pr.mjs and is unit-tested in
+          # test/unit/classify-dependabot-pr.test.js, which shell in YAML never was.
+          node scripts/ci/classify-dependabot-pr.mjs "$PR_TITLE" > "$RUNNER_TEMP/classification"
+          cat "$RUNNER_TEMP/classification"
 
-          # Block auto-merge for core database/auth dependencies at ANY bump level.
-          # This must be evaluated before the patch/minor branch below, otherwise a
-          # patch bump of mssql/tedious/Azure/AWS would auto-merge while the
-          # notify-manual-review job simultaneously tells reviewers it did not.
-          elif echo "$PR_TITLE" | grep -qiE 'bump (@?[^ ]*(mssql|tedious)|@azure/[^ ]+|aws-sdk|@aws-sdk/[^ ]+) '; then
-            echo "🔒 Core database/authentication dependency - manual review required"
-            auto_merge=false
-            reason="a core database or authentication dependency, held at every bump level"
+          # Forward only the keys a downstream job reads, and only the FIRST
+          # occurrence of each - never `cat` the whole file into GITHUB_OUTPUT.
+          # A later duplicate key overrides an earlier one there, so a forged
+          # second line would override the verdict the classifier just computed.
+          # The classifier now refuses to emit a control character, which is the
+          # root fix; this makes the property hold at the boundary too. `grep -m1`
+          # exits non-zero on a missing key, which under `set -e` fails the step
+          # rather than proceeding with an unset verdict.
+          for key in auto_merge decision rule reason bump_type; do
+            grep -m1 "^${key}=" "$RUNNER_TEMP/classification" >> "$GITHUB_OUTPUT"
+          done
 
-          # Block auto-merge for grouped updates whose title names no dependency.
-          # "bump the <group> group with N updates" carries neither a package name nor a
-          # version pair, so every title-based rule above misses it and it used to reach
-          # the generic "security" keyword branch below - which matched the literal group
-          # names "security-actions" and "security-critical" and enabled auto-merge on
-          # exactly the CodeQL/step-security actions and mssql/tedious/Azure/AWS packages
-          # this workflow claims to hold. #1071 and #1136 ("bump the security-actions group
-          # with 4 updates") both merged that way. An unclassifiable update gets a human.
-          elif [ "$bump_type" = "unknown" ] && echo "$PR_TITLE" | grep -qiE 'the [^ ]+ group'; then
-            echo "📦 Grouped update with no per-dependency version - manual review required"
-            auto_merge=false
-            reason="a grouped update whose title names no dependency or version, so its contents cannot be classified from the title"
+          auto_merge=$(grep -m1 '^auto_merge=' "$RUNNER_TEMP/classification" | cut -d= -f2)
 
-          # Block auto-merge for major updates
-          elif [ "$bump_type" = "major" ]; then
-            echo "🚨 Major version bump detected - manual review required"
-            auto_merge=false
-            reason="a major version bump"
-
-          # Auto-merge for patch/minor bumps (subject to other checks below)
-          elif [ "$bump_type" = "patch" ] || [ "$bump_type" = "minor" ]; then
-            echo "🩹 Patch/minor version bump detected - eligible for auto-merge"
-            auto_merge=true
-          
-          # Check for security updates (auto-merge for most security updates)
-          elif echo "$PR_TITLE" | grep -qi "security\|vulnerability\|cve\|ossf/scorecard-action"; then
-            echo "🔒 Security update detected - eligible for auto-merge"
-            auto_merge=true
-          
-          # Check for auto-mergeable GitHub Actions by analyzing title
-          elif echo "$PR_TITLE" | grep -qi "actions/checkout\|actions/setup-node\|actions/upload-artifact\|actions/cache\|streetsidesoftware/cspell-action\|gaurav-nelson.*markdown-link-check"; then
-            echo "🏗️ Build/utility action update - eligible for auto-merge"
-            auto_merge=true
-          
-          # Fallback: keywords in title (some ecosystems include these)
-          elif echo "$PR_TITLE" | grep -qi "\bpatch\b\|\bminor\b"; then
-            echo "🩹 Patch/minor keyword detected - eligible for auto-merge"
-            auto_merge=true
-          
+          # Whether to post the security notice is decided from the LIVE title too.
+          # It used to be `contains(github.event.pull_request.title, 'security')` on
+          # the notice step, which is the immutable event snapshot this step stopped
+          # trusting - so in the window where a title changes between event and run,
+          # the notice could describe a title that was never classified. Case
+          # -insensitive to match the `contains()` it replaces. Cosmetic either way,
+          # but there is no reason for two steps in one job to read different titles.
+          if printf '%s' "$PR_TITLE" | grep -qiE 'security|vulnerability'; then
+            echo "contains_security=true" >> "$GITHUB_OUTPUT"
           else
-            echo "🔍 Manual review required for this update"
-            reason="the update could not be classified automatically"
+            echo "contains_security=false" >> "$GITHUB_OUTPUT"
           fi
-          
-          echo "auto_merge=$auto_merge" >> $GITHUB_OUTPUT
-          echo "reason=${reason:-unclassified}" >> $GITHUB_OUTPUT
-          
-          # Add auto-merge label if eligible
+          # Both directions, because a retitle can move a PR either way and a stale
+          # label contradicts the merge state: a regrouped PR that becomes a
+          # parseable patch would otherwise queue for auto-merge still wearing
+          # manual-review-required, and the reverse leaves auto-merge-eligible on a
+          # held PR. The re-triage workflow already clears the opposing label.
+          # One `gh pr edit` call, not two: add and remove in the same request so a
+          # run cancelled between them cannot leave the PR wearing both labels or
+          # neither. Concurrency already keeps two classification runs for one PR
+          # from overlapping, but cancellation is exactly what that mechanism does.
           if [ "$auto_merge" = "true" ]; then
-            gh pr edit $pr_number --add-label "auto-merge-eligible" || echo "Warning: Could not add label (may not exist yet)"
+            add="auto-merge-eligible"; drop="manual-review-required"
           else
-            gh pr edit $pr_number --add-label "manual-review-required" || echo "Warning: Could not add label (may not exist yet)"
+            add="manual-review-required"; drop="auto-merge-eligible"
           fi
+          gh pr edit "$PR_NUMBER" --add-label "$add" --remove-label "$drop" \
+            || echo "Warning: Could not set labels (they may not exist yet)"
 
       - name: Enable auto-merge
         if: steps.analyze.outputs.auto_merge == 'true'
@@ -194,7 +183,7 @@ jobs:
           echo "Auto-merge revoked"
 
       - name: Add security notice for critical updates
-        if: steps.analyze.outputs.auto_merge == 'true' && (contains(github.event.pull_request.title, 'security') || contains(github.event.pull_request.title, 'vulnerability'))
+        if: steps.analyze.outputs.auto_merge == 'true' && steps.analyze.outputs.contains_security == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
