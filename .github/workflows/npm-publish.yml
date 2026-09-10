@@ -59,6 +59,21 @@ jobs:
         if: steps.check.outputs.should_publish == 'true'
         run: npm run test:unit
 
+      # The tag is created before the version bump (release.yml tags main as it stands,
+      # then opens the bump PR), so HEAD here is the bump merge commit and never the
+      # tagged commit. What must hold is that nothing else landed in between - see #1189.
+      #
+      # Deliberately the last step before publishing, not the first: an unpacked file
+      # that changed inside the release window is allowed through with a notice, and
+      # anything running after this gate - the test suite included - could still write
+      # into a packed path. Comparing immediately before `npm publish` is what makes
+      # this authoritative over the tree that actually gets packed.
+      - name: Verify this tree matches the release tag
+        if: steps.check.outputs.should_publish == 'true'
+        env:
+          PKG_VERSION: ${{ steps.check.outputs.version }}
+        run: node scripts/ci/verify-publish-tree.mjs "$PKG_VERSION"
+
       - name: Publish to npm
         if: steps.check.outputs.should_publish == 'true'
         run: npm publish --access public --provenance
