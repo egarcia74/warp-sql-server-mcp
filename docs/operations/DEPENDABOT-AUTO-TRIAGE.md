@@ -99,9 +99,12 @@ Auto-merge is **disabled** for, in the order the workflow evaluates them:
 - 📦 **Grouped updates** whose title names no dependency or version pair
 - 🚨 **Major version updates** on any dependency
 
-Each of these sets `auto_merge=false`, labels the PR `manual-review-required` and posts the
-manual-review comment. The order matters: the core-dependency rule is checked before the
-patch/minor rule, so a patch bump of one of those packages is held.
+Each of these sets `auto_merge=false`, labels the PR `manual-review-required`, posts the
+manual-review comment, and runs `gh pr merge --disable-auto` to **revoke** any auto-merge
+already queued - declining to grant it is not enough, because `--auto` is sticky and a PR
+queued by an earlier run or by the re-triage workflow would otherwise merge on the next
+green check. The order matters: the core-dependency rule is checked before the patch/minor
+rule, so a patch bump of one of those packages is held.
 
 ### Failed checks are not a manual-review trigger
 
@@ -113,10 +116,42 @@ a later run goes green. No `manual-review-required` label and no comment are pro
 a red check as blocking the queued merge, not as disabling auto-merge - a rerun merges the
 PR without anyone revisiting it.
 
-> **The `notify-manual-review` job no longer carries its own pattern to keep in sync.** It
-> reads `auto_merge` and `reason` from the classifier through `needs`, so there is exactly
-> one place where the rules above live: the `analyze` step in
-> `.github/workflows/dependabot-auto-merge.yml`.
+> **There are two copies of these rules, and they must be kept in sync by hand.**
+> `notify-manual-review` is not one of them - it reads `auto_merge` and `reason` from the
+> classifier through `needs`, so it cannot drift. The two that can are:
+>
+> - the `analyze` step in `.github/workflows/dependabot-auto-merge.yml` (triggered by
+>   `pull_request` types `opened`, `synchronize` and `reopened` - **not** `edited`, so a
+>   title corrected after auto-merge was queued does not reclassify until another of those
+>   events fires)
+> - `classify_pr` plus its rule chain in `.github/workflows/dependabot-retriage.yml`
+>   (manual `workflow_dispatch`, used to re-classify a backlog)
+>
+> **Their hold rules agree; their eligibility rules do not.** All four blocking branches -
+> security-critical action, core dependency, grouped title, major bump - are present in
+> both, so nothing this document lists as held can be auto-merged by either workflow. The
+> branches that mark a PR _eligible_ still differ: `dependabot-auto-merge.yml` has three
+> fallbacks that re-triage has no equivalent for - `ossf/scorecard-action` inside its
+> security-keyword branch, a build/utility action list (`actions/checkout`,
+> `actions/setup-node`, `actions/upload-artifact`, `actions/cache`, cspell-action,
+> markdown-link-check), and a bare `\bpatch\b`/`\bminor\b` keyword fallback. A
+> non-grouped `ossf/scorecard-action` title with no parseable version pair is therefore
+> marked auto-mergeable by the event workflow and left untouched by re-triage.
+>
+> Those three make re-triage the more conservative copy - but only those three, and
+> "conservative" is not a property to lean on. A fourth divergence ran the other way until
+> this commit: the event workflow required a bare digit after `from`, while re-triage
+> accepted `v?[0-9]`, so `bump foo from v1.2.3 to v1.2.4` was unclassifiable (and held) by
+> one and an auto-mergeable patch by the other. Re-triage now uses the same bare-digit pattern,
+> which makes a v-prefixed title unclassifiable in both - the safe direction - and the two
+> parsers agree again.
+>
+> Divergence is the hazard whichever way it points, and it is how the dangerous drift
+> started: until the
+> re-triage copy was corrected it lacked the core-dependency and grouped-title rules and
+> queued `gh pr merge --auto` on exactly the packages the other one holds, while stripping
+> the `manual-review-required` label. Extracting both to a shared script is tracked
+> separately; until then, **a change to either rule set has to be made in both files**.
 
 ## 📊 Security Alert Triage
 

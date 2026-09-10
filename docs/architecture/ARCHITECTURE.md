@@ -166,8 +166,14 @@ demand from the live pool, and failure handling is bounded retry plus a surfaced
 
 **File**: `lib/config/server-config.js`
 
-**Purpose**: Single source of truth for environment-derived configuration, exported as a
-module-level singleton and reloaded at startup.
+**Purpose**: Derives the grouped configuration objects the components consume, exported as
+a module-level singleton and reloaded at startup.
+
+It is **not** the only reader of the environment, and not a single instance either.
+`ConnectionManager` builds its own `ServerConfig` (see the Core Components note above) and
+additionally reads `process.env` directly in `_buildConnectionConfig()`; `Logger` reads its
+own environment defaults too. Changing `ServerConfig` therefore does not cover every
+configuration path - grep for `process.env` before assuming it does.
 
 **Responsibilities**:
 
@@ -176,10 +182,17 @@ module-level singleton and reloaded at startup.
   out-of-range value in favor of the default rather than clamping it to the nearest bound.
   Booleans (`SQL_SERVER_READ_ONLY`, `ENABLE_PERFORMANCE_MONITORING`, `ENABLE_STREAMING`,
   `TRACK_POOL_METRICS`, `ENABLE_SECURITY_AUDIT`, the two `SQL_SERVER_ALLOW_*` flags) are
-  bare `=== 'true'` / `!== 'false'` comparisons and strings (`SQL_SERVER_LOG_LEVEL`, host,
-  database, credentials) are taken as given - a malformed value in either group silently
-  takes the default with **no warning**. The boolean defaults fail safe (read-only on,
-  destructive and schema changes off), which is what makes the silence tolerable
+  bare `=== 'true'` / `!== 'false'` comparisons, so a malformed boolean silently takes the
+  default with **no warning** - though those defaults fail safe (read-only on, destructive
+  and schema changes off), which is what makes the silence tolerable. Three strings get an
+  `||` default when empty or unset - `SQL_SERVER_HOST` to `localhost`, `SQL_SERVER_DATABASE`
+  to `master`, `SQL_SERVER_LOG_LEVEL` to `info` - and are otherwise passed through without
+  validation, so an unset host quietly becomes `localhost` while a _misspelled_ one is
+  attempted as given and fails at connect time. **Credentials are not in that group**:
+  `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD` are read raw with no fallback, and in
+  `_buildConnectionConfig()` both being falsy selects NTLM and drops the fields entirely,
+  so an empty credential changes the _authentication mode_ rather than defaulting. No
+  malformed string is ever corrected or warned about
 - Groups configuration into connection, security, performance, streaming and logging
   sections. The connection, security and logging sections are consumed by the components
   above; the streaming section is **not** - see the notice below
@@ -229,7 +242,7 @@ enter its history.
 
 **Files**: `lib/utils/performance-monitor.js`, `lib/utils/logger.js`
 
-**`PerformanceMonitor`** records per-query timings and pool statistics, bounded by
+**`PerformanceMonitor`** records per-query timings, bounded by
 `MAX_METRICS_HISTORY` (default `1000`). It classifies a query as slow past
 `SLOW_QUERY_THRESHOLD` (default `5000` ms) and backs `get_performance_stats` and
 `get_query_performance`. It is an in-memory ring of samples - there is no alert manager and
@@ -241,6 +254,19 @@ no external metrics backend.
 > `test/unit/performance-monitor.test.js` - no production path invokes it. Setting the rate
 > below `1.0` therefore reduces neither the work done per query nor the number of retained
 > observations; every query is recorded.
+>
+> **⚠️ Pool metrics and connection events are never recorded.** `recordPoolMetrics()` and
+> `recordConnectionEvent()` are implemented (`performance-monitor.js:241`, `:269`) but
+> called only from `test/unit/performance-monitor.test.js` - no production path invokes
+> either, so the monitor's pool counters are always at their initialized zeros. Live pool
+> state does reach `get_connection_health`, by a different route:
+> `ConnectionManager.getConnectionHealth()` reads `size`, `available`, `pending` and
+> `borrowed` straight off the driver pool without passing through the monitor.
+> `TRACK_POOL_METRICS` therefore gates nothing about recording - it only affects the shape
+> of the monitor's own block. Exactly which tool emits that block, and under which of
+> `ENABLE_PERFORMANCE_MONITORING` / `TRACK_POOL_METRICS`, is response-shape detail rather
+> than architecture: read `getStats()` and `getPoolStats()` in `performance-monitor.js`
+> and their call sites at `index.js:547`, `:609` and `:720`.
 
 **`Logger`** wraps Winston to provide levelled structured logging plus a separate security
 audit channel. File transports are **opt-in**: `index.js` passes a path only when
@@ -336,7 +362,16 @@ There is no error class hierarchy. Every failure that leaves a tool is normalize
 MCP SDK's `McpError` with an `ErrorCode`, so the client sees a protocol-level error and
 never a raw `mssql` or Node error object. Connection failures are retried with backoff in
 `ConnectionManager.connect()`; a safety-policy rejection is raised immediately by
-`validateQuery` / `validateWhereClause` and audit-logged before it is thrown.
+`validateQuery` / `validateWhereClause`.
+
+> **⚠️ Rejections get a _detailed_ audit entry only when `ENABLE_SECURITY_AUDIT=true`, which
+> is not the default.** With it off, `Logger` never constructs a `securityLogger`, so
+> `Logger.security()` returns early - but not silently: it first calls
+> `this.warn('Security logging is disabled', { event, message })`, which puts
+> `event: "QUERY_BLOCKED"` and the policy message into the main log. So a coarse record of
+> _that_ a query was blocked survives on a default install; the blocked SQL, the specific
+> reason, the tool and the severity do not. Do not plan an audit trail around the default
+> configuration.
 
 ### Aspirational Patterns
 
@@ -486,7 +521,7 @@ Development → Testing → Staging → Production
 
 1. **Blue-Green Deployment**: Zero-downtime deployments - _aspirational_
 2. **Configuration Management**: Environment-specific configuration - _implemented_
-3. **Health Checks**: Automated deployment validation - _implemented_ (`get_connection_health`)
+3. **Health Checks**: Automated deployment validation - _aspirational_ (`get_connection_health` exists but is an on-demand MCP tool; no workflow or script invokes it during a release)
 4. **Rollback Capability**: Quick failure recovery - _aspirational_ (npm version pinning only)
 
 ## Future Extensibility
