@@ -61,33 +61,36 @@ Auto-merge is enabled when **ALL** conditions are met:
    GitHub Action (`github/codeql-action`, `step-security/*`)
 3. ✅ **Update Type**: Patch or minor versions only
 4. ✅ **No Breaking Changes**: No major version bumps
-5. ✅ **Named in the title**: The title carries a `from X to Y` pair the workflow can parse.
-   A grouped multi-dependency update - `bump the <group> group with N updates` - names no
-   package and no versions, so its contents cannot be classified and it is held regardless
-   of which group it belongs to, `dev-dependencies` and the docs/build groups included
+5. ✅ **Named in the title**: The title carries a `from X to Y` pair the classifier can
+   parse. This is a hard requirement, not a heuristic - a title with no parseable version
+   pair is held, whatever else it says. A grouped multi-dependency update -
+   `bump the <group> group with N updates` - names no package and no versions, so it is
+   held regardless of which group it belongs to, `dev-dependencies` and the docs/build
+   groups included
 
 Tests are **not** one of these conditions. Auto-merge is enabled purely from the
 classifier's verdict; GitHub then holds the merge until every required check is green (see
 "Failed checks" below).
 
-### Security Update Priority
+### Security keywords in a title carry no weight
 
-A PR whose title contains `security`, `vulnerability`, `cve` or `ossf/scorecard-action` is
-auto-merge eligible even when its bump type could not be parsed from the title - **unless
-the title is a grouped one**, which is now caught before this branch is reached.
+A PR whose title contains `security`, `vulnerability` or `cve` is classified **exactly like
+any other PR**: by its version pair. A security patch auto-merges because it is a patch, not
+because of the word.
 
-That exclusion is the point of the grouped-title rule. The group _names_ `security-actions`
-and `security-critical` contain the literal substring `security`, so before the rule existed
-`bump the security-actions group with 4 updates` matched this keyword branch and auto-merged
-the CodeQL and step-security actions the first manual-review rule claims to hold - PRs #1071
-and #1136 both merged that way.
+This used to work the other way. A keyword branch marked such a title auto-merge eligible
+_even when no version pair could be parsed from it_, and the group names `security-actions`
+and `security-critical` contain the literal substring `security` - so
+`bump the security-actions group with 4 updates` matched it and auto-merged the CodeQL and
+step-security actions the first manual-review rule claims to hold. PRs #1071 and #1136 both
+merged that way. A grouped-title rule was added ahead of the branch to stop that specific
+shape, and the branch itself has now been removed along with its two siblings (an allowlist
+of build/utility actions, and a bare `\bpatch\b`/`\bminor\b` match).
 
-This branch is **not** an override of the manual-review rules above: it is evaluated after
-them, so a security update to `mssql`, `tedious`, `@azure/*` or an AWS SDK package is still
-held, as is any major bump. Those are the packages whose regressions break the server
-outright, so they get a human plus the 24-48 hour SLA rather than a queue-and-forget merge.
-What remains for this branch is the narrow case of a non-grouped title with no parseable
-version pair.
+The rule that replaced all three is blunter and easier to reason about: **a title we cannot
+parse a version pair from is held, never merged.** Measured against all 400 Dependabot PRs
+this repository has ever opened, no title reached those branches with a parseable version,
+so nothing that merges today stopped merging.
 
 ### Manual Review Triggers
 
@@ -116,42 +119,31 @@ a later run goes green. No `manual-review-required` label and no comment are pro
 a red check as blocking the queued merge, not as disabling auto-merge - a rerun merges the
 PR without anyone revisiting it.
 
-> **There are two copies of these rules, and they must be kept in sync by hand.**
-> `notify-manual-review` is not one of them - it reads `auto_merge` and `reason` from the
-> classifier through `needs`, so it cannot drift. The two that can are:
+> **There is one copy of these rules.** `scripts/ci/classify-dependabot-pr.mjs` is a pure
+> function of the PR title, and both workflows call it:
 >
-> - the `analyze` step in `.github/workflows/dependabot-auto-merge.yml` (triggered by
->   `pull_request` types `opened`, `synchronize` and `reopened` - **not** `edited`, so a
->   title corrected after auto-merge was queued does not reclassify until another of those
->   events fires)
-> - `classify_pr` plus its rule chain in `.github/workflows/dependabot-retriage.yml`
->   (manual `workflow_dispatch`, used to re-classify a backlog)
+> - the `analyze` step in `.github/workflows/dependabot-auto-merge.yml`, triggered by
+>   `pull_request` types `opened`, `synchronize`, `reopened` and `edited` - `edited` is
+>   there because Dependabot rewrites a title when it regroups or rebases an update, and
+>   without it the classification from the original title would stand
+> - the per-PR loop in `.github/workflows/dependabot-retriage.yml` (manual
+>   `workflow_dispatch`, used to re-classify a backlog)
 >
-> **Their hold rules agree; their eligibility rules do not.** All four blocking branches -
-> security-critical action, core dependency, grouped title, major bump - are present in
-> both, so nothing this document lists as held can be auto-merged by either workflow. The
-> branches that mark a PR _eligible_ still differ: `dependabot-auto-merge.yml` has three
-> fallbacks that re-triage has no equivalent for - `ossf/scorecard-action` inside its
-> security-keyword branch, a build/utility action list (`actions/checkout`,
-> `actions/setup-node`, `actions/upload-artifact`, `actions/cache`, cspell-action,
-> markdown-link-check), and a bare `\bpatch\b`/`\bminor\b` keyword fallback. A
-> non-grouped `ossf/scorecard-action` title with no parseable version pair is therefore
-> marked auto-mergeable by the event workflow and left untouched by re-triage.
+> `notify-manual-review` reads `auto_merge` and `reason` from the classifier through
+> `needs`, so it cannot drift either.
 >
-> Those three make re-triage the more conservative copy - but only those three, and
-> "conservative" is not a property to lean on. A fourth divergence ran the other way until
-> this commit: the event workflow required a bare digit after `from`, while re-triage
-> accepted `v?[0-9]`, so `bump foo from v1.2.3 to v1.2.4` was unclassifiable (and held) by
-> one and an auto-mergeable patch by the other. Re-triage now uses the same bare-digit pattern,
-> which makes a v-prefixed title unclassifiable in both - the safe direction - and the two
-> parsers agree again.
+> **This is what the duplication cost.** The rules lived in two hand-maintained copies of
+> the same shell, and three separate defects came out of that: the re-triage copy lacked
+> the core-dependency and grouped-title rules and queued `gh pr merge --auto` on exactly
+> the packages the other one holds, while stripping the `manual-review-required` label;
+> the two parsers disagreed on a leading `v`, so `bump foo from v1.2.3 to v1.2.4` was held
+> by one and merged as a patch by the other; and the event workflow carried three
+> eligibility fallbacks the other had no equivalent for. In every case the copy missing a
+> rule was the one that granted auto-merge.
 >
-> Divergence is the hazard whichever way it points, and it is how the dangerous drift
-> started: until the
-> re-triage copy was corrected it lacked the core-dependency and grouped-title rules and
-> queued `gh pr merge --auto` on exactly the packages the other one holds, while stripping
-> the `manual-review-required` label. Extracting both to a shared script is tracked
-> separately; until then, **a change to either rule set has to be made in both files**.
+> The shared classifier is unit-tested in `test/unit/classify-dependabot-pr.test.js`,
+> which shell embedded in YAML never was. A change to the rules is now one edit with tests
+> in front of it.
 
 ## 📊 Security Alert Triage
 
@@ -186,13 +178,17 @@ For each security alert, the system:
 ### Core Configuration
 
 - **`.github/dependabot.yml`**: Enhanced Dependabot configuration
-- **`.github/workflows/dependabot-auto-merge.yml`**: Auto-merge logic
+- **`scripts/ci/classify-dependabot-pr.mjs`**: the classifier - the single source of truth
+  for which updates may merge unattended
+- **`.github/workflows/dependabot-auto-merge.yml`**: acts on the classifier's verdict per PR
+- **`.github/workflows/dependabot-retriage.yml`**: acts on it in bulk, on manual dispatch
 - **`.github/workflows/security-triage.yml`**: Security alert monitoring
 
 ### Supporting Files
 
 - **`.github/SECURITY.md`**: Security policy and reporting procedures
 - **`.github/PULL_REQUEST_TEMPLATE/dependabot.md`**: PR review template
+- **`test/unit/classify-dependabot-pr.test.js`**: the classifier's tests
 - **`.github/security-metrics.json`**: Real-time security status tracking
 
 ## 📈 Monitoring and Metrics
