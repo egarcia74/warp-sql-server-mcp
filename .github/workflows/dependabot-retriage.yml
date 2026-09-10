@@ -86,7 +86,11 @@ jobs:
               gh pr edit "$n" --remove-label "auto-merge-eligible" || true
               revoke_auto_merge "$n" || revoked=1
             fi
-            [ "$COMMENT_ON_PRS" = "true" ] && [ "$DRY_RUN" = "false" ] || return 0
+            [ "$DRY_RUN" = "false" ] || return 0
+            # The failure warning is NOT one of the optional classification comments:
+            # comment_on_prs=false silences routine chatter, but a PR whose hold did not
+            # take is the one case that must always be told, since this workflow is not a
+            # status check on it and nothing else will say so.
             if [ "$revoked" -eq 1 ]; then
               gh pr comment "$n" --body "**Automated triage: held for manual review - and auto-merge may still be active**
 
@@ -97,7 +101,7 @@ jobs:
           not block the merge: if auto-merge is still queued GitHub will merge as soon as the
           required checks pass. Check the merge box or run
           gh pr merge $n --disable-auto, then review as normal." || true
-            else
+            elif [ "$COMMENT_ON_PRS" = "true" ]; then
               gh pr comment "$n" --body "Automated triage: ${reason}" || true
             fi
           }
