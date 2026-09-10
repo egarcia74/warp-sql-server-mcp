@@ -541,7 +541,7 @@ contact me"_ with no details, and the maintainer will open a private advisory an
 
 ## 📚 Additional Resources
 
-- [OWASP SQL Injection Prevention](https://owasp.org/www-project-cheat-sheets/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
+- [OWASP SQL Injection Prevention](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
 - [Microsoft SQL Server Security Documentation](https://learn.microsoft.com/en-us/sql/relational-databases/security/)
 - [CIS Database Security Guidelines](https://www.cisecurity.org/controls/v8/)
 
