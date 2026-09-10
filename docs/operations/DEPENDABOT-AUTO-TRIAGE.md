@@ -111,6 +111,39 @@ queued by an earlier run or by the re-triage workflow would otherwise merge on t
 green check. The order matters: the core-dependency rule is checked before the patch/minor
 rule, so a patch bump of one of those packages is held.
 
+### A manual `--disable-auto` is not sticky
+
+This job re-derives the verdict and re-grants auto-merge **every time it runs**. So turning
+auto-merge off by hand on a PR the classifier considers eligible holds only until the next
+qualifying event - and Dependabot rebases produce `synchronize` events routinely.
+
+`edited` runs are now gated on the title having actually changed
+(`github.event.changes.title`), because `edited` also fires for body and base-branch edits
+and it would otherwise re-grant auto-merge on an unrelated body edit. That closes the
+instance that is easiest to trip over, but not the class: a `synchronize` will still
+re-grant it.
+
+If you need a hold that survives, do not rely on the merge box. Either close the PR, or add
+a rule here that refuses to enable auto-merge when a human-applied label is present - the
+latter does not exist today and is the right fix if this ever bites.
+
+### What the classifier trusts
+
+Classification is derived **entirely from the PR title**, so it trusts whoever can set that
+title: Dependabot, and anyone with write access to the repository. Since `edited` now
+re-runs the classification, a retitle can move a PR between held and eligible.
+
+That is not an escalation as this repository is configured - `main` has no push
+restrictions and the only collaborator is the owner, who can merge directly regardless - but
+it is worth stating, because it stops being true the moment write access is wider than
+merge rights. The fix in that case is not a title guard: it is to classify from
+`dependabot/fetch-metadata`, which reads the update's real metadata rather than its prose,
+and which is also what would restore auto-merge for grouped updates.
+
+The title is passed to the classifier through the step's `env:` block and quoted at the
+call site, never interpolated into the shell with `${{ }}`, so a title cannot inject a
+command whoever wrote it.
+
 ### Only the newest run for a PR takes effect
 
 The workflow serializes per pull request (`concurrency: dependabot-auto-merge-<number>`,

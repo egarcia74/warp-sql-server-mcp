@@ -24,12 +24,22 @@ jobs:
   auto-merge:
     name: Auto-merge Dependabot PRs
     runs-on: ubuntu-latest
+    # Two conditions.
+    #
     # Filter on the PR's AUTHOR, not `github.actor`. `github.actor` is whoever
     # triggered this particular event, so a maintainer correcting the title of a
     # queued Dependabot PR - the case `edited` exists to catch - would skip the
     # job entirely and leave the previous auto-merge request live. The same held
     # for a human `reopened` before this change.
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    #
+    # And for `edited`, require that the TITLE actually changed. `edited` also
+    # fires for body and base-branch edits, and this job re-grants auto-merge
+    # every time it runs - so an unrelated body edit on an eligible PR whose
+    # auto-merge a human had deliberately turned off would silently turn it back
+    # on. `github.event.changes.title` is present only on a title change.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]'
+      && (github.event.action != 'edited' || github.event.changes.title.from != null)
     outputs:
       auto_merge: ${{ steps.analyze.outputs.auto_merge }}
       reason: ${{ steps.analyze.outputs.reason }}

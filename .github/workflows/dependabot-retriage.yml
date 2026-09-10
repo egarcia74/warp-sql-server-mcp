@@ -131,6 +131,18 @@ jobs:
               continue
             fi
 
+            # Reachable only on an explicit "merge". `set -euo pipefail` already
+            # aborts the step if the classifier crashes - verified by stubbing node
+            # to exit 1, which ends the run before any `gh pr merge` - but that
+            # safety lives in one line at the top of a long block, and every branch
+            # below grants auto-merge. Make the invariant local: anything that is
+            # not a recognised verdict stops the run rather than falling through to
+            # the eligible path.
+            if [ "$decision" != "merge" ]; then
+              echo "::error::Classifier returned an unrecognised decision '$decision' for #$number - refusing to treat it as auto-merge eligible"
+              exit 1
+            fi
+
             echo " - $bump_type bump: auto-merge eligible"
             if [ "$DRY_RUN" = "false" ]; then
               gh pr edit "$number" --add-label "auto-merge-eligible" || true
