@@ -45,7 +45,7 @@ const RULES = [
   }
 ];
 
-const RULE = Object.fromEntries(RULES.map(r => [r.id, r]));
+const RULE = new Map(RULES.map(r => [r.id, r]));
 
 // Actions whose own releases gate this repository's security posture. A bad
 // version here weakens scanning silently, so it never merges unattended.
@@ -87,6 +87,23 @@ export function bumpTypeOf(fromVersion, toVersion) {
 }
 
 /**
+ * Pull the dependency name and version pair out of a Dependabot title.
+ * Returns empty strings when the title carries no parseable pair - the caller
+ * treats that as `unknown`, which is a hold.
+ * @param {string} title
+ */
+function parseVersionPair(title) {
+  if (!HAS_VERSION_PAIR.test(title)) {
+    return { dependency: '', fromVersion: '', toVersion: '' };
+  }
+  return {
+    dependency: title.match(DEPENDENCY)?.[1] ?? '',
+    fromVersion: title.match(FROM_VERSION)?.[1] ?? '',
+    toVersion: title.match(TO_VERSION)?.[1] ?? ''
+  };
+}
+
+/**
  * Classify one Dependabot PR title.
  * @param {string} title
  * @returns {{decision:'merge'|'hold', rule:string, reason:string, bumpType:string,
@@ -94,18 +111,17 @@ export function bumpTypeOf(fromVersion, toVersion) {
  */
 export function classifyDependabotPr(title) {
   const t = typeof title === 'string' ? title : '';
-
-  let dependency = '';
-  let fromVersion = '';
-  let toVersion = '';
-  if (HAS_VERSION_PAIR.test(t)) {
-    dependency = t.match(DEPENDENCY)?.[1] ?? '';
-    fromVersion = t.match(FROM_VERSION)?.[1] ?? '';
-    toVersion = t.match(TO_VERSION)?.[1] ?? '';
-  }
+  const { dependency, fromVersion, toVersion } = parseVersionPair(t);
   const bumpType = bumpTypeOf(fromVersion, toVersion);
 
-  const decide = id => ({ ...RULE[id], rule: id, bumpType, dependency, fromVersion, toVersion });
+  const decide = id => ({
+    ...RULE.get(id),
+    rule: id,
+    bumpType,
+    dependency,
+    fromVersion,
+    toVersion
+  });
 
   if (SECURITY_CRITICAL_ACTION.test(t)) return decide('security-critical-action');
   if (CORE_DEPENDENCY.test(t)) return decide('core-dependency');
@@ -130,7 +146,7 @@ export function classifyDependabotPr(title) {
 function main() {
   const title = process.argv.slice(2).join(' ');
   if (!title) {
-    console.error('usage: classify-dependabot-pr.mjs <pr title>');
+    console.error('usage: classify-dependabot-pr.mjs "the PR title"');
     process.exit(2);
   }
   const r = classifyDependabotPr(title);
