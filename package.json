@@ -137,7 +137,6 @@
     "vitest": "^4.1.2"
   },
   "overrides": {
-    "flatted": "3.4.2",
     "smol-toml": "1.8.0"
   },
   "engines": {
