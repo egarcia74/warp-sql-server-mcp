@@ -43,14 +43,23 @@
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
+/**
+ * A version must look like a version before it is pasted into a git revision. Nothing
+ * here is attacker-controlled today - it arrives from `package.json` on `main` or from
+ * the workflow's own step output - but a value carrying a path, a space or a leading
+ * dash would reach `git` as an argument, and the cost of rejecting those is one regex.
+ * Deliberately narrower than full semver: this repo's tags are `v<semver>`.
+ */
+const VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+
 /** Held to the version bump exactly: nothing in them may differ but the version. */
-const BUMP_FILES = ['package.json', 'package-lock.json'];
+const BUMP_FILES = new Set(['package.json', 'package-lock.json']);
 
 /**
  * Allowed to differ freely. CHANGELOG.md documents the release being published and is
  * committed separately from the bump, so it legitimately moves inside the window.
  */
-const RELEASE_FILES = ['CHANGELOG.md'];
+const RELEASE_FILES = new Set(['CHANGELOG.md']);
 
 /**
  * Serialise with object keys sorted, so a re-ordered but otherwise identical file is
@@ -61,7 +70,7 @@ function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value !== null && typeof value === 'object') {
     return `{${Object.keys(value)
-      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+      .sort()
       .map(key => `${JSON.stringify(key)}:${canonical(value[key])}`)
       .join(',')}}`;
   }
@@ -91,19 +100,36 @@ const CAPTURE = {
   stdio: ['ignore', 'pipe', 'pipe']
 };
 
+// Both readers below invoke `git` and `npm` by name, so they resolve through PATH.
+// SonarQube flags this as javascript:S4036 (OS commands should not rely on PATH
+// resolution), and the finding is accurate rather than a false positive - it is marked
+// Accepted for the same reason as scripts/check-fenced-blocks.mjs, which documents the
+// identical trade-off at length.
+//
+// The risk is immaterial here: this runs as a step inside npm-publish.yml, after
+// `npm ci` and immediately before `npm publish`. Anyone able to control PATH in that
+// job already controls the `npm` that does the publishing, so resolving `git` by
+// absolute path would protect nothing. An absolute path is also not portable across
+// the runner images, and resolving one via `which` reintroduces the same dependency.
+
 /** Reads blobs and diffs out of a real repository. */
 export function gitReader(cwd = process.cwd()) {
   const run = args => execFileSync('git', args, { cwd, ...CAPTURE });
   return {
-    /** [{ status, file }] between `tag` and HEAD; status is git's A/M/D/R letter. */
+    /**
+     * [{ status, file, from? }] between `tag` and HEAD; status is git's A/M/D/R letter.
+     * A rename reports both paths: `file` is the destination, which is what exists at
+     * HEAD, and `from` the source, which is what left the tree.
+     */
     changes: tag =>
       run(['diff', '--name-status', tag, 'HEAD'])
         .split('\n')
         .filter(Boolean)
         .map(line => {
           const [status, ...paths] = line.split('\t');
-          // A rename reports both paths; the destination is what exists at HEAD.
-          return { status: status[0], file: paths[paths.length - 1] };
+          const change = { status: status[0], file: paths[paths.length - 1] };
+          if (change.status === 'R' && paths.length > 1) change.from = paths[0];
+          return change;
         }),
     show: (rev, file) => run(['show', `${rev}:${file}`])
   };
@@ -131,25 +157,12 @@ export function packedFilesReader(cwd = process.cwd()) {
  * returning a Set of packed paths, so this is testable without a repository and
  * usable against a real one unchanged.
  */
-export function verifyPublishTree(version, git, readPackedFiles) {
-  const tag = `v${version}`;
+/**
+ * Holds the two bump files to the version bump exactly. Extracted so verifyPublishTree
+ * stays within the cognitive-complexity budget and so each tier reads on its own.
+ */
+function checkBumpFiles(version, tag, changes, git) {
   const problems = [];
-  const notices = [];
-
-  let changes;
-  try {
-    changes = git.changes(tag);
-  } catch (error) {
-    // A tag this check cannot resolve is a tag it cannot vouch for. Refuse rather
-    // than skipping quietly - a gate that reports clean on what it never compared is
-    // the failure mode this script exists to prevent.
-    return {
-      ok: false,
-      tag,
-      notices,
-      problems: [{ kind: 'unresolvable-tag', tag, message: String(error.message ?? error) }]
-    };
-  }
 
   for (const file of BUMP_FILES) {
     if (!changes.some(change => change.file === file)) continue;
@@ -165,48 +178,93 @@ export function verifyPublishTree(version, git, readPackedFiles) {
 
     if (head.version !== version) {
       problems.push({ kind: 'wrong-version', file, expected: version, actual: head.version });
-      continue;
-    }
-    if (canonical(withVersion(tagged, file, version)) !== canonical(head)) {
+    } else if (canonical(withVersion(tagged, file, version)) !== canonical(head)) {
       problems.push({ kind: 'unexpected-change', file });
     }
   }
 
+  return problems;
+}
+
+/** Splits everything that is not a bump or release file into blocking and reportable. */
+function classifyOtherChanges(changes, readPackedFiles) {
   const others = changes.filter(
-    change => !BUMP_FILES.includes(change.file) && !RELEASE_FILES.includes(change.file)
+    change => !BUMP_FILES.has(change.file) && !RELEASE_FILES.has(change.file)
   );
+  if (others.length === 0) return { problems: [], notices: [] };
 
-  if (others.length > 0) {
-    let packed;
-    try {
-      packed = readPackedFiles();
-    } catch (error) {
-      // Without the packlist there is no way to tell a tarball-affecting change from a
-      // harmless one, and guessing in the permissive direction is what this gate is
-      // for. Treat every difference as packed.
-      problems.push({ kind: 'unknown-packlist', message: String(error.message ?? error) });
-      packed = null;
-    }
-
-    // A deletion cannot be looked up in HEAD's packlist because the path is gone;
-    // whether it used to be packed is unknowable from here, so assume it was.
-    const affectsTarball = change =>
-      packed === null || change.status === 'D' || packed.has(change.file);
-
-    const shipped = others.filter(affectsTarball).map(change => change.file);
-    const unshipped = others.filter(change => !affectsTarball(change)).map(change => change.file);
-
-    if (shipped.length > 0) problems.push({ kind: 'foreign-packed-files', files: shipped });
-    if (unshipped.length > 0) notices.push({ kind: 'foreign-unpacked-files', files: unshipped });
+  const problems = [];
+  let packed;
+  try {
+    packed = readPackedFiles();
+  } catch (error) {
+    // Without the packlist there is no way to tell a tarball-affecting change from a
+    // harmless one, and guessing in the permissive direction is what this gate is for.
+    // Treat every difference as packed.
+    problems.push({ kind: 'unknown-packlist', message: String(error.message ?? error) });
+    packed = null;
   }
 
-  return { ok: problems.length === 0, tag, problems, notices };
+  // A path that no longer exists at HEAD cannot be looked up in HEAD's packlist, so
+  // whether it used to be packed is unknowable from here and is assumed. That covers a
+  // deletion, and equally a rename: a rename whose destination is unpacked still
+  // removes its source from the tarball, so consulting the destination alone would
+  // report a move of a shipped file out of the package as harmless. Verified against a
+  // real repository - `git mv lib/packed.js docs/notes.txt` reports `R100`, while the
+  // same move after a separate modifying commit is reported as `D` plus `A`.
+  const affectsTarball = change =>
+    packed === null || change.status === 'D' || change.status === 'R' || packed.has(change.file);
+
+  const name = change => (change.from ? `${change.from} -> ${change.file}` : change.file);
+  const shipped = others.filter(affectsTarball).map(name);
+  const unshipped = others.filter(change => !affectsTarball(change)).map(name);
+
+  const notices = [];
+  if (shipped.length > 0) problems.push({ kind: 'foreign-packed-files', files: shipped });
+  if (unshipped.length > 0) notices.push({ kind: 'foreign-unpacked-files', files: unshipped });
+  return { problems, notices };
+}
+
+/**
+ * Returns { ok, tag, problems, notices } for the tree at HEAD against tag `v<version>`.
+ * `git` is any object shaped like gitReader() and `readPackedFiles` any function
+ * returning a Set of packed paths, so this is testable without a repository and
+ * usable against a real one unchanged.
+ */
+export function verifyPublishTree(version, git, readPackedFiles) {
+  const tag = `v${version}`;
+
+  if (!VERSION.test(version)) {
+    return { ok: false, tag, notices: [], problems: [{ kind: 'malformed-version', version }] };
+  }
+
+  let changes;
+  try {
+    changes = git.changes(tag);
+  } catch (error) {
+    // A tag this check cannot resolve is a tag it cannot vouch for. Refuse rather than
+    // skipping quietly - a gate that reports clean on what it never compared is the
+    // failure mode this script exists to prevent.
+    return {
+      ok: false,
+      tag,
+      notices: [],
+      problems: [{ kind: 'unresolvable-tag', tag, message: String(error.message ?? error) }]
+    };
+  }
+
+  const other = classifyOtherChanges(changes, readPackedFiles);
+  const problems = [...checkBumpFiles(version, tag, changes, git), ...other.problems];
+
+  return { ok: problems.length === 0, tag, problems, notices: other.notices };
 }
 
 /** Renders one problem or notice as the operator-facing line explaining it. */
 export function describeProblem(problem) {
   const list = files => `\n    ${files.join('\n    ')}`;
   switch (problem.kind) {
+    case 'malformed-version':
+      return `"${problem.version}" is not a version this release process produces, so no tag can be derived from it`;
     case 'unresolvable-tag':
       return `cannot resolve tag ${problem.tag} - was the checkout made with fetch-depth: 0? (${problem.message})`;
     case 'foreign-packed-files':
@@ -227,7 +285,9 @@ export function describeProblem(problem) {
 }
 
 function main() {
-  const version = process.argv[2] ?? JSON.parse(gitReader().show('HEAD', 'package.json')).version;
+  // `??` alone would accept an empty argument - which an unset variable in the caller's
+  // `run:` block expands to - and compare against a tag named just "v".
+  const version = process.argv[2] || JSON.parse(gitReader().show('HEAD', 'package.json')).version;
   const { ok, tag, problems, notices } = verifyPublishTree(
     version,
     gitReader(),

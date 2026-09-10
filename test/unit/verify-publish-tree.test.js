@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -208,6 +208,20 @@ describe('verifyPublishTree', () => {
       expect(result.problems).toEqual([{ kind: 'foreign-packed-files', files: ['lib/gone.js'] }]);
     });
 
+    it('treats a rename as tarball-affecting, naming both paths', () => {
+      // Found by review: consulting the destination alone reports a move of a packed
+      // file to an unpacked path as harmless, though the tarball loses the source.
+      const result = verifyPublishTree(
+        '1.8.0',
+        fakeGit({ changes: [{ status: 'R', file: 'docs/notes.txt', from: 'lib/packed.js' }] }),
+        packs('lib/packed.js')
+      );
+      expect(result.ok).toBe(false);
+      expect(result.problems).toEqual([
+        { kind: 'foreign-packed-files', files: ['lib/packed.js -> docs/notes.txt'] }
+      ]);
+    });
+
     it('fails closed when the packlist cannot be read at all', () => {
       const result = verifyPublishTree(
         '1.8.0',
@@ -259,8 +273,41 @@ describe('verifyPublishTree', () => {
     });
   });
 
+  describe('the version must look like a version before it reaches a git argument', () => {
+    // Nothing here is attacker-controlled today, but the tag is built by interpolation
+    // and these are the shapes that would reach `git` as something other than a rev.
+    const rejected = ['', '1.8', 'v1.8.0', '--upload-pack=touch /tmp/x', '1.8.0 --exec', '../etc'];
+    for (const version of rejected) {
+      it(`rejects ${JSON.stringify(version)} without consulting git`, () => {
+        let consulted = false;
+        const git = {
+          changes: () => {
+            consulted = true;
+            return [];
+          },
+          show: () => {
+            consulted = true;
+            return '{}';
+          }
+        };
+        const result = verifyPublishTree(version, git, packs());
+        expect(result.ok).toBe(false);
+        expect(result.problems).toEqual([{ kind: 'malformed-version', version }]);
+        expect(consulted).toBe(false);
+      });
+    }
+
+    for (const version of ['1.8.0', '2.0.0-rc.1', '1.7.20+build.5']) {
+      it(`accepts ${version}`, () => {
+        const result = verifyPublishTree(version, fakeGit(), packs());
+        expect(result.ok).toBe(true);
+      });
+    }
+  });
+
   it('gives every problem and notice kind a description', () => {
     const kinds = [
+      { kind: 'malformed-version', version: 'x' },
       { kind: 'unresolvable-tag', tag: 'v1', message: 'm' },
       { kind: 'foreign-packed-files', files: ['a'] },
       { kind: 'foreign-unpacked-files', files: ['a'] },
@@ -277,62 +324,126 @@ describe('verifyPublishTree', () => {
 });
 
 describe('against a real repository, following the actual release sequence', () => {
-  let repo;
-  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
-  const commit = message => {
-    git('add', '-A');
-    git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', message);
-  };
-  const write = (file, body) => writeFileSync(join(repo, file), body);
+  const repos = [];
 
-  beforeAll(() => {
-    repo = mkdtempSync(join(tmpdir(), 'verify-publish-tree-'));
+  /**
+   * A throwaway repository with a committer identity set on the repo itself. `git init`
+   * configures none, and `git tag -a` needs one - so a suite that passes identity only
+   * to `git commit` works on a developer machine with a global identity and fails on a
+   * bare CI runner. That is exactly how this was found.
+   */
+  function makeRepo(files) {
+    const dir = mkdtempSync(join(tmpdir(), 'verify-publish-tree-'));
+    repos.push(dir);
+    const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
     git('init', '-q', '-b', 'main');
-    write('package.json', pkg('1.7.20'));
-    write('package-lock.json', lock('1.7.20'));
-    write('index.js', 'export const a = 1;\n');
-    write('doomed.js', 'export const b = 1;\n');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'Test');
+    const write = (file, body) => writeFileSync(join(dir, file), body);
+    for (const [file, body] of Object.entries(files)) write(file, body);
+    const commit = message => {
+      git('add', '-A');
+      git('commit', '-q', '-m', message);
+    };
     commit('initial');
-    // release.yml tags main as it stands, without committing the bump.
-    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    return { dir, git, write, commit };
+  }
+
+  afterAll(() => {
+    for (const dir of repos) rmSync(dir, { recursive: true, force: true });
   });
 
-  afterAll(() => rmSync(repo, { recursive: true, force: true }));
-
   it('passes when only the version-bump commit follows the tag', () => {
+    const { dir, git, write, commit } = makeRepo({
+      'package.json': pkg('1.7.20'),
+      'package-lock.json': lock('1.7.20'),
+      'index.js': 'export const a = 1;\n'
+    });
+    // release.yml tags main as it stands, without committing the bump.
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
     write('package.json', pkg('1.8.0'));
     write('package-lock.json', lock('1.8.0'));
     commit('chore(release): bump version to v1.8.0');
 
-    const result = verifyPublishTree('1.8.0', gitReader(repo), packEverything);
+    const result = verifyPublishTree('1.8.0', gitReader(dir), packEverything);
     expect(result.ok).toBe(true);
     expect(result.problems).toEqual([]);
   });
 
   it('fails when a foreign commit landed inside the release window', () => {
+    const { dir, git, write, commit } = makeRepo({
+      'package.json': pkg('1.7.20'),
+      'index.js': 'export const a = 1;\n'
+    });
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    write('package.json', pkg('1.8.0'));
+    commit('chore(release): bump version to v1.8.0');
     write('index.js', 'export const a = 2;\n');
     commit('feat: something else merged during the release');
 
-    const result = verifyPublishTree('1.8.0', gitReader(repo), packEverything);
+    const result = verifyPublishTree('1.8.0', gitReader(dir), packEverything);
     expect(result.ok).toBe(false);
     expect(result.problems).toEqual([{ kind: 'foreign-packed-files', files: ['index.js'] }]);
   });
 
-  it('reads a real deletion as a change, with git reporting status D', () => {
-    unlinkSync(join(repo, 'doomed.js'));
+  it('blocks a deletion, which HEAD cannot classify against the packlist', () => {
+    const { dir, git, commit } = makeRepo({
+      'package.json': pkg('1.8.0'),
+      'doomed.js': 'export const b = 1;\n'
+    });
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    unlinkSync(join(dir, 'doomed.js'));
     commit('chore: delete a file during the release');
 
-    const changes = gitReader(repo).changes('v1.8.0');
-    expect(changes).toContainEqual({ status: 'D', file: 'doomed.js' });
-
-    // Unpacked as far as HEAD is concerned, yet still blocking, because a deleted path
-    // cannot be looked up in the packlist.
-    const result = verifyPublishTree('1.8.0', gitReader(repo), packs('nothing-matching'));
+    expect(gitReader(dir).changes('v1.8.0')).toContainEqual({ status: 'D', file: 'doomed.js' });
+    const result = verifyPublishTree('1.8.0', gitReader(dir), packs('nothing-matching'));
     expect(result.problems[0].files).toContain('doomed.js');
   });
 
+  it('blocks a pure rename, which git reports as R with both paths', () => {
+    const { dir, git, commit } = makeRepo({
+      'package.json': pkg('1.8.0'),
+      'index.js': 'export const a = 1;\n'
+    });
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    git('mv', 'index.js', 'docs-notes.txt');
+    commit('refactor: move a shipped file out of the package');
+
+    expect(gitReader(dir).changes('v1.8.0')).toContainEqual({
+      status: 'R',
+      file: 'docs-notes.txt',
+      from: 'index.js'
+    });
+    // The destination is unpacked, yet the source leaving the tarball must still block.
+    const result = verifyPublishTree('1.8.0', gitReader(dir), packs('index.js'));
+    expect(result.ok).toBe(false);
+    expect(result.problems[0].files).toContain('index.js -> docs-notes.txt');
+  });
+
+  it('blocks a rename git reports as D+A, when a content change lowers similarity', () => {
+    // Measured: `git mv` after a separate modifying commit is reported as D + A rather
+    // than R, so the gate must be safe under both spellings. The D alone blocks.
+    const { dir, git, write, commit } = makeRepo({
+      'package.json': pkg('1.8.0'),
+      'index.js': 'export const a = 1;\n'
+    });
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    write('index.js', 'export const a = 2;\n');
+    commit('fix: change it');
+    git('mv', 'index.js', 'moved.js');
+    commit('refactor: then move it');
+
+    const statuses = gitReader(dir).changes('v1.8.0');
+    expect(statuses.map(c => c.status).sort()).toEqual(['A', 'D']);
+    const result = verifyPublishTree('1.8.0', gitReader(dir), packs('nothing-matching'));
+    expect(result.ok).toBe(false);
+    expect(result.problems[0].files).toContain('index.js');
+  });
+
   it('fails on a missing tag rather than reporting clean', () => {
-    const result = verifyPublishTree('9.9.9', gitReader(repo), packEverything);
+    const { dir, git } = makeRepo({ 'package.json': pkg('1.8.0') });
+    git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
+    const result = verifyPublishTree('9.9.9', gitReader(dir), packEverything);
     expect(result.problems[0].kind).toBe('unresolvable-tag');
   });
 });
