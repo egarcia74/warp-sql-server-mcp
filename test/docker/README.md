@@ -370,7 +370,7 @@ suites against it, and tears it down again:
 | `npm run test:integration:performance` | `test/manual/improved-performance-test.js`          |
 | `npm run docker:stop`                  | Tears the container down                            |
 
-Both matrix legs — `Tests (20)` and `Tests (22)` — are **required status checks on `main`**, so
+Both matrix legs — `Tests (22)` and `Tests (24)` — are **required status checks on `main`**, so
 the 40 live-database tests gate every pull request. Running `npm test` locally exercises the same
 pipeline, which is why it needs a working Docker daemon.
 

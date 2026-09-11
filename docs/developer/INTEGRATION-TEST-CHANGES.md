@@ -10,7 +10,7 @@
 >    `npm run test:integration:protocol` (was `test:manual:protocol`).
 > 2. **The live-database tests are no longer excluded from CI.** `npm test` now chains
 >    `test:unit` → `test:integration`, and `test:integration` starts a Docker SQL Server, runs all
->    40 phase tests against it, and stops it again. CI's required `Tests (20)` / `Tests (22)` jobs
+>    40 phase tests against it, and stops it again. CI's required `Tests (22)` / `Tests (24)` jobs
 >    run `npm test`, so those 40 tests gate every pull request.
 >
 > For the current picture, see [`test/README.md`](../../test/README.md) and
