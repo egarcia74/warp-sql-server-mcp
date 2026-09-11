@@ -125,7 +125,7 @@
     "@vitest/expect": "^4.1.2",
     "@vitest/mocker": "^4.1.2",
     "@vitest/runner": "^4.1.2",
-    "@vitest/snapshot": "^4.1.2",
+    "@vitest/snapshot": "^5.0.0",
     "@vitest/spy": "^4.1.2",
     "@vitest/ui": "^4.1.2",
     "eslint": "^10.0.0",
