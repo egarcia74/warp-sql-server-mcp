@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **`test/archived/` deleted.** Eight superseded vitest suites that `vitest.config.js` had excluded from every run since 2025-09-02 and nothing imported; they remain in the repository history.
 - **`SQL_SERVER_RESPONSE_FORMAT` and the `ResponseFormatter` class.** The setting was never consumed by any code
   path: tool responses are formatted by `base-handler.formatResults()` and `lib/utils/result-formatter.js`, and
   nothing ever constructed `ResponseFormatter`. Setting the variable had no effect, and its two defaults disagreed
