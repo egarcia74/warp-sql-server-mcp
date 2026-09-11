@@ -402,8 +402,29 @@ Follow conventional commits format:
 - `docs:` Documentation changes
 - `style:` Code style changes (formatting, etc.)
 - `refactor:` Code refactoring
+- `perf:` Performance improvements
 - `test:` Adding or updating tests
+- `build:` Build, packaging or dependency-manifest changes
+- `ci:` CI/workflow changes
+- `revert:` Reverting an earlier change
 - `chore:` Maintenance tasks
+
+### Your PR title is the one that counts
+
+PRs are squash-merged, and GitHub names the resulting commit on `main` after the **PR
+title**. The release workflow reads those subjects to decide whether to release and at what
+level, so the PR title — not the messages on your branch — is what drives it:
+
+- `feat:` / `feature:` → minor release
+- `fix:` / `bugfix:`, `docs:`, `chore:`, `perf:`, `refactor:`, `revert:`, `build:` → patch release
+- `BREAKING CHANGE` or `!:` anywhere in the title (e.g. `feat!:`) → major release
+- `test:`, `ci:`, `style:` → recognised, but release nothing: they cannot change the
+  published npm tarball (`test/` and `.github/` are not published)
+- anything else → release nothing, and the release run warns that the subject matched no type
+
+A scope is fine everywhere (`feat(cli): …`). If your change ships in the published package,
+title it with a type that releases — `refactor:` counts, `ci:` does not. The mapping lives
+in `scripts/lib/release-plan.mjs`; see WARP.md's Release Process for the full table.
 
 Example:
 

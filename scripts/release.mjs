@@ -12,9 +12,10 @@
  * person dispatching it learns the version after the tag and the GitHub Release exist. Both
  * are cheap to create and awkward to retract, and the version number is spent either way.
  *
- * This script computes the same decision locally, with the rules release.yml's "Check
- * conventional commits" step applies, prints it, and asks the operator to type the version
- * back before dispatching. The workflow still makes the final decision - the preview is
+ * This script computes the same decision locally - literally the same code: release.yml's
+ * "Check conventional commits" step reaches scripts/lib/release-plan.mjs through
+ * scripts/ci/classify-release-commits.mjs, and so does this preview - prints it, and asks
+ * the operator to type the version back before dispatching. The workflow still makes the final decision - the preview is
  * there so a surprise shows up before the tag, not after. Then it finds the run it started
  * and watches it to completion, and prints where the release and the version-bump PR are.
  *
@@ -44,6 +45,7 @@ import {
   assertRunId,
   data,
   decideConfirmation,
+  describeCommitMix,
   detectReleaseType,
   guard,
   isPlainVersion,
@@ -266,10 +268,12 @@ function buildPreview(options, { remoteHead, tags }) {
   const detected = detectReleaseType(subjects);
   const releaseType = options.type ?? detected.type;
 
+  const mix = describeCommitMix(detected);
+
   if (subjects.length === 0) {
     fail(
-      `no commits since ${lastTag ?? 'the beginning'} on origin/${RELEASE_BRANCH}. The workflow ` +
-        'would find nothing to release and skip every job.'
+      `no commits at all since ${lastTag ?? 'the beginning'} on origin/${RELEASE_BRANCH}. The ` +
+        'workflow would find nothing to release and skip every job.'
     );
   }
 
@@ -277,10 +281,15 @@ function buildPreview(options, { remoteHead, tags }) {
   let collisions = [];
   if (releaseType === 'none') {
     if (!options.dryRun) {
+      // Deliberately NOT the same sentence as the empty-window failure above: the two
+      // outcomes need different fixes, and reading alike is the defect #1158 reports.
       fail(
-        `none of the ${subjects.length} commit(s) since ${lastTag ?? 'the beginning'} is ` +
-          'release-worthy under the conventional-commit rules, so the workflow would skip. ' +
-          'Pass --type <patch|minor|major> to force a release, or --dry-run to see what it reports.'
+        `${subjects.length} commit(s) since ${lastTag ?? 'the beginning'} on ` +
+          `origin/${RELEASE_BRANCH}, none of a type that triggers a release (${mix}), so the ` +
+          'workflow would skip every job. Types test/ci/style are recognised and release ' +
+          'nothing on purpose; an "unclassified" count means a subject matched no type at ' +
+          'all. Pass --type <patch|minor|major> to release anyway, or --dry-run to see what ' +
+          'the workflow reports.'
       );
     }
   } else {
@@ -297,6 +306,7 @@ function buildPreview(options, { remoteHead, tags }) {
     rule: options.type ? null : detected.rule,
     lastTag,
     commitCount: subjects.length,
+    breakdown: mix,
     drivers: options.type ? [] : detected.drivers,
     collisions,
     headSha: remoteHead.slice(0, 7),

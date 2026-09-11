@@ -22,7 +22,15 @@
 
 ## 🧮 Choose Release Type
 
-- Auto (conventional commits): `feat:` → minor, `fix:` → patch, `BREAKING CHANGE`/`!:` → major, `docs:`/`chore:` → patch
+- Auto (conventional commits). **The subject that decides is the squash-merge commit's, and
+  GitHub takes that from the PR title — so this is a constraint on how PRs are titled.**
+  - `BREAKING CHANGE` / `!:` → major
+  - `feat:` / `feat(scope):` / `feature:` → minor
+  - `fix:` / `bugfix:`, `docs:` / `chore:`, `perf:`, `refactor:`, `revert:`, `build:` → patch
+  - `test:` / `ci:` / `style:` → **no release** (nothing they touch is in the published tarball)
+  - anything else → **no release**, and the run warns, naming the unclassified subjects
+  - Highest level in the window wins; a window with commits but no releasable type says so
+    explicitly rather than looking like an empty one (#1158)
 - Manual override: choose `patch | minor | major | prerelease`
 
 ## 🚀 Preferred: Automated Release Workflow
@@ -36,7 +44,8 @@ Trigger with the release script (`scripts/release.mjs`)
      `main` must stay frozen until the bump PR merges, because the publish gate compares the tree
      against the tag.
    - Prints the version it expects (`current -> next`), the release type and the commit subjects
-     that decided it, using the same conventional-commit rules as `release.yml`, then dispatches the
+     that decided it and the commit mix by type, running the same classifier `release.yml` does
+     (`scripts/lib/release-plan.mjs`), then dispatches the
      workflow with `dry_run=true` and watches it. Nothing is tagged.
 2. Release: `npm run release`
    - Same preview, then the prompt `Type the version to release (X.Y.Z), or anything else to abort:`.
@@ -135,6 +144,8 @@ not a silent gap.
 
 ## ℹ️ Notes about Automation
 
-- `release_type=auto` respects conventional commits and treats `docs:`/`chore:` as patch
+- `release_type=auto` respects conventional commits and treats `docs:`/`chore:` as patch; the
+  full mapping is in “Choose Release Type” above and lives in code in
+  `scripts/lib/release-plan.mjs`, which both `release.yml` steps and `npm run release` share
 - Tag collision avoidance is built-in (keeps bumping patch until a free tag exists)
 - `package.json` is not committed on `main` by the workflow; the version-bump PR keeps `main` in sync while honoring branch protection

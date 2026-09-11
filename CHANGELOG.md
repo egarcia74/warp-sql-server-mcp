@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The release workflow no longer ignores `refactor:`, `perf:`, `revert:`, `build:`, `test:`, `ci:` and
+  `style:` commits.** `release.yml` recognised only breaking/feat/fix/docs/chore, so a release window of only
+  those types computed `none` and silently shipped nothing, indistinguishable from an empty window (#1158, found
+  after a `refactor:` PR removed a module from the published tarball and a field from a public MCP tool response).
+  `perf`/`refactor`/`revert`/`build` now release a patch; `test`/`ci`/`style` are recognised and counted but
+  deliberately release nothing, because neither `test/` nor `.github/` is in `package.json`'s `files`. A window
+  with commits but no releasable type now warns and reports the mix instead of looking empty, and unclassified
+  subjects are named. The rules, which the workflow transcribed twice (the changelog copy matched `feat:` but not
+  `feat(scope):`) and `scripts/release.mjs` a third time, now live only in `scripts/lib/release-plan.mjs`, reached
+  by both workflow steps through the new `scripts/ci/classify-release-commits.mjs`. WARP.md, CONTRIBUTING.md and
+  the release checklist document the mapping and, for the first time, that it is the **PR title** that drives it.
+
 ### Changed
 
 - **`npm-publish.yml` now authenticates to npmjs.com with npm Trusted Publishing (GitHub OIDC) instead of an
