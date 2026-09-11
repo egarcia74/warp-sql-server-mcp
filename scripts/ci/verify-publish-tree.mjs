@@ -111,14 +111,43 @@ function withVersion(parsed, file, version) {
   return next;
 }
 
+/**
+ * process.env with every GIT_* variable removed, for spawning git and npm.
+ *
+ * Git exports GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE to the hooks it runs, and they
+ * take precedence over `cwd`. So a test that builds a throwaway repository in a temp
+ * directory and spawns `git` there with the inherited environment is, when the suite
+ * runs under a pre-commit hook, operating on the real repository instead: `git init`
+ * re-initialises it with core.worktree pointing at the temp directory, `git config`
+ * overwrites the committer identity, `git tag` creates a fake release tag and `git
+ * commit` lands fixture commits on whatever branch is checked out. That happened on
+ * 2026-09-11 from a linked worktree, and left the main checkout unable to run `git
+ * status`. Every reader in this file locates its repository by `cwd`, so the ambient
+ * variables carry no information it wants - stripping them is the whole fix.
+ *
+ * Exported so the test suite spawns its own git the same way.
+ *
+ * The comparison is case-insensitive because Windows environment names are: git there
+ * reads `git_dir` as readily as `GIT_DIR`, and Node's `Object.entries(process.env)`
+ * reports each name in whatever case it was set. Git itself only ever exports upper
+ * case, so this closes a gap that is unlikely rather than one that has been seen.
+ */
+export function scrubbedEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
+  );
+}
+
 // stderr is piped rather than inherited throughout so a failed child surfaces through
 // the thrown error's message alone, instead of also printing a raw `fatal: ...` line
-// that reads as an unhandled crash next to this script's own diagnostics.
-const CAPTURE = {
+// that reads as an unhandled crash next to this script's own diagnostics. A function
+// rather than a constant so the environment is read at spawn time, not at import.
+const capture = () => ({
   encoding: 'utf8',
   maxBuffer: 256 * 1024 * 1024,
-  stdio: ['ignore', 'pipe', 'pipe']
-};
+  stdio: ['ignore', 'pipe', 'pipe'],
+  env: scrubbedEnv()
+});
 
 // Both readers below invoke `git` and `npm` by name, so they resolve through PATH.
 // SonarQube flags this as javascript:S4036 (OS commands should not rely on PATH
@@ -158,7 +187,7 @@ export function gitReader(cwd = process.cwd()) {
     if (offending.length > 0) {
       throw new Error(`refusing to pass ${JSON.stringify(offending)} to git as an argument`);
     }
-    return execFileSync('git', args, { cwd, ...CAPTURE });
+    return execFileSync('git', args, { cwd, ...capture() });
   };
   return {
     /**
@@ -244,7 +273,7 @@ export function packedFilesReader(cwd = process.cwd()) {
   return () => {
     const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
       cwd,
-      ...CAPTURE
+      ...capture()
     });
     return new Set(JSON.parse(out)[0].files.map(entry => entry.path));
   };
