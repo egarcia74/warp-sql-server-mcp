@@ -271,8 +271,10 @@ Taken from [docs.npmjs.com/trusted-publishers](https://docs.npmjs.com/trusted-pu
 
 - **npm CLI and Node**: "Trusted publishing requires npm CLI version 11.5.1 or later and Node
   version 22.14.0 or higher." The workflow uses `node-version: '22'`, which resolves to the latest
-  22.x, but Node 22 bundles npm 10.x - so the job runs `npm install -g npm@11` and fails early if
-  `npm --version` is still below 11.5.1.
+  22.x, but Node 22 bundles npm 10.x - so the job installs an exact npm version (currently
+  `npm@11.19.1`) and fails early if `npm --version` is still below 11.5.1. The pin is deliberate:
+  this job holds the publish credential, so bump it as a reviewed change rather than letting a
+  range pull in an unreviewed release.
 - **OIDC permission**: "The critical requirement is the `id-token: write` permission, which allows
   GitHub Actions to generate OIDC tokens." The `publish` job declares it.
 - **Provenance**: "When you publish using trusted publishing from GitHub Actions or GitLab CI/CD,

@@ -70,14 +70,16 @@ jobs:
           echo "Will publish @egarcia74/warp-sql-server-mcp@$PKG_VERSION"
 
       # npm Trusted Publishing requires npm 11.5.1+ (docs.npmjs.com/trusted-publishers) and
-      # Node 22 bundles npm 10.x. Pinned to the 11 major, not `latest`, so a future npm 12
-      # cannot land here unreviewed. npm has no install scripts; --ignore-scripts is defence
-      # in depth only. The version check turns a too-old npm into a clear failure here rather
-      # than an opaque auth error at `npm publish`.
+      # Node 22 bundles npm 10.x. Pinned to an exact version, not a range: this job holds the
+      # publish credential, so the npm that runs in it is reviewed like any other dependency
+      # (Sonar githubactions:S8543). Bump deliberately; the check below is the floor, not the
+      # pin. npm has no install scripts; --ignore-scripts is defence in depth only. The check
+      # turns a too-old npm into a clear failure here rather than an opaque auth error at
+      # `npm publish`.
       - name: Upgrade npm for trusted publishing
         if: steps.check.outputs.should_publish == 'true'
         run: |
-          npm install -g npm@11 --ignore-scripts
+          npm install -g npm@11.19.1 --ignore-scripts
           NPM_VERSION=$(npm --version)
           echo "npm $NPM_VERSION"
           node -e '
