@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import {
   verifyPublishTree,
   describeProblem,
-  gitReader
+  gitReader,
+  scrubbedEnv
 } from '../../scripts/ci/verify-publish-tree.mjs';
 
 /** A git reader backed by plain objects, so the logic is testable without a repository. */
@@ -379,7 +380,8 @@ describe('against a real repository, following the actual release sequence', () 
   function makeRepo(files) {
     const dir = mkdtempSync(join(tmpdir(), 'verify-publish-tree-'));
     repos.push(dir);
-    const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
+    const git = (...args) =>
+      execFileSync('git', args, { cwd: dir, encoding: 'utf8', env: scrubbedEnv() });
     git('init', '-q', '-b', 'main');
     git('config', 'user.email', 'test@example.com');
     git('config', 'user.name', 'Test');
@@ -532,5 +534,52 @@ describe('against a real repository, following the actual release sequence', () 
     git('tag', '-a', 'v1.8.0', '-m', 'Release v1.8.0');
     const result = verifyPublishTree('9.9.9', gitReader(dir), packEverything);
     expect(result.problems[0].kind).toBe('unresolvable-tag');
+  });
+
+  it('ignores inherited GIT_DIR/GIT_WORK_TREE, which would otherwise redirect every git to another repository', () => {
+    // On 2026-09-11 this suite ran inside a pre-commit hook in a linked worktree. Git
+    // exports GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE to hooks, they beat `cwd`, and
+    // so every "throwaway" repository below was the real one: it was re-initialised
+    // with core.worktree pointing at a temp directory, its committer identity was
+    // overwritten with the one makeRepo sets, a fake `v1.8.0` release tag was created,
+    // and five fixture commits landed on the branch being committed. The victim here
+    // stands in for the real repository; nothing this test does may reach it.
+    const victim = makeRepo({ 'package.json': pkg('1.0.0') });
+    const victimConfig = key => {
+      try {
+        return victim.git('config', '--get', key).trim();
+      } catch {
+        return ''; // git exits 1 when the key is unset
+      }
+    };
+    const saved = { ...process.env };
+    process.env.GIT_DIR = join(victim.dir, '.git');
+    process.env.GIT_WORK_TREE = victim.dir;
+    process.env.GIT_INDEX_FILE = join(victim.dir, '.git', 'index');
+
+    try {
+      // Control: an UNscrubbed git is redirected - proving the variables are live and
+      // that the scrub below is what prevents the damage, not luck.
+      const scratch = mkdtempSync(join(tmpdir(), 'verify-publish-tree-'));
+      repos.push(scratch);
+      const redirected = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+        cwd: scratch,
+        encoding: 'utf8'
+      }).trim();
+      expect(redirected).toBe(execFileSync('realpath', [victim.dir], { encoding: 'utf8' }).trim());
+
+      // The real thing: the helper and the reader must both stay on their own cwd.
+      const { dir, git } = makeRepo({ 'package.json': pkg('1.8.0') });
+      git('tag', '-a', 'v9.0.0', '-m', 'Release v9.0.0');
+      expect(gitReader(dir).changes('v9.0.0')).toEqual([]);
+      expect(gitReader(dir).worktreeChanges()).toEqual([]);
+
+      expect(victim.git('tag', '-l', 'v9.0.0').trim()).toBe(''); // no leaked tag
+      expect(victimConfig('core.worktree')).toBe(''); // not re-initialised elsewhere
+      expect(victim.git('log', '--oneline').trim().split('\n')).toHaveLength(1); // no leaked commits
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+      Object.assign(process.env, saved);
+    }
   });
 });
