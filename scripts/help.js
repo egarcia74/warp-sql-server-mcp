@@ -131,6 +131,8 @@ ${'─'.repeat(80)}
 📚 Documentation & Release:
   npm run docs:build               # Generate documentation
   npm run links:check              # Validate documentation
+  npm run release:dry              # Preview the release the workflow would cut (dry-run dispatch)
+  npm run release                  # Dispatch release.yml after typing the version to confirm
 
 💡 TESTING OPTIONS COMPARISON
 ${'─'.repeat(80)}

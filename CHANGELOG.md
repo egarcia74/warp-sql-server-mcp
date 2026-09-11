@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`npm run release` and `npm run release:dry` dispatch the release workflow with a preview and an explicit
+  confirmation.** `scripts/release.mjs` replaces the two hand-typed `gh workflow run release.yml` /
+  `gh run watch` commands: it checks `gh` is authenticated, pins every `gh` call to the repository that
+  remote `origin` names, fetches `origin/main` and reads tags from the remote, and warns if local `main`
+  differs from it or if PRs are open (`main` must stay frozen until the bump PR merges), then computes the
+  release type and next version locally with the same conventional-commit rules as `release.yml` and prints
+  them together with the commit subjects that decided it and the SHA the tag will point at. The real release
+  dispatches only after the previewed version is typed back exactly; `--dry-run` dispatches with
+  `dry_run=true` and needs no confirmation; `--type <patch|minor|major>` overrides the detection; `--yes`
+  skips the prompt for non-interactive use. It then finds the run it started, watches it, and prints the
+  Release URL, the version-bump PR and the remaining steps. Every subprocess is spawned with an argument
+  array, never a shell string.
+
 ### Removed
 
 - **BREAKING: `STREAMING_MAX_MEMORY_MB` and `STREAMING_MAX_RESPONSE_SIZE` are gone.** Both were documented,

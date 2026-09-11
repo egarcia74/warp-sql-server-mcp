@@ -57,6 +57,8 @@
     "docker:test": "./scripts/docker-test-runner.sh",
     "docker:test:clean": "./scripts/docker-test-runner.sh --clean",
     "help": "node scripts/help.js",
+    "release": "node scripts/release.mjs",
+    "release:dry": "node scripts/release.mjs --dry-run",
     "docs:extract": "node scripts/docs/extract-docs.js",
     "docs:generate-tools": "node scripts/docs/generate-tools-html.js",
     "docs:generate-landing": "node scripts/docs/generate-landing-page.js",

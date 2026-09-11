@@ -20,8 +20,8 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, and **comprehensive performance monitoring**. Built with a
 modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 1,221 tests, every
-one of which runs automatically on every pull request (1,154 unit + 27 integration + 40
+**✅ Production Status**: This MCP server has been **fully validated** through 1,348 tests, every
+one of which runs automatically on every pull request (1,281 unit + 27 integration + 40
 live-database). Covers all security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/user/QUICKSTART.md) for a 5-minute setup walkthrough.
@@ -884,8 +884,8 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 1,221 tests total, **all of them automated** on every pull request:
-  1,154 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
+- **Comprehensive Coverage**: 1,348 tests total, **all of them automated** on every pull request:
+  1,281 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
   drives against a Docker SQL Server the CI `Tests` job starts itself. Together they cover all MCP
   tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
@@ -923,30 +923,31 @@ npm run docker:clean                  # Remove all data and containers
 ### Test Structure
 
 Counts below are the vitest suite sizes measured with `npm run test:unit`
-(28 files, 1,154 tests); the live-database suites are counted from their own runners.
+(29 files, 1,281 tests); the live-database suites are counted from their own runners.
 
 ```text
 test/
 ├── README.md                                # Comprehensive test documentation
 ├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
 ├── setup.js                                 # Vitest global setup
-├── unit/                                    # Vitest unit suites - 28 files, 1,154 tests
+├── unit/                                    # Vitest unit suites - 29 files, 1,281 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
 │   ├── query-optimizer.test.js              # 136 - Query analysis and optimization engine
 │   ├── sql-injection-battery.test.js        # 103 - Authoritative behavioral injection guard
 │   ├── where-clause-guard.test.js           #  81 - WHERE-clause validation
-│   ├── performance-monitor.test.js          #  70 - Metrics collection
-│   ├── streaming-handler.test.js            #  60 - Streaming large result sets
+│   ├── performance-monitor.test.js          #  84 - Metrics collection
+│   ├── streaming-handler.test.js            #  61 - Streaming large result sets
 │   ├── tool-registry.test.js                #  59 - Tool definitions and input schemas
-│   ├── database-tools-handler.test.js       #  55 - Database tool handlers
+│   ├── database-tools-handler.test.js       #  59 - Database tool handlers
 │   ├── logger.test.js                       #  52 - Structured logging and audit trail
 │   ├── mcp-security.test.js                 #  38 - Three-tier safety system
-│   ├── connection-manager.test.js           #  33 - Pooling, retries, auth
+│   ├── connection-manager.test.js           #  34 - Pooling, retries, auth
 │   ├── sql-batch-guard.test.js              #  30 - Whole-batch forbidden-statement scan
 │   ├── sql-construction-guard.test.js       #  30 - Dispatch-vs-escaping static guard
-│   ├── get-server-info.test.js              #  27 - Server diagnostics tool
+│   ├── get-server-info.test.js              #  29 - Server diagnostics tool
 │   ├── cleanup-test-processes.test.js        #  48 - Process inspector: PID guards, exit status
 │   ├── verify-publish-tree.test.js          #  40 - Published-tree verification before npm publish
+│   ├── release-script.test.js               # 105 - Release dispatch: type detection, semver bump, flags, run selection
 │   ├── classify-dependabot-pr.test.js       #  32 - Dependabot PR title classification rules
 │   ├── docs-html-writer.test.js              #   10 - Docs writer: timestamp churn guard
 │   ├── server-config.test.js                #  24 - Configuration parsing and defaults
@@ -993,22 +994,22 @@ test/
 
 ### Test Categories
 
-#### **Unit Tests (1,154 across 28 files)**
+#### **Unit Tests (1,281 across 29 files)**
 
-Grouped by area; the group totals sum to 1,154:
+Grouped by area; the group totals sum to 1,281:
 
 - **Core MCP server** (144): `index.test.js` - entry point, tool dispatch, `validateQuery`
 - **SQL safety and injection guards** (317): `sql-injection-battery` (103), `where-clause-guard` (81),
   `mcp-security` (38), `sql-batch-guard` (30), `sql-construction-guard` (30), `query-policy` (19),
   `sql-identifier` (16)
-- **Infrastructure utilities** (215): `performance-monitor` (70), `streaming-handler` (60),
-  `logger` (52), `connection-manager` (33)
+- **Infrastructure utilities** (231): `performance-monitor` (84), `streaming-handler` (61),
+  `logger` (52), `connection-manager` (34)
 - **Query analysis** (158): `query-optimizer` (136), `query-optimizer-security` (13),
   `bottleneck-detector` (9)
-- **Tools and handlers** (141): `tool-registry` (59), `database-tools-handler` (55),
-  `get-server-info` (27)
+- **Tools and handlers** (147): `tool-registry` (59), `database-tools-handler` (59),
+  `get-server-info` (29)
 - **Configuration** (24): `server-config` (24)
-- **Repository and CLI tooling** (155): `cleanup-test-processes` (48), `verify-publish-tree` (40),
+- **Repository and CLI tooling** (260): `cleanup-test-processes` (48), `release-script` (105), `verify-publish-tree` (40),
   `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6),
   `cli` (4), `docker-command-utils` (4), `dependabot-config` (2)
 
@@ -1208,7 +1209,7 @@ This project maintains high code quality through automated tooling and architect
 > This document captures real-world metrics from the WARP project including:
 >
 > - **525 automated tests** with 100% pass rate enforcement (the figure captured by that case study; the
->   suite has since grown to 1,154 automated unit tests)
+>   suite has since grown to 1,281 automated unit tests)
 > - **74% code coverage** with strict quality gates
 > - **3x development time** vs. 90% reduction in debugging time
 > - **The five critical challenges** teams face with no-compromise quality
@@ -1275,7 +1276,7 @@ The project includes comprehensive system maintenance tools to manage developmen
 
 #### **Process Cleanup Infrastructure**
 
-During intensive testing sessions (like our 1,154-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
+During intensive testing sessions (like our 1,281-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
 
 The project includes tools to inspect them:
 
@@ -1544,7 +1545,44 @@ on is the first one published after provenance was enabled.
 
 ### Alternative: Automated Release Workflow
 
-The project includes a GitHub Actions workflow for releases that can be manually triggered:
+The project includes a GitHub Actions workflow for releases that can be manually triggered.
+The preferred way to trigger it is the release script, which shows what the workflow will do
+before anything is tagged:
+
+```bash
+npm run release:dry     # preview + dispatch with dry_run=true; nothing is tagged
+npm run release         # preview, type the version to confirm, dispatch, watch
+```
+
+`scripts/release.mjs` (the CLI; its decision rules are the pure functions in
+`scripts/lib/release-plan.mjs`) checks that `gh` is authenticated, pins every `gh` call to the
+repository that remote `origin` names (`--repo owner/name`, so `GH_REPO` or `gh repo set-default`
+cannot point the dispatch elsewhere), unshallows a shallow clone, fetches `origin/main` by explicit
+refspec, reads tags from the remote (`git ls-remote`) so a stale local tag cannot skew the version,
+warns if the local `main` is not at `origin/main` (the workflow releases `origin/main`'s HEAD, and the
+preview is computed from that), and warns about open PRs - `main` must stay frozen until the
+version-bump PR merges, since the publish gate below compares the tree against the tag. It
+then prints `current -> next` version, the release type, the last tag, the commit count and
+the subjects that decided the type, applying the same rules as the workflow's
+"Check conventional commits" step (listed under Behavior Notes). `npm run release` proceeds
+only when you type the previewed version back exactly; it dispatches with `--ref main` and two
+optional inputs - `expected_sha`, the full SHA it previewed, which makes the workflow's first
+step refuse if `main` has moved, and `dispatch_id`, a random id the workflow puts in its run
+name - takes the run id from the URL `gh workflow run` prints (falling back to the run whose
+name carries the id), watches it, then reads the version the workflow actually tagged from the remote
+and prints the Release URL, the `chore/release/vX.Y.Z` bump PR and the remaining steps
+(CHANGELOG heading, merge, verify on npm). The workflow still makes
+the final decision on the runner. `npm run release -- --type <patch|minor|major>` overrides the
+detection; `--yes` skips the prompt for non-interactive use; `--help` lists the flags.
+
+The same dispatch by hand, or from the GitHub UI (both leave the two optional inputs
+`expected_sha` and `dispatch_id` empty, which is fine - the SHA check and the run-name marker
+are then simply skipped):
+
+```bash
+gh workflow run release.yml --ref main -f release_type=auto
+gh run watch <run-id>
+```
 
 1. Go to:
    `https://github.com/egarcia74/warp-sql-server-mcp/actions/workflows/release.yml`
