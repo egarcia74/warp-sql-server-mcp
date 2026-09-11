@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { QueryOptimizer } from '../../lib/analysis/query-optimizer.js';
 
@@ -212,6 +213,32 @@ describe('QueryOptimizer', () => {
       const query = 'SELECT * FROM Users ORDER BY  name  ,  age  DESC  ';
       const columns = optimizer.extractOrderByColumns(query);
       expect(columns).toEqual(['name', 'age']);
+    });
+  });
+
+  describe('ORDER BY item regexes are linear (Sonar javascript:S8786)', () => {
+    const prefix = 'SELECT a FROM t ORDER BY a';
+    // 9,970 = MAX_ANALYZABLE_QUERY_LENGTH (10,000) minus the fixed text around the
+    // run, so the longest run the extractor will actually analyse.
+    const run = ' '.repeat(9970);
+    // The quadratic regexes took ~330 ms on this input, the linear ones ~1.5 ms;
+    // 100 ms fails the old code outright while leaving margin for a slow CI runner.
+    const LIMIT_MS = 100;
+
+    test('a long whitespace run inside an item is kept, as it always was', () => {
+      expect(optimizer.extractOrderByColumns(prefix + run + 'b')).toEqual(['a' + run + 'b']);
+    });
+
+    test('a long run not followed by a sort direction is analysed in linear time', () => {
+      const started = performance.now();
+      optimizer.extractOrderByColumns(prefix + run + 'b');
+      expect(performance.now() - started).toBeLessThan(LIMIT_MS);
+    });
+
+    test('a long run followed by a sort direction is analysed in linear time', () => {
+      const started = performance.now();
+      expect(optimizer.extractOrderByColumns(prefix + run + 'ASC')).toEqual(['a']);
+      expect(performance.now() - started).toBeLessThan(LIMIT_MS);
     });
   });
 
