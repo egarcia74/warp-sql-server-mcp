@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import sql from 'mssql';
 import { PerformanceMonitor } from '../../lib/utils/performance-monitor.js';
+import { ServerConfig } from '../../lib/config/server-config.js';
 import {
   mockData,
   createMockConnectionManager,
@@ -1134,6 +1135,83 @@ describe('DatabaseToolsHandler', () => {
       expect(metric.tool).toBe('export_table_csv');
       expect(metric.rowCount).toBe(3);
       expect(metric.rowCount).not.toBe(0);
+    });
+
+    test('records the exported row count when ENABLE_STREAMING=false routes the export through executeRegularQuery (#1211 review)', async () => {
+      const rows = [
+        { id: 1, name: 'Alpha' },
+        { id: 2, name: 'Beta' },
+        { id: 3, name: 'Gamma' },
+        { id: 4, name: 'Delta' }
+      ];
+      // Real StreamingHandler with streaming disabled and a real
+      // PerformanceMonitor; the pooled request answers the plain query.
+      mockRequest.query.mockResolvedValue({ recordset: rows, rowsAffected: [rows.length] });
+      const performanceMonitor = new PerformanceMonitor();
+      const { DatabaseToolsHandler } = await import('../../lib/tools/handlers/database-tools.js');
+      const realHandler = new DatabaseToolsHandler(mockConnectionManager, performanceMonitor, {
+        enabled: false,
+        batchSize: 1000
+      });
+
+      const result = await realHandler.exportTableCsv('Users');
+      expect(result[0].text).toContain('id,name');
+      expect(result[0].text).toContain('Delta');
+
+      const [metric] = performanceMonitor.getQueryStats().queries;
+      expect(metric.tool).toBe('export_table_csv');
+      expect(metric.rowCount).toBe(4);
+    });
+  });
+
+  describe('streaming configuration', () => {
+    let originalEnv;
+
+    beforeEach(() => {
+      originalEnv = { ...process.env };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    test('passes ENABLE_STREAMING and STREAMING_BATCH_SIZE from ServerConfig to the StreamingHandler (regression: #1211)', async () => {
+      process.env.ENABLE_STREAMING = 'false';
+      process.env.STREAMING_BATCH_SIZE = '250';
+      const config = new ServerConfig();
+      expect(config.streaming).toEqual({ enabled: false, batchSize: 250 });
+
+      const { DatabaseToolsHandler } = await import('../../lib/tools/handlers/database-tools.js');
+      const configured = new DatabaseToolsHandler(
+        mockConnectionManager,
+        mockPerformanceMonitor,
+        config.streaming
+      );
+
+      expect(configured.streamingHandler.config.enableStreaming).toBe(false);
+      expect(configured.streamingHandler.config.batchSize).toBe(250);
+    });
+
+    test('keeps the streaming defaults when no config is supplied', () => {
+      // `handler` from beforeEach is constructed with two arguments, as the
+      // other suites and the SQL-injection battery do.
+      expect(handler.streamingHandler.config.enableStreaming).toBe(true);
+      expect(handler.streamingHandler.config.batchSize).toBe(1000);
+    });
+
+    test('defaults match ServerConfig with no streaming variables set', async () => {
+      delete process.env.ENABLE_STREAMING;
+      delete process.env.STREAMING_BATCH_SIZE;
+      const config = new ServerConfig();
+
+      const { DatabaseToolsHandler } = await import('../../lib/tools/handlers/database-tools.js');
+      const configured = new DatabaseToolsHandler(
+        mockConnectionManager,
+        mockPerformanceMonitor,
+        config.streaming
+      );
+
+      expect(configured.streamingHandler.config).toEqual(handler.streamingHandler.config);
     });
   });
 });

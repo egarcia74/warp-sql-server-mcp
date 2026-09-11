@@ -79,32 +79,25 @@ describe('StreamingHandler', () => {
     it('should initialize with default configuration', () => {
       const config = handler.getConfig();
       expect(config.batchSize).toBe(1000);
-      expect(config.maxMemoryMB).toBe(50);
-      expect(config.maxResponseSize).toBe(1000000);
       expect(config.enableStreaming).toBe(true);
     });
 
     it('should override defaults with custom config', () => {
       const customHandler = new StreamingHandler({
         batchSize: 500,
-        maxMemoryMB: 100,
-        maxResponseSize: 2000000,
         enableStreaming: false
       });
 
       const config = customHandler.getConfig();
       expect(config.batchSize).toBe(500);
-      expect(config.maxMemoryMB).toBe(100);
-      expect(config.maxResponseSize).toBe(2000000);
       expect(config.enableStreaming).toBe(false);
     });
 
     it('should update configuration', () => {
-      handler.updateConfig({ batchSize: 2000, enableStreaming: false });
+      handler.updateConfig({ enableStreaming: false });
       const config = handler.getConfig();
-      expect(config.batchSize).toBe(2000);
       expect(config.enableStreaming).toBe(false);
-      expect(config.maxMemoryMB).toBe(50); // Should preserve existing values
+      expect(config.batchSize).toBe(1000); // Should preserve existing values
     });
   });
 
@@ -789,6 +782,26 @@ describe('StreamingHandler', () => {
       expect(stats.totalRows).toBe(100);
     });
 
+    it('should read the row count from an executeRegularQuery() result (#1211 review)', () => {
+      // Shape produced by executeRegularQuery(): the count lives under performance
+      const regular = {
+        success: true,
+        recordset: [{ id: 1 }, { id: 2 }, { id: 3 }],
+        streaming: false,
+        performance: { duration: 5, rowCount: 3, memoryUsed: 0 }
+      };
+      expect(handler.getStreamingStats(regular).totalRows).toBe(3);
+
+      // A bare driver result still yields its recordset length
+      expect(handler.getStreamingStats({ streaming: false, recordset: [{}, {}] }).totalRows).toBe(
+        2
+      );
+      // An explicit rowCount of 0 is respected, not treated as missing
+      expect(
+        handler.getStreamingStats({ streaming: false, rowCount: 0, recordset: [{}] }).totalRows
+      ).toBe(0);
+    });
+
     it('should return streaming stats', () => {
       const result = {
         streaming: true,
@@ -819,13 +832,11 @@ describe('StreamingHandler', () => {
     it('should handle configuration edge cases', () => {
       const edgeHandler = new StreamingHandler({
         batchSize: 0,
-        maxMemoryMB: -1,
         enableStreaming: null
       });
 
       const config = edgeHandler.getConfig();
       expect(config.batchSize).toBe(0); // Should accept 0 even if not practical
-      expect(config.maxMemoryMB).toBe(-1); // Should accept negative values
       expect(config.enableStreaming).toBe(null); // Should accept null
     });
 

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **BREAKING: `STREAMING_MAX_MEMORY_MB` and `STREAMING_MAX_RESPONSE_SIZE` are gone.** Both were documented,
+  parsed, range-checked and echoed back by the startup summary and `get_server_info`, but no code path ever read
+  them: `StreamingHandler` stored `maxMemoryMB` and `maxResponseSize` at construction and never consulted either,
+  and the streaming path collects every chunk before joining them into one response, so no memory or response-size
+  bound was ever enforced. Setting them is now a no-op rather than a silently ignored setting, `ServerConfig.streaming`
+  carries only `enabled` and `batchSize`, and `get_server_info` no longer reports `streaming.maxMemoryMB` or
+  `streaming.maxResponseSizeMB`. Removed rather than implemented, since delivering a limit nobody could have been
+  relying on is a separate feature decision.
+  ([#1211](https://github.com/egarcia74/warp-sql-server-mcp/issues/1211))
 - **BREAKING: the AWS Secrets Manager and Azure Key Vault secret providers are gone.**
   `lib/config/secret-manager.js` implemented a `SecretManager` with both backends, but nothing ever constructed
   it: `index.js` builds `ServerConfig` and `ConnectionManager` directly and credentials have always been read from
@@ -43,6 +52,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Three documented settings that were parsed and displayed but never acted on now work.** Each default is
+  unchanged, so nothing differs for anyone who has not set them
+  ([#1211](https://github.com/egarcia74/warp-sql-server-mcp/issues/1211)):
+  - **`ENABLE_STREAMING` and `STREAMING_BATCH_SIZE` now reach the streaming handler.** `DatabaseToolsHandler`
+    constructed its `StreamingHandler` with hard-coded literals (`enableStreaming: true`, `batchSize: 1000`) and never
+    received `ServerConfig.streaming`. `index.js` now passes the parsed streaming section as an optional third
+    constructor argument whose defaults equal the previous literals.
+  - **`PERFORMANCE_SAMPLING_RATE` now samples.** Every production call site records through
+    `PerformanceMonitor.recordQuery()`, which checked only whether monitoring was enabled; the `shouldSample()` gate
+    lived in `startQuery()`, which nothing outside the unit tests called. `recordQuery()` now applies the same gate,
+    so a rate below `1.0` keeps that fraction of queries in the history and `0` keeps none. The default `1.0`
+    records every query as before.
+  - **`TRACK_POOL_METRICS` now tracks something.** `recordPoolMetrics()` had no production caller, so the monitor's
+    pool block in `get_connection_health` sat at its initial zeros forever; only the live driver counters beside it
+    were real. The server now attaches `ConnectionManager.getConnectionHealth()` to the monitor as a pool source,
+    and after every recorded query the monitor snapshots the driver's counters (open, idle, in-use, waiting, and the
+    pool's capacity) through `recordPoolMetrics()`. `get_connection_health` therefore reports a current snapshot and
+    a health assessment under `pool`, and `connection.pool` gains a `max` field (the pool capacity) so the
+    assessment has a denominator. Snapshots are kept in their own bounded history (`monitoring.poolSnapshots` in
+    `get_performance_stats`), not counted as connection events. The health check's critical rule, written for a
+    connect/disconnect model in which "active" meant "open", now reads "Requests waiting with no connection
+    available" (requests pending with nothing idle and nothing in use); the old "No active connections available"
+    would have fired on every idle pool. `TRACK_POOL_METRICS=false` stops the
+    sampling, as documented. Connection events (`connect`/`error`/`retry` rates) are still not recorded -
+    `recordConnectionEvent()` has no caller.
 - **The API-documentation job no longer opens a pull request just because the date changed.**
   `scripts/docs/generate-tools-html.js` renders `Last updated: <date>` into the page footer via
   `toLocaleDateString()`. Being date-only, the generated `docs/tools.html` differed from the

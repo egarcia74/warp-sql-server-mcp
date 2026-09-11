@@ -818,8 +818,6 @@ For large dataset handling:
 # In .env file
 ENABLE_STREAMING=true
 STREAMING_BATCH_SIZE=1000              # Rows per batch
-STREAMING_MAX_MEMORY_MB=50            # Memory limit
-STREAMING_MAX_RESPONSE_SIZE=1000000   # Response size limit
 ```
 
 ## Troubleshooting
