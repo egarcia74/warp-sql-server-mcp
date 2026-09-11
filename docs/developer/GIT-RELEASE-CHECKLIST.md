@@ -100,8 +100,9 @@ If checks are stuck on the version-bump PR
 ## 📦 Publish to npm
 
 Publishing is automatic and should stay that way: merging the version-bump PR pushes `package.json`
-to `main`, which triggers `.github/workflows/npm-publish.yml`. It publishes with
-`--provenance` under an OIDC `id-token`, so the tarball carries a Sigstore attestation.
+to `main`, which triggers `.github/workflows/npm-publish.yml`. It authenticates through npm
+Trusted Publishing (the job's GitHub OIDC `id-token`; there is no npm token secret) and publishes
+with `--provenance`, so the tarball carries a Sigstore attestation.
 
 Order matters here — the merge is the trigger, so it comes first:
 
@@ -114,8 +115,9 @@ Order matters here — the merge is the trigger, so it comes first:
 
 **Publishing by hand is a last resort, not an option.** `npm publish --access public` produces a
 release with **no** provenance attestation, which `.github/SECURITY.md` and the CHANGELOG both
-advertise as present from every published version. If the workflow fails, fix the workflow. If a
-manual publish is genuinely unavoidable, say so in the release notes so the missing attestation is
+advertise as present from every published version. If the workflow fails, fix the workflow and
+re-run it with `gh workflow run npm-publish.yml` — its tag and already-on-npm gates make a re-run
+safe at any time. If a manual publish is genuinely unavoidable, say so in the release notes so the missing attestation is
 not a silent gap.
 
 ## 🔍 Post-Release

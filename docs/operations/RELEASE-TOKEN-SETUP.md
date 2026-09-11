@@ -5,7 +5,10 @@
 ## Overview
 
 This guide explains how to set up an optional `RELEASE_TOKEN` to completely eliminate Token-Permissions security
-alerts from CodeQL/Scorecard while maintaining full release automation functionality.
+alerts from CodeQL/Scorecard while maintaining full release automation functionality. It also covers the
+other release-automation credentials: `DOCS_PAT`, `RELEASE_PR_TOKEN`, and the npm publish credential -
+which, since trusted publishing, is not a token at all (see
+[npm Publish Credential](#npm-publish-credential-trusted-publishing)).
 
 ## Why This Matters
 
@@ -250,6 +253,114 @@ branch protection requires CI/CodeQL checks to run on pull requests.
 
 Create a new fine-grained token before the old one expires, update the
 `RELEASE_PR_TOKEN` secret, then revoke the old token.
+
+## npm Publish Credential (Trusted Publishing)
+
+`.github/workflows/npm-publish.yml` publishes `@egarcia74/warp-sql-server-mcp` with **npm Trusted
+Publishing**. The job requests a short-lived GitHub OIDC token (`permissions: id-token: write`) and
+npmjs.com exchanges it for a publish credential valid for that run only, because the package's
+settings name this repository and this workflow file as a trusted publisher. There is no npm token
+to store in GitHub, rotate, or watch for expiry.
+
+**Why**: the 2.0.0 publish on 2026-09-11 failed because the `NPM_TOKEN` granular access token -
+90 days maximum lifetime - had expired under the release. A trusted publisher has nothing to expire.
+
+### Requirements
+
+Taken from [docs.npmjs.com/trusted-publishers](https://docs.npmjs.com/trusted-publishers):
+
+- **npm CLI and Node**: "Trusted publishing requires npm CLI version 11.5.1 or later and Node
+  version 22.14.0 or higher." The workflow uses `node-version: '22'`, which resolves to the latest
+  22.x, but Node 22 bundles npm 10.x - so the job installs an exact npm version (currently
+  `npm@11.19.1`) and fails early if `npm --version` is still below 11.5.1. The pin is deliberate:
+  this job holds the publish credential, so bump it as a reviewed change rather than letting a
+  range pull in an unreviewed release.
+- **OIDC permission**: "The critical requirement is the `id-token: write` permission, which allows
+  GitHub Actions to generate OIDC tokens." The `publish` job declares it.
+- **Provenance**: "When you publish using trusted publishing from GitHub Actions or GitLab CI/CD,
+  npm automatically generates and publishes provenance attestations for your package. This happens
+  by default—you don't need to add the `--provenance` flag to your publish command." The workflow
+  keeps `--provenance` explicit anyway; it is harmless.
+- **Runners**: "Self-hosted runners are not currently supported but are planned for future
+  releases." The job runs on `ubuntu-latest`.
+- **Reusable workflows**: not used here, and better kept that way - npm's validation "checks the
+  calling workflow's name instead of the workflow that actually contains the publish command", and
+  "`id-token: write` permission must also be given to both parent and child workflows."
+- **Token precedence**: "The npm CLI automatically detects OIDC environments and uses them for
+  authentication before falling back to traditional tokens." The publish step sets no
+  `NODE_AUTH_TOKEN`, so there is nothing to fall back to: if OIDC is not accepted, the publish
+  fails rather than silently using a token. `actions/setup-node`'s `registry-url` input is kept;
+  with no `NODE_AUTH_TOKEN` set it is inert for npm ("npm Trusted Publishing (OIDC) is not
+  affected, since it does not use `NODE_AUTH_TOKEN`" - setup-node v7 README).
+
+### Configure the trusted publisher on npmjs.com
+
+> **Do this BEFORE merging any change that removes `NODE_AUTH_TOKEN` from the publish step.**
+> Once the token is gone from the workflow, OIDC is the only credential the job has. If npmjs.com
+> does not yet list this repository and workflow as a trusted publisher, the next publish fails
+> with an authentication error, and the version number is spent.
+
+1. Sign in to npmjs.com as an owner or maintainer of the package.
+2. Open the package page (`npmjs.com/package/@egarcia74/warp-sql-server-mcp`) → **Settings**
+   → the **Trusted Publisher** section ("Navigate to your package settings on npmjs.com and find
+   the 'Trusted Publisher' section").
+3. Choose **GitHub Actions** and fill in exactly - "All fields are case-sensitive and must be
+   exact":
+
+   | Field (npm's label)                 | Value                                                                                             |
+   | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+   | **Organization or user** (required) | `egarcia74`                                                                                       |
+   | **Repository** (required)           | `warp-sql-server-mcp`                                                                             |
+   | **Workflow filename** (required)    | `npm-publish.yml` - the file name only, with the `.yml` extension, not the workflow `name:`       |
+   | **Environment name** (optional)     | leave blank - the `publish` job declares no `environment:`                                        |
+   | **Allowed actions** (optional)      | direct `npm publish` must stay allowed - the workflow runs `npm publish`, not `npm stage publish` |
+
+   On the last row npm's text is: "`npm stage publish` is always allowed. Choose whether this
+   trusted publisher can also publish directly with `npm publish`."
+
+4. Save. The package page's **Settings → Trusted publishing** list should now show the entry.
+
+### First OIDC publish, then remove the token
+
+npm's own migration order: "Set up trusted publishers first and verify they work. Then restrict
+token access... Revoke any existing automation tokens that are no longer needed."
+
+1. Merge the workflow change (step order above: publisher first, workflow second).
+2. On the next release, check the `npm-publish.yml` run: the **Upgrade npm for trusted
+   publishing** step prints an npm version of 11.5.1 or higher, and **Publish to npm** succeeds.
+3. Verify the registry: `npm view @egarcia74/warp-sql-server-mcp@X.Y.Z dist.attestations` is
+   non-empty.
+4. Delete the `NPM_TOKEN` repository secret (repo → Settings → Secrets and variables → Actions).
+   No workflow reads it any more, so it is dead weight that still authenticates as you if it
+   leaks. Check for the secret binding rather than the name: `grep -rn 'secrets\.NPM_TOKEN'
+.github/` must return nothing. A bare `grep -rn NPM_TOKEN .github` still matches the
+   explanatory comments in `npm-publish.yml` and would look like a failed migration.
+5. Revoke the underlying token on npmjs.com (Account → Access Tokens).
+
+### Re-running a publish
+
+`npm-publish.yml` also has a `workflow_dispatch` trigger:
+
+```bash
+gh workflow run npm-publish.yml
+gh run watch
+```
+
+This is safe at any time. The **Check if this is a release version bump** step publishes only when a
+`vX.Y.Z` tag matching `package.json` exists and that version is not already on npm; otherwise the
+run skips. Use it after a failed publish has been fixed, or after a tag was created late.
+
+### Troubleshooting
+
+- **Authentication error at `npm publish`** - re-check the three required fields against the table
+  above; the npm docs' first advice is to "verify that the workflow filename matches exactly what you
+  configured on npmjs.com, including the `.yml` extension." Then confirm the run's
+  `Upgrade npm for trusted publishing` step printed 11.5.1 or higher.
+- **The workflow was renamed** - the trusted publisher is bound to the file name. Renaming
+  `npm-publish.yml` requires updating the entry on npmjs.com first.
+- **`NODE_AUTH_TOKEN` reappears in the publish step** - do not add it back "just in case". npm
+  tries OIDC first, so a token would be used only when OIDC fails, which hides the misconfiguration
+  behind a credential that will itself expire.
 
 ## Support
 

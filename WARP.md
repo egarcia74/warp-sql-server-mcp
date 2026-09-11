@@ -1426,7 +1426,8 @@ npm version X.Y.Z --no-git-tag-version
 the tag to step 5 and the commit to step 7. The tag must exist **before** the version bump lands on
 `main`: `npm-publish.yml` has no `tags:` trigger - it fires on a push to `main` that touches
 `package.json` and then publishes only if a tag matching the new version already exists. Tagging
-after the merge means the publish fires once, finds no tag, skips, and never fires again.
+after the merge means the publish fires once, finds no tag, and skips; it does not fire again on
+its own - create the tag, then re-run it with `gh workflow run npm-publish.yml`.
 
 #### 5. Create and Push Git Tag
 
@@ -1621,15 +1622,22 @@ gh run watch <run-id>
 
 Publishing is a separate workflow, `.github/workflows/npm-publish.yml`. It is **not** triggered by
 the tag or the Release - it triggers on a push to `main` that touches `package.json`, which in
-practice means the merge of the version-bump PR above:
+practice means the merge of the version-bump PR above. It can also be re-run by hand with
+`gh workflow run npm-publish.yml` (`workflow_dispatch`); the two gates in the first bullet make
+that safe at any time:
 
 - It publishes only when a tag matching the new `package.json` version already exists, and skips if
   that version is already on npm - so a `package.json` edit that is not a release bump is a no-op.
 - It runs `npm run test:unit` before publishing.
-- It publishes with `npm publish --access public --provenance` under an OIDC `id-token`, so each
-  tarball carries a Sigstore provenance attestation binding it to the workflow run and commit that
-  built it. Verify an install with `npm audit signatures`; the npm package page shows a Provenance
-  badge.
+- It authenticates with npm Trusted Publishing: the job's OIDC `id-token` is exchanged for a
+  short-lived npm credential, so there is no `NPM_TOKEN` secret to rotate or to expire under a
+  release (the 2.0.0 publish failed exactly that way). The trusted publisher is configured on
+  npmjs.com - see `docs/operations/RELEASE-TOKEN-SETUP.md`. Trusted publishing needs npm 11.5.1+
+  and Node 22 bundles npm 10.x, so the job upgrades npm before publishing.
+- It publishes with `npm publish --access public --provenance`, so each tarball carries a Sigstore
+  provenance attestation binding it to the workflow run and commit that built it (trusted
+  publishing generates the attestation even without the flag; the flag is kept explicit). Verify
+  an install with `npm audit signatures`; the npm package page shows a Provenance badge.
 - The package is published as `@egarcia74/warp-sql-server-mcp`.
 
 If `create_version_pr=false` was used, nothing publishes to npm until a `package.json` version bump

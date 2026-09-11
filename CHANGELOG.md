@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`npm-publish.yml` now authenticates to npmjs.com with npm Trusted Publishing (GitHub OIDC) instead of an
+  `NPM_TOKEN` secret.** The 2.0.0 publish failed because the granular token (90-day maximum lifetime) had expired
+  under the release; a trusted publisher bound to this repository and workflow file has nothing to expire. The job
+  upgrades npm to 11.x before publishing (trusted publishing needs 11.5.1+, Node 22 bundles 10.x) and prints the
+  version, `NODE_AUTH_TOKEN` is gone from the publish step, `--provenance` stays explicit, and the workflow gains a
+  `workflow_dispatch` trigger so a skipped or failed publish can be re-run without another `package.json` push -
+  the existing tag and already-on-npm gates make that safe. The publishing job also stops caching dependencies
+  (`package-manager-cache: false`), per setup-node's trusted-publisher guidance that a poisoned cache can expose the
+  OIDC token. Setup steps are in `docs/operations/RELEASE-TOKEN-SETUP.md`.
+
 ## [2.0.0] - 2026-09-11
 
 ### Added

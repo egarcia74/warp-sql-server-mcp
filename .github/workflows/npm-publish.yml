@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'package.json'
+  # Manual re-run without another package.json push - after a failed publish, or after a
+  # tag was created late. Safe to dispatch at any time: the "Check if this is a release
+  # version bump" step below publishes only when a tag matching package.json exists AND
+  # that version is not yet on npm, and skips otherwise.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # OIDC token for npm provenance attestation
+      id-token: write # OIDC token: npm Trusted Publishing auth + provenance attestation
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
@@ -25,8 +30,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: '22' # latest 22.x; trusted publishing needs Node 22.14.0+
+          # No dependency cache in the publishing job. setup-node's trusted-publisher guide:
+          # "a poisoned cache may expose credentials (including OIDC tokens) to
+          # attacker-controlled code". package.json sets no packageManager, so this only
+          # makes the default explicit; the other workflows keep cache: 'npm'.
+          package-manager-cache: false
+          # Kept on purpose. This writes the registry plus an auth line that reads
+          # NODE_AUTH_TOKEN into .npmrc. No token is set anywhere in this job: npm leaves the
+          # unset ${NODE_AUTH_TOKEN} placeholder alone and authenticates with the OIDC token
+          # instead (setup-node v7 README: "npm Trusted Publishing (OIDC) is not affected,
+          # since it does not use NODE_AUTH_TOKEN").
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -55,6 +69,31 @@ jobs:
           echo "should_publish=true" >> "$GITHUB_OUTPUT"
           echo "Will publish @egarcia74/warp-sql-server-mcp@$PKG_VERSION"
 
+      # npm Trusted Publishing requires npm 11.5.1+ (docs.npmjs.com/trusted-publishers) and
+      # Node 22 bundles npm 10.x. Pinned to an exact version, not a range: this job holds the
+      # publish credential, so the npm that runs in it is reviewed like any other dependency
+      # (Sonar githubactions:S8543). Bump deliberately; the check below is the floor, not the
+      # pin. npm has no install scripts; --ignore-scripts is defence in depth only. The check
+      # turns a too-old npm into a clear failure here rather than an opaque auth error at
+      # `npm publish`.
+      - name: Upgrade npm for trusted publishing
+        if: steps.check.outputs.should_publish == 'true'
+        run: |
+          npm install -g npm@11.19.1 --ignore-scripts
+          NPM_VERSION=$(npm --version)
+          echo "npm $NPM_VERSION"
+          node -e '
+            const have = process.argv[1].split(".").map(Number);
+            const need = [11, 5, 1];
+            for (let i = 0; i < 3; i++) {
+              if (have[i] > need[i]) break;
+              if (have[i] < need[i]) {
+                console.error(`npm ${process.argv[1]} is below 11.5.1, which trusted publishing requires`);
+                process.exit(1);
+              }
+            }
+          ' "$NPM_VERSION"
+
       - name: Run tests
         if: steps.check.outputs.should_publish == 'true'
         run: npm run test:unit
@@ -74,11 +113,14 @@ jobs:
           PKG_VERSION: ${{ steps.check.outputs.version }}
         run: node scripts/ci/verify-publish-tree.mjs "$PKG_VERSION"
 
+      # Authenticates with the job's OIDC token (npm Trusted Publishing) - there is no
+      # NODE_AUTH_TOKEN / NPM_TOKEN in this job. The trusted publisher configured on
+      # npmjs.com must name this repository and this file (npm-publish.yml); see
+      # docs/operations/RELEASE-TOKEN-SETUP.md. Trusted publishing generates the provenance
+      # attestation on its own; --provenance is kept so the intent stays visible here.
       - name: Publish to npm
         if: steps.check.outputs.should_publish == 'true'
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Summary
         if: steps.check.outputs.should_publish == 'true'
