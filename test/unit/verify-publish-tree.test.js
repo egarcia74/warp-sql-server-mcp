@@ -1,8 +1,8 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, unlinkSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import {
   verifyPublishTree,
@@ -556,8 +556,15 @@ describe('against a real repository, following the actual release sequence', () 
     process.env.GIT_DIR = join(victim.dir, '.git');
     process.env.GIT_WORK_TREE = victim.dir;
     process.env.GIT_INDEX_FILE = join(victim.dir, '.git', 'index');
+    // Windows environment names are case-insensitive and git there honours `git_dir`
+    // as readily as `GIT_DIR`; the scrub must not depend on the case the name was set in.
+    process.env.git_ceiling_directories = '/nonexistent';
 
     try {
+      const scrubbed = scrubbedEnv();
+      expect(Object.keys(scrubbed).filter(key => /^git_/i.test(key))).toEqual([]);
+      expect(scrubbed.PATH ?? scrubbed.Path).toBeDefined(); // everything else survives
+
       // Control: an UNscrubbed git is redirected - proving the variables are live and
       // that the scrub below is what prevents the damage, not luck.
       const scratch = mkdtempSync(join(tmpdir(), 'verify-publish-tree-'));
@@ -566,7 +573,10 @@ describe('against a real repository, following the actual release sequence', () 
         cwd: scratch,
         encoding: 'utf8'
       }).trim();
-      expect(redirected).toBe(execFileSync('realpath', [victim.dir], { encoding: 'utf8' }).trim());
+      // `--show-toplevel` reports the symlink-resolved path with forward slashes on every
+      // platform, so resolve both sides in Node rather than shelling out to a `realpath`
+      // binary Windows does not have.
+      expect(resolve(redirected)).toBe(realpathSync(victim.dir));
 
       // The real thing: the helper and the reader must both stay on their own cwd.
       const { dir, git } = makeRepo({ 'package.json': pkg('1.8.0') });
