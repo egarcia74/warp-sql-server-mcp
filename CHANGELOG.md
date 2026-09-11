@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`npm run release` and `npm run release:dry` dispatch the release workflow with a preview and an explicit
   confirmation.** `scripts/release.mjs` replaces the two hand-typed `gh workflow run release.yml` /
-  `gh run watch` commands: it checks `gh` is authenticated, fetches `origin/main` and warns if local `main`
+  `gh run watch` commands: it checks `gh` is authenticated, pins every `gh` call to the repository that
+  remote `origin` names, fetches `origin/main` and reads tags from the remote, and warns if local `main`
   differs from it or if PRs are open (`main` must stay frozen until the bump PR merges), then computes the
   release type and next version locally with the same conventional-commit rules as `release.yml` and prints
   them together with the commit subjects that decided it and the SHA the tag will point at. The real release

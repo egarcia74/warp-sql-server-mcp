@@ -18,16 +18,19 @@
  * there so a surprise shows up before the tag, not after. Then it finds the run it started
  * and watches it to completion, and prints where the release and the version-bump PR are.
  *
- * What it previews is origin/main, not the local checkout: the workflow is dispatched with
- * `--ref main`, so the runner checks out origin/main's HEAD, and that is the commit the tag
- * will point at. A local `main` that is behind or ahead is reported as a warning, because
- * it means the preview and the operator's mental model can disagree.
+ * What it previews is origin/main on the repository that remote `origin` names, not the
+ * local checkout: every gh call is pinned to that repository with `--repo`, the workflow is
+ * dispatched with `--ref main`, so the runner checks out origin/main's HEAD, and that is the
+ * commit the tag will point at. Tags are read from the remote (`git ls-remote`), because a
+ * tag kept locally after being deleted upstream would otherwise skip a version the runner's
+ * fresh checkout will use. A local `main` that is behind or ahead is reported as a warning.
  *
  * This file is the CLI only: preconditions, subprocess plumbing, the prompt, the dispatch
  * and the watch. Every decision - flag parsing, the release-type rules, the version bump,
- * run selection, the preview text - is a pure function in scripts/lib/release-plan.mjs,
- * unit tested in test/unit/release-script.test.js. Every subprocess is spawned with an
- * argument array - never a shell string - and every value read back from gh or git is data.
+ * run selection, the argument guard, the preview text - is a pure function in
+ * scripts/lib/release-plan.mjs, unit tested in test/unit/release-script.test.js. Every
+ * subprocess is spawned with an argument array - never a shell string - and every value
+ * read back from gh or git is passed on as data().
  */
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
@@ -37,74 +40,41 @@ import { pathToFileURL } from 'node:url';
 import {
   WORKFLOW,
   RELEASE_BRANCH,
-  PLAIN_VERSION,
-  parseArgs,
+  assertRunId,
+  data,
+  decideConfirmation,
   detectReleaseType,
-  resolveNextVersion,
-  selectRun,
+  guard,
+  isPlainVersion,
+  parseArgs,
+  parseOriginRepo,
+  parseRemoteTags,
+  parseRunUrl,
   renderPreview,
+  resolveNextVersion,
+  resolveReleasedVersion,
+  selectRun,
   usage
 } from './lib/release-plan.mjs';
 
 const REMOTE_HEAD = `refs/remotes/origin/${RELEASE_BRANCH}`;
 const PACKAGE_NAME = '@egarcia74/warp-sql-server-mcp';
 
-/** How long to wait for the dispatched run to appear in `gh run list`. */
+/** How long to keep looking for the dispatched run when gh did not print its URL. */
 const POLL_INTERVAL_MS = 3_000;
-const POLL_ATTEMPTS = 20;
+const POLL_WINDOW_MS = 60_000;
 
 /**
- * The run is matched by creation time against the local clock, and the two clocks are not
- * the same clock. Selecting from a little before the dispatch keeps a slow local clock
- * from hiding the run; the pre-dispatch snapshot of run ids keeps that slack from picking
- * up an older run instead.
+ * The fallback matches the run by creation time against the local clock, and the two clocks
+ * are not the same clock. Selecting from a little before the dispatch keeps a slow local
+ * clock from hiding the run; the pre-dispatch snapshot of run ids keeps that slack from
+ * picking up an older run instead.
  */
 const CLOCK_SKEW_MS = 15_000;
 
 // ---------------------------------------------------------------------------------------
 // Subprocesses
 // ---------------------------------------------------------------------------------------
-
-/**
- * Every dash-prefixed argument this file passes to either tool. A value that arrives from
- * outside - a tag name from `git describe`, a run id from `gh run list` - is data, and if
- * it started with a dash the tool would read it as an option. Checking at the boundary
- * keeps that guarantee in one place instead of at each call site.
- */
-const ALLOWED_FLAGS = {
-  git: new Set([
-    '--is-inside-work-tree',
-    '--quiet',
-    '--tags',
-    '--verify',
-    '--short',
-    '--format=%s',
-    '--no-merges',
-    '--abbrev=0',
-    '--'
-  ]),
-  gh: new Set([
-    '--json',
-    '-q',
-    '--limit',
-    '--workflow',
-    '--event',
-    '-f',
-    '--ref',
-    '--exit-status',
-    '--head',
-    '--state'
-  ])
-};
-
-function guard(command, args) {
-  const offending = args.filter(
-    arg => typeof arg !== 'string' || (arg.startsWith('-') && !ALLOWED_FLAGS[command].has(arg))
-  );
-  if (offending.length > 0) {
-    throw new Error(`refusing to pass ${JSON.stringify(offending)} to ${command} as an argument`);
-  }
-}
 
 class CommandError extends Error {
   constructor(command, args, result) {
@@ -113,23 +83,23 @@ class CommandError extends Error {
         ? `${command} could not be started: ${result.error.message}`
         : `${command} ${args.join(' ')} exited ${result.status}${result.stderr?.trim() ? `\n${result.stderr.trim()}` : ''}`
     );
-    this.command = command;
-    this.status = result.status;
     this.notFound = result.error?.code === 'ENOENT';
   }
 }
 
-/** Runs `command` with `args` and returns its stdout; throws a CommandError otherwise. */
-function capture(command, args) {
-  guard(command, args);
+/** Runs `command`; returns { stdout, stderr } or throws a CommandError. */
+function captureAll(command, rawArgs) {
+  const args = guard(command, rawArgs);
   const result = spawnSync(command, args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024
   });
   if (result.error || result.status !== 0) throw new CommandError(command, args, result);
-  return result.stdout;
+  return { stdout: result.stdout, stderr: result.stderr };
 }
+
+const capture = (command, args) => captureAll(command, args).stdout;
 
 /** Like capture(), but a non-zero exit returns null instead of throwing. */
 function tryCapture(command, args) {
@@ -142,16 +112,25 @@ function tryCapture(command, args) {
 }
 
 /** Runs `command` with the terminal attached, so the user sees its output live. */
-function inherit(command, args) {
-  guard(command, args);
+function inherit(command, rawArgs) {
+  const args = guard(command, rawArgs);
   const result = spawnSync(command, args, { stdio: 'inherit' });
   if (result.error) throw new CommandError(command, args, result);
   return result.status;
 }
 
 const git = (...args) => capture('git', args).trim();
-const gh = (...args) => capture('gh', args);
+
+/** Set once the origin repository is known; every gh call after `auth status` is pinned to it. */
+let REPO = null;
+const pinned = args => {
+  if (!REPO) throw new Error('gh called before the origin repository was resolved');
+  return [...args, '--repo', data(REPO)];
+};
+const gh = (...args) => capture('gh', pinned(args));
+const ghAll = (...args) => captureAll('gh', pinned(args));
 const ghJson = (...args) => JSON.parse(gh(...args));
+const remoteTags = () => parseRemoteTags(capture('git', ['ls-remote', '--tags', 'origin']));
 
 // ---------------------------------------------------------------------------------------
 // main
@@ -167,7 +146,7 @@ function fail(message) {
 
 function checkPreconditions() {
   try {
-    gh('auth', 'status');
+    capture('gh', ['auth', 'status']);
   } catch (error) {
     if (error instanceof CommandError && error.notFound) {
       fail('GitHub CLI (gh) is not installed or not on PATH. See https://cli.github.com/');
@@ -180,18 +159,34 @@ function checkPreconditions() {
   }
 
   try {
-    git('fetch', '--quiet', '--tags', 'origin', RELEASE_BRANCH);
+    REPO = parseOriginRepo(git('remote', 'get-url', 'origin')).slug;
+  } catch (error) {
+    fail(`${error.message}. The release is pinned to the repository remote "origin" names.`);
+  }
+
+  // release.yml checks out with fetch-depth 0, so its `git describe` sees the whole history.
+  // A shallow clone can describe a different last tag and so compute a different type.
+  if (git('rev-parse', '--is-shallow-repository') === 'true') {
+    note('this clone is shallow; fetching the full history so the preview matches the runner.');
+    try {
+      git('fetch', '--quiet', '--unshallow', 'origin');
+    } catch (error) {
+      fail(`could not unshallow the clone.\n${error.message}`);
+    }
+  }
+
+  // An explicit refspec, so a narrowed remote.origin.fetch cannot leave origin/main stale.
+  // --tags adds the remote's tags without deleting local ones: the remote is consulted
+  // directly for every tag decision below, so nothing here needs to prune.
+  try {
+    git('fetch', '--quiet', '--tags', 'origin', `+refs/heads/${RELEASE_BRANCH}:${REMOTE_HEAD}`);
   } catch (error) {
     fail(`could not fetch origin/${RELEASE_BRANCH}.\n${error.message}`);
   }
 
   const remoteHead = git('rev-parse', REMOTE_HEAD);
-  const localHead = tryCapture('git', [
-    'rev-parse',
-    '--verify',
-    '--quiet',
-    `refs/heads/${RELEASE_BRANCH}`
-  ])?.trim();
+  const localRef = `refs/heads/${RELEASE_BRANCH}`;
+  const localHead = tryCapture('git', ['rev-parse', '--verify', '--quiet', localRef])?.trim();
 
   if (localHead && localHead !== remoteHead) {
     warn(
@@ -225,19 +220,45 @@ function checkPreconditions() {
     );
   }
 
-  return { remoteHead };
+  return { remoteHead, tags: remoteTags() };
 }
 
-function buildPreview(options, remoteHead) {
-  const lastTag =
-    tryCapture('git', ['describe', '--tags', '--abbrev=0', REMOTE_HEAD])?.trim() || null;
-  const range = lastTag ? `${lastTag}..${REMOTE_HEAD}` : REMOTE_HEAD;
+/**
+ * What `git describe --tags --abbrev=0` reports on the runner: the nearest tag reachable
+ * from origin/main among the REMOTE's tags. Local-only tags are excluded by name so they
+ * cannot shorten the commit range the release type is computed from.
+ */
+function lastRemoteTag(tags) {
+  // Only names the argument guard will accept as an `--exclude=` value; a stranger name
+  // would make the guard refuse the whole describe, which is worse than not excluding it.
+  const localOnly = git('tag', '--list')
+    .split('\n')
+    .filter(tag => tag && !tags.has(tag) && /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(tag));
+  if (localOnly.length > 0) {
+    note(
+      `ignoring ${localOnly.length} local-only tag(s) the runner will not see: ${localOnly.join(', ')}`
+    );
+  }
+  const excludes = localOnly.map(tag => `--exclude=${tag}`);
+  const described = tryCapture('git', [
+    'describe',
+    '--tags',
+    '--abbrev=0',
+    ...excludes,
+    REMOTE_HEAD
+  ]);
+  return described?.trim() || null;
+}
+
+function buildPreview(options, { remoteHead, tags }) {
+  const lastTag = lastRemoteTag(tags);
+  const range = lastTag ? data(`${lastTag}..${REMOTE_HEAD}`) : REMOTE_HEAD;
   const subjects = git('log', '--format=%s', '--no-merges', range, '--')
     .split('\n')
     .filter(line => line.trim());
 
   const currentVersion = JSON.parse(git('show', `${REMOTE_HEAD}:package.json`)).version;
-  if (!PLAIN_VERSION.test(currentVersion)) {
+  if (!isPlainVersion(currentVersion)) {
     fail(
       `package.json on origin/${RELEASE_BRANCH} declares version "${currentVersion}", which is not a ` +
         'plain X.Y.Z. This script only previews plain versions; dispatch the workflow by hand.'
@@ -265,16 +286,12 @@ function buildPreview(options, remoteHead) {
       );
     }
   } else {
-    const tagExists = tag =>
-      tryCapture('git', ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`]) !== null;
-    ({ version: nextVersion, collisions } = resolveNextVersion(
-      currentVersion,
-      releaseType,
-      tagExists
-    ));
+    const resolved = resolveNextVersion(currentVersion, releaseType, tag => tags.has(tag));
+    ({ version: nextVersion, collisions } = resolved);
   }
 
   return {
+    repo: REPO,
     currentVersion,
     nextVersion,
     releaseType,
@@ -290,25 +307,22 @@ function buildPreview(options, remoteHead) {
 }
 
 async function confirm(version, options) {
-  if (options.yes) return true;
+  const input = { yes: options.yes, isTTY: Boolean(process.stdin.isTTY), version };
+  let decision = decideConfirmation(input);
 
-  if (!process.stdin.isTTY) {
-    console.error(
-      'stdin is not a terminal, so the version cannot be typed back. Re-run from a terminal, ' +
-        'or pass --yes to skip the confirmation.'
-    );
-    return false;
+  if (!decision.proceed && !decision.reason) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const answer = await rl.question(
+        'Type the version to release (X.Y.Z), or anything else to abort: '
+      );
+      decision = decideConfirmation({ ...input, answer });
+    } finally {
+      rl.close();
+    }
   }
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const answer = await rl.question(
-      'Type the version to release (X.Y.Z), or anything else to abort: '
-    );
-    return answer.trim() === version;
-  } finally {
-    rl.close();
-  }
+  if (!decision.proceed) fail(decision.reason);
 }
 
 const listRuns = () =>
@@ -325,7 +339,8 @@ const listRuns = () =>
     'databaseId,createdAt,status'
   );
 
-async function dispatchAndFind(releaseType, dryRun) {
+/** Dispatches the workflow and returns the validated id of the run it created. */
+async function dispatch(releaseType, dryRun) {
   const before = new Set(listRuns().map(run => run.databaseId));
   const dispatchedAt = Date.now();
 
@@ -339,31 +354,36 @@ async function dispatchAndFind(releaseType, dryRun) {
     `release_type=${releaseType}`
   ];
   if (dryRun) args.push('-f', 'dry_run=true');
-  gh(...args);
+  const { stdout, stderr } = ghAll(...args);
   console.log(
     `Dispatched ${WORKFLOW} on ${RELEASE_BRANCH} with release_type=${releaseType}${dryRun ? ' dry_run=true' : ''}.`
   );
 
-  for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
+  // gh prints the created run's URL when the API returns it; that is the only exact match.
+  const fromUrl = parseRunUrl(`${stdout}\n${stderr}`);
+  if (fromUrl) return assertRunId(fromUrl);
+
+  // Fallback: the oldest run that is new since the snapshot. See selectRun() for the race.
+  note('gh did not report the run URL; matching the run by creation time instead.');
+  const deadline = Date.now() + POLL_WINDOW_MS;
+  for (;;) {
     const run = selectRun(listRuns(), dispatchedAt - CLOCK_SKEW_MS, before);
-    if (run) return run;
-    await sleep(POLL_INTERVAL_MS);
+    if (run) return assertRunId(run.databaseId);
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await sleep(Math.min(POLL_INTERVAL_MS, remaining));
   }
 
   fail(
-    `the run did not appear within ${(POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000} s. It was ` +
-      `dispatched; find it with \`gh run list --workflow=${WORKFLOW}\` and watch it with \`gh run watch <id>\`.`
+    `the run did not appear within ${POLL_WINDOW_MS / 1000} s. It was dispatched; find it with ` +
+      `\`gh run list --repo ${REPO} --workflow=${WORKFLOW}\` and watch it with \`gh run watch <id>\`.`
   );
 }
 
-function report(run, preview) {
-  const id = String(run.databaseId);
-  if (!/^\d+$/.test(id))
-    fail(`gh returned a run id that is not a number: ${JSON.stringify(run.databaseId)}`);
-
-  const { conclusion, url } = ghJson('run', 'view', id, '--json', 'conclusion,url');
+function report(runId, preview, tagsBefore) {
+  const { conclusion, url } = ghJson('run', 'view', data(runId), '--json', 'conclusion,url');
   console.log('');
-  console.log(`Run ${id} finished: ${conclusion}`);
+  console.log(`Run ${runId} finished: ${conclusion}`);
   console.log(`  ${url}`);
 
   if (conclusion !== 'success') {
@@ -379,25 +399,23 @@ function report(run, preview) {
     return;
   }
 
-  const version = preview.nextVersion;
+  // The version the workflow actually tagged, not the one the preview expected.
+  const released = resolveReleasedVersion(tagsBefore, remoteTags(), preview.nextVersion);
+  const version = released.version;
+  const label = released.source === 'tag' ? '' : ' (expected - no new tag seen on the remote yet)';
   const tag = `v${version}`;
   const branch = `chore/release/${tag}`;
 
   console.log('');
-  const releaseUrl = tryCapture('gh', [
-    'release',
-    'view',
-    tag,
-    '--json',
-    'url',
-    '-q',
-    '.url'
-  ])?.trim();
+  console.log(`Version:  ${version}${label}`);
+  const releaseUrl = tryCapture(
+    'gh',
+    pinned(['release', 'view', tag, '--json', 'url', '-q', '.url'])
+  );
   console.log(
     releaseUrl
-      ? `Release:  ${releaseUrl}`
-      : `Release:  ${tag} not found - the workflow may have chosen another version or skipped; ` +
-          'check the run summary and `gh release list --limit 3`.'
+      ? `Release:  ${releaseUrl.trim()}`
+      : `Release:  ${tag} not found - check the run summary and \`gh release list --repo ${REPO} --limit 3\`.`
   );
 
   const prs = ghJson(
@@ -418,10 +436,11 @@ function report(run, preview) {
       : `Bump PR:  none open for ${branch} yet.`
   );
 
+  const today = new Date().toISOString().slice(0, 10);
   console.log('');
   console.log('Next steps:');
   console.log(
-    `  1. On the bump PR, edit CHANGELOG.md: \`## [Unreleased]\` -> \`## [${version}] - ${new Date().toISOString().slice(0, 10)}\``
+    `  1. On the bump PR, edit CHANGELOG.md: \`## [Unreleased]\` -> \`## [${version}] - ${today}\``
   );
   console.log(
     '     (add a fresh empty `## [Unreleased]` above it), and update the compare link at the bottom.'
@@ -447,25 +466,21 @@ async function main() {
     return;
   }
 
-  const { remoteHead } = checkPreconditions();
-  const preview = buildPreview(options, remoteHead);
+  const state = checkPreconditions();
+  const preview = buildPreview(options, state);
 
   console.log('');
   console.log(renderPreview(preview));
   console.log('');
 
-  if (!options.dryRun) {
-    const confirmed = await confirm(preview.nextVersion, options);
-    if (!confirmed) fail('aborted - nothing was dispatched.');
-  }
+  if (!options.dryRun) await confirm(preview.nextVersion, options);
 
-  const releaseType = options.type ?? 'auto';
-  const run = await dispatchAndFind(releaseType, options.dryRun);
-  console.log(`Watching run ${run.databaseId} ...`);
+  const runId = await dispatch(options.type ?? 'auto', options.dryRun);
+  console.log(`Watching run ${runId} ...`);
   console.log('');
 
-  inherit('gh', ['run', 'watch', String(run.databaseId), '--exit-status']);
-  report(run, preview);
+  inherit('gh', pinned(['run', 'watch', data(runId), '--exit-status']));
+  report(runId, preview, state.tags);
 }
 
 // Compare as file URLs: process.argv[1] is a plain filesystem path while import.meta.url is

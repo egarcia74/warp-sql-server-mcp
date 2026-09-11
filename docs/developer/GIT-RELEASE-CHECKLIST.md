@@ -30,7 +30,8 @@
 Trigger with the release script (`scripts/release.mjs`)
 
 1. Preview: `npm run release:dry`
-   - Checks `gh` is authenticated, fetches `origin/main`, warns if local `main` differs from it
+   - Checks `gh` is authenticated, pins every `gh` call to the repository remote `origin` names,
+     fetches `origin/main` and the remote's tags, warns if local `main` differs from it
      (the workflow releases `origin/main`'s HEAD, not your checkout) and warns about open PRs -
      `main` must stay frozen until the bump PR merges, because the publish gate compares the tree
      against the tag.

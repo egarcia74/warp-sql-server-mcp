@@ -3,9 +3,19 @@ import {
   parseArgs,
   detectReleaseType,
   bumpVersion,
+  isPlainVersion,
   resolveNextVersion,
   selectRun,
   renderPreview,
+  parseOriginRepo,
+  parseRemoteTags,
+  resolveReleasedVersion,
+  parseRunUrl,
+  assertRunId,
+  guard,
+  data,
+  ALLOWED_FLAGS,
+  decideConfirmation,
   RELEASE_TYPES
 } from '../../scripts/lib/release-plan.mjs';
 
@@ -106,12 +116,23 @@ describe('bumpVersion', () => {
     '1.7.20.1',
     ' 1.7.20',
     '1.7.x',
+    '01.2.3',
+    '1.02.3',
+    '1.2.03',
+    '9007199254740992.0.0',
     '',
     undefined,
     null,
     1.7
   ])('rejects %j, which is not a plain X.Y.Z', bad => {
     expect(() => bumpVersion(bad, 'patch')).toThrow(/not a plain X\.Y\.Z/);
+    expect(isPlainVersion(bad)).toBe(false);
+  });
+
+  it('accepts what npm version accepts: zero components and the largest safe integer', () => {
+    expect(isPlainVersion('0.0.0')).toBe(true);
+    expect(isPlainVersion('9007199254740991.0.0')).toBe(true);
+    expect(bumpVersion('0.0.0', 'patch')).toBe('0.0.1');
   });
 
   it('rejects a release type it does not bump', () => {
@@ -207,14 +228,14 @@ describe('selectRun', () => {
   const run = (databaseId, createdAt, status = 'queued') => ({ databaseId, createdAt, status });
   const dispatchedAt = Date.parse('2026-09-11T13:40:00Z');
 
-  it('picks the newest run created at or after the dispatch time', () => {
+  it('picks the OLDEST run created at or after the dispatch time, so a later dispatch cannot win', () => {
     const runs = [
-      run(3, '2026-09-11T13:40:05Z'),
       run(4, '2026-09-11T13:40:09Z'),
+      run(3, '2026-09-11T13:40:05Z'),
       run(2, '2026-09-11T13:39:59Z', 'completed'),
       run(1, '2026-09-11T13:32:28Z', 'completed')
     ];
-    expect(selectRun(runs, dispatchedAt)?.databaseId).toBe(4);
+    expect(selectRun(runs, dispatchedAt)?.databaseId).toBe(3);
   });
 
   it('accepts a run created exactly at the dispatch time', () => {
@@ -236,7 +257,7 @@ describe('selectRun', () => {
     // Clock skew allowance can reach back before the dispatch; the snapshot keeps an older
     // run from being mistaken for the new one.
     const runs = [run(9, '2026-09-11T13:40:02Z'), run(8, '2026-09-11T13:40:01Z')];
-    expect(selectRun(runs, dispatchedAt, new Set([9]))?.databaseId).toBe(8);
+    expect(selectRun(runs, dispatchedAt, new Set([8]))?.databaseId).toBe(9);
     expect(selectRun(runs, dispatchedAt, new Set([8, 9]))).toBeNull();
   });
 
@@ -247,6 +268,7 @@ describe('selectRun', () => {
 
 describe('renderPreview', () => {
   const base = {
+    repo: 'egarcia74/warp-sql-server-mcp',
     currentVersion: '1.7.20',
     nextVersion: '2.0.0',
     releaseType: 'major',
@@ -262,6 +284,7 @@ describe('renderPreview', () => {
 
   it('prints the version transition, type, tag, count, drivers and the tag target', () => {
     const text = renderPreview(base);
+    expect(text).toContain('Repository:     egarcia74/warp-sql-server-mcp (from git remote origin');
     expect(text).toContain('Version:        1.7.20 -> 2.0.0');
     expect(text).toContain('Release type:   major (auto: breaking change / !:)');
     expect(text).toContain('Last tag:       v1.7.20');
@@ -303,4 +326,224 @@ describe('renderPreview', () => {
     expect(text).toContain('Last tag:       (none - every commit counts)');
     expect(text).toContain('since the beginning');
   });
+});
+
+describe('parseOriginRepo', () => {
+  const expected = {
+    host: 'github.com',
+    owner: 'egarcia74',
+    name: 'warp-sql-server-mcp',
+    slug: 'egarcia74/warp-sql-server-mcp'
+  };
+
+  it.each([
+    'https://github.com/egarcia74/warp-sql-server-mcp.git',
+    'https://github.com/egarcia74/warp-sql-server-mcp',
+    'https://github.com/egarcia74/warp-sql-server-mcp/',
+    'https://token@github.com/egarcia74/warp-sql-server-mcp.git',
+    'git@github.com:egarcia74/warp-sql-server-mcp.git',
+    'git@github.com:egarcia74/warp-sql-server-mcp',
+    'ssh://git@github.com/egarcia74/warp-sql-server-mcp.git',
+    'ssh://git@github.com:22/egarcia74/warp-sql-server-mcp.git',
+    '  https://github.com/egarcia74/warp-sql-server-mcp.git\n'
+  ])('reads owner/name from %s', url => {
+    expect(parseOriginRepo(url)).toEqual(expected);
+  });
+
+  it('prefixes the host for a GitHub Enterprise remote, as --repo expects', () => {
+    expect(parseOriginRepo('git@ghe.example.com:acme/tool.git').slug).toBe(
+      'ghe.example.com/acme/tool'
+    );
+  });
+
+  it.each([
+    '',
+    '/Users/me/repos/warp-sql-server-mcp',
+    'https://github.com/egarcia74',
+    'https://github.com/egarcia74/warp sql/x',
+    'https://github.com/-egarcia74/repo.git',
+    'https://github.com/egarcia74/..',
+    'https://github.com/egarcia74/repo$name',
+    'https://github.com/a/b/c'
+  ])('rejects %j', url => {
+    expect(() => parseOriginRepo(url)).toThrow(/origin URL/);
+  });
+});
+
+describe('parseRemoteTags and resolveReleasedVersion', () => {
+  const lsRemote = [
+    'aaaa\trefs/tags/v1.7.19',
+    'bbbb\trefs/tags/v1.7.20',
+    'cccc\trefs/tags/v1.7.20^{}',
+    'dddd\trefs/tags/combined-1153',
+    ''
+  ].join('\n');
+
+  it('lists tag names once each, ignoring the peeled ^{} entries', () => {
+    expect([...parseRemoteTags(lsRemote)].sort()).toEqual(['combined-1153', 'v1.7.19', 'v1.7.20']);
+    expect(parseRemoteTags('')).toEqual(new Set());
+  });
+
+  const before = parseRemoteTags(lsRemote);
+
+  it('reports the version from the tag that appeared, labelled as a tag', () => {
+    const after = new Set([...before, 'v2.0.0']);
+    expect(resolveReleasedVersion(before, after, '2.0.0')).toEqual({
+      version: '2.0.0',
+      source: 'tag'
+    });
+  });
+
+  it('prefers a new tag over the expectation when the workflow chose differently', () => {
+    const after = new Set([...before, 'v2.0.1']);
+    expect(resolveReleasedVersion(before, after, '2.0.0')).toEqual({
+      version: '2.0.1',
+      source: 'tag'
+    });
+  });
+
+  it('falls back to the expected version, labelled as such, when no new tag is seen', () => {
+    expect(resolveReleasedVersion(before, before, '2.0.0')).toEqual({
+      version: '2.0.0',
+      source: 'expected'
+    });
+  });
+
+  it('ignores new tags that are not plain v<X.Y.Z>, and picks the highest of several', () => {
+    const after = new Set([...before, 'nightly', 'v2.0.0-rc.1', 'v2.0.1', 'v2.0.3']);
+    expect(resolveReleasedVersion(before, after, '2.0.0')).toEqual({
+      version: '2.0.3',
+      source: 'tag'
+    });
+  });
+});
+
+describe('parseRunUrl and assertRunId', () => {
+  it('finds the run id in the URL gh prints after a dispatch', () => {
+    const out =
+      '✓ Created workflow_dispatch event for release.yml at main\n' +
+      'https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/34605777694\n';
+    expect(parseRunUrl(out)).toBe('34605777694');
+  });
+
+  it('is null when gh printed no run URL', () => {
+    expect(parseRunUrl('✓ Created workflow_dispatch event for release.yml at main\n')).toBeNull();
+    expect(parseRunUrl('')).toBeNull();
+    expect(parseRunUrl(undefined)).toBeNull();
+    expect(parseRunUrl('https://github.com/o/r/actions/workflows/release.yml')).toBeNull();
+  });
+
+  it('accepts a numeric id, as a number or a string, and returns it as a string', () => {
+    expect(assertRunId(34605777694)).toBe('34605777694');
+    expect(assertRunId('34605777694')).toBe('34605777694');
+  });
+
+  it.each(['--exit-status', '12a', '', undefined, null, '1.5', '-1'])('rejects %j', bad => {
+    expect(() => assertRunId(bad)).toThrow(/not a number/);
+  });
+});
+
+describe('guard', () => {
+  it('passes listed flags and plain values through unchanged', () => {
+    expect(guard('gh', ['run', 'watch', '123', '--exit-status'])).toEqual([
+      'run',
+      'watch',
+      '123',
+      '--exit-status'
+    ]);
+    expect(guard('git', ['log', '--format=%s', '--no-merges', 'v1..HEAD', '--'])).toEqual([
+      'log',
+      '--format=%s',
+      '--no-merges',
+      'v1..HEAD',
+      '--'
+    ]);
+  });
+
+  it('rejects a dash-prefixed argument that is not on the allowlist', () => {
+    expect(() => guard('git', ['fetch', '--prune'])).toThrow(/refusing to pass "--prune"/);
+    expect(() => guard('gh', ['run', 'list', '-L', '5'])).toThrow(/refusing to pass "-L"/);
+    expect(() => guard('git', ['log', '--upload-pack=evil'])).toThrow(/refusing/);
+  });
+
+  it('rejects an allowlisted flag when it arrives in a data position', () => {
+    // A run id read back from gh that happens to spell a flag must never reach gh as one.
+    expect(() => guard('gh', ['run', 'watch', data('--exit-status')])).toThrow(
+      /refusing to pass "--exit-status" to gh as data/
+    );
+    expect(() => guard('git', ['log', data('--')])).toThrow(/as data/);
+    expect(() => guard('gh', ['pr', 'list', '--repo', data('-owner/repo')])).toThrow(/as data/);
+  });
+
+  it('unwraps data values that do not start with a dash', () => {
+    expect(guard('gh', ['run', 'view', data('123'), '--repo', data('o/r')])).toEqual([
+      'run',
+      'view',
+      '123',
+      '--repo',
+      'o/r'
+    ]);
+  });
+
+  it('accepts --exclude= only with a plain ref-like value', () => {
+    expect(guard('git', ['describe', '--exclude=combined-1153'])).toEqual([
+      'describe',
+      '--exclude=combined-1153'
+    ]);
+    expect(() => guard('git', ['describe', '--exclude=-x'])).toThrow(/refusing/);
+    expect(() => guard('git', ['describe', '--exclude='])).toThrow(/refusing/);
+    expect(() => guard('git', ['describe', '--exclude=a b'])).toThrow(/refusing/);
+  });
+
+  it('rejects non-string arguments and unknown commands', () => {
+    expect(() => guard('git', ['log', 5])).toThrow(/refusing to pass 5/);
+    expect(() => guard('git', ['log', undefined])).toThrow(/refusing/);
+    expect(() => guard('git', ['log', { other: 'x' }])).toThrow(/refusing/);
+    expect(() => guard('npm', ['publish'])).toThrow(/no argument allowlist/);
+  });
+
+  it('has no --short entry, which nothing used, and pins gh with --repo', () => {
+    expect(ALLOWED_FLAGS.git.has('--short')).toBe(false);
+    expect(ALLOWED_FLAGS.gh.has('--repo')).toBe(true);
+  });
+});
+
+describe('decideConfirmation', () => {
+  const version = '2.0.0';
+
+  it('proceeds on --yes without asking, terminal or not', () => {
+    expect(decideConfirmation({ yes: true, isTTY: false, version })).toEqual({
+      proceed: true,
+      reason: null
+    });
+    expect(decideConfirmation({ yes: true, isTTY: true, version }).proceed).toBe(true);
+  });
+
+  it('aborts with a reason when stdin is not a terminal and --yes was not given', () => {
+    const result = decideConfirmation({ yes: false, isTTY: false, version });
+    expect(result.proceed).toBe(false);
+    expect(result.reason).toMatch(/not a terminal/);
+    expect(result.reason).toMatch(/--yes/);
+  });
+
+  it('asks first on a terminal: no answer yet means neither proceed nor a reason', () => {
+    expect(decideConfirmation({ yes: false, isTTY: true, version })).toEqual({
+      proceed: false,
+      reason: null
+    });
+  });
+
+  it('proceeds only on the exact version, whitespace aside', () => {
+    expect(decideConfirmation({ isTTY: true, version, answer: '2.0.0' }).proceed).toBe(true);
+    expect(decideConfirmation({ isTTY: true, version, answer: ' 2.0.0\n' }).proceed).toBe(true);
+  });
+
+  it.each(['v2.0.0', '2.0.1', '2.0', 'yes', 'y', '', '2.0.0 please'])(
+    'aborts on %j, which is not 2.0.0',
+    answer => {
+      const result = decideConfirmation({ isTTY: true, version, answer });
+      expect(result.proceed).toBe(false);
+      expect(result.reason).toMatch(/is not 2\.0\.0/);
+    }
+  );
 });
