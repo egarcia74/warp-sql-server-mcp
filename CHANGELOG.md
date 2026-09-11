@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-11
+
 ### Added
 
 - **`npm run release` and `npm run release:dry` dispatch the release workflow with a preview and an explicit
