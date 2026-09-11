@@ -138,6 +138,98 @@ vi.mock('mssql', () => {
   };
 });
 
+// Mock the modular lib imports. These must sit at module top level: vi.mock is
+// hoisted above the imports of this file, so they take effect before index.js is
+// loaded (vitest 5 throws if vi.mock is written inside a function).
+vi.mock('../../lib/database/connection-manager.js', () => ({
+  ConnectionManager: vi.fn().mockImplementation(function () {
+    return mocks.mockConnectionManager;
+  })
+}));
+
+vi.mock('../../lib/config/server-config.js', () => ({
+  serverConfig: mocks.mockServerConfig
+}));
+
+vi.mock('../../lib/tools/tool-registry.js', () => ({
+  getAllTools: vi.fn().mockReturnValue([
+    { name: 'execute_query', description: 'Execute a SQL query' },
+    { name: 'list_databases', description: 'List all databases' },
+    { name: 'list_tables', description: 'List all tables' }
+  ])
+}));
+
+vi.mock('../../lib/tools/handlers/database-tools.js', () => ({
+  DatabaseToolsHandler: vi.fn().mockImplementation(function () {
+    return {
+      listDatabases: vi.fn().mockImplementation(async () => {
+        const query = `
+      SELECT 
+        name as database_name,
+        database_id,
+        create_date,
+        collation_name,
+        state_desc as state
+      FROM sys.databases 
+      WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')
+      ORDER BY name
+    `;
+        if (globalThis.mockRequest && globalThis.mockRequest.query) {
+          globalThis.mockRequest.query(query);
+        }
+        return [{ type: 'text', text: JSON.stringify(testData.sampleDatabases) }];
+      }),
+      listTables: vi.fn().mockImplementation(async (database, schema) => {
+        let query;
+        if (database) {
+          query = `
+        SELECT 
+          t.TABLE_SCHEMA as schema_name,
+          t.TABLE_NAME as table_name,
+          t.TABLE_TYPE as table_type
+        FROM [${database}].INFORMATION_SCHEMA.TABLES t
+        WHERE t.TABLE_SCHEMA = '${schema || 'dbo'}'
+        ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME
+      `;
+        } else {
+          query = `
+        SELECT 
+          t.TABLE_SCHEMA as schema_name,
+          t.TABLE_NAME as table_name,
+          t.TABLE_TYPE as table_type
+        FROM INFORMATION_SCHEMA.TABLES t
+        WHERE t.TABLE_SCHEMA = '${schema || 'dbo'}'
+        ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME
+      `;
+        }
+        if (globalThis.mockRequest && globalThis.mockRequest.query) {
+          globalThis.mockRequest.query(query);
+        }
+        return [{ type: 'text', text: JSON.stringify(testData.sampleTables) }];
+      }),
+      describeTable: vi.fn().mockImplementation(async (tableName, _database, _schema) => {
+        const query = `SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tableName}' AND CONSTRAINT_TYPE = 'PRIMARY KEY'`;
+        if (globalThis.mockRequest && globalThis.mockRequest.query) {
+          globalThis.mockRequest.query(query);
+        }
+        return [{ type: 'text', text: JSON.stringify(testData.sampleTableSchema) }];
+      }),
+      listForeignKeys: vi.fn().mockImplementation(async (database, _schema) => {
+        if (database) {
+          const query = `USE [${database}]`;
+          if (globalThis.mockRequest && globalThis.mockRequest.query) {
+            globalThis.mockRequest.query(query);
+          }
+        }
+        return [{ type: 'text', text: JSON.stringify(testData.sampleForeignKeys) }];
+      }),
+      getTableData: vi.fn().mockResolvedValue([{ type: 'text', text: 'Mock table data' }]),
+      exportTableCsv: vi.fn().mockResolvedValue([{ type: 'text', text: 'Mock CSV data' }]),
+      explainQuery: vi.fn().mockResolvedValue([{ type: 'text', text: 'Mock execution plan' }])
+    };
+  })
+}));
+
 export const setupMssqlMock = () => {
   // Deprecated: Mocks are now applied at module level
 };
@@ -502,35 +594,6 @@ export const setupMcpTest = (envOverrides = {}) => {
   resetMocks();
   setupTestEnvironment(envOverrides);
   setupDefaultMockResponses();
-
-  // Mock the new module imports
-  vi.mock('../../lib/database/connection-manager.js', () => ({
-    ConnectionManager: vi.fn().mockImplementation(function () {
-      return {
-        connect: vi.fn().mockResolvedValue(mocks.mockPool),
-        getPool: vi.fn().mockReturnValue(mocks.mockPool),
-        isConnectionActive: vi.fn().mockReturnValue(true),
-        close: vi.fn(),
-        getConnectionHealth: vi.fn().mockReturnValue({
-          connected: true,
-          status: 'Connected',
-          pool: { size: 5, available: 3, pending: 0, borrowed: 2 }
-        })
-      };
-    })
-  }));
-
-  vi.mock('../../lib/tools/tool-registry.js', () => ({
-    getAllTools: vi.fn().mockReturnValue([
-      { name: 'execute_query', description: 'Execute a SQL query' },
-      { name: 'list_databases', description: 'List all databases' },
-      { name: 'list_tables', description: 'List all tables' }
-    ]),
-    getTool: vi.fn().mockImplementation(name => ({
-      name,
-      description: `Mock tool: ${name}`
-    }))
-  }));
 };
 
 // Performance monitoring mock setup
@@ -566,98 +629,6 @@ export { default as sql } from 'mssql';
 
 // Alias for V4V2 (updated version with better compatibility)
 export const createTestMcpServerV4V2 = createTestMcpServer;
-
-// Setup mocks for new modules
-export const setupModularMocks = () => {
-  vi.mock('../../lib/database/connection-manager.js', () => ({
-    ConnectionManager: vi.fn().mockImplementation(function () {
-      return mocks.mockConnectionManager;
-    })
-  }));
-
-  vi.mock('../../lib/config/server-config.js', () => ({
-    serverConfig: mocks.mockServerConfig
-  }));
-
-  vi.mock('../../lib/tools/tool-registry.js', () => ({
-    getAllTools: vi.fn().mockReturnValue([
-      { name: 'execute_query', description: 'Execute a SQL query' },
-      { name: 'list_databases', description: 'List all databases' },
-      { name: 'list_tables', description: 'List all tables' }
-    ])
-  }));
-
-  vi.mock('../../lib/tools/handlers/database-tools.js', () => ({
-    DatabaseToolsHandler: vi.fn().mockImplementation(function () {
-      return {
-        listDatabases: vi.fn().mockImplementation(async () => {
-          const query = `
-      SELECT 
-        name as database_name,
-        database_id,
-        create_date,
-        collation_name,
-        state_desc as state
-      FROM sys.databases 
-      WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')
-      ORDER BY name
-    `;
-          if (globalThis.mockRequest && globalThis.mockRequest.query) {
-            globalThis.mockRequest.query(query);
-          }
-          return [{ type: 'text', text: JSON.stringify(testData.sampleDatabases) }];
-        }),
-        listTables: vi.fn().mockImplementation(async (database, schema) => {
-          let query;
-          if (database) {
-            query = `
-        SELECT 
-          t.TABLE_SCHEMA as schema_name,
-          t.TABLE_NAME as table_name,
-          t.TABLE_TYPE as table_type
-        FROM [${database}].INFORMATION_SCHEMA.TABLES t
-        WHERE t.TABLE_SCHEMA = '${schema || 'dbo'}'
-        ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME
-      `;
-          } else {
-            query = `
-        SELECT 
-          t.TABLE_SCHEMA as schema_name,
-          t.TABLE_NAME as table_name,
-          t.TABLE_TYPE as table_type
-        FROM INFORMATION_SCHEMA.TABLES t
-        WHERE t.TABLE_SCHEMA = '${schema || 'dbo'}'
-        ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME
-      `;
-          }
-          if (globalThis.mockRequest && globalThis.mockRequest.query) {
-            globalThis.mockRequest.query(query);
-          }
-          return [{ type: 'text', text: JSON.stringify(testData.sampleTables) }];
-        }),
-        describeTable: vi.fn().mockImplementation(async (tableName, _database, _schema) => {
-          const query = `SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tableName}' AND CONSTRAINT_TYPE = 'PRIMARY KEY'`;
-          if (globalThis.mockRequest && globalThis.mockRequest.query) {
-            globalThis.mockRequest.query(query);
-          }
-          return [{ type: 'text', text: JSON.stringify(testData.sampleTableSchema) }];
-        }),
-        listForeignKeys: vi.fn().mockImplementation(async (database, _schema) => {
-          if (database) {
-            const query = `USE [${database}]`;
-            if (globalThis.mockRequest && globalThis.mockRequest.query) {
-              globalThis.mockRequest.query(query);
-            }
-          }
-          return [{ type: 'text', text: JSON.stringify(testData.sampleForeignKeys) }];
-        }),
-        getTableData: vi.fn().mockResolvedValue([{ type: 'text', text: 'Mock table data' }]),
-        exportTableCsv: vi.fn().mockResolvedValue([{ type: 'text', text: 'Mock CSV data' }]),
-        explainQuery: vi.fn().mockResolvedValue([{ type: 'text', text: 'Mock execution plan' }])
-      };
-    })
-  }));
-};
 
 // Mock performance monitor for tests - using hoisted version
 // export const mockPerformanceMonitor = mocks.mockPerformanceMonitor; // Already exported above

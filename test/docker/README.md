@@ -350,8 +350,8 @@ Use **manual setup** (`npm run test:integration:manual`) when you need:
 ## 🔄 **Integration with CI/CD**
 
 This Docker setup **is already wired into CI** — it is not a future consideration. The `Tests`
-job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs `npm test` on Node 20
-and Node 22, and `npm test` expands to:
+job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs `npm test` on Node 22
+and Node 24, and `npm test` expands to:
 
 ```bash
 npm run test:unit          # 1,132 unit tests (mocked, no database)

@@ -136,7 +136,7 @@ source (`lib/security/`):
 - Updates to the database driver (`mssql`, `tedious`) and secret-management clients
   (`@azure/identity`, `@azure/keyvault-secrets`, `@aws-sdk/*`) are grouped as
   _security-critical_ and never auto-merge a major version.
-- Minimum supported runtime is Node.js 20.19 (see `engines` in `package.json`).
+- Minimum supported runtime is Node.js 22.12 (see `engines` in `package.json`).
 
 ## 📞 Contact
 
