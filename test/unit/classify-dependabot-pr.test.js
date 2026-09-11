@@ -44,8 +44,7 @@ describe('hold rules, in priority order', () => {
       'deps(deps): bump mssql from 11.0.0 to 11.0.1',
       'deps(deps): bump tedious from 18.2.0 to 18.2.1',
       'deps(deps): bump @azure/msal-node from 3.1.0 to 3.1.1',
-      'deps(deps): bump @aws-sdk/client-secrets-manager from 3.1126.0 to 3.1127.0 ',
-      'deps(deps): bump aws-sdk from 2.1.0 to 2.1.1'
+      'deps(deps): bump @azure/identity from 4.13.2 to 4.13.3 '
     ]) {
       expect(classifyDependabotPr(title)).toMatchObject({
         decision: 'hold',

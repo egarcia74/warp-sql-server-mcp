@@ -30,8 +30,6 @@
     "test:integration:protocol": "MCP_TESTING_MODE=docker node test/protocol/mcp-server-startup-test.js",
     "test:integration:performance": "node test/manual/improved-performance-test.js",
     "test:integration:warp": "node test/manual/warp-mcp-performance-test.js",
-    "test:integration:aws": "node test/integration/test-aws-secrets.js",
-    "test:integration:azure": "node test/integration/test-azure-secrets.js",
     "test:integration:ci": "echo '\u26a0\ufe0f  This requires a running SQL Server on localhost:14330 with SA password WarpMCP123!' && npm run test:integration:run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -110,9 +108,6 @@
     "url": "https://github.com/egarcia74/warp-sql-server-mcp/issues"
   },
   "dependencies": {
-    "@aws-sdk/client-secrets-manager": "^3.1049.0",
-    "@azure/identity": "^4.11.1",
-    "@azure/keyvault-secrets": "^4.10.0",
     "@modelcontextprotocol/sdk": "^1.17.5",
     "dotenv": "^17.2.1",
     "mssql": "^11.0.1",

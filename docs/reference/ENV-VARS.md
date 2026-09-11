@@ -358,45 +358,6 @@ accidental certificate trust in cloud production environments using private IP a
   - `true` (enable security audit logging)
   - `false` (standard security logging)
 
-## Secret Management Settings
-
-> **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
-> unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
-> directly, and credentials are read straight from `process.env`. Setting any variable in this section currently has
-> **no effect** - a deployment with credentials only in a cloud secret store will not connect. Use plain
-> environment variables - see [Connection Settings](#connection-settings) for `SQL_SERVER_HOST`,
-> `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD` - until this is resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
-
-### `SECRET_MANAGER_TYPE`
-
-- **Status**: Reserved - currently ignored by the server
-- **Default**: `env`
-- **Description**: Secret provider intended for credential management
-- **Values**:
-  - `env` (environment variables) - the only behavior available today
-  - `aws` (AWS Secrets Manager) - not wired in
-  - `azure` (Azure Key Vault) - not wired in
-
-### AWS Secrets Manager Settings
-
-Intended for `SECRET_MANAGER_TYPE=aws` (not wired in):
-
-#### `AWS_REGION`
-
-- **Status**: Reserved - currently ignored by the server
-- **Description**: AWS region for Secrets Manager
-- **Examples**: `us-east-1`, `eu-west-1`, `ap-southeast-2`
-
-### Azure Key Vault Settings
-
-Intended for `SECRET_MANAGER_TYPE=azure` (not wired in):
-
-#### `AZURE_KEY_VAULT_URL`
-
-- **Status**: Reserved - currently ignored by the server
-- **Description**: Azure Key Vault URL
-- **Format**: `https://your-vault.vault.azure.net/`
-
 ## Security Configuration Examples
 
 ### 🔒 Maximum Security (Default - Production)
@@ -457,7 +418,8 @@ Environment variables are processed in this order:
 
 - **Always** explicitly set security variables
 - Use `SQL_SERVER_TRUST_CERT=false` for maximum SSL security
-- Consider AWS Secrets Manager or Azure Key Vault for credentials
+- Inject credentials from your deployment platform's secret store into the environment rather than
+  committing them to files
 - Monitor performance and adjust streaming settings based on usage
 
 ### Security
@@ -494,6 +456,4 @@ Environment variables are processed in this order:
 
 - **[.env.example](../../.env.example)** - Example environment configuration file
 - **[Security Guide](../architecture/SECURITY.md)** - Comprehensive security configuration
-- **[AWS Secrets Guide](AWS-SECRETS-GUIDE.md)** - AWS Secrets Manager setup
-- **[Azure Secrets Guide](AZURE-SECRETS-GUIDE.md)** - Azure Key Vault setup
 - **[Quick Start](../user/QUICKSTART.md)** - Getting started guide

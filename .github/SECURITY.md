@@ -69,7 +69,7 @@ Reporters are credited in the advisory and release notes unless they ask not to 
 - The three-tier safety system and any way to execute a statement the active tier forbids
 - SQL injection through any tool argument (`table_name`, `schema`, `database`, `where_clause`,
   `limit`, `offset`, query text, etc.)
-- Credential handling (environment, Azure Key Vault, AWS Secrets Manager)
+- Credential handling (environment variables, `.env` files)
 - The release pipeline and GitHub Actions workflows in this repository
 
 Out of scope: vulnerabilities in SQL Server itself, misconfiguration of the user's own
@@ -137,9 +137,8 @@ source (`lib/security/`):
   built it. Verify with `npm audit signatures` after installing.
 - Dependabot patch/minor updates auto-merge once CI passes. **Major** updates, and any
   update to `github/codeql-action` or `step-security/*`, require manual review.
-- Updates to the database driver (`mssql`, `tedious`) and secret-management clients
-  (`@azure/identity`, `@azure/keyvault-secrets`, `@aws-sdk/*`) are grouped as
-  _security-critical_ and never auto-merge a major version.
+- Updates to the database driver (`mssql`, `tedious`) and the `@azure/identity` auth client it
+  depends on are grouped as _security-critical_ and never auto-merge a major version.
 - Minimum supported runtime is Node.js 22.12 from version 2.0.0 (see `engines` in
   `package.json`). The 1.7.x line was the last to support Node.js 20, which reached
   end-of-life on 2026-04-30.
