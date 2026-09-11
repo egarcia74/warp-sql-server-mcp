@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `streaming.maxResponseSizeMB`. Removed rather than implemented, since delivering a limit nobody could have been
   relying on is a separate feature decision.
   ([#1211](https://github.com/egarcia74/warp-sql-server-mcp/issues/1211))
+- **BREAKING: the AWS Secrets Manager and Azure Key Vault secret providers are gone.**
+  `lib/config/secret-manager.js` implemented a `SecretManager` with both backends, but nothing ever constructed
+  it: `index.js` builds `ServerConfig` and `ConnectionManager` directly and credentials have always been read from
+  `process.env`. Setting `SECRET_MANAGER_TYPE=aws` or `=azure` never contacted a vault, so no working deployment can
+  depend on it. Rather than wire the providers into startup, the module is removed for 2.0.0 together with its unit
+  and integration tests, the `test:integration:aws` / `test:integration:azure` scripts, the AWS and Azure setup
+  guides, and the `SECRET_MANAGER_TYPE`, `AWS_REGION` and `AZURE_KEY_VAULT_URL` environment variables, which are no
+  longer documented and were never read. The three SDK dependencies that existed only for it -
+  `@aws-sdk/client-secrets-manager`, `@azure/identity` and `@azure/keyvault-secrets` - are dropped from
+  `package.json` (`@azure/identity` remains in the lock file as a transitive dependency of `tedious`). Inject
+  credentials from your platform's secret store into the environment instead.
+  ([#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152))
 - **`test/archived/` deleted.** Eight superseded vitest suites that `vitest.config.js` had excluded from every run since 2025-09-02 and nothing imported; they remain in the repository history.
 - **`SQL_SERVER_RESPONSE_FORMAT` and the `ResponseFormatter` class.** The setting was never consumed by any code
   path: tool responses are formatted by `base-handler.formatResults()` and `lib/utils/result-formatter.js`, and

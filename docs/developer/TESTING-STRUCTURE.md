@@ -31,8 +31,6 @@ confusing deprecated scripts. The new structure makes Docker the default for int
 - **`npm run test:unit:watch`** - Watch mode for unit tests
 - **`npm run test:watch`** - Watch mode for all tests
 - **`npm run test:ui`** - Open Vitest UI
-- **`npm run test:integration:aws`** - AWS secrets integration test
-- **`npm run test:integration:azure`** - Azure secrets integration test
 - **`npm run test:all`** - Alias for `npm test`
 
 ## Key Changes

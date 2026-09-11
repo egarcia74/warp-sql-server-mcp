@@ -75,12 +75,6 @@ flowchart TB
 > timeout/retry values with no `serverConfig` property, and its constructor falls back to
 > `config.serverConfig || new ServerConfig()` - so a **second** `ServerConfig` instance
 > exists at runtime and a `serverConfig.reload()` on the singleton does not reach it.
-> One implemented module -
-> `SecretManager` (`lib/config/secret-manager.js`) - is **not** constructed anywhere and
-> takes no part in request handling; see
-> [ENV-VARS.md](../reference/ENV-VARS.md) for what that means for its environment
-> variables, and [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152)
-> for the wiring work.
 
 ### 1. SqlServerMCP (Orchestration Layer)
 
@@ -526,7 +520,7 @@ flowchart LR
 
 1. **Plugin Architecture**: Modular tool additions
 2. **Event System**: Extensible event handling
-3. **Configuration Providers**: Multiple configuration sources - the not-yet-wired-up `SecretManager` is the closest thing
+3. **Configuration Providers**: Multiple configuration sources - today the only source is `process.env`
 4. **Monitoring Backends**: Pluggable monitoring systems
 5. **Authentication Providers**: Multiple auth mechanisms - SQL and Windows auth are supported today
 

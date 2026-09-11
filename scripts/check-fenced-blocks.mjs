@@ -79,7 +79,7 @@ export function scanMarkdown(text) {
 // The alternatives were considered and are worse: an absolute path is not portable
 // across macOS, Linux and Windows, and resolving one via `which` reintroduces the
 // same PATH dependency. Replacing git with a filesystem walk means hand-maintaining
-// a gitignore-equivalent skip list - measured at 69 files walked versus 55 tracked,
+// a gitignore-equivalent skip list - measured at 67 files walked versus 53 tracked,
 // the difference being ignored directories - which is precisely the kind of list
 // that drifts out of date.
 function repoRoot() {

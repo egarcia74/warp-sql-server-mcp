@@ -83,8 +83,6 @@ test/
 │   │   ├── phase1-readonly-security.test.js
 │   │   ├── phase2-dml-operations.test.js
 │   │   └── phase3-ddl-operations.test.js
-│   ├── test-aws-secrets.js      # AWS integration
-│   ├── test-azure-secrets.js    # Azure integration
 │   ├── sqlserver-mcp-integration.test.js  # Core MCP integration
 │   └── error-scenarios-integration.test.js # Error handling tests
 ├── protocol/                     # MCP protocol tests

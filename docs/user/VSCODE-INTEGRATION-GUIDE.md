@@ -3,12 +3,6 @@
 > **Audience**: VS Code users going beyond the quickstart - workflows, tasks, troubleshooting
 >
 > **Complete guide for integrating warp-sql-server-mcp with Visual Studio Code and the Model Context Protocol (MCP)**
->
-> **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
-> unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
-> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE` currently has
-> **no effect** - a deployment with credentials only in AWS Secrets Manager or Azure Key Vault will not connect. Use plain
-> environment variables ([ENV-VARS.md](../reference/ENV-VARS.md)) until this is resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
 
 This guide covers VS Code setup, MCP configuration, development workflow, and best practices for working with the Warp SQL Server MCP in Visual Studio Code.
 
@@ -785,50 +779,6 @@ Execute this query on the Analytics database: SELECT COUNT(*) FROM Reports
 
 ## Advanced Configuration
 
-### Cloud Secret Management
-
-#### AWS Secrets Manager Integration
-
-1. **Configure AWS credentials** in VS Code:
-
-   ```bash
-   # Install AWS CLI extension or configure locally
-   aws configure
-   ```
-
-2. **Update environment**:
-
-   ```bash
-   SECRET_MANAGER_TYPE=aws
-   AWS_REGION=us-east-1
-   # Secret stored in AWS Secrets Manager
-   ```
-
-3. **Test connection**:
-   ```text
-   Get connection health status
-   ```
-
-#### Azure Key Vault Integration
-
-1. **Configure Azure CLI**:
-
-   ```bash
-   az login
-   ```
-
-2. **Update environment**:
-
-   ```bash
-   SECRET_MANAGER_TYPE=azure
-   AZURE_KEY_VAULT_URL=https://your-vault.vault.azure.net/
-   ```
-
-3. **Test connection**:
-   ```text
-   Get connection health status
-   ```
-
 ### Performance Monitoring
 
 #### Enable Advanced Monitoring
@@ -1086,8 +1036,6 @@ Create environment-specific MCP configurations:
 
 ```json
 {
-  "SECRET_MANAGER_TYPE": "azure",
-  "AZURE_KEY_VAULT_URL": "https://prod-vault.vault.azure.net/",
   "SQL_SERVER_HOST": "prod-sql-server.company.com",
   "SQL_SERVER_PORT": "1433",
   "SQL_SERVER_DATABASE": "ProductionDB",
@@ -1198,8 +1146,6 @@ Show me queries that took longer than 5 seconds to execute
 - 🚀 **[Warp Quick Start Guide](QUICKSTART.md)** - Original Warp-focused setup
 - 🔒 **[Security Guide](../architecture/SECURITY.md)** - Comprehensive security documentation
 - 🏗️ **[Architecture Guide](../architecture/ARCHITECTURE.md)** - Technical architecture details
-- ☁️ **[AWS Secrets Guide](../reference/AWS-SECRETS-GUIDE.md)** - AWS Secrets Manager integration
-- 🔑 **[Azure Secrets Guide](../reference/AZURE-SECRETS-GUIDE.md)** - Azure Key Vault integration
 
 ### Support Channels
 

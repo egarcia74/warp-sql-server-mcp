@@ -51,10 +51,11 @@ const RULE = new Map(RULES.map(r => [r.id, r]));
 // version here weakens scanning silently, so it never merges unattended.
 const SECURITY_CRITICAL_ACTION = /github\/codeql-action|step-security/i;
 
-// Database drivers and cloud-auth SDKs: held at EVERY bump level, including
-// patch. This must be evaluated before the bump-type rules, otherwise a patch
-// bump of mssql/tedious/Azure/AWS merges while the notice says it did not.
-const CORE_DEPENDENCY = /bump (@?[^ ]*(mssql|tedious)|@azure\/[^ ]+|aws-sdk|@aws-sdk\/[^ ]+) /i;
+// Database drivers and the @azure/* auth packages tedious pulls in for Azure AD
+// authentication: held at EVERY bump level, including patch. This must be
+// evaluated before the bump-type rules, otherwise a patch bump of
+// mssql/tedious/@azure merges while the notice says it did not.
+const CORE_DEPENDENCY = /bump (@?[^ ]*(mssql|tedious)|@azure\/[^ ]+) /i;
 
 // "bump the <group> group with N updates" names neither a package nor a version.
 const GROUPED = /the [^ ]+ group/i;

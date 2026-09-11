@@ -31,11 +31,6 @@
       "SQL_SERVER_POOL_MIN": "0",
       "SQL_SERVER_POOL_IDLE_TIMEOUT_MS": "30000",
 
-      "_comment_secrets": "=== Secret Management (v1.4.0+) ===",
-      "SECRET_MANAGER_TYPE": "env",
-      "AWS_REGION": "",
-      "AZURE_KEY_VAULT_URL": "",
-
       "_comment_streaming": "=== Streaming Support (v1.4.0+) ===",
       "ENABLE_STREAMING": "true",
       "STREAMING_BATCH_SIZE": "1000",

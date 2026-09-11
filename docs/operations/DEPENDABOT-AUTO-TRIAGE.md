@@ -15,8 +15,8 @@ Dependencies are automatically classified into security risk categories:
 #### 🔒 **Security-Critical** (Manual Review Required)
 
 - **Database Libraries**: `mssql`, `tedious`
-- **Authentication**: `@azure/*` (including `@azure/identity`, `@azure/keyvault-secrets`),
-  `aws-sdk`, `@aws-sdk/*`
+- **Authentication**: `@azure/*` (the `@azure/identity` and `@azure/msal-*` packages `tedious` pulls in
+  for Azure AD authentication)
 - **Impact**: Core functionality, potential breaking changes
 - **Applies at every bump level**: these are held back from auto-merge for patch and minor
   updates too, not just majors. `dependabot-auto-merge.yml` evaluates this class **before**
@@ -104,7 +104,7 @@ Auto-merge is **disabled** for, in the order the workflow evaluates them:
 
 - 🔒 **Security-critical GitHub Actions** (`github/codeql-action`, `step-security/*`)
 - 🔒 **Core database libraries** (`mssql`, `tedious`) - at any bump level
-- 🔑 **Authentication libraries** (`@azure/*`, `aws-sdk`, `@aws-sdk/*`) - at any bump level
+- 🔑 **Authentication libraries** (`@azure/*`, transitive via `tedious`) - at any bump level
 - 📦 **Grouped updates** whose title names no dependency or version pair
 - 🚨 **Major version updates** on any dependency
 

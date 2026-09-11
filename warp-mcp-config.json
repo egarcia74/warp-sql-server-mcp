@@ -83,12 +83,7 @@
         "_comment_logging": "--- Logging & Debugging (Defaults shown) ---",
         "_SQL_SERVER_LOG_LEVEL": "info",
         "_SQL_SERVER_DEBUG": "false",
-        "_ENABLE_SECURITY_AUDIT": "false",
-
-        "_comment_secrets": "--- Secret Management for Cloud Deployments (Defaults shown) ---",
-        "_SECRET_MANAGER_TYPE": "env",
-        "_AWS_REGION": "(required when SECRET_MANAGER_TYPE=aws)",
-        "_AZURE_KEY_VAULT_URL": "(required when SECRET_MANAGER_TYPE=azure)"
+        "_ENABLE_SECURITY_AUDIT": "false"
       },
 
       "_comment_working_dir": "=== Optional Working Directory ===",
