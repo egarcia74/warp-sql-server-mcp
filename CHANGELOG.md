@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Claude review Action can run a single test file.** `Bash(npx vitest run:*)` is added to
+  its tool allowlist, so a review can check a claim like "this regression test fails on the old
+  code" itself instead of taking it on trust; `npm run test:unit` only ever runs the whole suite.
+  `Bash(node:*)` was deliberately not granted - the job carries `GITHUB_TOKEN` and the OAuth token
+  and the reviewer reads author-supplied PR text, so arbitrary `node -e` is a wider blast radius
+  than a review needs. ([#1213](https://github.com/egarcia74/warp-sql-server-mcp/issues/1213))
 - **`npm-publish.yml` now authenticates to npmjs.com with npm Trusted Publishing (GitHub OIDC) instead of an
   `NPM_TOKEN` secret.** The 2.0.0 publish failed because the granular token (90-day maximum lifetime) had expired
   under the release; a trusted publisher bound to this repository and workflow file has nothing to expire. The job
