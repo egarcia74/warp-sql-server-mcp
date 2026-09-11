@@ -45,7 +45,6 @@ The manual integration tests are **properly excluded** from:
 
 ```javascript
 exclude: [
-  'test/archived/**',
   'test/integration/manual/**'  // ← Excludes manual integration tests
 ],
 ```
