@@ -127,7 +127,7 @@
     "@vitest/runner": "^4.1.2",
     "@vitest/snapshot": "^4.1.2",
     "@vitest/spy": "^4.1.2",
-    "@vitest/ui": "^4.1.2",
+    "@vitest/ui": "^5.0.0",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "markdown-link-check": "^3.13.7",
