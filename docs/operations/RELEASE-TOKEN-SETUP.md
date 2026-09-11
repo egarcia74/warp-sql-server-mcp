@@ -331,8 +331,10 @@ token access... Revoke any existing automation tokens that are no longer needed.
 3. Verify the registry: `npm view @egarcia74/warp-sql-server-mcp@X.Y.Z dist.attestations` is
    non-empty.
 4. Delete the `NPM_TOKEN` repository secret (repo → Settings → Secrets and variables → Actions).
-   No workflow reads it any more - `grep -rn NPM_TOKEN .github` returns nothing - so it is dead
-   weight that still authenticates as you if it leaks.
+   No workflow reads it any more, so it is dead weight that still authenticates as you if it
+   leaks. Check for the secret binding rather than the name: `grep -rn 'secrets\.NPM_TOKEN'
+.github/` must return nothing. A bare `grep -rn NPM_TOKEN .github` still matches the
+   explanatory comments in `npm-publish.yml` and would look like a failed migration.
 5. Revoke the underlying token on npmjs.com (Account → Access Tokens).
 
 ### Re-running a publish
