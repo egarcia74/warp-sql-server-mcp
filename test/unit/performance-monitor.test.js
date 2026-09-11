@@ -46,6 +46,7 @@ describe('PerformanceMonitor', () => {
 
       expect(monitor.metrics.queries).toEqual([]);
       expect(monitor.metrics.connections).toEqual([]);
+      expect(monitor.metrics.poolHistory).toEqual([]);
       expect(monitor.metrics.poolStats).toEqual({
         totalConnections: 0,
         activeConnections: 0,
@@ -349,11 +350,13 @@ describe('PerformanceMonitor', () => {
         uptime: 1000 // 2000 - 1000 (startTime)
       });
 
-      expect(monitor.metrics.connections).toHaveLength(1);
-      expect(monitor.metrics.connections[0]).toEqual({
+      expect(monitor.metrics.poolHistory).toHaveLength(1);
+      expect(monitor.metrics.poolHistory[0]).toEqual({
         timestamp: 2000,
         ...poolStats
       });
+      // A snapshot is not a connection event
+      expect(monitor.metrics.connections).toHaveLength(0);
     });
 
     test('should not record pool metrics when disabled', () => {
@@ -361,7 +364,7 @@ describe('PerformanceMonitor', () => {
 
       monitor.recordPoolMetrics({ totalConnections: 5 });
 
-      expect(monitor.metrics.connections).toHaveLength(0);
+      expect(monitor.metrics.poolHistory).toHaveLength(0);
     });
 
     test('should not record pool metrics when monitor disabled', () => {
@@ -369,7 +372,16 @@ describe('PerformanceMonitor', () => {
 
       monitor.recordPoolMetrics({ totalConnections: 5 });
 
-      expect(monitor.metrics.connections).toHaveLength(0);
+      expect(monitor.metrics.poolHistory).toHaveLength(0);
+    });
+
+    test('should trim pool history to maxMetricsHistory', () => {
+      monitor = new PerformanceMonitor({ maxMetricsHistory: 3 });
+      for (let i = 0; i < 5; i++) {
+        monitor.recordPoolMetrics({ activeConnections: i });
+      }
+      expect(monitor.metrics.poolHistory).toHaveLength(3);
+      expect(monitor.metrics.poolHistory[0].activeConnections).toBe(2);
     });
   });
 
@@ -470,7 +482,8 @@ describe('PerformanceMonitor', () => {
         pool: monitor.metrics.poolStats,
         monitoring: {
           totalQueriesTracked: 1,
-          totalConnectionEvents: 1,
+          totalConnectionEvents: 0, // the pool snapshot above is not an event
+          poolSnapshots: 1,
           samplingRate: 1.0,
           slowQueryThreshold: 5000
         }
@@ -736,7 +749,7 @@ describe('PerformanceMonitor', () => {
       expect(health.issues).toContain('High number of pending requests');
     });
 
-    test('should detect critical no active connections', () => {
+    test('should detect critical starvation: requests waiting, nothing idle, nothing in use', () => {
       monitor.metrics.poolStats = {
         totalConnections: 10,
         activeConnections: 0,
@@ -748,7 +761,23 @@ describe('PerformanceMonitor', () => {
       const health = monitor.assessPoolHealth();
 
       expect(health.status).toBe('critical');
-      expect(health.issues).toContain('No active connections available');
+      expect(health.issues).toContain('Requests waiting with no connection available');
+    });
+
+    test('should not flag an idle pool as critical (tarn: 0 in use is normal)', () => {
+      monitor.metrics.poolStats = {
+        totalConnections: 10,
+        activeConnections: 0,
+        idleConnections: 4,
+        pendingRequests: 0,
+        openConnections: 4,
+        errors: 0
+      };
+
+      const health = monitor.assessPoolHealth();
+
+      expect(health.status).toBe('healthy');
+      expect(health.issues).toHaveLength(0);
     });
 
     test('should calculate health score correctly', () => {
@@ -953,6 +982,7 @@ describe('PerformanceMonitor', () => {
 
       expect(monitor.metrics.queries).toHaveLength(0);
       expect(monitor.metrics.connections).toHaveLength(0);
+      expect(monitor.metrics.poolHistory).toHaveLength(0);
       expect(monitor.metrics.poolStats).toEqual({
         totalConnections: 0,
         activeConnections: 0,
@@ -1236,23 +1266,47 @@ describe('PerformanceMonitor', () => {
       monitor.recordQuery(query);
 
       expect(source).toHaveBeenCalledTimes(1);
+      // tarn: max -> capacity, borrowed -> in use, available -> idle,
+      // pending -> waiting, size -> open (borrowed + available + creating)
       expect(monitor.metrics.poolStats).toEqual({
         totalConnections: 10,
-        activeConnections: 3,
+        activeConnections: 1,
         idleConnections: 2,
         pendingRequests: 1,
-        borrowedConnections: 1,
+        openConnections: 3,
         errors: 0, // carried forward from the initial counters
         timestamp: 2000,
         uptime: 1000
       });
-      expect(monitor.metrics.connections).toHaveLength(1);
+      expect(monitor.metrics.poolHistory).toHaveLength(1);
       expect(monitor.getPoolStats().current).toBe(monitor.metrics.poolStats);
       expect(monitor.getPoolStats().health.status).toBe('healthy');
 
       monitor.recordQuery(query);
       expect(source).toHaveBeenCalledTimes(2);
-      expect(monitor.metrics.connections).toHaveLength(2);
+      expect(monitor.metrics.poolHistory).toHaveLength(2);
+    });
+
+    test('does not report an idle pool that once grew to max as near capacity', () => {
+      monitor.setPoolStatsSource(() => ({
+        pool: { size: 10, available: 10, pending: 0, borrowed: 0, max: 10 }
+      }));
+      monitor.recordQuery(query);
+      const health = monitor.getPoolStats().health;
+      expect(health.status).toBe('healthy');
+      expect(health.issues).toHaveLength(0);
+    });
+
+    test('keeps pool snapshots out of the connection-event counts', () => {
+      monitor.setPoolStatsSource(() => health);
+      for (let i = 0; i < 25; i++) {
+        monitor.recordQuery(query);
+      }
+      expect(monitor.metrics.poolHistory).toHaveLength(25);
+      expect(monitor.metrics.connections).toHaveLength(0);
+      expect(monitor.getStats().monitoring.totalConnectionEvents).toBe(0);
+      expect(monitor.getStats().monitoring.poolSnapshots).toBe(25);
+      expect(monitor.getPoolStats().recent.totalEvents).toBe(0);
     });
 
     test('omits totalConnections when the source has no pool max', () => {
@@ -1262,7 +1316,8 @@ describe('PerformanceMonitor', () => {
       monitor.recordQuery(query);
       // The initial 0 is carried forward, so the capacity checks stay inert.
       expect(monitor.metrics.poolStats.totalConnections).toBe(0);
-      expect(monitor.metrics.poolStats.activeConnections).toBe(1);
+      expect(monitor.metrics.poolStats.activeConnections).toBe(0);
+      expect(monitor.metrics.poolStats.openConnections).toBe(1);
     });
 
     test('does not sample the pool when TRACK_POOL_METRICS is off', () => {
@@ -1273,7 +1328,7 @@ describe('PerformanceMonitor', () => {
       monitor.recordQuery(query);
 
       expect(source).not.toHaveBeenCalled();
-      expect(monitor.metrics.connections).toHaveLength(0);
+      expect(monitor.metrics.poolHistory).toHaveLength(0);
       expect(monitor.metrics.queries).toHaveLength(1); // the query itself is still recorded
     });
 
@@ -1300,19 +1355,38 @@ describe('PerformanceMonitor', () => {
         monitor.setPoolStatsSource(source);
         monitor.recordQuery(query);
         expect(monitor.metrics.queries).toHaveLength(1);
-        expect(monitor.metrics.connections).toHaveLength(0);
+        expect(monitor.metrics.poolHistory).toHaveLength(0);
         expect(monitor.metrics.poolStats.timestamp).toBeUndefined();
       }
     });
 
+    test('swallows a pool whose counter getter throws: the query is still recorded, no snapshot is added, nothing escapes', () => {
+      const pool = {
+        available: 1,
+        pending: 0,
+        borrowed: 0,
+        max: 10,
+        get size() {
+          throw new Error('pool destroyed');
+        }
+      };
+      monitor.setPoolStatsSource(() => ({ connected: true, status: 'Connected', pool }));
+
+      expect(() => monitor.recordQuery(query)).not.toThrow();
+
+      expect(monitor.metrics.queries).toHaveLength(1);
+      expect(monitor.metrics.poolHistory).toHaveLength(0);
+      expect(monitor.metrics.poolStats.timestamp).toBeUndefined();
+    });
+
     test('records nothing without a source and rejects a non-function source', () => {
       monitor.recordQuery(query);
-      expect(monitor.metrics.connections).toHaveLength(0);
+      expect(monitor.metrics.poolHistory).toHaveLength(0);
 
       monitor.setPoolStatsSource('not a function');
       expect(monitor.poolStatsSource).toBeNull();
       monitor.recordQuery(query);
-      expect(monitor.metrics.connections).toHaveLength(0);
+      expect(monitor.metrics.poolHistory).toHaveLength(0);
     });
   });
 });

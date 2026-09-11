@@ -782,6 +782,26 @@ describe('StreamingHandler', () => {
       expect(stats.totalRows).toBe(100);
     });
 
+    it('should read the row count from an executeRegularQuery() result (#1211 review)', () => {
+      // Shape produced by executeRegularQuery(): the count lives under performance
+      const regular = {
+        success: true,
+        recordset: [{ id: 1 }, { id: 2 }, { id: 3 }],
+        streaming: false,
+        performance: { duration: 5, rowCount: 3, memoryUsed: 0 }
+      };
+      expect(handler.getStreamingStats(regular).totalRows).toBe(3);
+
+      // A bare driver result still yields its recordset length
+      expect(handler.getStreamingStats({ streaming: false, recordset: [{}, {}] }).totalRows).toBe(
+        2
+      );
+      // An explicit rowCount of 0 is respected, not treated as missing
+      expect(
+        handler.getStreamingStats({ streaming: false, rowCount: 0, recordset: [{}] }).totalRows
+      ).toBe(0);
+    });
+
     it('should return streaming stats', () => {
       const result = {
         streaming: true,

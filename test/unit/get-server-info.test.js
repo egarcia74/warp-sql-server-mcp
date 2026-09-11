@@ -194,10 +194,10 @@ describe('get_server_info Tool', () => {
       expect(data.data.pool.enabled).toBe(true);
       expect(data.data.pool.current).toMatchObject({
         totalConnections: 10,
-        activeConnections: 3,
+        activeConnections: 1,
         idleConnections: 2,
         pendingRequests: 0,
-        borrowedConnections: 1
+        openConnections: 3
       });
       expect(data.data.pool.health.status).toBe('healthy');
     });

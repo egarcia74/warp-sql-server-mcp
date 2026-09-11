@@ -277,7 +277,9 @@ accidental certificate trust in cloud production environments using private IP a
   - `0.5` (monitor 50% of queries)
   - `1.0` (monitor all queries)
 - **Note**: sampling decides which queries enter the metrics history (and take a pool
-  snapshot, see `TRACK_POOL_METRICS`); it does not change how a query is executed
+  snapshot, see `TRACK_POOL_METRICS`); it does not change how a query is executed. A query
+  that is not sampled is not recorded at all, so below `1.0` slow queries can be missed by
+  the slow-query view as well - use `1.0` if every slow query must be caught
 
 ## Streaming Configuration
 

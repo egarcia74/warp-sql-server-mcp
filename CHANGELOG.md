@@ -58,8 +58,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     and after every recorded query the monitor snapshots the driver's counters (open, idle, in-use, waiting, and the
     pool's capacity) through `recordPoolMetrics()`. `get_connection_health` therefore reports a current snapshot and
     a health assessment under `pool`, and `connection.pool` gains a `max` field (the pool capacity) so the
-    assessment has a denominator. `TRACK_POOL_METRICS=false` stops the sampling, as documented. Connection
-    events (`connect`/`error`/`retry` rates) are still not recorded - `recordConnectionEvent()` has no caller.
+    assessment has a denominator. Snapshots are kept in their own bounded history (`monitoring.poolSnapshots` in
+    `get_performance_stats`), not counted as connection events. The health check's critical rule, written for a
+    connect/disconnect model in which "active" meant "open", now reads "Requests waiting with no connection
+    available" (requests pending with nothing idle and nothing in use); the old "No active connections available"
+    would have fired on every idle pool. `TRACK_POOL_METRICS=false` stops the
+    sampling, as documented. Connection events (`connect`/`error`/`retry` rates) are still not recorded -
+    `recordConnectionEvent()` has no caller.
 - **The API-documentation job no longer opens a pull request just because the date changed.**
   `scripts/docs/generate-tools-html.js` renders `Last updated: <date>` into the page footer via
   `toLocaleDateString()`. Being date-only, the generated `docs/tools.html` differed from the
