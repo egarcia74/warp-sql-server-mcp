@@ -123,8 +123,8 @@ const CAPTURE = {
 // Both readers below invoke `git` and `npm` by name, so they resolve through PATH.
 // SonarQube flags this as javascript:S4036 (OS commands should not rely on PATH
 // resolution), and the finding is accurate rather than a false positive - it is marked
-// Accepted for the same reason as scripts/check-fenced-blocks.mjs, which documents the
-// identical trade-off at length.
+// Accepted in SonarCloud for the same reason as scripts/check-fenced-blocks.mjs, which
+// documents the identical trade-off at length.
 //
 // The risk is immaterial here: this runs as a step inside npm-publish.yml, after
 // `npm ci` and immediately before `npm publish`. Anyone able to control PATH in that
@@ -138,14 +138,20 @@ const GIT_ARGUMENTS = new Set(['--name-status', '-z', '--porcelain=v1', '--untra
 /** Reads blobs and diffs out of a real repository. */
 export function gitReader(cwd = process.cwd()) {
   const run = args => {
-    // execFileSync spawns git directly, with no shell, so nothing here is exposed to
-    // shell metacharacters. The check below is about git's own argument parsing: a
-    // value that begins with a dash would be read as an option rather than as the
-    // revision or path it is meant to be. Every argument is already either a literal
-    // from this file or a version matched against VERSION, but asserting it here keeps
-    // the guarantee local to the call instead of an invariant a reader has to trace
-    // back - and a later edit that passes something new fails loudly rather than
-    // quietly handing git an option.
+    // Argument injection, not shell injection. execFileSync spawns git directly with no
+    // shell, which is why there is nothing to say about metacharacters - and saying it
+    // would answer the wrong question, because the risk here does not need a shell: a
+    // value that begins with a dash is read by git itself as an option rather than as
+    // the revision or path it was meant to be. That is what SonarQube's jssecurity:S8705
+    // is about, and its own non-compliant example uses execFileSync too.
+    //
+    // Three things already prevent it, and this check is the third. `version` is matched
+    // against VERSION before any git call, which is the mitigation that rule prescribes;
+    // the revision is built as `v${version}`, so it cannot begin with a dash whatever
+    // the version says; and every argument is checked here. The first two are invariants
+    // a reader has to trace to other functions, so asserting at the boundary keeps the
+    // guarantee local - and a later edit that passes something new fails loudly rather
+    // than quietly handing git an option.
     const offending = args.filter(
       arg => typeof arg !== 'string' || (arg.startsWith('-') && !GIT_ARGUMENTS.has(arg))
     );
