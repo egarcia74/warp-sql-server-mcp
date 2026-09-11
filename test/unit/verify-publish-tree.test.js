@@ -1,8 +1,8 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, unlinkSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import {
   verifyPublishTree,
@@ -573,7 +573,10 @@ describe('against a real repository, following the actual release sequence', () 
         cwd: scratch,
         encoding: 'utf8'
       }).trim();
-      expect(redirected).toBe(execFileSync('realpath', [victim.dir], { encoding: 'utf8' }).trim());
+      // `--show-toplevel` reports the symlink-resolved path with forward slashes on every
+      // platform, so resolve both sides in Node rather than shelling out to a `realpath`
+      // binary Windows does not have.
+      expect(resolve(redirected)).toBe(realpathSync(victim.dir));
 
       // The real thing: the helper and the reader must both stay on their own cwd.
       const { dir, git } = makeRepo({ 'package.json': pkg('1.8.0') });
