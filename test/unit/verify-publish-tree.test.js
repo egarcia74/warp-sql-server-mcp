@@ -556,8 +556,15 @@ describe('against a real repository, following the actual release sequence', () 
     process.env.GIT_DIR = join(victim.dir, '.git');
     process.env.GIT_WORK_TREE = victim.dir;
     process.env.GIT_INDEX_FILE = join(victim.dir, '.git', 'index');
+    // Windows environment names are case-insensitive and git there honours `git_dir`
+    // as readily as `GIT_DIR`; the scrub must not depend on the case the name was set in.
+    process.env.git_ceiling_directories = '/nonexistent';
 
     try {
+      const scrubbed = scrubbedEnv();
+      expect(Object.keys(scrubbed).filter(key => /^git_/i.test(key))).toEqual([]);
+      expect(scrubbed.PATH ?? scrubbed.Path).toBeDefined(); // everything else survives
+
       // Control: an UNscrubbed git is redirected - proving the variables are live and
       // that the scrub below is what prevents the damage, not luck.
       const scratch = mkdtempSync(join(tmpdir(), 'verify-publish-tree-'));

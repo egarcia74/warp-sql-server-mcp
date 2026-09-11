@@ -126,9 +126,16 @@ function withVersion(parsed, file, version) {
  * variables carry no information it wants - stripping them is the whole fix.
  *
  * Exported so the test suite spawns its own git the same way.
+ *
+ * The comparison is case-insensitive because Windows environment names are: git there
+ * reads `git_dir` as readily as `GIT_DIR`, and Node's `Object.entries(process.env)`
+ * reports each name in whatever case it was set. Git itself only ever exports upper
+ * case, so this closes a gap that is unlikely rather than one that has been seen.
  */
 export function scrubbedEnv() {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
+  );
 }
 
 // stderr is piped rather than inherited throughout so a failed child surfaces through
