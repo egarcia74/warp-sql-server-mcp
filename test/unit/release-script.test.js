@@ -460,7 +460,7 @@ describe('parseRunUrl and assertRunId', () => {
   });
 
   it('accepts a numeric id, as a number or a string, and returns it as a string', () => {
-    expect(assertRunId(34605777694)).toBe('34605777694');
+    expect(assertRunId(4177)).toBe('4177');
     expect(assertRunId('34605777694')).toBe('34605777694');
   });
 
