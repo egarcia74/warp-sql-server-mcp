@@ -225,22 +225,37 @@ describe('QueryOptimizer', () => {
     // 100 ms fails the old code outright while leaving margin for a slow CI runner.
     const LIMIT_MS = 100;
 
+    // The bound is applied to the fastest of several runs, not to a single one. A
+    // shared runner can deschedule the process for longer than the whole operation
+    // takes, and one such stall inside a single measurement would fail a required
+    // check for no reason. Taking the minimum discards stalls: for the linear code
+    // one clean run out of five is all that is needed, while for the quadratic code
+    // every run is slow, so the minimum still fails and the test still discriminates.
+    const fastestOf = (runs, fn) => {
+      let best = Infinity;
+      for (let i = 0; i < runs; i++) {
+        const started = performance.now();
+        fn();
+        best = Math.min(best, performance.now() - started);
+      }
+      return best;
+    };
+
     test('a long whitespace run inside an item is kept, as it always was', () => {
       expect(optimizer.extractOrderByColumns(prefix + run + 'b')).toEqual(['a' + run + 'b']);
     });
 
     test('a long run not followed by a sort direction is analysed in linear time', () => {
-      const started = performance.now();
-      optimizer.extractOrderByColumns(prefix + run + 'b');
-      expect(performance.now() - started).toBeLessThan(LIMIT_MS);
+      const query = prefix + run + 'b';
+      expect(fastestOf(5, () => optimizer.extractOrderByColumns(query))).toBeLessThan(LIMIT_MS);
     });
 
     test('a long run followed by a sort direction is analysed in linear time', () => {
       // Pins the stripped result. Note this shape was never slow - the greedy `\s+`
       // succeeds on its first attempt - so on its own it would not fail the old code.
-      const started = performance.now();
-      expect(optimizer.extractOrderByColumns(prefix + run + 'ASC')).toEqual(['a']);
-      expect(performance.now() - started).toBeLessThan(LIMIT_MS);
+      const query = prefix + run + 'ASC';
+      expect(optimizer.extractOrderByColumns(query)).toEqual(['a']);
+      expect(fastestOf(5, () => optimizer.extractOrderByColumns(query))).toBeLessThan(LIMIT_MS);
     });
 
     test('a sort-direction word inside the run, not at its end, is analysed in linear time', () => {
@@ -248,10 +263,9 @@ describe('QueryOptimizer', () => {
       // find and then reject a candidate from every interior position. Measured
       // 325 ms on the old regexes, 8.6 ms on the new, with identical output.
       const half = ' '.repeat(4980);
-      const item = 'a' + half + 'asc' + half + 'b';
-      const started = performance.now();
-      expect(optimizer.extractOrderByColumns(prefix + half + 'asc' + half + 'b')).toEqual([item]);
-      expect(performance.now() - started).toBeLessThan(LIMIT_MS);
+      const query = prefix + half + 'asc' + half + 'b';
+      expect(optimizer.extractOrderByColumns(query)).toEqual(['a' + half + 'asc' + half + 'b']);
+      expect(fastestOf(5, () => optimizer.extractOrderByColumns(query))).toBeLessThan(LIMIT_MS);
     });
   });
 
