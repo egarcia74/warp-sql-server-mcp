@@ -125,24 +125,6 @@ the three-tier security model, and the configuration surface area in `.env.examp
 
 ---
 
-### Scenario 6 — Cloud Secret Manager Integration
-
-**Persona**: Cloud engineer connecting the MCP server to AWS Secrets Manager or Azure Key Vault.
-
-**Pain today**:
-
-- `SECRET_MANAGER_TYPE` is set but there is no way to verify the secret provider is healthy or reachable before use.
-- No status report on cache hit rates or secret refresh state.
-
-**How `detect_optimal_config` helps**:
-
-- Reports the active secret manager type and its health state.
-- Flags misconfigured or unreachable secret providers.
-
-**Value**: Medium — niche but high-pain when it goes wrong. Feasible with very low effort since `SecretManager` already has a health interface.
-
----
-
 ### Scenario 7 — Multi-Environment CI/CD Pipeline
 
 **Persona**: DevOps engineer running the MCP server in a CI/CD pipeline across dev, staging, and production environments.
@@ -209,8 +191,6 @@ The following table maps each feature requirement from Issue #57 to existing cod
 2. **Production readiness checklist** (Scenario 2) — Machine-readable pass/fail items derived from `ServerConfig.validate()`
    (which already produces warnings and errors). Low additional code, but needs careful design of the output schema.
 
-3. **Secret manager health** (Scenario 6) — `SecretManager` already exists. Adding its status to the output is low effort but low urgency.
-
 ### 🔵 Nice-to-Have (Stage 4 or later)
 
 1. **Streaming config recommendations** (Scenario 5) — Valuable but requires sufficient historical metrics to be non-trivial. Adds complexity to the scoring algorithm. Defer until Stage 3 core is proven.
@@ -230,8 +210,6 @@ The `detect_optimal_config` tool output **must never** include:
 
 - `SQL_SERVER_PASSWORD` (or any derivative)
 - `SQL_SERVER_USER` in plain text beyond what `ServerConfig._redactSensitive()` already produces
-- AWS/Azure secret values
-- Any key material from the secret manager
 
 The existing `ServerConfig._redactSensitive()` method and the `getConnectionSummary()` redaction pattern should be used as the model.
 
@@ -304,9 +282,9 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 
 ---
 
-### Stage 3 — Production Readiness Checklist & Secret Manager Health
+### Stage 3 — Production Readiness Checklist
 
-**Objective**: Add a machine-readable production readiness checklist and secret manager status (Scenarios 2 and 6).
+**Objective**: Add a machine-readable production readiness checklist (Scenario 2).
 
 **Delivery Items**:
 
@@ -317,9 +295,8 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
    - `currentValue` — the redacted current value
    - `recommendation` — what to do if not passing
 2. Checklist items map directly to the `docs/architecture/SECURITY.md` production checklist.
-3. Add `secretManager` section to `detect_optimal_config` output — type, health, cache stats (no secret values).
-4. Update `WARP.md` MCP tools table to include `detect_optimal_config`.
-5. Update `CHANGELOG.md`.
+3. Update `WARP.md` MCP tools table to include `detect_optimal_config`.
+4. Update `CHANGELOG.md`.
 
 **Quality Gate**:
 
@@ -371,7 +348,6 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 | 3 — Diagnosing load/timeout issues    | **Very High**  | Medium                | Stage 2                                               |
 | 4 — Security audit / compliance       | **High**       | Low                   | Stage 1                                               |
 | 5 — Large database performance tuning | Medium         | Medium                | Stage 4                                               |
-| 6 — Cloud secret manager health       | Medium         | Low                   | Stage 3                                               |
 | 7 — CI/CD pipeline integration        | Medium         | High                  | Post-Stage 4 / separate feature                       |
 
 ---

@@ -17,11 +17,11 @@ This is a **production-validated** and **enterprise-ready** Model Context Protoc
 Microsoft SQL Server databases safely and securely. The project provides a bridge between
 Warp's AI capabilities and SQL Server through the MCP standard, featuring a **comprehensively tested
 three-tier graduated safety system** for production database security, **advanced query validation**,
-**streaming support for large datasets**, **comprehensive performance monitoring**, and **cloud-ready
-secret management**. Built with a modular architecture for enterprise-scale deployments.
+**streaming support for large datasets**, and **comprehensive performance monitoring**. Built with a
+modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 1,199 tests, every
-one of which runs automatically on every pull request (1,132 unit + 27 integration + 40
+**✅ Production Status**: This MCP server has been **fully validated** through 1,221 tests, every
+one of which runs automatically on every pull request (1,154 unit + 27 integration + 40
 live-database). Covers all security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/user/QUICKSTART.md) for a 5-minute setup walkthrough.
@@ -93,7 +93,6 @@ lib/
 │   ├── bottleneck-detector.js # 🚨 Query bottleneck detection & categorization
 │   └── query-optimizer.js     # ⚡ Query analysis & optimization recommendations
 ├── config/
-│   ├── secret-manager.js     # 🔐 Universal secret management
 │   └── server-config.js      # ⚙️ Centralized configuration management
 ├── database/
 │   └── connection-manager.js # 🗄️ Database connection pooling & management
@@ -148,30 +147,6 @@ lib/
 - **🚀 Enhanced Development**: Faster IDE performance and better code navigation
 - **👥 Team Collaboration**: Multiple developers can work on different modules
 - **🔧 Easier Debugging**: Clear separation makes issue identification easier
-
-### 🔐 Enhanced Secret Management
-
-> **⚠️ Not yet wired up.** `SecretManager` (`lib/config/secret-manager.js`) is implemented and
-> unit-tested, but nothing constructs it: `index.js` builds `ServerConfig` and `ConnectionManager`
-> directly, and credentials are read straight from `process.env`. Setting `SECRET_MANAGER_TYPE` currently has
-> **no effect** - a deployment with credentials only in a cloud secret store will not connect. Use plain
-> environment variables ([ENV-VARS.md](docs/reference/ENV-VARS.md)) until this is resolved. Tracked in [#1152](https://github.com/egarcia74/warp-sql-server-mcp/issues/1152).
-
-**Multi-Provider Secret Management**:
-
-> **⚠️ Cloud providers are not wired in.** `lib/config/secret-manager.js` implements a
-> `SecretManager` with AWS Secrets Manager and Azure Key Vault backends, credential caching
-> and provider health checks, and it is covered by unit tests - but nothing constructs it.
-> `index.js` builds `ServerConfig` and `ConnectionManager` directly, and `ServerConfig` never
-> reads `SECRET_MANAGER_TYPE`. Setting `SECRET_MANAGER_TYPE=aws` or `=azure` has **no effect**:
-> the server connects with the ordinary environment values and never contacts the vault. Wiring
-> the provider into startup is outstanding work; treat the guides below as preparation for the
-> cloud side only.
-
-**📋 Cloud Secret Management guides** (setup on the AWS/Azure side; server integration pending):
-
-- **Azure Key Vault**: [Azure Secrets Configuration Guide](docs/reference/AZURE-SECRETS-GUIDE.md) - Complete setup with authentication, secret naming, and troubleshooting
-- **AWS Secrets Manager**: [AWS Secrets Configuration Guide](docs/reference/AWS-SECRETS-GUIDE.md) - Comprehensive guide with IAM roles, JSON secrets, and multi-environment deployment
 
 ### 🔒 Query Safety Policy
 
@@ -912,8 +887,8 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 1,199 tests total, **all of them automated** on every pull request:
-  1,132 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
+- **Comprehensive Coverage**: 1,221 tests total, **all of them automated** on every pull request:
+  1,154 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
   drives against a Docker SQL Server the CI `Tests` job starts itself. Together they cover all MCP
   tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
@@ -951,23 +926,22 @@ npm run docker:clean                  # Remove all data and containers
 ### Test Structure
 
 Counts below are the vitest suite sizes measured with `npm run test:unit`
-(27 files, 1,132 tests); the live-database suites are counted from their own runners.
+(28 files, 1,154 tests); the live-database suites are counted from their own runners.
 
 ```text
 test/
 ├── README.md                                # Comprehensive test documentation
 ├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
 ├── setup.js                                 # Vitest global setup
-├── unit/                                    # Vitest unit suites - 27 files, 1,132 tests
+├── unit/                                    # Vitest unit suites - 28 files, 1,154 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
-│   ├── query-optimizer.test.js              # 132 - Query analysis and optimization engine
+│   ├── query-optimizer.test.js              # 136 - Query analysis and optimization engine
 │   ├── sql-injection-battery.test.js        # 103 - Authoritative behavioral injection guard
 │   ├── where-clause-guard.test.js           #  81 - WHERE-clause validation
 │   ├── performance-monitor.test.js          #  70 - Metrics collection
 │   ├── streaming-handler.test.js            #  60 - Streaming large result sets
 │   ├── tool-registry.test.js                #  59 - Tool definitions and input schemas
 │   ├── database-tools-handler.test.js       #  55 - Database tool handlers
-│   ├── secret-manager.test.js               #  54 - Azure/AWS secret backends
 │   ├── logger.test.js                       #  52 - Structured logging and audit trail
 │   ├── mcp-security.test.js                 #  38 - Three-tier safety system
 │   ├── connection-manager.test.js           #  33 - Pooling, retries, auth
@@ -975,6 +949,8 @@ test/
 │   ├── sql-construction-guard.test.js       #  30 - Dispatch-vs-escaping static guard
 │   ├── get-server-info.test.js              #  27 - Server diagnostics tool
 │   ├── cleanup-test-processes.test.js        #  48 - Process inspector: PID guards, exit status
+│   ├── verify-publish-tree.test.js          #  40 - Published-tree verification before npm publish
+│   ├── classify-dependabot-pr.test.js       #  32 - Dependabot PR title classification rules
 │   ├── docs-html-writer.test.js              #   10 - Docs writer: timestamp churn guard
 │   ├── server-config.test.js                #  24 - Configuration parsing and defaults
 │   ├── query-policy.test.js                 #  19 - Safety-tier policy decisions
@@ -993,8 +969,6 @@ test/
 ├── integration/                             # Vitest integration suites + live-DB scripts
 │   ├── error-scenarios-integration.test.js  #  15 tests - failure-path integration
 │   ├── sqlserver-mcp-integration.test.js    #  12 tests - component integration
-│   ├── test-aws-secrets.js                  # npm run test:integration:aws (live AWS)
-│   ├── test-azure-secrets.js                # npm run test:integration:azure (live Azure)
 │   ├── shared/config-validator.js           # Shared config assertions
 │   └── manual/                              # Live-database tests (40, also run in CI)
 │       ├── README.md                        # Manual testing guide
@@ -1022,9 +996,9 @@ test/
 
 ### Test Categories
 
-#### **Unit Tests (1,132 across 27 files)**
+#### **Unit Tests (1,154 across 28 files)**
 
-Grouped by area; the group totals sum to 1,132:
+Grouped by area; the group totals sum to 1,154:
 
 - **Core MCP server** (144): `index.test.js` - entry point, tool dispatch, `validateQuery`
 - **SQL safety and injection guards** (317): `sql-injection-battery` (103), `where-clause-guard` (81),
@@ -1032,13 +1006,14 @@ Grouped by area; the group totals sum to 1,132:
   `sql-identifier` (16)
 - **Infrastructure utilities** (215): `performance-monitor` (70), `streaming-handler` (60),
   `logger` (52), `connection-manager` (33)
-- **Query analysis** (154): `query-optimizer` (132), `query-optimizer-security` (13),
+- **Query analysis** (158): `query-optimizer` (136), `query-optimizer-security` (13),
   `bottleneck-detector` (9)
 - **Tools and handlers** (141): `tool-registry` (59), `database-tools-handler` (55),
   `get-server-info` (27)
-- **Configuration and secrets** (78): `secret-manager` (54), `server-config` (24)
-- **Repository and CLI tooling** (83): `cleanup-test-processes` (48), `docs-html-writer` (10), `check-fenced-blocks` (9),
-  `link-checker` (6), `cli` (4), `docker-command-utils` (4), `dependabot-config` (2)
+- **Configuration** (24): `server-config` (24)
+- **Repository and CLI tooling** (155): `cleanup-test-processes` (48), `verify-publish-tree` (40),
+  `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6),
+  `cli` (4), `docker-command-utils` (4), `dependabot-config` (2)
 
 #### **Integration Tests (27 Vitest + 40 live-database)**
 
@@ -1236,7 +1211,7 @@ This project maintains high code quality through automated tooling and architect
 > This document captures real-world metrics from the WARP project including:
 >
 > - **525 automated tests** with 100% pass rate enforcement (the figure captured by that case study; the
->   suite has since grown to 1,132 automated unit tests)
+>   suite has since grown to 1,154 automated unit tests)
 > - **74% code coverage** with strict quality gates
 > - **3x development time** vs. 90% reduction in debugging time
 > - **The five critical challenges** teams face with no-compromise quality
@@ -1303,7 +1278,7 @@ The project includes comprehensive system maintenance tools to manage developmen
 
 #### **Process Cleanup Infrastructure**
 
-During intensive testing sessions (like our 1,132-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
+During intensive testing sessions (like our 1,154-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
 
 The project includes tools to inspect them:
 

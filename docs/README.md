@@ -39,8 +39,6 @@ System design and security posture:
 Look-up material:
 
 - **[Environment Variables Reference](reference/ENV-VARS.md)** - Every setting, with examples
-- **[AWS Secrets Manager Guide](reference/AWS-SECRETS-GUIDE.md)** - Enterprise credential management
-- **[Azure Key Vault Guide](reference/AZURE-SECRETS-GUIDE.md)** - Cloud secret management setup
 
 ## 🛠️ Developer
 

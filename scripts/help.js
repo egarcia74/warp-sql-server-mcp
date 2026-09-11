@@ -35,10 +35,8 @@ ${'─'.repeat(80)}
   npm run test:integration:performance  ⭐ RECOMMENDED: Fast performance test (~2s)
   npm run test:integration:warp    Test with Warp MCP integration (~10s)
 
-📡 Protocol & Cloud Integration Tests
+📡 Protocol Tests
   npm run test:integration:protocol    MCP protocol smoke test
-  npm run test:integration:aws     AWS Secrets Manager integration
-  npm run test:integration:azure   Azure Key Vault integration
 
 🐳 DOCKER CONTAINER MANAGEMENT
 ${'─'.repeat(80)}

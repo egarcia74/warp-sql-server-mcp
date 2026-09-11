@@ -32,12 +32,6 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@azure/identity"
         update-types: ["version-update:semver-major"]
-      - dependency-name: "@azure/keyvault-secrets"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "aws-sdk"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@aws-sdk/*"
-        update-types: ["version-update:semver-major"]
     # Enhanced dependency grouping for better auto-triage
     groups:
       # 🔒 Security-critical production dependencies (manual review required)
@@ -46,9 +40,6 @@ updates:
           - "mssql"
           - "tedious"
           - "@azure/identity"
-          - "@azure/keyvault-secrets"
-          - "aws-sdk"
-          - "@aws-sdk/*"
         update-types:
           - "minor"
           - "patch"
