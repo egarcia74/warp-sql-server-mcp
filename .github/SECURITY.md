@@ -15,6 +15,10 @@ release on `latest`; we do not backport.
 | 1.7.11–17        | ❌ No     | Deprecated on npm — each carries at least one of the advisories below. |
 | < 1.7.11         | ❌ No     | Not available on npm.                                                  |
 
+Version 2.0.0 raises the minimum Node.js to 22.12. Under the policy above, 1.7.x - the last
+line to support Node.js 20 - stops receiving fixes when 2.0.0 ships, and this table will be
+updated with that release.
+
 Run `npm view @egarcia74/warp-sql-server-mcp@<version> deprecated` to see why a given
 version was deprecated, or just upgrade: `npm i -g @egarcia74/warp-sql-server-mcp@latest`.
 
@@ -136,7 +140,9 @@ source (`lib/security/`):
 - Updates to the database driver (`mssql`, `tedious`) and secret-management clients
   (`@azure/identity`, `@azure/keyvault-secrets`, `@aws-sdk/*`) are grouped as
   _security-critical_ and never auto-merge a major version.
-- Minimum supported runtime is Node.js 22.12 (see `engines` in `package.json`).
+- Minimum supported runtime is Node.js 22.12 from version 2.0.0 (see `engines` in
+  `package.json`). The 1.7.x line was the last to support Node.js 20, which reached
+  end-of-life on 2026-04-30.
 
 ## 📞 Contact
 

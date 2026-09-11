@@ -27,7 +27,8 @@ These guides will help you understand both the technical architecture and practi
 
 ### Prerequisites
 
-- Node.js 22.12.0 or higher
+- Node.js 22.12.0 or higher - develop on 22 or 24, the lines CI tests; vitest 5 does not
+  support the odd-numbered, non-LTS releases (23, 25), so the suite will not run on them
 - npm (comes with Node.js)
 - Docker (required by the default commit workflow - see below)
 - A standalone SQL Server instance (optional; the integration suite starts its own in Docker)
