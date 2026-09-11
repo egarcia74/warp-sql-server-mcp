@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **An ESLint rule now fails the build when a test spawns `git` without stripping the inherited `GIT_*`
+  environment.** `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE` beat `cwd`, and a linked git worktree exports
+  them into hook environments - which is how, on 2026-09-11, a suite operating on temp-directory fixtures
+  rewrote the real repository (#1207 fixed that one file with `scrubbedEnv()`). The guard is scoped to
+  `test/**` and leaves the deliberate git spawns in `scripts/` and `lib/` alone; the sanctioned path is the
+  new `runGit()` helper in `test/helpers/git.js`, which imports `scrubbedEnv()` from
+  `scripts/ci/verify-publish-tree.mjs` rather than copying it. `test/unit/git-spawn-scrub-guard.test.js`
+  runs the project's real ESLint config to prove the guard fires on every unscrubbed spawn shape, stays
+  silent on the scrubbed ones and outside `test/`, and pins the single documented suppression so a new
+  `eslint-disable` cannot appear silently. Closes #1214.
+
 ### Changed
 
 - **`npm-publish.yml` now authenticates to npmjs.com with npm Trusted Publishing (GitHub OIDC) instead of an

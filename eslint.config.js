@@ -1,5 +1,61 @@
 import js from '@eslint/js';
 
+/**
+ * Guards the fix from #1207 against being reintroduced by a new test (#1214).
+ *
+ * On 2026-09-11 `test/unit/verify-publish-tree.test.js`, run by the pre-commit hook from
+ * inside a LINKED GIT WORKTREE, inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE` from
+ * the hook environment. Those beat `cwd`, so every git the test spawned against its
+ * temp-directory fixtures operated on the REAL repository instead: `core.worktree` was
+ * re-pointed at a since-deleted temp dir, the committer identity was overwritten, a fake
+ * `v1.8.0` tag appeared and five fixture commits landed on a live branch. `scrubbedEnv()`
+ * (exported from `scripts/ci/verify-publish-tree.mjs`) strips every `GIT_*` name, case
+ * insensitively, and fixed that one file. Any NEW test that spawns git with the inherited
+ * environment reintroduces the whole incident, so the absence of the scrub is a lint error.
+ *
+ * Scoped to `test/**` only. `scripts/` and `lib/` spawn git deliberately against the real
+ * repository - that is their job - and are untouched by this rule.
+ *
+ * WHAT IS MATCHED: a `child_process` spawn whose command argument is the literal `git`
+ * (`'git'`, `'git.exe'`, or a string/template command starting `git `), called either bare
+ * (`execFileSync(...)`) or through a namespace (`cp.execFileSync(...)`), UNLESS the call
+ * passes `env: scrubbedEnv()`. Routing the spawn through `runGit()` in
+ * `test/helpers/git.js` is not a `child_process` call at all and so never matches.
+ *
+ * WHAT IS NOT MATCHED (the residual, deliberately stated rather than implied): the check is
+ * syntactic. A command held in a variable (`const cmd = 'git'; execFileSync(cmd, ...)`), an
+ * absolute path (`/usr/bin/git`), a git invoked through a shell wrapper or through `npm`,
+ * an options object built elsewhere and spread in, a local function that is *named*
+ * `scrubbedEnv` but scrubs nothing, and an `env: scrubbedEnv()` nested inside some other
+ * property of the options object all slip past it. It also cannot see the runtime value of
+ * what `scrubbedEnv` returns - only that the name is there. An `eslint-disable` comment
+ * defeats it outright, which is why `test/unit/git-spawn-scrub-guard.test.js` pins the
+ * complete set of suppressions in the test tree: adding one fails that test until the
+ * allow-list is updated in the same change, where a reviewer sees it.
+ */
+const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSync)$/';
+/** `git`, `git.exe`, or a shell-command string that starts with one of them. */
+const GIT_COMMAND = '/^git(\\.exe)?($|\\s)/';
+/** The one sanctioned shape for a direct spawn: the options object names the scrub. */
+const NOT_SCRUBBED =
+  ":not(:has(Property[key.name='env'] > CallExpression[callee.name='scrubbedEnv']))";
+
+export const UNSCRUBBED_GIT_SPAWN_SELECTORS = [
+  // execFileSync('git', args, opts) / spawnSync('git', ...) / execSync('git status', ...)
+  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.value=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  // cp.execFileSync('git', ...) / child_process.spawnSync('git', ...)
+  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.value=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  // execSync(`git ${subcommand}`) - a template literal has no `.value` to match on.
+  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`
+];
+
+export const UNSCRUBBED_GIT_SPAWN_MESSAGE =
+  'Spawning git from test/ must strip the inherited GIT_* environment, which otherwise ' +
+  'beats cwd and redirects the child at the real repository (see #1207/#1214). Use ' +
+  'runGit() from test/helpers/git.js, or pass env: scrubbedEnv() from ' +
+  'scripts/ci/verify-publish-tree.mjs.';
+
 export default [
   js.configs.recommended,
   {
@@ -63,6 +119,20 @@ export default [
         afterAll: 'readonly',
         vi: 'readonly'
       }
+    }
+  },
+  {
+    // Every JavaScript file under test/, not just the *.test.js suites: fixtures, helpers
+    // and the docker/manual runners spawn child processes too.
+    files: ['test/**/*.js', 'test/**/*.mjs', 'test/**/*.cjs'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...UNSCRUBBED_GIT_SPAWN_SELECTORS.map(selector => ({
+          selector,
+          message: UNSCRUBBED_GIT_SPAWN_MESSAGE
+        }))
+      ]
     }
   }
 ];
