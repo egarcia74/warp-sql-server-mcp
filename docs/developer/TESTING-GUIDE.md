@@ -96,7 +96,6 @@ test/
 │   └── troubleshoot-apple-silicon.js # Apple Silicon troubleshooting
 ├── unit/                        # Automated unit tests
 │   └── *.test.js                # Component unit tests
-├── archived/                     # Deprecated tests
 ├── temp/                         # Temporary test artifacts
 ├── setup.js                     # Test environment setup
 ├── README.md                    # Testing documentation

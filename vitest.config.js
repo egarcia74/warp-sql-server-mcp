@@ -7,7 +7,6 @@ export default defineConfig({
     setupFiles: ['./test/setup.js'],
     include: ['test/**/*.test.js'],
     exclude: [
-      'test/archived/**',
       'test/integration/manual/**', // Exclude manual integration tests from automated runs
       'test/protocol/**' // Exclude protocol tests from automated runs (require live DB)
     ],
