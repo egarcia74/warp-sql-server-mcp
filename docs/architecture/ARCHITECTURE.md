@@ -174,24 +174,20 @@ configuration path - grep for `process.env` before assuming it does.
   malformed string is ever corrected or warned about
 - Groups configuration into connection, security, performance, streaming and logging
   sections. The connection, security and logging sections are consumed by the components
-  above; the streaming section is **not** - see the notice below
+  above; the streaming section is passed to `DatabaseToolsHandler`, which hands it to its
+  `StreamingHandler` - see the note below
 - Derives the context-aware `SQL_SERVER_TRUST_CERT` default and records why it chose what
   it chose
 - Renders the startup configuration summary, with the password masked
 
-> **⚠️ The streaming section is reported but never applied.** `DatabaseToolsHandler`
-> constructs its `StreamingHandler` with literals (`enableStreaming: true`, batch size
-> `1000`, `maxMemoryMB: 50`, `maxResponseSize: 1000000`) at
-> `lib/tools/handlers/database-tools.js:21` and never receives `serverConfig.streaming`,
-> whose only readers are `get_server_info` (`index.js:770-775`) and the startup summary
-> (`server-config.js:676-681`). So
-> `ENABLE_STREAMING=false`, `STREAMING_BATCH_SIZE`, `STREAMING_MAX_MEMORY_MB` and
-> `STREAMING_MAX_RESPONSE_SIZE` are parsed, range-checked and displayed back to you while
-> having no effect on any export. Nor are the handler's own literals a safety net:
-> `maxMemoryMB` and `maxResponseSize` are stored at construction and never read again, and
-> the streaming path accumulates every chunk before `reconstructFromChunks` joins them into
-> one string - so **no memory or response-size limit is enforced at all**. Only
-> `enableStreaming` and `batchSize` are actually consulted.
+> **Note on streaming limits.** `index.js` passes `serverConfig.streaming` to
+> `DatabaseToolsHandler`, which constructs its `StreamingHandler` with
+> `enableStreaming: streaming.enabled` and `batchSize: streaming.batchSize`, so
+> `ENABLE_STREAMING` and `STREAMING_BATCH_SIZE` govern every export. Those are the only two
+> streaming settings: the streaming path accumulates every chunk before
+> `reconstructFromChunks` joins them into one string, so **no memory or response-size limit
+> is enforced**. The two limit variables once documented for this were never read by any
+> code path and have been removed (see the CHANGELOG).
 
 ### 4. Tool Handlers (Business Logic Layer)
 
@@ -227,25 +223,19 @@ enter its history.
 `get_query_performance`. It is an in-memory ring of samples - there is no alert manager and
 no external metrics backend.
 
-> **⚠️ `PERFORMANCE_SAMPLING_RATE` has no effect.** Every production call site records
-> through `recordQuery()`, which checks `config.enabled` and nothing else. `shouldSample()`
-> is consulted only by `startQuery()`, and `startQuery()` is called exclusively from
-> `test/unit/performance-monitor.test.js` - no production path invokes it. Setting the rate
-> below `1.0` therefore reduces neither the work done per query nor the number of retained
-> observations; every query is recorded.
+> **Sampling.** Every production call site records through `recordQuery()`, which applies
+> the same `shouldSample()` gate as `startQuery()`, so `PERFORMANCE_SAMPLING_RATE` bounds
+> the fraction of queries that enter the history. It does not change how a query executes.
 >
-> **⚠️ Pool metrics and connection events are never recorded.** `recordPoolMetrics()` and
-> `recordConnectionEvent()` are implemented (`performance-monitor.js:241`, `:269`) but
-> called only from `test/unit/performance-monitor.test.js` - no production path invokes
-> either, so the monitor's pool counters are always at their initialized zeros. Live pool
-> state does reach `get_connection_health`, by a different route:
-> `ConnectionManager.getConnectionHealth()` reads `size`, `available`, `pending` and
-> `borrowed` straight off the driver pool without passing through the monitor.
-> `TRACK_POOL_METRICS` therefore gates nothing about recording - it only affects the shape
-> of the monitor's own block. Exactly which tool emits that block, and under which of
-> `ENABLE_PERFORMANCE_MONITORING` / `TRACK_POOL_METRICS`, is response-shape detail rather
-> than architecture: read `getStats()` and `getPoolStats()` in `performance-monitor.js`
-> and their call sites at `index.js:547`, `:609` and `:720`.
+> **Pool metrics.** `index.js` attaches `ConnectionManager.getConnectionHealth()` to the
+> monitor as its pool source (`setPoolStatsSource`). After each recorded query the monitor
+> reads the driver's tarn counters once (`size`, `available`, `pending`, `borrowed`, `max`)
+> and records them through `recordPoolMetrics()`, so `get_connection_health` returns both
+> the live counters (`connection.pool`) and the monitor's latest snapshot with a health
+> assessment (`pool.current`, `pool.health`). `TRACK_POOL_METRICS=false` stops the
+> sampling and collapses the monitor's block to `{ enabled: false }`.
+> `recordConnectionEvent()` still has no production caller, so the `connect`/`error`/`retry`
+> rates in `pool.recent` stay at zero.
 
 **`Logger`** wraps Winston to provide levelled structured logging plus a separate security
 audit channel. File transports are **opt-in**: `index.js` passes a path only when

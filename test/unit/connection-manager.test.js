@@ -356,6 +356,25 @@ describe('ConnectionManager', () => {
         borrowed: undefined
       });
     });
+
+    test('should expose the pool capacity from the tarn pool, falling back to the configured max', async () => {
+      await connectionManager.connect();
+      try {
+        // mssql exposes the resolved tarn pool as `pool.pool`
+        mockPool.pool = { max: 10 };
+        mockPool.config = { pool: { max: 7 } };
+        expect(connectionManager.getConnectionHealth().pool.max).toBe(10);
+
+        delete mockPool.pool;
+        expect(connectionManager.getConnectionHealth().pool.max).toBe(7);
+
+        delete mockPool.config;
+        expect(connectionManager.getConnectionHealth().pool.max).toBeUndefined();
+      } finally {
+        delete mockPool.pool;
+        delete mockPool.config;
+      }
+    });
   });
 
   describe('configuration building', () => {

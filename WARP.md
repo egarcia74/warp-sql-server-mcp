@@ -251,8 +251,6 @@ ENABLE_STREAMING=true
 
 # Configure batch sizes
 STREAMING_BATCH_SIZE=1000
-STREAMING_MAX_MEMORY_MB=50
-STREAMING_MAX_RESPONSE_SIZE=1000000
 ```
 
 #### **Enhanced CSV Export with Streaming (v1.7.0+)**
@@ -267,7 +265,7 @@ STREAMING_MAX_RESPONSE_SIZE=1000000
 
 **Configuration Options**:
 
-- Uses existing `ENABLE_STREAMING`, `STREAMING_BATCH_SIZE`, and `STREAMING_MAX_MEMORY_MB` settings
+- Uses existing `ENABLE_STREAMING` and `STREAMING_BATCH_SIZE` settings
 - Automatic streaming detection based on table size analysis
 - Fallback to regular export for smaller datasets
 
@@ -320,13 +318,12 @@ STREAMING_MAX_RESPONSE_SIZE=1000000
 
 - **Query Execution Tracking**: Duration, memory usage, row counts
 - **Connection Pool Monitoring**: live driver counters (size, available, pending,
-  borrowed) come from `ConnectionManager.getConnectionHealth().pool`. Utilization history
-  and connection-error rates are **not** recorded:
-  `PerformanceMonitor.recordPoolMetrics()` and `recordConnectionEvent()` have no
-  production call sites, so the separate `PerformanceMonitor.getPoolStats()` block that
-  `get_connection_health` also returns stays at its initialized zeros.
-  `TRACK_POOL_METRICS=false` suppresses that block entirely (`{ enabled: false }`) - it
-  gates whether the diagnostic appears, not whether anything is recorded
+  borrowed, max) come from `ConnectionManager.getConnectionHealth().pool`, and after every
+  recorded query `PerformanceMonitor` snapshots them through `recordPoolMetrics()`, so the
+  `PerformanceMonitor.getPoolStats()` block that `get_connection_health` also returns
+  carries the latest snapshot and a health assessment. `TRACK_POOL_METRICS=false` stops
+  the sampling and collapses that block to `{ enabled: false }`. Connection-error rates
+  are still not recorded: `recordConnectionEvent()` has no production call site
 - **Slow Query Detection**: Configurable thresholds with alerting
 - **Performance Recommendations**: AI-powered optimization suggestions
 - **Historical Analytics**: Trend analysis and performance insights
