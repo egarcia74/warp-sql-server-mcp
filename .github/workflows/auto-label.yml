@@ -9,13 +9,15 @@ on:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
 
 jobs:
   auto-label:
     name: Auto Label
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # actions/labeler and auto-assign-action read their config files from the repo
+      issues: write # github/issue-labeler labels issues; actions/first-interaction comments on them
+      pull-requests: write # actions/labeler, size-label-action, first-interaction and auto-assign-action write to PRs
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
@@ -96,6 +98,8 @@ jobs:
     name: Label Dependencies
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && contains(github.head_ref, 'dependabot')
+    permissions:
+      pull-requests: write # github-script adds labels to the Dependabot PR
     steps:
       - name: Add dependency labels
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v7
