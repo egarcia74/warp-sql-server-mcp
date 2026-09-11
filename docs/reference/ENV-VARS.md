@@ -261,10 +261,12 @@ accidental certificate trust in cloud production environments using private IP a
 ### `TRACK_POOL_METRICS`
 
 - **Default**: `true`
-- **Description**: Monitor connection pool health and utilization
+- **Description**: Record a snapshot of the connection pool's driver counters (open, idle,
+  in-use, waiting, capacity) after every recorded query, and report the latest snapshot plus
+  a health assessment in the `pool` block of `get_connection_health`
 - **Values**:
   - `true` (track pool metrics)
-  - `false` (disable pool monitoring)
+  - `false` (disable pool monitoring - the `pool` block reports `{ "enabled": false }`)
 
 ### `PERFORMANCE_SAMPLING_RATE`
 
@@ -274,28 +276,16 @@ accidental certificate trust in cloud production environments using private IP a
   - `0.1` (monitor 10% of queries)
   - `0.5` (monitor 50% of queries)
   - `1.0` (monitor all queries)
-
-> **⚠️ Not yet wired up.** Every production call site records through
-> `PerformanceMonitor.recordQuery()`, which never consults `shouldSample()`; the sampling
-> check lives in `startQuery()`, which only the unit tests call. Setting this below `1.0`
-> has no effect - every query is still recorded.
+- **Note**: sampling decides which queries enter the metrics history (and take a pool
+  snapshot, see `TRACK_POOL_METRICS`); it does not change how a query is executed
 
 ## Streaming Configuration
 
-> **⚠️ Not yet wired up.** All four settings below are parsed, range-checked and reported
-> by `get_server_info`, but nothing acts on them: `DatabaseToolsHandler` constructs its
-> `StreamingHandler` with hard-coded literals at
-> `lib/tools/handlers/database-tools.js:21` and never receives `serverConfig.streaming`.
-> Setting them changes what the server _reports_, not what it _does_.
->
-> Of the four hard-coded literals the handler runs with, only two do anything:
-> `enableStreaming: true` (checked at `streaming-handler.js:55`) and batch size `1000`
-> (checked at `:163`). **`maxMemoryMB: 50` and `maxResponseSize: 1000000` are never read
-> after construction** - repo-wide, both names appear only in constructors, the config
-> parser and the two display paths, never in a comparison. The streaming path pushes every
-> chunk into an array and `reconstructFromChunks` joins them into one complete string for
-> the MCP response, so **no memory or response-size bound is enforced anywhere**, by
-> environment variable or by default. A large export is held in memory in full.
+> **Note**: the streaming path collects every chunk and `reconstructFromChunks` joins them
+> into one complete string for the MCP response, so a large export is still held in memory
+> in full. Batching bounds how many rows are processed per step, not the size of the
+> response; there is no memory or response-size limit setting (the two that were once
+> documented were never implemented and have been removed - see the CHANGELOG).
 
 ### `ENABLE_STREAMING`
 
@@ -313,22 +303,6 @@ accidental certificate trust in cloud production environments using private IP a
 - **Examples**:
   - `500` (smaller batches - lower memory)
   - `2000` (larger batches - better performance)
-
-### `STREAMING_MAX_MEMORY_MB`
-
-- **Default**: `100`
-- **Description**: Memory threshold in MB before streaming activation
-- **Examples**:
-  - `50` (aggressive streaming)
-  - `200` (allow larger in-memory result sets)
-
-### `STREAMING_MAX_RESPONSE_SIZE`
-
-- **Default**: `10485760` (10 MB)
-- **Description**: Response size limit in bytes for automatic chunking
-- **Examples**:
-  - `1048576` (1 MB - smaller responses)
-  - `52428800` (50 MB - larger responses)
 
 ## Logging and Debugging Settings
 

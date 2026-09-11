@@ -111,7 +111,7 @@ the three-tier security model, and the configuration surface area in `.env.examp
 
 **Pain today**:
 
-- `STREAMING_BATCH_SIZE`, `STREAMING_MAX_MEMORY_MB`, and `STREAMING_MAX_RESPONSE_SIZE` are set by default and rarely re-evaluated.
+- `STREAMING_BATCH_SIZE` is set by default and rarely re-evaluated.
 - Slow large exports have no guidance on whether to tune streaming settings vs pool settings vs request timeouts.
 - The `get_optimization_insights` tool covers query-level analysis but not MCP server-level config tuning.
 
@@ -335,7 +335,7 @@ The MCP tool response schema should be versioned from day one. Adding fields lat
 
 **Delivery Items**:
 
-1. Extend `ConfigDetector` with a `streaming` section — compare current `STREAMING_BATCH_SIZE`, `STREAMING_MAX_MEMORY_MB` against observed memory deltas and tool-specific performance metrics from `PerformanceMonitor`.
+1. Extend `ConfigDetector` with a `streaming` section — compare current `STREAMING_BATCH_SIZE` against observed memory deltas and tool-specific performance metrics from `PerformanceMonitor`.
 2. Add integration test that starts the MCP server (mock connection), calls `detect_optimal_config`, and validates the response schema end-to-end.
 3. PR converted from Draft to Ready.
 4. Update `PRODUCT-BACKLOG.md` status to ✅ Complete.

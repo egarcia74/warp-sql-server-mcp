@@ -104,11 +104,22 @@ class SqlServerMCP {
 
     this.connectionManager = new ConnectionManager(this.config.getConnectionConfig());
 
-    // Initialize performance monitoring
+    // Initialize performance monitoring. The pool source is what makes
+    // TRACK_POOL_METRICS record anything: one snapshot of the live driver
+    // counters is taken after every recorded query (#1211).
     this.performanceMonitor = new PerformanceMonitor(this.config.getPerformanceConfig());
+    this.performanceMonitor.setPoolStatsSource(() =>
+      this.connectionManager.getConnectionHealth
+        ? this.connectionManager.getConnectionHealth()
+        : null
+    );
 
     // Initialize tool handlers
-    this.databaseTools = new DatabaseToolsHandler(this.connectionManager, this.performanceMonitor);
+    this.databaseTools = new DatabaseToolsHandler(
+      this.connectionManager,
+      this.performanceMonitor,
+      this.config.streaming
+    );
 
     // Initialize analyzers
     this.queryOptimizer = new QueryOptimizer(this.connectionManager);
@@ -769,9 +780,7 @@ class SqlServerMCP {
         },
         streaming: {
           enabled: this.config.streaming.enabled,
-          batchSize: this.config.streaming.batchSize,
-          maxMemoryMB: this.config.streaming.maxMemoryMB,
-          maxResponseSizeMB: Math.round(this.config.streaming.maxResponseSize / 1048576)
+          batchSize: this.config.streaming.batchSize
         }
       },
       runtime: {

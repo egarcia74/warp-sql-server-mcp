@@ -79,32 +79,25 @@ describe('StreamingHandler', () => {
     it('should initialize with default configuration', () => {
       const config = handler.getConfig();
       expect(config.batchSize).toBe(1000);
-      expect(config.maxMemoryMB).toBe(50);
-      expect(config.maxResponseSize).toBe(1000000);
       expect(config.enableStreaming).toBe(true);
     });
 
     it('should override defaults with custom config', () => {
       const customHandler = new StreamingHandler({
         batchSize: 500,
-        maxMemoryMB: 100,
-        maxResponseSize: 2000000,
         enableStreaming: false
       });
 
       const config = customHandler.getConfig();
       expect(config.batchSize).toBe(500);
-      expect(config.maxMemoryMB).toBe(100);
-      expect(config.maxResponseSize).toBe(2000000);
       expect(config.enableStreaming).toBe(false);
     });
 
     it('should update configuration', () => {
-      handler.updateConfig({ batchSize: 2000, enableStreaming: false });
+      handler.updateConfig({ enableStreaming: false });
       const config = handler.getConfig();
-      expect(config.batchSize).toBe(2000);
       expect(config.enableStreaming).toBe(false);
-      expect(config.maxMemoryMB).toBe(50); // Should preserve existing values
+      expect(config.batchSize).toBe(1000); // Should preserve existing values
     });
   });
 
@@ -819,13 +812,11 @@ describe('StreamingHandler', () => {
     it('should handle configuration edge cases', () => {
       const edgeHandler = new StreamingHandler({
         batchSize: 0,
-        maxMemoryMB: -1,
         enableStreaming: null
       });
 
       const config = edgeHandler.getConfig();
       expect(config.batchSize).toBe(0); // Should accept 0 even if not practical
-      expect(config.maxMemoryMB).toBe(-1); // Should accept negative values
       expect(config.enableStreaming).toBe(null); // Should accept null
     });
 

@@ -148,8 +148,9 @@ describe('get_server_info Tool', () => {
       const streamingConfig = data.data.configuration.streaming;
       expect(streamingConfig.enabled).toBeTypeOf('boolean');
       expect(streamingConfig.batchSize).toBeTypeOf('number');
-      expect(streamingConfig.maxMemoryMB).toBeTypeOf('number');
-      expect(streamingConfig.maxResponseSizeMB).toBeTypeOf('number');
+      // Only the two settings the StreamingHandler actually reads are reported;
+      // the memory and response-size limits were removed as never implemented.
+      expect(Object.keys(streamingConfig).sort()).toEqual(['batchSize', 'enabled']);
     });
   });
 
@@ -171,6 +172,50 @@ describe('get_server_info Tool', () => {
       const connectionHealth = data.data.runtime.connection;
       expect(connectionHealth).toBeDefined();
       // Connection health structure may vary based on connection state
+    });
+
+    test('records a live pool snapshot per query so get_connection_health reports it (#1211)', () => {
+      // The server attaches ConnectionManager.getConnectionHealth() as the
+      // monitor's pool source; stub the driver counters it would read.
+      server.connectionManager.getConnectionHealth = vi.fn().mockReturnValue({
+        connected: true,
+        status: 'Connected',
+        pool: { size: 3, available: 2, pending: 0, borrowed: 1, max: 10 }
+      });
+
+      server.performanceMonitor.recordQuery({
+        tool: 'list_tables',
+        query: 'SELECT 1',
+        executionTime: 5,
+        success: true
+      });
+
+      const data = JSON.parse(server.getConnectionHealth()[0].text);
+      expect(data.data.pool.enabled).toBe(true);
+      expect(data.data.pool.current).toMatchObject({
+        totalConnections: 10,
+        activeConnections: 3,
+        idleConnections: 2,
+        pendingRequests: 0,
+        borrowedConnections: 1
+      });
+      expect(data.data.pool.health.status).toBe('healthy');
+    });
+
+    test('honours PERFORMANCE_SAMPLING_RATE on the production recording path (#1211)', () => {
+      process.env.PERFORMANCE_SAMPLING_RATE = '0';
+      try {
+        const sampledOut = new SqlServerMCP();
+        sampledOut.performanceMonitor.recordQuery({
+          tool: 'list_tables',
+          query: 'SELECT 1',
+          executionTime: 5,
+          success: true
+        });
+        expect(sampledOut.performanceMonitor.getStats().overall.totalQueries).toBe(0);
+      } finally {
+        delete process.env.PERFORMANCE_SAMPLING_RATE;
+      }
     });
 
     test('should return environment information', () => {

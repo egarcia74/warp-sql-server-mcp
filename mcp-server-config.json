@@ -39,8 +39,6 @@
       "_comment_streaming": "=== Streaming Support (v1.4.0+) ===",
       "ENABLE_STREAMING": "true",
       "STREAMING_BATCH_SIZE": "1000",
-      "STREAMING_MAX_MEMORY_MB": "50",
-      "STREAMING_MAX_RESPONSE_SIZE": "1000000",
 
       "_comment_performance": "=== Performance Monitoring (v1.4.0+) ===",
       "ENABLE_PERFORMANCE_MONITORING": "true",
