@@ -6,7 +6,7 @@ Get your **SQL Server MCP** running in Warp in under 3 minutes! 🚀
 
 ## Prerequisites
 
-- ✅ **Node.js 20.19+** installed
+- ✅ **Node.js 22.12+** installed
 - ✅ **SQL Server** running (localhost:1433)
 - ✅ **Warp Terminal** installed
 

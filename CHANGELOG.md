@@ -90,6 +90,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING: the minimum supported Node.js version is now 22.12.** Node.js 20 reached end-of-life on
+  2026-04-30, and the test-runner upgrade below requires `^22.12.0 || ^24.0.0`. `engines.node` in `package.json`
+  is now `>=22.12.0`, CI runs the test matrix on Node 22 and 24 (previously 20 and 22), and every workflow that
+  pinned Node 20 now uses Node 22. Node 22 is LTS until 2027-04-30 and Node 24 until 2028-04-30.
+  ([#1183](https://github.com/egarcia74/warp-sql-server-mcp/issues/1183))
+- **Test runner upgraded from vitest 4.1 to vitest 5.0**, together with `@vitest/ui`, `@vitest/coverage-v8` and
+  the other `@vitest/*` companions, which vitest 5 pins to an exact matching version — so they cannot be bumped
+  one at a time, which is why the individual Dependabot PRs failed. The unused `@vitest/runner` devDependency was
+  dropped: nothing imported it and no 5.0.0 release of it exists. The only test-side change was moving the
+  `vi.mock` calls in `test/unit/mcp-shared-fixtures.js` to module top level, where vitest 4 was already hoisting
+  them; vitest 5 refuses nested `vi.mock`. Supersedes #1176, #1193, #1194 and #1195.
 - Rewrote the security policy (`.github/SECURITY.md`) to match the shipped project: supported versions are the
   `1.7.x` line from 1.7.18 (1.7.11–1.7.17 are deprecated on npm); the three published advisories
   (GHSA-qhf4-jmhq-73c8, GHSA-crw3-hmxc-f53p, GHSA-p8gx-89fp-x73j) are listed with affected and fixed versions;

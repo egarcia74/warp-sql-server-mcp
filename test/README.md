@@ -115,7 +115,7 @@ and the CI jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 
 | Suite                                      | Tests           | Command                                | Runs in CI?                                |
 | ------------------------------------------ | --------------- | -------------------------------------- | ------------------------------------------ |
-| `test/unit/**`                             | 1,132           | `npm run test:unit`                    | Yes - required `Tests (20)` / `(22)`       |
+| `test/unit/**`                             | 1,132           | `npm run test:unit`                    | Yes - required `Tests (22)` / `(24)`       |
 | `test/integration/*.test.js`               | 27              | `npm run test:coverage` / `npm run ci` | Yes - `coverage` job                       |
 | `test/integration/manual/phase*.js`        | 40              | `npm run test:integration:manual`      | Yes - required `Tests` job, via `npm test` |
 | `test/protocol/mcp-server-startup-test.js` | handshake check | `npm run test:integration:protocol`    | Yes - required `Tests` job                 |

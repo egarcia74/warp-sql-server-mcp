@@ -29,7 +29,7 @@ This guide covers VS Code setup, MCP configuration, development workflow, and be
 ### Required Software
 
 - ✅ **VS Code** 1.80+ (latest recommended)
-- ✅ **Node.js** 20.19+ installed
+- ✅ **Node.js** 22.12+ installed
 - ✅ **SQL Server** running (localhost:1433 or remote)
 - ✅ **Warp Terminal** with MCP support
 - ✅ **Git** for version control

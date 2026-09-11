@@ -78,7 +78,7 @@ npm run test:integration:protocol
 On top of the counted suites, `test/protocol/mcp-server-startup-test.js` runs as a pass/fail
 handshake check in the same required `Tests` job.
 
-The 40 live-database tests are _not_ excluded from CI. The required `Tests (20)` / `Tests (22)`
+The 40 live-database tests are _not_ excluded from CI. The required `Tests (22)` / `Tests (24)`
 jobs run `npm test`, which starts a Docker SQL Server, runs all three security phases against it,
 and stops it again. Every suite in the repository runs in CI.
 

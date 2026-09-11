@@ -350,8 +350,8 @@ Use **manual setup** (`npm run test:integration:manual`) when you need:
 ## 🔄 **Integration with CI/CD**
 
 This Docker setup **is already wired into CI** — it is not a future consideration. The `Tests`
-job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs `npm test` on Node 20
-and Node 22, and `npm test` expands to:
+job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs `npm test` on Node 22
+and Node 24, and `npm test` expands to:
 
 ```bash
 npm run test:unit          # 1,132 unit tests (mocked, no database)
@@ -370,7 +370,7 @@ suites against it, and tears it down again:
 | `npm run test:integration:performance` | `test/manual/improved-performance-test.js`          |
 | `npm run docker:stop`                  | Tears the container down                            |
 
-Both matrix legs — `Tests (20)` and `Tests (22)` — are **required status checks on `main`**, so
+Both matrix legs — `Tests (22)` and `Tests (24)` — are **required status checks on `main`**, so
 the 40 live-database tests gate every pull request. Running `npm test` locally exercises the same
 pipeline, which is why it needs a working Docker daemon.
 
