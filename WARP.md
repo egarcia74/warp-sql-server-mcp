@@ -969,8 +969,6 @@ test/
 ├── integration/                             # Vitest integration suites + live-DB scripts
 │   ├── error-scenarios-integration.test.js  #  15 tests - failure-path integration
 │   ├── sqlserver-mcp-integration.test.js    #  12 tests - component integration
-│   ├── test-aws-secrets.js                  # npm run test:integration:aws (live AWS)
-│   ├── test-azure-secrets.js                # npm run test:integration:azure (live Azure)
 │   ├── shared/config-validator.js           # Shared config assertions
 │   └── manual/                              # Live-database tests (40, also run in CI)
 │       ├── README.md                        # Manual testing guide
