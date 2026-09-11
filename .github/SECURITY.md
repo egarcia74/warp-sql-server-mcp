@@ -132,9 +132,11 @@ source (`lib/security/`):
 ## 🔄 Dependency and supply-chain policy
 
 - GitHub Actions are pinned to full commit SHAs.
-- npm releases are published only from GitHub Actions (`npm-publish.yml`) with `--provenance`,
-  which records a Sigstore attestation linking the tarball to the exact commit and workflow that
-  built it. Verify with `npm audit signatures` after installing.
+- npm releases are published only from GitHub Actions (`npm-publish.yml`) through npm
+  Trusted Publishing: the job authenticates to npmjs.com with a short-lived GitHub OIDC token
+  bound to this repository and that workflow file, so no long-lived npm token exists to leak or
+  to expire. Every publish records a Sigstore provenance attestation linking the tarball to the
+  exact commit and workflow that built it. Verify with `npm audit signatures` after installing.
 - Dependabot patch/minor updates auto-merge once CI passes. **Major** updates, and any
   update to `github/codeql-action` or `step-security/*`, require manual review.
 - Updates to the database driver (`mssql`, `tedious`) and the `@azure/identity` auth client it
