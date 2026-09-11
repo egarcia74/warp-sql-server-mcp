@@ -236,8 +236,21 @@ describe('QueryOptimizer', () => {
     });
 
     test('a long run followed by a sort direction is analysed in linear time', () => {
+      // Pins the stripped result. Note this shape was never slow - the greedy `\s+`
+      // succeeds on its first attempt - so on its own it would not fail the old code.
       const started = performance.now();
       expect(optimizer.extractOrderByColumns(prefix + run + 'ASC')).toEqual(['a']);
+      expect(performance.now() - started).toBeLessThan(LIMIT_MS);
+    });
+
+    test('a sort-direction word inside the run, not at its end, is analysed in linear time', () => {
+      // The second shape that discriminates: `asc` mid-item makes the suffix regex
+      // find and then reject a candidate from every interior position. Measured
+      // 325 ms on the old regexes, 8.6 ms on the new, with identical output.
+      const half = ' '.repeat(4980);
+      const item = 'a' + half + 'asc' + half + 'b';
+      const started = performance.now();
+      expect(optimizer.extractOrderByColumns(prefix + half + 'asc' + half + 'b')).toEqual([item]);
       expect(performance.now() - started).toBeLessThan(LIMIT_MS);
     });
   });
