@@ -73,13 +73,9 @@ export function resolveNextVersion(current, type, tagExists) {
   let candidate = bumpVersion(current, type);
   const collisions = [];
 
-  // A `tagExists` that says yes to everything would loop forever; the workflow has the
-  // same shape and the same theoretical problem, but here the bound costs one line.
+  // Unbounded on purpose: the workflow's loop is, and the remote's tag set is finite.
   while (tagExists(`v${candidate}`)) {
     collisions.push(`v${candidate}`);
-    if (collisions.length > 1000) {
-      throw new Error('gave up looking for a free tag after 1000 collisions');
-    }
     candidate = bumpVersion(candidate, 'patch');
   }
 
@@ -355,31 +351,37 @@ export function assertRunId(value) {
 }
 
 /**
- * The OLDEST run created at or after `since` (a Date or epoch milliseconds) that is not in
- * `exclude` - the ids seen before the dispatch. `runs` is the parsed output of
- * `gh run list --json databaseId,createdAt,status`. Returns null when none qualifies.
- *
- * Oldest, not newest: this is the fallback when gh did not print the run URL, and if
- * someone else dispatches the same workflow a moment later, theirs is the newer one. The
- * residual race - two dispatches inside the same polling interval - cannot be told apart
- * from the listing, which is why the URL gh prints is used first whenever it is there.
+ * The run whose name carries `[<dispatchId>]`. release.yml sets `run-name` from the
+ * `dispatch_id` input the CLI passes, so the run it created is identifiable exactly - a run
+ * dispatched by someone else in the same moment has a different id, or none. `runs` is the
+ * parsed output of `gh run list --json databaseId,createdAt,status,displayTitle`. Returns
+ * null when no run matches yet; the oldest wins in the (impossible) case of two matches.
+ * Used when gh did not print the created run's URL, which is the primary path.
  */
-export function selectRun(runs, since, exclude = new Set()) {
-  const threshold = since instanceof Date ? since.getTime() : Number(since);
-
-  const candidates = runs.filter(run => {
-    if (exclude.has(run.databaseId)) return false;
-    const created = Date.parse(run.createdAt);
-    return Number.isFinite(created) && created >= threshold;
-  });
-
-  candidates.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
-  return candidates[0] ?? null;
+export function selectRun(runs, dispatchId) {
+  if (typeof dispatchId !== 'string' || dispatchId === '') {
+    throw new Error('a dispatch id is required to correlate the run');
+  }
+  const marker = `[${dispatchId}]`;
+  const matches = runs.filter(run => String(run.displayTitle ?? '').includes(marker));
+  matches.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+  return matches[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------------------
 // Text
 // ---------------------------------------------------------------------------------------
+
+/**
+ * `text` with C0 and C1 control characters removed, for terminal output only. Commit
+ * subjects are attacker-adjacent text that the preview echoes; an escape sequence in one
+ * could recolour or rewrite the confirmation prompt. Detection always runs on the raw
+ * subject - only what is printed is cleaned.
+ */
+export function sanitizeForTerminal(text) {
+  // eslint-disable-next-line no-control-regex
+  return String(text).replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+}
 
 /** The preview block, as printed. Pure so its shape is pinned by a test. */
 export function renderPreview(preview) {
@@ -421,7 +423,9 @@ export function renderPreview(preview) {
   if (drivers.length > 0) {
     lines.push('');
     lines.push(`  Decided by (${rule}):`);
-    for (const subject of drivers.slice(0, MAX_DRIVERS)) lines.push(`    - ${subject}`);
+    for (const subject of drivers.slice(0, MAX_DRIVERS)) {
+      lines.push(`    - ${sanitizeForTerminal(subject)}`);
+    }
     if (drivers.length > MAX_DRIVERS) {
       lines.push(`    ... and ${drivers.length - MAX_DRIVERS} more`);
     }
@@ -430,7 +434,8 @@ export function renderPreview(preview) {
   lines.push('');
   lines.push(
     'The workflow makes the final decision: it re-runs this detection on the runner and tags\n' +
-      `origin/${RELEASE_BRANCH} as it stands then, currently ${headSha}.`
+      `origin/${RELEASE_BRANCH} at ${headSha}. It is told this SHA (expected_sha) and refuses to run\n` +
+      `if ${RELEASE_BRANCH} has moved since this preview.`
   );
 
   return lines.join('\n');

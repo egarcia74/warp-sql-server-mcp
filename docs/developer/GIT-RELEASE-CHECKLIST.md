@@ -51,6 +51,10 @@ Trigger via GitHub CLI (what the script runs for you)
 
 - `gh workflow run release.yml --ref main -f release_type=auto -f dry_run=false`
 - `gh run watch <run-id>`
+- The script also passes two optional inputs you can leave empty by hand: `expected_sha`
+  (the full SHA it previewed - the workflow's first step fails if `main` has moved) and
+  `dispatch_id` (a random id the workflow puts in its run name, so the script finds its run
+  exactly).
 
 Trigger from GitHub UI
 

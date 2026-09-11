@@ -33,6 +33,7 @@
  * read back from gh or git is passed on as data().
  */
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
@@ -64,13 +65,7 @@ const PACKAGE_NAME = '@egarcia74/warp-sql-server-mcp';
 const POLL_INTERVAL_MS = 3_000;
 const POLL_WINDOW_MS = 60_000;
 
-/**
- * The fallback matches the run by creation time against the local clock, and the two clocks
- * are not the same clock. Selecting from a little before the dispatch keeps a slow local
- * clock from hiding the run; the pre-dispatch snapshot of run ids keeps that slack from
- * picking up an older run instead.
- */
-const CLOCK_SKEW_MS = 15_000;
+const FULL_SHA = /^[0-9a-f]{40}$/;
 
 // ---------------------------------------------------------------------------------------
 // Subprocesses
@@ -185,6 +180,9 @@ function checkPreconditions() {
   }
 
   const remoteHead = git('rev-parse', REMOTE_HEAD);
+  if (!FULL_SHA.test(remoteHead)) {
+    fail(`git rev-parse ${REMOTE_HEAD} returned "${remoteHead}", not a full commit SHA.`);
+  }
   const localRef = `refs/heads/${RELEASE_BRANCH}`;
   const localHead = tryCapture('git', ['rev-parse', '--verify', '--quiet', localRef])?.trim();
 
@@ -302,6 +300,7 @@ function buildPreview(options, { remoteHead, tags }) {
     drivers: options.type ? [] : detected.drivers,
     collisions,
     headSha: remoteHead.slice(0, 7),
+    fullSha: remoteHead,
     dryRun: options.dryRun
   };
 }
@@ -334,40 +333,38 @@ const listRuns = () =>
     '--event',
     'workflow_dispatch',
     '--limit',
-    '5',
+    '10',
     '--json',
-    'databaseId,createdAt,status'
+    'databaseId,createdAt,status,displayTitle'
   );
 
-/** Dispatches the workflow and returns the validated id of the run it created. */
-async function dispatch(releaseType, dryRun) {
-  const before = new Set(listRuns().map(run => run.databaseId));
-  const dispatchedAt = Date.now();
-
-  const args = [
-    'workflow',
-    'run',
-    WORKFLOW,
-    '--ref',
-    RELEASE_BRANCH,
-    '-f',
-    `release_type=${releaseType}`
-  ];
+/**
+ * Dispatches the workflow and returns the validated id of the run it created. Two inputs
+ * bind the run to this preview: `expected_sha` makes the workflow refuse if main has moved,
+ * and `dispatch_id` goes into the run name so the run can be found exactly.
+ */
+async function dispatch(releaseType, dryRun, expectedSha) {
+  const dispatchId = randomUUID();
+  const args = ['workflow', 'run', WORKFLOW, '--ref', RELEASE_BRANCH];
+  args.push('-f', data(`release_type=${releaseType}`));
+  args.push('-f', data(`expected_sha=${expectedSha}`));
+  args.push('-f', data(`dispatch_id=${dispatchId}`));
   if (dryRun) args.push('-f', 'dry_run=true');
   const { stdout, stderr } = ghAll(...args);
   console.log(
-    `Dispatched ${WORKFLOW} on ${RELEASE_BRANCH} with release_type=${releaseType}${dryRun ? ' dry_run=true' : ''}.`
+    `Dispatched ${WORKFLOW} on ${RELEASE_BRANCH} with release_type=${releaseType}${dryRun ? ' dry_run=true' : ''} ` +
+      `expected_sha=${expectedSha.slice(0, 7)} dispatch_id=${dispatchId}.`
   );
 
-  // gh prints the created run's URL when the API returns it; that is the only exact match.
+  // gh prints the created run's URL when the API returns it; that is the exact match.
   const fromUrl = parseRunUrl(`${stdout}\n${stderr}`);
   if (fromUrl) return assertRunId(fromUrl);
 
-  // Fallback: the oldest run that is new since the snapshot. See selectRun() for the race.
-  note('gh did not report the run URL; matching the run by creation time instead.');
+  // Otherwise the run name carries the dispatch id: still exact, just not immediate.
+  note('gh did not report the run URL; looking for the run named with this dispatch id.');
   const deadline = Date.now() + POLL_WINDOW_MS;
   for (;;) {
-    const run = selectRun(listRuns(), dispatchedAt - CLOCK_SKEW_MS, before);
+    const run = selectRun(listRuns(), dispatchId);
     if (run) return assertRunId(run.databaseId);
     const remaining = deadline - Date.now();
     if (remaining <= 0) break;
@@ -475,7 +472,7 @@ async function main() {
 
   if (!options.dryRun) await confirm(preview.nextVersion, options);
 
-  const runId = await dispatch(options.type ?? 'auto', options.dryRun);
+  const runId = await dispatch(options.type ?? 'auto', options.dryRun, preview.fullSha);
   console.log(`Watching run ${runId} ...`);
   console.log('');
 

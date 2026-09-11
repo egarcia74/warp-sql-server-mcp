@@ -1,5 +1,12 @@
 name: Release Automation
 
+# When scripts/release.mjs dispatches this workflow it passes a random dispatch_id, and the
+# run name carries it in brackets so the script can pick its own run out of `gh run list`
+# exactly, even when two dispatches land in the same moment. A manual dispatch leaves the
+# input empty and the run name is just the workflow name, as before. `run-name` may use the
+# github and inputs contexts.
+run-name: ${{ github.workflow }}${{ inputs.dispatch_id && format(' [{0}]', inputs.dispatch_id) || '' }}
+
 # Note: This workflow uses dynamic outputs from github-script actions.
 # Step outputs (should_release, release_type, changelog, version) are set at runtime
 # and may not be statically analyzable by linters - this is expected behavior.
@@ -30,6 +37,17 @@ on:
         required: false
         default: true
         type: boolean
+      # The two inputs below are set by scripts/release.mjs and may be left empty by hand.
+      dispatch_id:
+        description: 'Opaque id the release script uses to find this run (leave empty)'
+        required: false
+        default: ''
+        type: string
+      expected_sha:
+        description: 'Full SHA the release was previewed at; the run refuses if main has moved (leave empty)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -45,6 +63,21 @@ jobs:
       should_release: ${{ steps.check.outputs.should_release }} # yamllint disable-line rule:line-length
       release_type: ${{ steps.check.outputs.release_type }} # yamllint disable-line rule:line-length
     steps:
+      # On workflow_dispatch, github.sha (GITHUB_SHA) is the tip of the dispatched ref at the
+      # moment of dispatch - the commit every later job checks out and tags. When the release
+      # script passes the SHA it previewed, a push to main between preview and dispatch makes
+      # this step fail instead of releasing a commit nobody looked at. The value reaches the
+      # shell through the environment, never by interpolation into the script.
+      - name: Refuse if main moved since the preview
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          if [ -n "$EXPECTED_SHA" ] && [ "$EXPECTED_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::main is at $GITHUB_SHA, not the previewed $EXPECTED_SHA - re-run the preview"
+            exit 1
+          fi
+          echo "expected_sha: ${EXPECTED_SHA:-(not set)}; github.sha: $GITHUB_SHA"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

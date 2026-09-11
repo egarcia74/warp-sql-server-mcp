@@ -7,6 +7,7 @@ import {
   resolveNextVersion,
   selectRun,
   renderPreview,
+  sanitizeForTerminal,
   parseOriginRepo,
   parseRemoteTags,
   resolveReleasedVersion,
@@ -176,8 +177,15 @@ describe('resolveNextVersion', () => {
     expect(asked).toEqual(['v1.7.21']);
   });
 
-  it('gives up rather than loop forever if every tag is taken', () => {
-    expect(() => resolveNextVersion('1.0.0', 'patch', () => true)).toThrow(/gave up/);
+  it.each([
+    [0, [], '1.0.1'],
+    [1, ['v1.0.1'], '1.0.2'],
+    [3, ['v1.0.1', 'v1.0.2', 'v1.0.3'], '1.0.4']
+  ])('walks past %i occupied tag(s) and stops at the first free one', (_, taken, expected) => {
+    expect(resolveNextVersion('1.0.0', 'patch', tags(...taken))).toEqual({
+      version: expected,
+      collisions: taken
+    });
   });
 });
 
@@ -225,44 +233,50 @@ describe('parseArgs', () => {
 });
 
 describe('selectRun', () => {
-  const run = (databaseId, createdAt, status = 'queued') => ({ databaseId, createdAt, status });
-  const dispatchedAt = Date.parse('2026-09-11T13:40:00Z');
+  const id = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0';
+  const run = (databaseId, createdAt, displayTitle) => ({
+    databaseId,
+    createdAt,
+    status: 'queued',
+    displayTitle
+  });
 
-  it('picks the OLDEST run created at or after the dispatch time, so a later dispatch cannot win', () => {
+  it('picks the run whose name carries [dispatch_id], wherever it sits in the listing', () => {
     const runs = [
-      run(4, '2026-09-11T13:40:09Z'),
-      run(3, '2026-09-11T13:40:05Z'),
-      run(2, '2026-09-11T13:39:59Z', 'completed'),
-      run(1, '2026-09-11T13:32:28Z', 'completed')
+      run(4, '2026-09-11T13:40:09Z', 'Release Automation'),
+      run(3, '2026-09-11T13:40:05Z', `Release Automation [${id}]`),
+      run(2, '2026-09-11T13:39:59Z', 'Release Automation [another-id]')
     ];
-    expect(selectRun(runs, dispatchedAt)?.databaseId).toBe(3);
+    expect(selectRun(runs, id)?.databaseId).toBe(3);
   });
 
-  it('accepts a run created exactly at the dispatch time', () => {
-    expect(selectRun([run(7, '2026-09-11T13:40:00Z')], dispatchedAt)?.databaseId).toBe(7);
+  it('ignores a concurrent dispatch that carries no id, even when it is newer or older', () => {
+    // Someone else ran the workflow by hand in the same interval: its run name has no
+    // marker, so it can never be mistaken for ours, whatever its timestamp.
+    const runs = [
+      run(9, '2026-09-11T13:40:02Z', 'Release Automation'),
+      run(8, '2026-09-11T13:39:58Z', 'Release Automation')
+    ];
+    expect(selectRun(runs, id)).toBeNull();
+    expect(selectRun([...runs, run(10, '2026-09-11T13:40:03Z', `x [${id}]`)], id)?.databaseId).toBe(
+      10
+    );
   });
 
-  it('is null when every run predates the dispatch', () => {
-    const runs = [run(1, '2026-09-11T13:32:28Z'), run(2, '2026-09-11T13:39:59Z')];
-    expect(selectRun(runs, dispatchedAt)).toBeNull();
-    expect(selectRun([], dispatchedAt)).toBeNull();
+  it('is null while the run has not appeared yet', () => {
+    expect(selectRun([], id)).toBeNull();
+    expect(selectRun([run(1, '2026-09-11T13:40:00Z', undefined)], id)).toBeNull();
   });
 
-  it('accepts the dispatch time as a Date too', () => {
-    const runs = [run(5, '2026-09-11T13:40:01Z')];
-    expect(selectRun(runs, new Date(dispatchedAt))?.databaseId).toBe(5);
+  it('does not match a run whose id merely contains ours as a substring', () => {
+    expect(
+      selectRun([run(1, '2026-09-11T13:40:00Z', `Release Automation [${id}0]`)], id)
+    ).toBeNull();
   });
 
-  it('skips runs listed in the pre-dispatch snapshot, whatever their timestamp', () => {
-    // Clock skew allowance can reach back before the dispatch; the snapshot keeps an older
-    // run from being mistaken for the new one.
-    const runs = [run(9, '2026-09-11T13:40:02Z'), run(8, '2026-09-11T13:40:01Z')];
-    expect(selectRun(runs, dispatchedAt, new Set([8]))?.databaseId).toBe(9);
-    expect(selectRun(runs, dispatchedAt, new Set([8, 9]))).toBeNull();
-  });
-
-  it('ignores a run whose createdAt does not parse', () => {
-    expect(selectRun([run(1, 'yesterday')], dispatchedAt)).toBeNull();
+  it('requires a dispatch id: correlation without one is refused, not guessed', () => {
+    expect(() => selectRun([], '')).toThrow(/dispatch id is required/);
+    expect(() => selectRun([], undefined)).toThrow(/dispatch id is required/);
   });
 });
 
@@ -293,7 +307,19 @@ describe('renderPreview', () => {
     expect(text).toContain('Decided by (breaking change / !:):');
     expect(text).toContain('    - feat!: remove providers');
     expect(text).toContain('The workflow makes the final decision');
+    expect(text).toContain('It is told this SHA (expected_sha) and refuses to run');
     expect(text).not.toContain('DRY RUN');
+  });
+
+  it('strips terminal control characters from subjects, and only when rendering', () => {
+    const hostile = 'fix: \u001b[31mred\u001b[0m and \u0007bell and \u009f c1';
+    const text = renderPreview({ ...base, drivers: [hostile] });
+    expect(text).toContain('    - fix: [31mred[0m and bell and  c1');
+    expect(text).not.toContain('\u001b');
+    // Detection is unaffected: the raw subject still classifies as a fix.
+    expect(detectReleaseType([hostile]).type).toBe('patch');
+    expect(sanitizeForTerminal('plain: text')).toBe('plain: text');
+    expect(sanitizeForTerminal('a\u0000b\u007fc')).toBe('abc');
   });
 
   it('summarises drivers beyond the first five', () => {
