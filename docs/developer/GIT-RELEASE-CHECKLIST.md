@@ -27,16 +27,36 @@
 
 ## 🚀 Preferred: Automated Release Workflow
 
+Trigger with the release script (`scripts/release.mjs`)
+
+1. Preview: `npm run release:dry`
+   - Checks `gh` is authenticated, fetches `origin/main`, warns if local `main` differs from it
+     (the workflow releases `origin/main`'s HEAD, not your checkout) and warns about open PRs -
+     `main` must stay frozen until the bump PR merges, because the publish gate compares the tree
+     against the tag.
+   - Prints the version it expects (`current -> next`), the release type and the commit subjects
+     that decided it, using the same conventional-commit rules as `release.yml`, then dispatches the
+     workflow with `dry_run=true` and watches it. Nothing is tagged.
+2. Release: `npm run release`
+   - Same preview, then the prompt `Type the version to release (X.Y.Z), or anything else to abort:`.
+     It dispatches only if you type the previewed version exactly. The workflow still makes the
+     final decision on the runner.
+   - Watches the run, then prints the Release URL, the `chore/release/vX.Y.Z` bump PR and the
+     remaining steps.
+   - Override the detected type with `npm run release -- --type <patch|minor|major>`. Outside a
+     terminal (CI, a pipe) add `--yes` to skip the prompt; without it the script aborts.
+
+Trigger via GitHub CLI (what the script runs for you)
+
+- `gh workflow run release.yml --ref main -f release_type=auto -f dry_run=false`
+- `gh run watch <run-id>`
+
 Trigger from GitHub UI
 
 - Actions → Release Automation → Run workflow
   - release_type: `auto` (or override)
   - dry_run: `false`
   - create_version_pr: `true` (default)
-
-Trigger via GitHub CLI
-
-- `gh workflow run release.yml -f release_type=auto -f dry_run=false`
 
 What the workflow does
 

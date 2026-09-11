@@ -456,7 +456,7 @@ That file list is 314 tests across 7 files.
 > functions they cover - `stripWhereClauseLiterals`, `tokenizeWhereClause`,
 > `findForbiddenWhereClauseSyntax` - so a name filter like
 > `-t "safety|security|validation"` matches **none** of them. Measured: that pattern
-> selects 55 of 1,154 tests and **zero** from `sql-batch-guard`, `where-clause-guard`,
+> selects 55 of 1,223 tests and **zero** from `sql-batch-guard`, `where-clause-guard`,
 > `sql-construction-guard` or `sql-injection-battery`, while pulling in unrelated
 > query-optimizer, cleanup-script, server-config and logger tests that happen to contain
 > the word "validation". A contributor using it to check for injection regressions is
@@ -464,7 +464,7 @@ That file list is 314 tests across 7 files.
 >
 > **⚠️ `npm run test:unit -- <paths>` does not narrow the run either.** `test:unit` is
 > `vitest run test/unit`, so paths are _appended_ to the directory argument and Vitest
-> runs the whole directory - all 1,154 tests. Call `npx vitest run <paths>` directly. Same
+> runs the whole directory - all 1,223 tests. Call `npx vitest run <paths>` directly. Same
 > class of trap as `npm test`, which is a shell chain ending in the summary script, so
 > appended arguments never reach Vitest at all.
 
