@@ -9,7 +9,7 @@ import { resolveTestFile } from '../../scripts/ci/run-one-test.mjs';
 // name, so these tests pin the refusals, not just the happy path.
 describe('resolveTestFile (guard for npm run test:one, #1213)', () => {
   const root = resolve(process.cwd(), 'test');
-  const opts = { root, exists: () => true, isFile: () => true };
+  const opts = { root, exists: () => true, isFile: () => true, realpath: p => p };
 
   it('accepts an existing test file inside test/', () => {
     const result = resolveTestFile(['test/unit/example.test.js'], opts);
@@ -74,6 +74,46 @@ describe('resolveTestFile (guard for npm run test:one, #1213)', () => {
     const result = resolveTestFile(['test/unit/dir.test.js'], { ...opts, isFile: () => false });
     expect(result.ok).toBe(false);
     expect(result.reason).toMatch(/no such test file/);
+  });
+
+  it('refuses a file inside test/ that is a symlink pointing outside it', () => {
+    // Lexically fine, canonically not: exactly the gap a lexical-only check misses.
+    const result = resolveTestFile(['test/unit/link.test.js'], {
+      ...opts,
+      realpath: p => (p === root ? root : '/tmp/elsewhere/link.test.js')
+    });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/resolves outside/);
+  });
+
+  it('accepts a file whose canonical path is still inside test/', () => {
+    const result = resolveTestFile(['test/unit/real.test.js'], {
+      ...opts,
+      realpath: p => p
+    });
+    expect(result.ok).toBe(true);
+    expect(result.file).toBe(resolve(root, 'unit/real.test.js'));
+  });
+
+  it('tolerates a symlinked checkout by canonicalising the root too', () => {
+    // /var -> /private/var on macOS: the root moves, so containment must be
+    // judged against the canonical root, not the configured one.
+    const result = resolveTestFile(['test/unit/real.test.js'], {
+      ...opts,
+      realpath: p => p.replace('/var/', '/private/var/')
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('refuses a path realpath cannot resolve', () => {
+    const result = resolveTestFile(['test/unit/broken.test.js'], {
+      ...opts,
+      realpath: () => {
+        throw new Error('ELOOP');
+      }
+    });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/cannot resolve/);
   });
 
   it('containment is checked on the resolved path, not the raw string', () => {

@@ -15,12 +15,16 @@
  * without spawning anything.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { existsSync, realpathSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, resolve, sep } from 'node:path';
 
 const TEST_ROOT = resolve(process.cwd(), 'test');
 
-export function resolveTestFile(argv, { root = TEST_ROOT, exists = existsSync, isFile } = {}) {
+export function resolveTestFile(
+  argv,
+  { root = TEST_ROOT, exists = existsSync, isFile, realpath = realpathSync } = {}
+) {
   const stat = isFile ?? (p => statSync(p).isFile());
 
   if (argv.length !== 1) {
@@ -47,19 +51,40 @@ export function resolveTestFile(argv, { root = TEST_ROOT, exists = existsSync, i
     return { ok: false, reason: `not a test file: ${candidate}` };
   }
 
-  const full = resolve(root, '..', candidate);
+  const lexical = resolve(root, '..', candidate);
 
   // Containment is checked on the resolved path, so ../ escapes and absolute
   // paths outside the repo's test directory both fail here.
-  if (full !== root && !full.startsWith(root + sep)) {
+  if (!contains(root, lexical)) {
     return { ok: false, reason: `outside ${root}: ${candidate}` };
   }
 
-  if (!exists(full) || !stat(full)) {
+  if (!exists(lexical) || !stat(lexical)) {
     return { ok: false, reason: `no such test file: ${candidate}` };
   }
 
-  return { ok: true, file: full };
+  // Lexical resolution does not follow symlinks, so test/unit/x.test.js could
+  // still be a link pointing anywhere. Re-check containment on the canonical
+  // path, with the root canonicalised too so a symlinked checkout does not
+  // reject everything. Only reached once the file is known to exist.
+  let canonical;
+  let canonicalRoot;
+  try {
+    canonical = realpath(lexical);
+    canonicalRoot = realpath(root);
+  } catch {
+    return { ok: false, reason: `cannot resolve: ${candidate}` };
+  }
+
+  if (!contains(canonicalRoot, canonical)) {
+    return { ok: false, reason: `resolves outside ${root}: ${candidate}` };
+  }
+
+  return { ok: true, file: canonical };
+}
+
+function contains(root, path) {
+  return path === root || path.startsWith(root + sep);
 }
 
 function main() {
@@ -71,7 +96,13 @@ function main() {
     process.exit(2);
   }
 
-  execFileSync('npx', ['vitest', 'run', result.file], { stdio: 'inherit' });
+  // Not `npx vitest`: that resolves the binary through PATH (Sonar S4036) and
+  // puts a package manager between this guard and the runner. Resolve the
+  // installed vitest from the module graph and run it on this same node.
+  const require = createRequire(`${process.cwd()}${sep}`);
+  const vitest = resolve(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
+
+  execFileSync(process.execPath, [vitest, 'run', result.file], { stdio: 'inherit' });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
