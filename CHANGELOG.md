@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silent on the scrubbed ones and outside `test/`, and pins the single documented suppression so a new
   `eslint-disable` cannot appear silently. Closes #1214.
 
+- **ESLint's ignore list actually ignores things now.** `ignores` shared a config object with
+  `rules`, which in flat config narrows that one block instead of setting global ignores, so
+  `coverage/`, `dist/`, `build/` and `.codacy/` were still being linted - `eslint .` covered 89
+  files, three of them generated files under `coverage/`. Split into its own entry, and extended
+  to the gitignored agent worktrees under `.claude/worktrees/` and `.worktrees/`, whose
+  work-in-progress could fail an unrelated branch's pre-push hook.
+
 ### Changed
 
 - **`npm-publish.yml` now authenticates to npmjs.com with npm Trusted Publishing (GitHub OIDC) instead of an

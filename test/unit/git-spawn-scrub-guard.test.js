@@ -148,6 +148,18 @@ describe('the guard cannot be satisfied by shrinking what gets linted', () => {
     }
   });
 
+  it("ignores gitignored agent worktrees, so one branch cannot fail another branch's push", async () => {
+    // The pre-push hook runs `eslint .` over the whole tree. .claude/worktrees/ holds
+    // gitignored checkouts, so a half-written file in one would otherwise block every
+    // other branch's push - it did, on 2026-09-12.
+    for (const file of [
+      '.claude/worktrees/agent-example/test/unit/whatever.test.js',
+      '.worktrees/other/index.js'
+    ]) {
+      expect(await eslint.isPathIgnored(resolve(REPO_ROOT, file))).toBe(true);
+    }
+  });
+
   it('configures the rule for every JavaScript file under test/, not only *.test.js', async () => {
     for (const file of [
       'test/unit/verify-publish-tree.test.js',

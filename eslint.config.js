@@ -27,15 +27,17 @@ import js from '@eslint/js';
  * absolute path (`/usr/bin/git`), a git invoked through a shell wrapper or through `npm`,
  * an options object built elsewhere and spread in, a local function that is *named*
  * `scrubbedEnv` but scrubs nothing, and an `env: scrubbedEnv()` nested inside some other
- * property of the options object all slip past it. It also cannot see the runtime value of
- * what `scrubbedEnv` returns - only that the name is there. An `eslint-disable` comment
+ * property of the options object all slip past it. So does an aliased import
+ * (`import { execFileSync as run }`), since the selectors match on the callee's name. It
+ * also cannot see the runtime value of what `scrubbedEnv` returns - only that the name is
+ * there. An `eslint-disable` comment
  * defeats it outright, which is why `test/unit/git-spawn-scrub-guard.test.js` pins the
  * complete set of suppressions in the test tree: adding one fails that test until the
  * allow-list is updated in the same change, where a reviewer sees it.
  */
 const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSync)$/';
 /** `git`, `git.exe`, or a shell-command string that starts with one of them. */
-const GIT_COMMAND = '/^git(\\.exe)?($|\\s)/';
+const GIT_COMMAND = String.raw`/^git(\.exe)?($|\s)/`;
 /** The one sanctioned shape for a direct spawn: the options object names the scrub. */
 const NOT_SCRUBBED =
   ":not(:has(Property[key.name='env'] > CallExpression[callee.name='scrubbedEnv']))";
@@ -57,6 +59,26 @@ export const UNSCRUBBED_GIT_SPAWN_MESSAGE =
   'scripts/ci/verify-publish-tree.mjs.';
 
 export default [
+  // A config object whose ONLY key is `ignores` sets GLOBAL ignores. With any other key
+  // beside it, `ignores` merely narrows that one block - which is how this list sat inert:
+  // before this was split out, `eslint .` still linted coverage/, dist/, build/ and
+  // .codacy/ (89 files, 3 of them generated files under coverage/).
+  //
+  // .claude/worktrees/ and .worktrees/ are gitignored checkouts that agents work in.
+  // Linting them lets one branch's work-in-progress fail an unrelated branch's pre-push
+  // hook, which runs `eslint .` over the whole tree. That happened on 2026-09-12.
+  {
+    ignores: [
+      'node_modules/**',
+      'coverage/**',
+      '.git/**',
+      '.codacy/**',
+      'dist/**',
+      'build/**',
+      '.claude/worktrees/**',
+      '.worktrees/**'
+    ]
+  },
   js.configs.recommended,
   {
     languageOptions: {
@@ -102,8 +124,7 @@ export default [
       'eol-last': 'error',
       'no-trailing-spaces': 'error',
       'no-multiple-empty-lines': ['error', { max: 2, maxEOF: 1 }]
-    },
-    ignores: ['node_modules/**', 'coverage/**', '.git/**', '.codacy/**', 'dist/**', 'build/**']
+    }
   },
   {
     files: ['**/*.test.js', '**/*.spec.js', 'tests/**/*.js'],
