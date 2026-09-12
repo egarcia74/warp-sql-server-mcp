@@ -57,7 +57,7 @@ jobs:
     name: Check for Release-worthy Changes
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # Required to read git history and commits
+      contents: read # Required to read git history and commits
     outputs:
       # These outputs are dynamically set by the github-script action below
       should_release: ${{ steps.check.outputs.should_release }} # yamllint disable-line rule:line-length
@@ -83,6 +83,15 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      # This job spawns `node` to run the classifier. GitHub-hosted runners ship a Node,
+      # but which one is theirs to change, so pin it the way every other job here does
+      # rather than depend on the image. No `cache: npm` - the classifier has no
+      # dependencies and this job never runs `npm ci`.
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
 
       # The conventional-commit rules are NOT written here, and must never be written here
       # again. They live in scripts/lib/release-plan.mjs and reach this step - and the
@@ -193,7 +202,7 @@ jobs:
       # Without write permissions, repositories lacking RELEASE_TOKEN configuration would fail
       # during tag creation and release publishing, breaking automated release workflows.
       # This is an intentional security trade-off for release pipeline functionality.
-      contents: write  # Required for fallback GITHUB_TOKEN to push tags and create releases
+      contents: write # Required for fallback GITHUB_TOKEN to push tags and create releases
     steps:
       # Tag creation and release creation both use
       # `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`. `||` falls through only on
@@ -277,7 +286,7 @@ jobs:
         run: |
           RELEASE_TYPE="${{ needs.check-changes.outputs.release_type }}"
           echo "Release type: $RELEASE_TYPE"
-          
+
           if [ "$RELEASE_TYPE" = "none" ]; then
             echo "No version bump needed"
             echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
@@ -359,7 +368,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            
+
             await github.rest.issues.create({
               owner,
               repo,
@@ -446,21 +455,21 @@ jobs:
             const version = process.env.VERSION || '${{ needs.release.outputs.version }}';
             const branch = process.env.BRANCH || `chore/release/v${{ needs.release.outputs.version }}`;
             const { owner, repo } = context.repo;
-            
+
             // Check if PR already exists
             const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', head: `${owner}:${branch}` });
             if (prs.length > 0) {
               core.info(`PR already exists: #${prs[0].number}`);
               return;
             }
-            
+
             const body = [
               `This automated PR bumps package.json and package-lock.json to v${version} to match the released tag.`,
               '',
               `- Version: v${version}`,
               `- Source workflow: Release Automation`,
             ].join('\n');
-            
+
             const pr = await github.rest.pulls.create({
               owner,
               repo,

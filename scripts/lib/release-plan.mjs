@@ -547,6 +547,22 @@ export function sanitizeForTerminal(text) {
 }
 
 /** The preview block, as printed. Pure so its shape is pinned by a test. */
+/**
+ * Why the preview shows the release type it does: an explicit --type, the rule that matched,
+ * or nothing having matched at all.
+ */
+function releaseTypeReason(requestedType, rule) {
+  if (requestedType) {
+    return ` (forced by --type ${requestedType})`;
+  }
+
+  if (rule) {
+    return ` (auto: ${rule})`;
+  }
+
+  return ' (auto: no commit of a type that triggers a release)';
+}
+
 export function renderPreview(preview) {
   const {
     repo,
@@ -569,9 +585,7 @@ export function renderPreview(preview) {
   lines.push('');
   lines.push(`  Repository:     ${repo} (from git remote origin; every gh call is pinned to it)`);
   lines.push(`  Version:        ${currentVersion} -> ${nextVersion}`);
-  lines.push(
-    `  Release type:   ${releaseType}${requestedType ? ` (forced by --type ${requestedType})` : rule ? ` (auto: ${rule})` : ' (auto: no commit of a type that triggers a release)'}`
-  );
+  lines.push(`  Release type:   ${releaseType}${releaseTypeReason(requestedType, rule)}`);
   lines.push(`  Last tag:       ${lastTag ?? '(none - every commit counts)'}`);
   lines.push(
     `  Commits:        ${commitCount} since ${lastTag ?? 'the beginning'} on origin/${RELEASE_BRANCH} (no merges)`
