@@ -285,11 +285,11 @@ function buildPreview(options, { remoteHead, tags }) {
       // outcomes need different fixes, and reading alike is the defect #1158 reports.
       fail(
         `${subjects.length} commit(s) since ${lastTag ?? 'the beginning'} on ` +
-          `origin/${RELEASE_BRANCH}, none of a type that triggers a release (${mix}), so the ` +
-          'workflow would skip every job. Types test/ci/style are recognised and release ' +
-          'nothing on purpose; an "unclassified" count means a subject matched no type at ' +
-          'all. Pass --type <patch|minor|major> to release anyway, or --dry-run to see what ' +
-          'the workflow reports.'
+          `origin/${RELEASE_BRANCH}, none of them carrying a recognised conventional-commit ` +
+          `type (${mix}), so the workflow would skip every job. Every recognised type ` +
+          'releases at least a patch, so an "unclassified" count is the whole story: those ' +
+          'subjects matched no type at all. Pass --type <patch|minor|major> to release ' +
+          'anyway, or --dry-run to see what the workflow reports.'
       );
     }
   } else {

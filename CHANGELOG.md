@@ -13,13 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `style:` commits.** `release.yml` recognised only breaking/feat/fix/docs/chore, so a release window of only
   those types computed `none` and silently shipped nothing, indistinguishable from an empty window (#1158, found
   after a `refactor:` PR removed a module from the published tarball and a field from a public MCP tool response).
-  `perf`/`refactor`/`revert`/`build` now release a patch; `test`/`ci`/`style` are recognised and counted but
-  deliberately release nothing, because neither `test/` nor `.github/` is in `package.json`'s `files`. A window
-  with commits but no releasable type now warns and reports the mix instead of looking empty, and unclassified
-  subjects are named. The rules, which the workflow transcribed twice (the changelog copy matched `feat:` but not
-  `feat(scope):`) and `scripts/release.mjs` a third time, now live only in `scripts/lib/release-plan.mjs`, reached
-  by both workflow steps through the new `scripts/ci/classify-release-commits.mjs`. WARP.md, CONTRIBUTING.md and
-  the release checklist document the mapping and, for the first time, that it is the **PR title** that drives it.
+  All seven now release a patch: a commit-type prefix is a label the PR author chooses, not a guarantee about
+  which paths the diff touched, and the packed tree is not only runtime code — `docs/**/*.md`, `README.md` and
+  `CHANGELOG.md` are in `package.json`'s `files`, and `ci:`-titled PRs here routinely edit them. Over-releasing
+  spends a patch version; under-releasing ships work nowhere and silently, which is the defect itself. The only
+  window that now releases nothing is one whose subjects match no type at all, and it warns and names them
+  instead of looking empty. The rules, which the workflow transcribed twice (the changelog copy matched `feat:`
+  but not `feat(scope):`) and `scripts/release.mjs` a third time, now live only in `scripts/lib/release-plan.mjs`,
+  reached by both workflow steps through the new `scripts/ci/classify-release-commits.mjs`. WARP.md,
+  CONTRIBUTING.md and the release checklist document the mapping and, for the first time, that it is the
+  **PR title** that drives it.
 
 ### Changed
 

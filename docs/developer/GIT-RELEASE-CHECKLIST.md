@@ -26,10 +26,13 @@
   GitHub takes that from the PR title — so this is a constraint on how PRs are titled.**
   - `BREAKING CHANGE` / `!:` → major
   - `feat:` / `feat(scope):` / `feature:` → minor
-  - `fix:` / `bugfix:`, `docs:` / `chore:`, `perf:`, `refactor:`, `revert:`, `build:` → patch
-  - `test:` / `ci:` / `style:` → **no release** (nothing they touch is in the published tarball)
+  - `fix:` / `bugfix:`, `docs:` / `chore:`, `perf:`, `refactor:`, `revert:`, `build:`,
+    `test:` / `ci:` / `style:` → patch
   - anything else → **no release**, and the run warns, naming the unclassified subjects
-  - Highest level in the window wins; a window with commits but no releasable type says so
+  - Every recognised type releases at least a patch: the prefix is a label the PR author
+    chooses, not a guarantee about which paths changed, and `docs/**/*.md`, `README.md` and
+    `CHANGELOG.md` are packed, so a `ci:` PR can and does change the tarball (#1158)
+  - Highest level in the window wins; a window with commits but nothing classifiable says so
     explicitly rather than looking like an empty one (#1158)
 - Manual override: choose `patch | minor | major | prerelease`
 
@@ -144,8 +147,9 @@ not a silent gap.
 
 ## ℹ️ Notes about Automation
 
-- `release_type=auto` respects conventional commits and treats `docs:`/`chore:` as patch; the
-  full mapping is in “Choose Release Type” above and lives in code in
+- `release_type=auto` respects conventional commits and treats every recognised type other
+  than `feat:` and a breaking change as patch — `docs:`/`chore:`/`test:`/`ci:`/`style:`
+  included; the full mapping is in “Choose Release Type” above and lives in code in
   `scripts/lib/release-plan.mjs`, which both `release.yml` steps and `npm run release` share
 - Tag collision avoidance is built-in (keeps bumping patch until a free tag exists)
 - `package.json` is not committed on `main` by the workflow; the version-bump PR keeps `main` in sync while honoring branch protection

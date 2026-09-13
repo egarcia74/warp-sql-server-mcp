@@ -106,10 +106,19 @@ jobs:
       #
       #   major  BREAKING CHANGE / !:
       #   minor  feat / feature
-      #   patch  fix / bugfix, docs / chore, perf, refactor, revert, build
-      #   none   test, ci, style - recognised and counted and reported, but deliberately
-      #          release nothing: neither test/ nor .github/ is in package.json "files",
-      #          so no consumer of the published tarball can observe them
+      #   patch  every other recognised type - fix / bugfix, docs / chore, perf, refactor,
+      #          revert, build, test, ci, style
+      #
+      # No recognised type releases nothing. `test`, `ci` and `style` were briefly mapped to
+      # `none` on the argument that test/ and .github/ are not in package.json "files", so
+      # they could not change the published tarball; that argument is false. The markdown
+      # under docs/, README.md and CHANGELOG.md ARE packed, and `ci:`-subjected commits here
+      # routinely edit them (ac38c51, c4cb6d8, 38293d9 all carry a ci(...) subject and all
+      # changed packed files). More generally a commit-type prefix is a label the PR author
+      # chooses, not a guarantee about which paths the diff touched, so a release decision
+      # cannot rest on it. The asymmetry settles the rest: over-releasing spends a patch
+      # version, under-releasing ships work nowhere and silently - which is #1158 itself.
+      # So the only window that releases nothing is one whose subjects match NO type at all.
       #
       # Because a squash merge names the commit from the PR TITLE, this is in practice a
       # constraint on PR titles. See WARP.md "Release Process" and CONTRIBUTING.md.
@@ -165,8 +174,9 @@ jobs:
             const releaseType = forced ? manualType : plan.releaseType;
             const shouldRelease = releaseType !== 'none' || process.env.DRY_RUN === 'true';
 
-            // The point of #1158: "commits, but none of a releasing type" must never look
-            // like "no commits". It is a warning, not a silent `none`.
+            // The point of #1158: "commits, but none of them classifiable" must never look
+            // like "no commits". It is a warning, not a silent `none`. Every recognised type
+            // releases, so reaching here means every subject in the window was unclassified.
             if (!forced && plan.releaseType === 'none') {
               core.warning(`No release from this window: ${plan.summary}`);
             }
@@ -498,7 +508,8 @@ jobs:
             echo "✅ **Release Status**: Completed successfully" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.check-changes.outputs.should_release }}" = "false" ]; then
             # The check-changes job's own summary says which of the two it was: no commits
-            # at all, or commits of no release-triggering type. See #1158.
+            # at all, or commits whose subjects matched no conventional-commit type at all
+            # (every recognised type releases). See #1158.
             echo "⏭️ **Release Status**: Skipped - see \"Release type\" above for why" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Release Status**: Failed" >> $GITHUB_STEP_SUMMARY

@@ -73,13 +73,14 @@ export function readWindow(tag) {
  *   rule          the label of the bucket that decided it, null when none did
  *   drivers       the subjects in that bucket
  *   counts        commits per rule id, plus `unclassified`
- *   nonReleasing  subjects of a recognised type that deliberately triggers no release
  *   unclassified  subjects no rule recognised at all
  *   summary       the same decision as one line of prose, for the log and the job summary
  *   changelog     { breaking, features, fixes, other } of { hash, text }
  *
- * `releaseType: 'none'` with `commitCount > 0` is a DIFFERENT outcome from an empty
- * window, and `summary` is worded so the two can never read alike (#1158).
+ * Every recognised conventional-commit type releases at least a patch, so
+ * `releaseType: 'none'` with `commitCount > 0` means no subject in the window matched any
+ * type. That is a DIFFERENT outcome from an empty window, and `summary` is worded so the
+ * two can never read alike (#1158).
  */
 export function planFromLog(text) {
   const commits = parseCommitLines(text);
@@ -91,8 +92,9 @@ export function planFromLog(text) {
     summary = 'No commits in this window - nothing to release.';
   } else if (detected.type === 'none') {
     summary =
-      `${commits.length} commit(s), none of a type that triggers a release (${mix}). ` +
-      'Nothing will be tagged or published - dispatch with an explicit release_type to force one.';
+      `${commits.length} commit(s), none of them carrying a recognised conventional-commit ` +
+      `type (${mix}). Nothing will be tagged or published - retitle them, or dispatch with ` +
+      'an explicit release_type to force a release.';
   } else {
     summary = `${commits.length} commit(s) -> ${detected.type}, decided by ${detected.rule} (${mix}).`;
   }
@@ -104,7 +106,6 @@ export function planFromLog(text) {
     rule: detected.rule,
     drivers: detected.drivers,
     counts: detected.counts,
-    nonReleasing: detected.nonReleasing,
     unclassified: detected.unclassified,
     summary,
     changelog: groupForChangelog(commits)

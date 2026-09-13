@@ -288,25 +288,39 @@ export function parseArgs(argv) {
  *
  *   major  breaking change / !:                          a compatibility break
  *   minor  feat / feature                                new functionality
- *   patch  fix / bugfix, docs / chore, perf, refactor,    can change what the published
- *          revert, build                                 tarball contains or does
- *   none   test, ci, style                                cannot: `test/` and `.github/`
- *                                                        are not in package.json "files",
- *                                                        and `style` is formatting only
+ *   patch  EVERY other recognised type - fix / bugfix,   anything else that ships
+ *          docs / chore, perf, refactor, revert, build,
+ *          test, ci, style
+ *
+ * No recognised type maps to `none`. The only window that releases nothing is one in which
+ * NO subject matches any rule at all, and that is a defect in the subjects rather than a
+ * decision this table makes.
  *
  * Why `perf` is patch and not minor: SemVer's MINOR is "functionality added in a
  * backwards compatible manner", and Conventional Commits maps only `feat` to it. A faster
  * implementation of the same API adds no functionality, and this project already puts
  * every other shipping-but-not-new change (`docs`, `chore`) in patch.
  *
- * Why `test`/`ci`/`style` release NOTHING while `refactor`/`perf`/`build` do: the line is
- * "could a consumer of the npm package observe this?". `refactor` can - #1155 removed a
- * module that shipped in the tarball and a field from a public MCP tool response under a
- * `refactor:` subject, which is the bug that prompted #1158. `test:` and `ci:` provably
- * cannot: neither `test/` nor `.github/` is published. Their commits are still recognised
- * and counted, so a window made only of them reports "N commits, none of a type that
- * triggers a release" instead of looking like an empty window - which is the real defect
- * #1158 describes. Force one with `npm run release -- --type patch` if you want it.
+ * Why `test`, `ci` and `style` are patch too - the correction #1158 originally asked for:
+ * an earlier revision of this table made them non-releasing, on the argument that `test/`
+ * and `.github/` are not in package.json's `files`, so such commits provably cannot change
+ * the published tarball. That argument is wrong twice over.
+ *
+ *   1. The packed tree is not only runtime code. The markdown under `docs/`, plus
+ *      `README.md` and `CHANGELOG.md`, is published, and `ci:`-subjected commits here
+ *      routinely edit it:
+ *      ac38c51 `ci(publish): pin the npm used to publish` changed
+ *      docs/operations/RELEASE-TOKEN-SETUP.md, c4cb6d8 `ci(publish): authenticate to npm`
+ *      changed CHANGELOG.md and two docs files, 38293d9 `ci(release): bump
+ *      package-lock.json` changed two docs files.
+ *   2. More fundamentally, a conventional-commit prefix is a LABEL THE AUTHOR CHOOSES, not
+ *      a guarantee about which paths the commit touched. A release decision that assumes a
+ *      prefix constrains the diff cannot be sound, whatever `files` happens to contain.
+ *
+ * And the asymmetry favours releasing: over-releasing spends a patch version, which costs
+ * nothing anyone notices; under-releasing ships the work nowhere and says nothing, which is
+ * precisely the #1158 defect (#1155 removed a module from the tarball and a field from a
+ * public MCP tool response under a `refactor:` subject and shipped no release at all).
  */
 const startsWithType = (msg, type) => msg.startsWith(`${type}:`) || msg.startsWith(`${type}(`);
 
@@ -352,9 +366,9 @@ export const CLASSIFICATION_RULES = [
     match: msg => startsWithType(msg, 'revert') || msg.startsWith('revert "')
   },
   { id: 'build', label: 'build', release: 'patch', match: msg => startsWithType(msg, 'build') },
-  { id: 'test', label: 'test', release: 'none', match: msg => startsWithType(msg, 'test') },
-  { id: 'ci', label: 'ci', release: 'none', match: msg => startsWithType(msg, 'ci') },
-  { id: 'style', label: 'style', release: 'none', match: msg => startsWithType(msg, 'style') }
+  { id: 'test', label: 'test', release: 'patch', match: msg => startsWithType(msg, 'test') },
+  { id: 'ci', label: 'ci', release: 'patch', match: msg => startsWithType(msg, 'ci') },
+  { id: 'style', label: 'style', release: 'patch', match: msg => startsWithType(msg, 'style') }
 ];
 
 /** The first rule `subject` matches, or null when nothing recognises it. */
@@ -370,16 +384,16 @@ const LEVELS = ['major', 'minor', 'patch'];
  * The release type release.yml's "Check conventional commits" step computes from these
  * commit subjects, plus the evidence behind it.
  *
- * Returns { type, rule, drivers, counts, unclassified, nonReleasing }:
+ * Returns { type, rule, drivers, counts, unclassified }:
  *   type          major | minor | patch | none
  *   rule          the label of the bucket that decided it, or null for none
  *   drivers       that bucket's subjects, in commit order, not deduplicated
  *   counts        commits per rule id, plus `unclassified`, for the "why not" message
  *   unclassified  subjects no rule recognised (a malformed or unprefixed subject)
- *   nonReleasing  subjects of a recognised type that deliberately triggers no release
  *
- * `type: 'none'` with a non-empty `counts` is NOT the same as an empty window, and every
- * caller must say which one it is - that ambiguity is the whole of #1158.
+ * Since every recognised type releases, `type: 'none'` on a non-empty window means every
+ * subject in it was unclassified. That is still NOT the same outcome as an empty window,
+ * and every caller must say which one it is - that ambiguity is the whole of #1158.
  */
 export function detectReleaseType(subjects) {
   const buckets = new Map();
@@ -401,11 +415,7 @@ export function detectReleaseType(subjects) {
   }
   if (unclassified.length > 0) counts.unclassified = unclassified.length;
 
-  const nonReleasing = CLASSIFICATION_RULES.filter(
-    rule => rule.release === 'none' && buckets.has(rule.id)
-  ).flatMap(rule => buckets.get(rule.id));
-
-  const evidence = { counts, unclassified, nonReleasing };
+  const evidence = { counts, unclassified };
 
   for (const level of LEVELS) {
     const rule = CLASSIFICATION_RULES.find(
@@ -560,7 +570,7 @@ function releaseTypeReason(requestedType, rule) {
     return ` (auto: ${rule})`;
   }
 
-  return ' (auto: no commit of a type that triggers a release)';
+  return ' (auto: no commit subject matched a recognised type)';
 }
 
 export function renderPreview(preview) {

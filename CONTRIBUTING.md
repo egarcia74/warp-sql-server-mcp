@@ -416,15 +416,20 @@ title**. The release workflow reads those subjects to decide whether to release 
 level, so the PR title — not the messages on your branch — is what drives it:
 
 - `feat:` / `feature:` → minor release
-- `fix:` / `bugfix:`, `docs:`, `chore:`, `perf:`, `refactor:`, `revert:`, `build:` → patch release
+- `fix:` / `bugfix:`, `docs:`, `chore:`, `perf:`, `refactor:`, `revert:`, `build:`,
+  `test:`, `ci:`, `style:` → patch release
 - `BREAKING CHANGE` or `!:` anywhere in the title (e.g. `feat!:`) → major release
-- `test:`, `ci:`, `style:` → recognised, but release nothing: they cannot change the
-  published npm tarball (`test/` and `.github/` are not published)
 - anything else → release nothing, and the release run warns that the subject matched no type
 
-A scope is fine everywhere (`feat(cli): …`). If your change ships in the published package,
-title it with a type that releases — `refactor:` counts, `ci:` does not. The mapping lives
-in `scripts/lib/release-plan.mjs`; see WARP.md's Release Process for the full table.
+Every recognised type releases at least a patch, `test:`, `ci:` and `style:` included. The
+prefix you pick is a label, not a promise about which files your PR touched, and plenty of
+the published tarball is documentation — `docs/**/*.md`, `README.md` and `CHANGELOG.md` are
+all packed, and `ci:`-titled PRs here routinely edit them. Over-releasing costs a patch
+version; under-releasing ships your work nowhere and says nothing.
+
+A scope is fine everywhere (`feat(cli): …`). The only title that releases nothing is one
+that matches no type at all, so give yours a type. The mapping lives in
+`scripts/lib/release-plan.mjs`; see WARP.md's Release Process for the full table.
 
 Example:
 
