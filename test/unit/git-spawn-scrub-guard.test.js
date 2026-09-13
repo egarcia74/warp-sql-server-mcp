@@ -223,19 +223,24 @@ describe('the escape hatch is pinned, not pretended away', () => {
     // Every inline form ESLint honours: the rule-config and disable families, plus the
     // environment ones, which are directives too even though they cannot disable a rule.
     const labels = [word, `${word}-disable`, `${word}-enable`, 'global', 'globals', 'exported'];
-    const directive = new RegExp(
-      `\\/\\*\\s*(?:${labels.join('|')})[-\\w]*[\\s\\S]*?\\*\\/|` +
-        `\\/\\/\\s*${word}-(?:disable|enable)[-\\w]*[^\\n]*`,
-      'g'
-    );
     const nextLine = `${word}-disable-next-line`;
+
+    // A literal pattern for ANY comment, then the label test in code. Building the pattern
+    // out of the assembled words would mean `new RegExp(<non-literal>)`, which the security
+    // scanner rejects on sight, and it is not needed - the label check reads better anyway.
+    const comments = /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
+    const isDirective = text => {
+      const body = text.replace(/^\/\*+|^\/\/+/, '').trimStart();
+      return labels.some(label => body.startsWith(label));
+    };
 
     const results = await eslint.lintFiles([resolve(REPO_ROOT, 'test')]);
     const found = [];
 
     for (const result of results) {
       const source = await readFile(result.filePath, 'utf8');
-      for (const [text] of source.matchAll(directive)) {
+      for (const [text] of source.matchAll(comments)) {
+        if (!isDirective(text)) continue;
         found.push(`${relative(REPO_ROOT, result.filePath)}: ${text.trim()}`);
       }
     }
