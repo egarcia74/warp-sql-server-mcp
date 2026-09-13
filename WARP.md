@@ -20,8 +20,8 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, and **comprehensive performance monitoring**. Built with a
 modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 1,427 tests, every
-one of which runs automatically on every pull request (1,360 unit + 27 integration + 40
+**✅ Production Status**: This MCP server has been **fully validated** through 1,457 tests, every
+one of which runs automatically on every pull request (1,390 unit + 27 integration + 40
 live-database). Covers all security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/user/QUICKSTART.md) for a 5-minute setup walkthrough.
@@ -884,8 +884,8 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 1,427 tests total, **all of them automated** on every pull request:
-  1,360 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
+- **Comprehensive Coverage**: 1,457 tests total, **all of them automated** on every pull request:
+  1,390 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
   drives against a Docker SQL Server the CI `Tests` job starts itself. Together they cover all MCP
   tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
@@ -923,14 +923,14 @@ npm run docker:clean                  # Remove all data and containers
 ### Test Structure
 
 Counts below are the vitest suite sizes measured with `npm run test:unit`
-(31 files, 1,360 tests); the live-database suites are counted from their own runners.
+(31 files, 1,390 tests); the live-database suites are counted from their own runners.
 
 ```text
 test/
 ├── README.md                                # Comprehensive test documentation
 ├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
 ├── setup.js                                 # Vitest global setup
-├── unit/                                    # Vitest unit suites - 31 files, 1,360 tests
+├── unit/                                    # Vitest unit suites - 31 files, 1,390 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
 │   ├── query-optimizer.test.js              # 136 - Query analysis and optimization engine
 │   ├── sql-injection-battery.test.js        # 103 - Authoritative behavioral injection guard
@@ -946,10 +946,12 @@ test/
 │   ├── sql-construction-guard.test.js       #  30 - Dispatch-vs-escaping static guard
 │   ├── get-server-info.test.js              #  29 - Server diagnostics tool
 │   ├── cleanup-test-processes.test.js        #  48 - Process inspector: PID guards, exit status
+│   ├── git-spawn-scrub-guard.test.js         #  50 - Lint guard: git spawns must scrub the environment
+│   ├── run-one-test.test.js                  #  29 - Single-suite runner the Claude action is allowed to call
 │   ├── verify-publish-tree.test.js          #  40 - Published-tree verification before npm publish
-│   ├── release-script.test.js               # 105 - Release dispatch: type detection, semver bump, flags, run selection
+│   ├── release-script.test.js               # 135 - Release dispatch: type detection, semver bump, flags, run selection
 │   ├── classify-dependabot-pr.test.js       #  32 - Dependabot PR title classification rules
-│   ├── docs-html-writer.test.js              #   10 - Docs writer: timestamp churn guard
+│   ├── docs-html-writer.test.js              #  10 - Docs writer: timestamp churn guard
 │   ├── server-config.test.js                #  24 - Configuration parsing and defaults
 │   ├── query-policy.test.js                 #  19 - Safety-tier policy decisions
 │   ├── sql-identifier.test.js               #  16 - Identifier/literal escaping helpers
@@ -994,9 +996,9 @@ test/
 
 ### Test Categories
 
-#### **Unit Tests (1,360 across 31 files)**
+#### **Unit Tests (1,390 across 31 files)**
 
-Grouped by area; the group totals sum to 1,360:
+Grouped by area; the group totals sum to 1,390:
 
 - **Core MCP server** (144): `index.test.js` - entry point, tool dispatch, `validateQuery`
 - **SQL safety and injection guards** (317): `sql-injection-battery` (103), `where-clause-guard` (81),
@@ -1009,7 +1011,7 @@ Grouped by area; the group totals sum to 1,360:
 - **Tools and handlers** (147): `tool-registry` (59), `database-tools-handler` (59),
   `get-server-info` (29)
 - **Configuration** (24): `server-config` (24)
-- **Repository and CLI tooling** (339): `cleanup-test-processes` (48), `release-script` (105), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (40),
+- **Repository and CLI tooling** (369): `cleanup-test-processes` (48), `release-script` (135), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (40),
   `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6),
   `cli` (4), `docker-command-utils` (4), `dependabot-config` (2)
 
@@ -1209,7 +1211,7 @@ This project maintains high code quality through automated tooling and architect
 > This document captures real-world metrics from the WARP project including:
 >
 > - **525 automated tests** with 100% pass rate enforcement (the figure captured by that case study; the
->   suite has since grown to 1,360 automated unit tests)
+>   suite has since grown to 1,390 automated unit tests)
 > - **74% code coverage** with strict quality gates
 > - **3x development time** vs. 90% reduction in debugging time
 > - **The five critical challenges** teams face with no-compromise quality
@@ -1276,7 +1278,7 @@ The project includes comprehensive system maintenance tools to manage developmen
 
 #### **Process Cleanup Infrastructure**
 
-During intensive testing sessions (like our 1,360-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
+During intensive testing sessions (like our 1,390-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
 
 The project includes tools to inspect them:
 
@@ -1563,9 +1565,11 @@ refspec, reads tags from the remote (`git ls-remote`) so a stale local tag canno
 warns if the local `main` is not at `origin/main` (the workflow releases `origin/main`'s HEAD, and the
 preview is computed from that), and warns about open PRs - `main` must stay frozen until the
 version-bump PR merges, since the publish gate below compares the tree against the tag. It
-then prints `current -> next` version, the release type, the last tag, the commit count and
-the subjects that decided the type, applying the same rules as the workflow's
-"Check conventional commits" step (listed under Behavior Notes). `npm run release` proceeds
+then prints `current -> next` version, the release type, the last tag, the commit count, the
+commit mix by type and the subjects that decided the type, running the very same classifier
+as the workflow's "Check conventional commits" step - `scripts/lib/release-plan.mjs`, mapping
+listed under Behavior Notes. When no commit is of a releasing type it says so and names the
+mix, which is not the same message as "no commits at all". `npm run release` proceeds
 only when you type the previewed version back exactly; it dispatches with `--ref main` and two
 optional inputs - `expected_sha`, the full SHA it previewed, which makes the workflow's first
 step refuse if `main` has moved, and `dispatch_id`, a random id the workflow puts in its run
@@ -1601,11 +1605,43 @@ gh run watch <run-id>
 
 #### Behavior Notes (Automation Details)
 
-- Auto detection (when `release_type=auto`):
-  - `BREAKING CHANGE` or `!:` → major
-  - `feat:` / `feature:` → minor
-  - `fix:` / `bugfix:` → patch
-  - `docs:` / `chore:` → patch (treated as release‑worthy for auditability)
+- Auto detection (when `release_type=auto`) — **the subjects that count are whatever lands on
+  `main`, with merge commits skipped** (`git log --no-merges`). A squash-merge contributes one
+  subject, the PR TITLE; a merge commit contributes every commit from the branch and its own
+  merge subject is skipped. This repository permits both, so a release depends on the PR
+  title OR on the branch commits, according to how the PR is merged:
+
+  | Subject prefix                                                     | Release                               |
+  | ------------------------------------------------------------------ | ------------------------------------- |
+  | `BREAKING CHANGE` or `!:` anywhere in the subject                  | major                                 |
+  | `feat:` / `feat(scope):` / `feature:`                              | minor                                 |
+  | `fix:` / `fix(scope):` / `bugfix:`                                 | patch                                 |
+  | `docs:` / `chore:` (release‑worthy for auditability)               | patch                                 |
+  | `perf:` / `refactor:` / `revert:` (incl. `Revert "…"`) / `build:`  | patch                                 |
+  | `test:` / `ci:` / `style:`                                         | patch                                 |
+  | anything else (`deps:`, an unprefixed subject, a malformed one, …) | **none** — and logged as unclassified |
+
+  A prefix has to be COMPLETE to count: `type:`, `type(scope):`, `type!:` or
+  `type(scope)!:`. An unclosed scope such as `ci(release update workflow` is malformed,
+  not a `ci` commit, and falls to the last row.
+
+  The first matching row wins, so `feat!: …` is major, not minor; across a window the
+  highest level any commit asks for wins. **Every recognised type releases at least a
+  patch**, `test:`, `ci:` and `style:` included: a commit-type prefix is a label the PR
+  author chooses, not a guarantee about which paths the diff touched, and the packed tree is
+  not only runtime code — `docs/**/*.md`, `README.md` and `CHANGELOG.md` are all in
+  `package.json`'s `files`, and `ci:`-titled PRs here routinely edit them. The asymmetry
+  decides the rest: over-releasing spends a patch version, under-releasing ships the work
+  nowhere and says nothing, which is the #1158 defect itself. So the only window that
+  releases nothing is one whose subjects match **no type at all**, and that window **warns
+  and names them** rather than looking like an empty one (#1158). Force a release over it
+  with `release_type=patch` or `npm run release -- --type patch`.
+
+  These rules exist in exactly one place, `scripts/lib/release-plan.mjs`; the workflow's two
+  `github-script` steps (release type, changelog grouping) both reach them through
+  `scripts/ci/classify-release-commits.mjs`, and so does `npm run release`'s preview. Do not
+  transcribe them into a workflow again - three transcriptions is how #1158 happened.
+
 - Tag collision handling: If the computed tag (e.g., `vX.Y.Z`) already exists, the workflow
   automatically increments the patch version until it finds a free tag, then proceeds.
 - Version bump on `main`: the `release` job never pushes the bump to `main` directly - branch

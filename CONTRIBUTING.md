@@ -402,8 +402,44 @@ Follow conventional commits format:
 - `docs:` Documentation changes
 - `style:` Code style changes (formatting, etc.)
 - `refactor:` Code refactoring
+- `perf:` Performance improvements
 - `test:` Adding or updating tests
+- `build:` Build, packaging or dependency-manifest changes
+- `ci:` CI/workflow changes
+- `revert:` Reverting an earlier change
 - `chore:` Maintenance tasks
+
+### Which subjects the release reads
+
+The release workflow classifies the commit subjects that land on `main`, skipping merge
+commits (`git log --no-merges`). Which subjects those are depends on how your PR is merged,
+and this repository allows both:
+
+- **Squash-merge** produces one commit named after the **PR title**, so the PR title is what
+  drives the release and your branch messages are not read.
+- **Merge commit** keeps every commit from your branch and the merge subject itself is
+  skipped, so **each of your branch commits** is classified and the PR title is not read at
+  all. PRs #1231 and #1233 were merged this way.
+
+So title the PR properly _and_ keep branch subjects conventional — whichever way it is
+merged, something you wrote has to carry the type:
+
+- `feat:` / `feature:` → minor release
+- `fix:` / `bugfix:`, `docs:`, `chore:`, `perf:`, `refactor:`, `revert:`, `build:`,
+  `test:`, `ci:`, `style:` → patch release
+- `BREAKING CHANGE` or `!:` anywhere in a classified subject (e.g. `feat!:`) → major release
+- anything else → release nothing, and the release run warns that the subject matched no type
+
+Every recognised type releases at least a patch, `test:`, `ci:` and `style:` included. The
+prefix you pick is a label, not a promise about which files your PR touched, and plenty of
+the published tarball is documentation — `docs/**/*.md`, `README.md` and `CHANGELOG.md` are
+all packed, and `ci:`-titled PRs here routinely edit them. Over-releasing costs a patch
+version; under-releasing ships your work nowhere and says nothing.
+
+A scope is fine everywhere (`feat(cli): …`). The only subject that releases nothing is
+one that matches no type at all, so make sure whichever one gets classified carries a
+type. The mapping lives in `scripts/lib/release-plan.mjs`; see WARP.md's Release Process
+for the full table.
 
 Example:
 
