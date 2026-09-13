@@ -147,7 +147,19 @@ describe('resolveVitest confines the runner to this repository', () => {
     mkdirSync(join(outside, 'node_modules', 'vitest'), { recursive: true });
     writeFileSync(join(outside, 'node_modules', 'vitest', 'package.json'), '{}');
     writeFileSync(join(outside, 'node_modules', 'vitest', 'vitest.mjs'), '');
-    symlinkSync(join(outside, 'node_modules'), join(repo, 'node_modules'));
+    // 'junction' rather than the default directory link: on Windows a directory symlink
+    // needs elevated privileges or Developer Mode and throws EPERM, which would fail this
+    // suite on a working resolver. Junctions need neither, and the type is ignored on POSIX.
+    try {
+      symlinkSync(join(outside, 'node_modules'), join(repo, 'node_modules'), 'junction');
+    } catch (error) {
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+      // A host that cannot create links at all cannot exercise this; say so rather than
+      // reporting a resolver failure that did not happen.
+      expect(error.code).toMatch(/EPERM|EACCES|ENOSYS|UNKNOWN/);
+      return;
+    }
 
     try {
       expect(() =>
