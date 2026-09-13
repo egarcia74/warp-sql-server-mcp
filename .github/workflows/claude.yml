@@ -224,7 +224,7 @@ jobs:
           # author-supplied PR text:
           #   Bash(npx vitest run:*)     vitest executes whatever --config,
           #                              --setupFiles and --globalSetup name.
-          #   Bash(node scripts/ci/run-one-test.mjs:*)   npm's own options are accepted before the
+          #   Bash(npm run test:one:*)   npm's own options are accepted before the
           #                              script runs at all, and `npm run test:one
           #                              --script-shell=<path>` makes npm execute
           #                              that path as the shell instead. Verified

@@ -15,7 +15,7 @@
  * without spawning anything.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -106,7 +106,38 @@ function main() {
     process.exit(2);
   }
 
+  const ambiguous = siblingsSharingPrefix(result.file);
+  if (ambiguous.length > 0) {
+    console.error(
+      `run-one-test: ${result.file} is a prefix of ${ambiguous.join(', ')}, and vitest filters ` +
+        'by prefix, so it would run those too. Rename one of them.'
+    );
+    process.exit(2);
+  }
+
   execFileSync(process.execPath, [vitest, 'run', result.file], { stdio: 'inherit' });
+}
+
+/**
+ * Vitest matches a CLI filter by prefix, not equality, so asking for `foo.test.js` also runs
+ * `foo.test.js.extra.test.js` - verified, two files ran. Nothing in the CLI expresses "this
+ * file only", so the one-file guarantee is kept by refusing the ambiguous case outright.
+ */
+export function siblingsSharingPrefix(file, { root = TEST_ROOT, list = listTestFiles } = {}) {
+  return list(root).filter(other => other !== file && other.startsWith(file));
+}
+
+function listTestFiles(root) {
+  const found = [];
+  const walk = dir => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.test.js')) found.push(full);
+    }
+  };
+  walk(root);
+  return found;
 }
 
 /**
@@ -134,7 +165,21 @@ export function resolveVitest({
     throw new Error(`cannot resolve vitest under ${modules}`);
   }
 
-  if (canonicalEntry !== canonicalModules && !canonicalEntry.startsWith(canonicalModules + sep)) {
+  // Canonicalising node_modules would move the trusted boundary with it: if node_modules is
+  // itself a symlink out of the repository, everything under its target would "contain".
+  // So the canonical node_modules must also still sit inside the canonical repository.
+  let canonicalRoot;
+  try {
+    canonicalRoot = realpathSync(root);
+  } catch {
+    throw new Error(`cannot resolve ${root}`);
+  }
+
+  if (!contains(canonicalRoot, canonicalModules)) {
+    throw new Error(`refusing a node_modules outside ${root}: ${canonicalModules}`);
+  }
+
+  if (!contains(canonicalModules, canonicalEntry)) {
     throw new Error(`refusing a vitest outside ${modules}: ${entry}`);
   }
 

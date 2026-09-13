@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { resolve, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
-import { resolveTestFile, resolveVitest } from '../../scripts/ci/run-one-test.mjs';
+import {
+  resolveTestFile,
+  resolveVitest,
+  siblingsSharingPrefix
+} from '../../scripts/ci/run-one-test.mjs';
 
 // The point of scripts/ci/run-one-test.mjs is that the Claude review Action can
 // be granted `Bash(npm run test:one:*)` without that being arbitrary code
@@ -134,6 +140,28 @@ describe('resolveVitest confines the runner to this repository', () => {
     expect(resolveVitest()).toMatch(/node_modules\/vitest\/vitest\.mjs$/);
   });
 
+  it('refuses a node_modules that is itself a symlink out of the repository', () => {
+    // Canonicalising node_modules would otherwise move the trusted boundary with it.
+    const repo = mkdtempSync(join(tmpdir(), 'rot-repo-'));
+    const outside = mkdtempSync(join(tmpdir(), 'rot-out-'));
+    mkdirSync(join(outside, 'node_modules', 'vitest'), { recursive: true });
+    writeFileSync(join(outside, 'node_modules', 'vitest', 'package.json'), '{}');
+    writeFileSync(join(outside, 'node_modules', 'vitest', 'vitest.mjs'), '');
+    symlinkSync(join(outside, 'node_modules'), join(repo, 'node_modules'));
+
+    try {
+      expect(() =>
+        resolveVitest({
+          root: repo,
+          require: { resolve: () => join(repo, 'node_modules', 'vitest', 'package.json') }
+        })
+      ).toThrow(/refusing a node_modules outside/);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('refuses a vitest resolved outside the repo node_modules', () => {
     expect(() =>
       resolveVitest({
@@ -154,5 +182,51 @@ describe('resolveVitest confines the runner to this repository', () => {
         }
       })
     ).toThrow();
+  });
+});
+
+// Codex on #1231: vitest matches a CLI filter by prefix, not equality, so asking for
+// foo.test.js also runs foo.test.js.extra.test.js. Reproduced - two files, 46 tests ran.
+describe('siblingsSharingPrefix keeps the one-file guarantee', () => {
+  const list = files => () => files;
+
+  it('finds a sibling that extends the requested name', () => {
+    expect(
+      siblingsSharingPrefix('/r/test/unit/a.test.js', {
+        list: list(['/r/test/unit/a.test.js', '/r/test/unit/a.test.js.extra.test.js'])
+      })
+    ).toEqual(['/r/test/unit/a.test.js.extra.test.js']);
+  });
+
+  it('is empty when the name is unambiguous', () => {
+    expect(
+      siblingsSharingPrefix('/r/test/unit/a.test.js', {
+        list: list(['/r/test/unit/a.test.js', '/r/test/unit/b.test.js'])
+      })
+    ).toEqual([]);
+  });
+
+  it('does not count the requested file as its own sibling', () => {
+    expect(
+      siblingsSharingPrefix('/r/test/unit/a.test.js', { list: list(['/r/test/unit/a.test.js']) })
+    ).toEqual([]);
+  });
+
+  it('reports every ambiguous sibling, not just the first', () => {
+    expect(
+      siblingsSharingPrefix('/r/test/unit/a.test.js', {
+        list: list([
+          '/r/test/unit/a.test.js',
+          '/r/test/unit/a.test.js.one.test.js',
+          '/r/test/unit/a.test.js.two.test.js'
+        ])
+      })
+    ).toHaveLength(2);
+  });
+
+  it("finds no ambiguity among this repository's own test files", () => {
+    expect(siblingsSharingPrefix(resolve(process.cwd(), 'test/unit/run-one-test.test.js'))).toEqual(
+      []
+    );
   });
 });
