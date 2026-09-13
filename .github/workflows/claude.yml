@@ -214,6 +214,26 @@ jobs:
           # #1177 reports that input is dropped before reaching the SDK. The
           # claude_args path demonstrably works at this SHA - the failed run
           # logged "maxTurns": 20 and stopped at exactly 20.
+          # Lets the reviewer run a SINGLE test file and check a claim itself
+          # ("this regression test fails on the old code") instead of taking it on
+          # trust; `npm run test:unit` only ever runs all of them.
+          #
+          # The grant names the script directly, and that spelling is load-bearing.
+          # Two shapes were tried and rejected, both arbitrary code execution in a
+          # job holding GITHUB_TOKEN and the OAuth token while reading
+          # author-supplied PR text:
+          #   Bash(npx vitest run:*)     vitest executes whatever --config,
+          #                              --setupFiles and --globalSetup name.
+          #   Bash(npm run test:one:*)   npm's own options are accepted before the
+          #                              script runs at all, and `npm run test:one
+          #                              --script-shell=<path>` makes npm execute
+          #                              that path as the shell instead. Verified
+          #                              against the real npm, not reasoned about.
+          # Naming `node scripts/ci/run-one-test.mjs` leaves no launcher options in
+          # front of the script: anything after it lands in argv, where the script
+          # refuses it. Same reason Bash(node:*) is absent - that would hand the
+          # option surface back. `npm test` stays out too: it drives the Docker
+          # integration suite, which this runner cannot support.
           claude_args: |
             --max-turns 60
-            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(npm ci),Bash(npm run lint),Bash(npm run lint:fix),Bash(npm run format),Bash(npm run format:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run precommit),Bash(npm run ci)"
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(npm ci),Bash(npm run lint),Bash(npm run lint:fix),Bash(npm run format),Bash(npm run format:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(node scripts/ci/run-one-test.mjs:*),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run precommit),Bash(npm run ci)"
