@@ -23,7 +23,7 @@
  * nothing can execute them.
  */
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -96,6 +96,20 @@ export const c = script => spawn('node', [script]);`,
   'a command that merely starts with the same letters': `import { execFileSync } from 'node:child_process';
 export const show = () => execFileSync('${GIT}leaks', ['detect']);`
 };
+
+/**
+ * Every JavaScript file under `test/`, hidden entries included. Enumerated from the
+ * filesystem rather than from ESLint, so the two can be compared: if a future `ignores`
+ * entry hid a test file, ESLint would stop linting it AND stop scanning it, and nothing
+ * else here would notice.
+ */
+function testFilesOnDisk(dir = resolve(REPO_ROOT, 'test')) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const full = resolve(dir, entry.name);
+    if (entry.isDirectory()) return testFilesOnDisk(full);
+    return /\.(js|mjs|cjs)$/.test(entry.name) ? [full] : [];
+  });
+}
 
 describe('the #1214 guard fires on an unscrubbed git spawn under test/', () => {
   for (const [shape, source] of Object.entries(UNSCRUBBED_FIXTURES)) {
@@ -251,6 +265,21 @@ describe('the escape hatch is pinned, not pretended away', () => {
         `test/unit/verify-publish-tree.test.js: // ${nextLine} no-restricted-syntax -- deliberate unscrubbed control, see above`
       ].sort()
     );
+  });
+
+  // The two scans above take their file set from ESLint. That is aligned with what is
+  // actually linted, but it means a future `ignores` entry would remove a file from the
+  // scan and from the lint at the same time, silently. So enumerate the disk independently
+  // and require ESLint to have seen every one.
+  it('lints every JavaScript file that exists under test/, so nothing can be hidden by ignoring it', async () => {
+    const onDisk = testFilesOnDisk().sort();
+    const results = await eslint.lintFiles([resolve(REPO_ROOT, 'test')]);
+    const linted = new Set(results.map(result => result.filePath));
+
+    const unseen = onDisk.filter(file => !linted.has(file)).map(file => relative(REPO_ROOT, file));
+
+    expect(unseen).toEqual([]);
+    expect(onDisk.length).toBeGreaterThan(0);
   });
 
   it('lints the whole test tree clean under the guard', async () => {
