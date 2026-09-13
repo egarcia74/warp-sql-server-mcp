@@ -228,6 +228,16 @@ describe('detectReleaseType: the types added by #1158', () => {
     expect(classifySubject('styles for the docs page')).toBeNull();
   });
 
+  // `feature:` used to be matched anywhere in the subject, so a docs commit that merely
+  // mentioned it classified as a feature - a minor release, and filed under New Features.
+  it('reads feature: as a prefix, not as a word appearing anywhere', () => {
+    expect(classifySubject('feature: add a thing')?.id).toBe('feat');
+    expect(classifySubject('feature(cli): add a thing')?.id).toBe('feat');
+    expect(classifySubject('docs: explain feature: titles')?.id).toBe('docs');
+    expect(classifySubject('chore: mention feature: in passing')?.id).toBe('docs');
+    expect(detectReleaseType(['docs: explain feature: titles']).type).toBe('patch');
+  });
+
   it('gives every rule a distinct id and a release level the bumper understands', () => {
     const ids = CLASSIFICATION_RULES.map(rule => rule.id);
     expect(new Set(ids).size).toBe(ids.length);

@@ -22,8 +22,9 @@
 
 ## 🧮 Choose Release Type
 
-- Auto (conventional commits). **The subject that decides is the squash-merge commit's, and
-  GitHub takes that from the PR title — so this is a constraint on how PRs are titled.**
+- Auto (conventional commits). **The subjects that decide are whatever lands on `main`, with
+  merge commits skipped: a squash-merge contributes the PR title, a merge commit contributes
+  every branch commit instead. Both are allowed here, so both need a type.**
   - `BREAKING CHANGE` / `!:` → major
   - `feat:` / `feat(scope):` / `feature:` → minor
   - `fix:` / `bugfix:`, `docs:` / `chore:`, `perf:`, `refactor:`, `revert:`, `build:`,

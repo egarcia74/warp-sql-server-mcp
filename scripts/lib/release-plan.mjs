@@ -335,7 +335,9 @@ export const CLASSIFICATION_RULES = [
     id: 'feat',
     label: 'feat / feature',
     release: 'minor',
-    match: msg => startsWithType(msg, 'feat') || msg.includes('feature:')
+    // Anchored, not `includes`: `docs: explain feature: titles` is a docs commit, and an
+    // unanchored match would classify it minor and file it under New Features.
+    match: msg => startsWithType(msg, 'feat') || startsWithType(msg, 'feature')
   },
   {
     id: 'fix',

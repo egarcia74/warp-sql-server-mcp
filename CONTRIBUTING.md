@@ -409,11 +409,20 @@ Follow conventional commits format:
 - `revert:` Reverting an earlier change
 - `chore:` Maintenance tasks
 
-### Your PR title is the one that counts
+### Which subjects the release reads
 
-PRs are squash-merged, and GitHub names the resulting commit on `main` after the **PR
-title**. The release workflow reads those subjects to decide whether to release and at what
-level, so the PR title — not the messages on your branch — is what drives it:
+The release workflow classifies the commit subjects that land on `main`, skipping merge
+commits (`git log --no-merges`). Which subjects those are depends on how your PR is merged,
+and this repository allows both:
+
+- **Squash-merge** produces one commit named after the **PR title**, so the PR title is what
+  drives the release and your branch messages are not read.
+- **Merge commit** keeps every commit from your branch and the merge subject itself is
+  skipped, so **each of your branch commits** is classified and the PR title is not read at
+  all. PRs #1231 and #1233 were merged this way.
+
+So title the PR properly _and_ keep branch subjects conventional — whichever way it is
+merged, something you wrote has to carry the type:
 
 - `feat:` / `feature:` → minor release
 - `fix:` / `bugfix:`, `docs:`, `chore:`, `perf:`, `refactor:`, `revert:`, `build:`,
