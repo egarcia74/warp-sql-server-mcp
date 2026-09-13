@@ -48,7 +48,6 @@ import js from '@eslint/js';
  * Adding either fails a test until the allow-list is updated in the same change, where a
  * reviewer sees it.
  */
-const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSync)$/';
 /**
  * `git`, `git.exe`, or a shell command starting with one of them.
  *
@@ -65,49 +64,48 @@ const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSyn
  * Quotes and a backslash count as boundaries too: a POSIX shell removes them before
  * execution, so `git"" status` and a backslash-newline continuation both run git status.
  */
-/** A shell word break AFTER the name: whitespace, an operator, or end of string. */
-const GIT_END = String.raw`(?:[\s;|&<>()]|$)`;
-/** Empty quotes are erased by the shell, so `git\"\" status` is still git. */
-const GIT_QUOTES = String.raw`(?:\"\"|'')*`;
 /**
- * Where a command word may START: the beginning, or after an operator that ends the
- * previous command, optionally past environment assignments. Without this, git is only
- * found as the FIRST command, and `mkdir -p f && git init` - an ordinary thing to write,
- * needing no obfuscation - inherited GIT_* unguarded.
+ * Two families, because they carry different risks and admit different checks.
+ *
+ * `exec`/`execSync` take a SHELL COMMAND. Locating the git word inside one means parsing
+ * shell grammar - operators, reserved words like `then`, `{` grouping, leading redirections,
+ * quoting, escaping, interpolation - and a regex in an esquery attribute cannot do that.
+ * Successive attempts here missed `mkdir -p f && git init`, `{ git status; }` and
+ * `if true; then git status; fi`, while reporting `echo "x; git status"`, where the word is
+ * data. So position is no longer interpreted at all: a shell command that MENTIONS git as a
+ * word must carry the scrub. That over-matches deliberately - `echo "git is nice"` is
+ * reported - and the remedy is one argument, which is the right trade for a hazard whose
+ * failure mode rewrote the real repository.
+ *
+ * `execFile`/`execFileSync`/`spawn`/`spawnSync` take an EXECUTABLE NAME with no shell, so
+ * there is nothing to parse: the first argument either names git or does not.
  */
-const GIT_WORD_START = String.raw`(?:^|[;&|(\n])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s;|&<>()]*\s+)*`;
-const GIT_COMMAND = `/${GIT_WORD_START}git(\\.exe)?${GIT_QUOTES}${GIT_END}/i`;
-/** The same, but the word break must be PRESENT - used where a quasi's end is not the command's end. */
-const GIT_COMMAND_BOUNDED = `/${GIT_WORD_START}git(\\.exe)?${GIT_QUOTES}[\\s;|&<>()]/i`;
-/**
- * The same, but requiring the boundary to be PRESENT. A template's first cooked quasi ends
- * where an interpolation begins, so `` execSync(`\x67it${'leaks'}`) `` has the cooked quasi
- * `git` exactly - end-of-quasi is not end-of-command, and treating it as one reported
- * gitleaks. Templates that carry an interpolation must show the boundary inside the quasi.
- */
+const SHELL_CALLEES = '/^(exec|execSync)$/';
+const ARGV_CALLEES = '/^(execFile|execFileSync|spawn|spawnSync)$/';
+/** git as a whole word, wherever it appears in a shell command. */
+const GIT_MENTION = String.raw`/\bgit(\.exe)?\b/i`;
+/** An executable named git, allowing the Windows spelling. Anchored - no shell involved. */
+const GIT_EXECUTABLE = String.raw`/^\s*git(\.exe)?$/i`;
 
 /** The one sanctioned shape for a direct spawn: the options object names the scrub. */
 const NOT_SCRUBBED =
   ":not(:has(Property[key.name='env'] > CallExpression[callee.name='scrubbedEnv']))";
 
 export const UNSCRUBBED_GIT_SPAWN_SELECTORS = [
-  // execFileSync('git', args, opts) / spawnSync('git', ...) / execSync('git status', ...)
-  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.value=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  // cp.execFileSync('git', ...) / child_process.spawnSync('git', ...)
-  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.value=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  // execSync(`git ${subcommand}`) - a template literal has no `.value` to match on.
-  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND_BOUNDED}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND_BOUNDED}]${NOT_SCRUBBED}`,
-  // ...and on the COOKED text too: node runs the cooked value, so execSync(`\x67it status`)
-  // launches git while its raw text reads `\x67it status` and matches nothing above.
-  // A template with no interpolation may end at the quasi; one with an interpolation must
-  // show the boundary inside the quasi, or `\x67it${'leaks'}` would read as git.
-  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.cooked=${GIT_COMMAND_BOUNDED}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.cooked=${GIT_COMMAND_BOUNDED}]${NOT_SCRUBBED}`
+  // Shell commands: a string that mentions git...
+  `CallExpression[callee.name=${SHELL_CALLEES}][arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${SHELL_CALLEES}][arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
+  // ...or a template ANY of whose quasis does. Checking only quasis.0 missed
+  // execSync(`cd ${dir} && git status`), a routine way to build a command.
+  `CallExpression[callee.name=${SHELL_CALLEES}]:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${SHELL_CALLEES}]:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.name=${SHELL_CALLEES}]:has(TemplateElement[value.cooked=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${SHELL_CALLEES}]:has(TemplateElement[value.cooked=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  // Executable names: exact, since no shell reinterprets them.
+  `CallExpression[callee.name=${ARGV_CALLEES}][arguments.0.value=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${ARGV_CALLEES}][arguments.0.value=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.name=${ARGV_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${ARGV_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`
 ];
 
 export const UNSCRUBBED_GIT_SPAWN_MESSAGE =

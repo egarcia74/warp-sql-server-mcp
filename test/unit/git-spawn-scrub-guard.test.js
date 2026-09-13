@@ -115,11 +115,6 @@ export const show = dir => runGit(['status'], { cwd: dir });`,
 export const a = dir => execFileSync('npm', ['run', 'build'], { cwd: dir });
 export const b = () => execSync('docker ps', { stdio: 'ignore' });
 export const c = script => spawn('node', [script]);`,
-  // Adjacent quoted and unquoted fragments concatenate, so this runs gitleaks, not git.
-  'a quoted fragment that completes another command name': `import { execSync } from 'node:child_process';
-export const show = dir => execSync('${GIT}"leaks" detect', { cwd: dir });`,
-  'a cooked template whose interpolation completes another command': `import { execSync } from 'node:child_process';
-export const show = () => execSync(\`\\x67it\${'leaks'}\`);`,
   'a command that merely starts with the same letters': `import { execFileSync } from 'node:child_process';
 export const show = () => execFileSync('${GIT}leaks', ['detect']);`
 };
@@ -166,6 +161,39 @@ function testFilesOnDisk(dir = resolve(REPO_ROOT, 'test')) {
     return /\.(js|mjs|cjs)$/.test(entry.name) ? [full] : [];
   });
 }
+
+/**
+ * Shell commands the guard reports even though they do not run git.
+ *
+ * Deliberate. Locating the git word inside a shell command means parsing shell grammar, and
+ * a regex cannot: the attempts that tried missed `mkdir -p f && git init`, `{ git status; }`
+ * and `if true; then git status; fi`. Position is no longer interpreted, so a command that
+ * MENTIONS git must carry the scrub. The cost is these; the remedy is one argument.
+ */
+const OVERMATCHED_FIXTURES = {
+  'a quoted fragment that completes another command name': `import { execSync } from 'node:child_process';
+export const show = dir => execSync('${GIT}"leaks" detect', { cwd: dir });`,
+  'a template whose interpolation completes another command name': `import { execSync } from 'node:child_process';
+export const show = () => execSync(\`${GIT}\${'leaks'}\`);`,
+  'git named only as data inside a quoted argument': `import { execSync } from 'node:child_process';
+export const show = () => execSync('echo "${GIT} is nice"');`
+};
+
+describe('the guard over-matches shell commands that merely mention git, on purpose', () => {
+  for (const [shape, source] of Object.entries(OVERMATCHED_FIXTURES)) {
+    it(`reports ${shape}`, async () => {
+      const result = await lintSource(source, 'test/unit/generated-overmatch-fixture.js');
+      expect(guardReports(result).length).toBeGreaterThanOrEqual(1);
+    });
+  }
+
+  it('does not over-match the argv family, where no shell reinterprets the name', async () => {
+    const source = `import { execFileSync } from 'node:child_process';
+export const show = () => execFileSync('${GIT}leaks', ['detect']);`;
+    const result = await lintSource(source, 'test/unit/generated-argv-fixture.js');
+    expect(guardReports(result)).toEqual([]);
+  });
+});
 
 describe('the #1214 guard fires on an unscrubbed git spawn under test/', () => {
   for (const [shape, source] of Object.entries(UNSCRUBBED_FIXTURES)) {
