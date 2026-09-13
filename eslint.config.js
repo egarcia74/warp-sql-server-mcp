@@ -50,11 +50,14 @@ import js from '@eslint/js';
  */
 const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSync)$/';
 /**
- * `git`, `git.exe`, or a shell-command string that starts with one of them. Matched
- * case-insensitively: Windows resolves executables without regard to case, so `Git` and
- * `GIT.EXE` launch the same binary and inherit the same GIT_* variables.
+ * `git`, `git.exe`, or a shell-command string that starts with one of them.
+ *
+ * Case-insensitive: Windows resolves executables without regard to case, so `Git` and
+ * `GIT.EXE` launch the same binary and inherit the same GIT_* variables. Leading whitespace
+ * is allowed because `exec`/`execSync` take a shell command, where `' git status'` is valid
+ * and launches git just the same.
  */
-const GIT_COMMAND = String.raw`/^git(\.exe)?($|\s)/i`;
+const GIT_COMMAND = String.raw`/^\s*git(\.exe)?($|\s)/i`;
 /** The one sanctioned shape for a direct spawn: the options object names the scrub. */
 const NOT_SCRUBBED =
   ":not(:has(Property[key.name='env'] > CallExpression[callee.name='scrubbedEnv']))";

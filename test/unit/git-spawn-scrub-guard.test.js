@@ -28,7 +28,7 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ESLint } from 'eslint';
+import { ESLint, Linter } from 'eslint';
 
 import { UNSCRUBBED_GIT_SPAWN_MESSAGE } from '../../eslint.config.js';
 import { runGit } from '../helpers/git.js';
@@ -103,6 +103,32 @@ export const show = () => execFileSync('${GIT}leaks', ['detect']);`
  * entry hid a test file, ESLint would stop linting it AND stop scanning it, and nothing
  * else here would notice.
  */
+/**
+ * Real comment tokens, from ESLint's parser rather than a regex over the source. Directive
+ * text inside a string or template literal is not a directive, and this file's own fixtures
+ * are strings.
+ */
+function commentsOf(source) {
+  const collected = [];
+  new Linter().verify(source, {
+    plugins: {
+      probe: {
+        rules: {
+          collect: {
+            create: context => ({
+              Program() {
+                collected.push(...context.sourceCode.getAllComments());
+              }
+            })
+          }
+        }
+      }
+    },
+    rules: { 'probe/collect': 'error' }
+  });
+  return collected;
+}
+
 function testFilesOnDisk(dir = resolve(REPO_ROOT, 'test')) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const full = resolve(dir, entry.name);
@@ -224,38 +250,42 @@ describe('the escape hatch is pinned, not pretended away', () => {
   // shows up in neither the reports nor the suppressed messages - both assertions around
   // this one pass while an unscrubbed spawn sits in the file. Verified against real ESLint.
   //
-  // The scanned set comes from ESLint itself rather than a glob, so it cannot drift from
-  // what is actually linted: a glob of `test/**/*.js` silently omits hidden paths, and a
-  // file such as `test/.hidden-bypass.js` IS linted - verified - so it could have carried
-  // the override and gone unseen.
-  //
-  // The directive words are assembled rather than written, for the same reason the git
-  // fixtures above are: this file must contain no directive text of its own, or the scan
-  // would match its own source. That also means this file cannot exempt itself.
+  // Comments come from the parser, not from a scan of the raw source: comment-shaped text
+  // inside a string or template literal is not a directive, and the fixtures in this very
+  // file are strings. The label is then matched as a whole token, so ordinary prose like
+  // "globally shared setup" is not mistaken for a `global` directive.
   it('allows exactly the known ESLint directive comments in everything it lints under test/', async () => {
     const word = `${'esl'}int`;
     // Every inline form ESLint honours: the rule-config and disable families, plus the
     // environment ones, which are directives too even though they cannot disable a rule.
-    const labels = [word, `${word}-disable`, `${word}-enable`, 'global', 'globals', 'exported'];
-    const nextLine = `${word}-disable-next-line`;
+    // ESLint honours these only as BLOCK comments...
+    const blockLabels = new Set([
+      word,
+      `${word}-disable`,
+      `${word}-enable`,
+      `${word}-disable-line`,
+      `${word}-disable-next-line`,
+      'global',
+      'globals',
+      'exported'
+    ]);
+    // ...and only these as LINE comments, which is why prose such as
+    // "// exported helper details" is not a directive and must not be flagged as one.
+    const lineLabels = new Set([`${word}-disable-line`, `${word}-disable-next-line`]);
 
-    // A literal pattern for ANY comment, then the label test in code. Building the pattern
-    // out of the assembled words would mean `new RegExp(<non-literal>)`, which the security
-    // scanner rejects on sight, and it is not needed - the label check reads better anyway.
-    const comments = /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
-    const isDirective = text => {
-      const body = text.replace(/^\/\*+|^\/\/+/, '').trimStart();
-      return labels.some(label => body.startsWith(label));
-    };
+    const nextLine = `${word}-disable-next-line`;
 
     const results = await eslint.lintFiles([resolve(REPO_ROOT, 'test')]);
     const found = [];
 
     for (const result of results) {
       const source = await readFile(result.filePath, 'utf8');
-      for (const [text] of source.matchAll(comments)) {
-        if (!isDirective(text)) continue;
-        found.push(`${relative(REPO_ROOT, result.filePath)}: ${text.trim()}`);
+      for (const comment of commentsOf(source)) {
+        const text = comment.value.trim();
+        const labels = comment.type === 'Line' ? lineLabels : blockLabels;
+        if (!labels.has(text.split(/\s+/)[0])) continue;
+        const marker = comment.type === 'Line' ? '//' : '/*';
+        found.push(`${relative(REPO_ROOT, result.filePath)}: ${marker} ${text}`);
       }
     }
 
@@ -267,19 +297,22 @@ describe('the escape hatch is pinned, not pretended away', () => {
     );
   });
 
-  // The two scans above take their file set from ESLint. That is aligned with what is
-  // actually linted, but it means a future `ignores` entry would remove a file from the
-  // scan and from the lint at the same time, silently. So enumerate the disk independently
-  // and require ESLint to have seen every one.
-  it('lints every JavaScript file that exists under test/, so nothing can be hidden by ignoring it', async () => {
-    const onDisk = testFilesOnDisk().sort();
-    const results = await eslint.lintFiles([resolve(REPO_ROOT, 'test')]);
-    const linted = new Set(results.map(result => result.filePath));
+  // Being linted is not the same as being guarded: a later config block could disable or
+  // replace no-restricted-syntax for a subtree, and every other assertion here would still
+  // pass because the base config keeps those files in lintFiles(). So check the EFFECTIVE
+  // rule for each file found on disk.
+  it('applies the guard to every test file on disk, not just to representative paths', async () => {
+    const unguarded = [];
 
-    const unseen = onDisk.filter(file => !linted.has(file)).map(file => relative(REPO_ROOT, file));
+    for (const file of testFilesOnDisk()) {
+      const config = await eslint.calculateConfigForFile(file);
+      const entry = config.rules?.['no-restricted-syntax'];
+      const options = Array.isArray(entry) ? entry.slice(1) : [];
+      const guards = options.some(option => option?.message === UNSCRUBBED_GIT_SPAWN_MESSAGE);
+      if (!guards) unguarded.push(relative(REPO_ROOT, file));
+    }
 
-    expect(unseen).toEqual([]);
-    expect(onDisk.length).toBeGreaterThan(0);
+    expect(unguarded).toEqual([]);
   });
 
   it('lints the whole test tree clean under the guard', async () => {
