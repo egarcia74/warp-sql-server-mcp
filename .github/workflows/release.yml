@@ -120,8 +120,11 @@ jobs:
       # version, under-releasing ships work nowhere and silently - which is #1158 itself.
       # So the only window that releases nothing is one whose subjects match NO type at all.
       #
-      # Because a squash merge names the commit from the PR TITLE, this is in practice a
-      # constraint on PR titles. See WARP.md "Release Process" and CONTRIBUTING.md.
+      # Which subjects reach this classifier depends on how the PR was merged, because the
+      # window is read with `--no-merges`: a squash merge contributes one subject, the PR
+      # TITLE, while a merge commit contributes every commit from the branch and its own
+      # merge subject is skipped. This repository permits both, so both need a type.
+      # See WARP.md "Release Process" and CONTRIBUTING.md.
       - name: Check conventional commits
         id: check
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3

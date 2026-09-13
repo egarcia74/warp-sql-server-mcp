@@ -238,6 +238,25 @@ describe('detectReleaseType: the types added by #1158', () => {
     expect(detectReleaseType(['docs: explain feature: titles']).type).toBe('patch');
   });
 
+  it('reads bugfix: as a prefix, while doc: stays deliberately loose', () => {
+    expect(classifySubject('bugfix: a real fix')?.id).toBe('fix');
+    expect(classifySubject('bugfix(cli): a scoped fix')?.id).toBe('fix');
+    expect(classifySubject('docs: explain bugfix: titles')?.id).toBe('docs');
+    // `doc:` is deliberately left loose - see the rule's comment - so this still matches
+    // the docs rule, which `chore` shares anyway.
+    expect(classifySubject('chore: update doc: links')?.id).toBe('docs');
+    expect(classifySubject('update doc: thing')?.id).toBe('docs');
+  });
+
+  // The breaking matchers are the one deliberate exception: Conventional Commits puts
+  // `BREAKING CHANGE` in the body or footer and `!` after the type, so anchoring them
+  // would break the spec rather than tighten it.
+  it('still finds BREAKING CHANGE and !: away from the start of the subject', () => {
+    expect(classifySubject('feat!: drop a thing')?.id).toBe('breaking');
+    expect(classifySubject('fix: something\n\nBREAKING CHANGE: removed')?.id).toBe('breaking');
+    expect(detectReleaseType(['refactor(core)!: reshape']).type).toBe('major');
+  });
+
   it('gives every rule a distinct id and a release level the bumper understands', () => {
     const ids = CLASSIFICATION_RULES.map(rule => rule.id);
     expect(new Set(ids).size).toBe(ids.length);

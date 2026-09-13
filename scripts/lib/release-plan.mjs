@@ -329,6 +329,9 @@ export const CLASSIFICATION_RULES = [
     id: 'breaking',
     label: 'breaking change / !:',
     release: 'major',
+    // Deliberately NOT anchored, unlike every other alias here: Conventional Commits puts
+    // `BREAKING CHANGE` in the body or footer, and `!` after the type (`feat!:`), so both
+    // legitimately appear away from the start of the subject.
     match: msg => msg.includes('breaking change') || msg.includes('!:')
   },
   {
@@ -343,13 +346,19 @@ export const CLASSIFICATION_RULES = [
     id: 'fix',
     label: 'fix / bugfix',
     release: 'patch',
-    match: msg => startsWithType(msg, 'fix') || msg.includes('bugfix:')
+    // Anchored like `feat`/`feature`: `docs: explain bugfix: titles` is a docs commit, and
+    // an unanchored match filed it under Bug Fixes with its own `docs:` prefix showing.
+    match: msg => startsWithType(msg, 'fix') || startsWithType(msg, 'bugfix')
   },
   {
     id: 'docs',
     label: 'docs / chore',
     release: 'patch',
     match: msg =>
+      // `doc:` stays unanchored on purpose, unlike `bugfix:`/`feature:`. Anchoring it would
+      // make an untyped subject such as `update doc: thing` release nothing, and #1158 is
+      // precisely about not silently shipping nothing. `docs` and `chore` share this rule,
+      // so a loose match here cannot send a commit to the wrong release level either.
       startsWithType(msg, 'docs') || msg.includes('doc:') || startsWithType(msg, 'chore')
   },
   { id: 'perf', label: 'perf', release: 'patch', match: msg => startsWithType(msg, 'perf') },

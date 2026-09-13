@@ -21,8 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of looking empty. The rules, which the workflow transcribed twice (the changelog copy matched `feat:`
   but not `feat(scope):`) and `scripts/release.mjs` a third time, now live only in `scripts/lib/release-plan.mjs`,
   reached by both workflow steps through the new `scripts/ci/classify-release-commits.mjs`. WARP.md,
-  CONTRIBUTING.md and the release checklist document the mapping and, for the first time, that it is the
-  **PR title** that drives it.
+  CONTRIBUTING.md and the release checklist document the mapping and, for the first time, which subjects
+  are actually read: the workflow skips merge commits, so a squash-merge contributes the **PR title** while
+  a merge commit contributes **every commit on the branch**. This repository permits both, so both need a
+  conventional type.
 
 ### Added
 
