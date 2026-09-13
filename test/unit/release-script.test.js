@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseArgs,
+  classifySubject,
+  CLASSIFICATION_RULES,
+  describeCommitMix,
   detectReleaseType,
+  groupForChangelog,
+  parseCommitLines,
+  stripTypePrefix,
   bumpVersion,
   isPlainVersion,
   resolveNextVersion,
@@ -19,16 +25,20 @@ import {
   decideConfirmation,
   RELEASE_TYPES
 } from '../../scripts/lib/release-plan.mjs';
+import { planFromLog } from '../../scripts/ci/classify-release-commits.mjs';
 
 // The pure parts only. main() spawns gh and git and is deliberately left untested here;
 // nothing in this file starts a process.
 
 describe('detectReleaseType', () => {
-  it('is none when nothing matches', () => {
-    expect(detectReleaseType([])).toEqual({ type: 'none', rule: null, drivers: [] });
-    expect(
-      detectReleaseType(['refactor: tidy', 'test: add cases', 'ci: pin action', 'style: fmt'])
-    ).toEqual({ type: 'none', rule: null, drivers: [] });
+  it('is none for an empty window, with nothing counted', () => {
+    expect(detectReleaseType([])).toEqual({
+      type: 'none',
+      rule: null,
+      drivers: [],
+      counts: {},
+      unclassified: []
+    });
   });
 
   it('is patch for fix and bugfix', () => {
@@ -84,8 +94,9 @@ describe('detectReleaseType', () => {
   });
 
   it('matches the type prefix only at the start, with a colon or scope', () => {
-    // "feat" appearing later, or without a delimiter, is not a feature commit.
-    expect(detectReleaseType(['refactor: prefer feat flags']).type).toBe('none');
+    // "feat" appearing later, or without a delimiter, is not a feature commit: the
+    // subject below is a refactor, which is its own (patch) bucket.
+    expect(detectReleaseType(['refactor: prefer feat flags']).rule).toBe('refactor');
     expect(detectReleaseType(['feature flags']).type).toBe('none');
     expect(detectReleaseType(['fixture: add']).type).toBe('none');
     expect(detectReleaseType(['feat(scope): yes']).type).toBe('minor');
@@ -94,6 +105,249 @@ describe('detectReleaseType', () => {
   it('keeps drivers in commit order and does not deduplicate', () => {
     const result = detectReleaseType(['fix: same', 'fix: same', 'fix: other']);
     expect(result.drivers).toEqual(['fix: same', 'fix: same', 'fix: other']);
+  });
+});
+
+// #1158: six standard conventional-commit types matched nothing, so a window of only those
+// computed `none` and released nothing, indistinguishable from a window with no commits.
+describe('detectReleaseType: the types added by #1158', () => {
+  it('is patch for perf, refactor, revert and build - they can change the published tarball', () => {
+    expect(detectReleaseType(['perf: cache the pool stats']).type).toBe('patch');
+    expect(detectReleaseType(['refactor: drop the connect tool']).type).toBe('patch');
+    expect(detectReleaseType(['revert: undo the pool change']).type).toBe('patch');
+    expect(detectReleaseType(['build: narrow the published files']).type).toBe('patch');
+  });
+
+  it('names the deciding type as the rule, so the preview reads correctly', () => {
+    expect(detectReleaseType(['perf: faster']).rule).toBe('perf');
+    expect(detectReleaseType(['refactor: tidy']).rule).toBe('refactor');
+    expect(detectReleaseType(['revert: back out']).rule).toBe('revert');
+    expect(detectReleaseType(['build: bundle']).rule).toBe('build');
+    expect(detectReleaseType(['refactor: tidy']).drivers).toEqual(['refactor: tidy']);
+  });
+
+  it('treats a generated `Revert "..."` subject as a revert', () => {
+    expect(detectReleaseType(['Revert "fix: the pool"']).rule).toBe('revert');
+    // ...but a reverted breaking change is still a breaking change.
+    expect(detectReleaseType(['Revert "feat!: drop providers"']).type).toBe('major');
+  });
+
+  // A prefix is a label the author picks, not a promise about the diff, and docs/, README.md
+  // and CHANGELOG.md are all packed - so `ci:` commits here really do change the tarball.
+  it('is patch for test, ci and style - a prefix is not a guarantee about the paths touched', () => {
+    expect(detectReleaseType(['test: add cases']).type).toBe('patch');
+    expect(detectReleaseType(['ci: pin action']).type).toBe('patch');
+    expect(detectReleaseType(['style: reformat']).type).toBe('patch');
+  });
+
+  it('releases a patch for a ci-only window, and names ci as the deciding rule', () => {
+    const result = detectReleaseType(['ci(publish): pin the npm used to publish']);
+    expect(result.type).toBe('patch');
+    expect(result.rule).toBe('ci');
+    expect(result.drivers).toEqual(['ci(publish): pin the npm used to publish']);
+    expect(result.unclassified).toEqual([]);
+    expect(result.counts).toEqual({ ci: 1 });
+  });
+
+  it('counts every recognised type and still lets fix outrank test, ci and style', () => {
+    const result = detectReleaseType(['test: add cases', 'ci: pin action', 'style: reformat']);
+    expect(result.type).toBe('patch');
+    expect(result.counts).toEqual({ test: 1, ci: 1, style: 1 });
+    // All three are patch, so the highest-placed rule in the table names the window: `test`.
+    expect(result.rule).toBe('test');
+    // ...but every older patch rule still sits above them, so a fix in the mix decides it.
+    expect(detectReleaseType(['ci: pin action', 'fix: a bug']).rule).toBe('fix / bugfix');
+  });
+
+  it('distinguishes an empty window from a window of only unclassified commits', () => {
+    const empty = detectReleaseType([]);
+    const unrecognised = detectReleaseType(['deps: a', 'wip', 'rebase onto main']);
+    expect(empty.type).toBe(unrecognised.type);
+    // Same verdict, different evidence - which is the whole point of #1158.
+    expect(describeCommitMix(empty)).toBe('');
+    expect(describeCommitMix(unrecognised)).toBe('unclassified: 3');
+  });
+
+  it('reports subjects that match no type at all as unclassified', () => {
+    const result = detectReleaseType(['deps(deps): bump jose', 'wip']);
+    expect(result.type).toBe('none');
+    expect(result.unclassified).toEqual(['deps(deps): bump jose', 'wip']);
+    expect(result.counts).toEqual({ unclassified: 2 });
+    expect(describeCommitMix(result)).toBe('unclassified: 2');
+    // One recognised subject is enough to release, whatever else is in the window.
+    expect(detectReleaseType(['deps(deps): bump jose', 'wip', 'ci: pin']).type).toBe('patch');
+  });
+
+  it('keeps breaking > feat > fix > docs/chore ahead of every added type', () => {
+    const window = [
+      'style: s',
+      'ci: i',
+      'test: t',
+      'build: b',
+      'refactor: r',
+      'perf: p',
+      'chore: c',
+      'fix: f',
+      'feat: n',
+      'feat!: x'
+    ];
+    expect(detectReleaseType(window).type).toBe('major');
+    expect(detectReleaseType(window.slice(0, -1)).type).toBe('minor');
+    expect(detectReleaseType(window.slice(0, -2)).rule).toBe('fix / bugfix');
+    expect(detectReleaseType(window.slice(0, -3)).rule).toBe('docs / chore');
+    expect(detectReleaseType(window.slice(0, -4)).rule).toBe('perf');
+    expect(detectReleaseType(window.slice(0, -5)).rule).toBe('refactor');
+    expect(detectReleaseType(window.slice(0, -6)).rule).toBe('build');
+    // The three corrected types are patch as well, so each still decides its own window.
+    expect(detectReleaseType(window.slice(0, -7)).rule).toBe('test');
+    expect(detectReleaseType(window.slice(0, -8)).rule).toBe('ci');
+    expect(detectReleaseType(window.slice(0, -9)).rule).toBe('style');
+  });
+
+  it('accepts the type(scope): form for every added type', () => {
+    expect(detectReleaseType(['perf(pool): reuse connections']).rule).toBe('perf');
+    expect(detectReleaseType(['refactor(core): split index.js']).rule).toBe('refactor');
+    expect(detectReleaseType(['revert(cli): undo']).rule).toBe('revert');
+    expect(detectReleaseType(['build(deps): drop a file']).rule).toBe('build');
+    expect(detectReleaseType(['test(release): more cases']).rule).toBe('test');
+    expect(detectReleaseType(['ci(publish): pin npm']).rule).toBe('ci');
+    expect(detectReleaseType(['style(lib): reformat']).rule).toBe('style');
+  });
+
+  it('is case-insensitive for the added types too', () => {
+    expect(detectReleaseType(['PERF: faster']).type).toBe('patch');
+    expect(detectReleaseType(['Refactor(core): tidy']).type).toBe('patch');
+    expect(detectReleaseType(['CI: pin']).type).toBe('patch');
+    expect(detectReleaseType(['Revert "FIX: x"']).rule).toBe('revert');
+  });
+
+  it('does not match a type name that merely appears in the subject', () => {
+    expect(classifySubject('tested the perf of the build')).toBeNull();
+    expect(classifySubject('performance work')).toBeNull();
+    expect(classifySubject('citation needed')).toBeNull();
+    expect(classifySubject('styles for the docs page')).toBeNull();
+  });
+
+  it('gives every rule a distinct id and a release level the bumper understands', () => {
+    const ids = CLASSIFICATION_RULES.map(rule => rule.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const rule of CLASSIFICATION_RULES) {
+      expect(['major', 'minor', 'patch']).toContain(rule.release);
+    }
+  });
+
+  it('leaves no recognised type non-releasing, so `none` can only mean unclassified', () => {
+    // The maintainer decision behind #1158: a commit-type prefix is a label the author
+    // chooses, not a guarantee about which paths changed, so no type may veto a release.
+    expect(CLASSIFICATION_RULES.filter(rule => rule.release === 'none')).toEqual([]);
+  });
+});
+
+describe('describeCommitMix', () => {
+  it('lists every bucket that matched, in rule order, and is empty for no commits', () => {
+    expect(describeCommitMix(detectReleaseType([]))).toBe('');
+    expect(describeCommitMix(detectReleaseType(['ci: a', 'feat: b', 'fix: c', 'nope']))).toBe(
+      'feat / feature: 1, fix / bugfix: 1, ci: 1, unclassified: 1'
+    );
+    expect(describeCommitMix(detectReleaseType(['ci: a', 'test: b', 'style: c']))).toBe(
+      'test: 1, ci: 1, style: 1'
+    );
+  });
+});
+
+describe('parseCommitLines and stripTypePrefix', () => {
+  it('splits `<hash> <subject>` lines and ignores blanks', () => {
+    expect(parseCommitLines('abc1234 fix: a thing\n\ndef5678 feat(x): b\n')).toEqual([
+      { hash: 'abc1234', subject: 'fix: a thing' },
+      { hash: 'def5678', subject: 'feat(x): b' }
+    ]);
+    expect(parseCommitLines('')).toEqual([]);
+    expect(parseCommitLines('abc1234')).toEqual([{ hash: 'abc1234', subject: '' }]);
+  });
+
+  it('strips the feature and fix prefixes, scope and bang included, and nothing else', () => {
+    expect(stripTypePrefix('feat: add')).toBe('add');
+    expect(stripTypePrefix('feat(cli): add')).toBe('add');
+    expect(stripTypePrefix('FIX(core)!: guard')).toBe('guard');
+    expect(stripTypePrefix('bugfix: old style')).toBe('old style');
+    expect(stripTypePrefix('refactor: keep me whole')).toBe('refactor: keep me whole');
+  });
+});
+
+// The second copy of the classifier #1158 reports: release.yml's changelog block matched
+// `feat:` but not `feat(scope):`, so a scoped feature drove a minor release and was then
+// filed under "Other Changes". Both now go through groupForChangelog.
+describe('groupForChangelog', () => {
+  const commits = [
+    { hash: 'h1', subject: 'feat(cli): scoped feature' },
+    { hash: 'h2', subject: 'feat: plain feature' },
+    { hash: 'h3', subject: 'fix(core): scoped fix' },
+    { hash: 'h4', subject: 'refactor: tidy' },
+    { hash: 'h5', subject: 'ci: pin' },
+    { hash: 'h6', subject: 'feat!: breaking feature' }
+  ];
+
+  it('files a scoped feature under features, not other', () => {
+    const groups = groupForChangelog(commits);
+    expect(groups.features).toEqual([
+      { hash: 'h1', text: 'scoped feature' },
+      { hash: 'h2', text: 'plain feature' }
+    ]);
+  });
+
+  it('files breaking changes ahead of features, and keeps everything else whole', () => {
+    const groups = groupForChangelog(commits);
+    expect(groups.breaking).toEqual([{ hash: 'h6', text: 'feat!: breaking feature' }]);
+    expect(groups.fixes).toEqual([{ hash: 'h3', text: 'scoped fix' }]);
+    expect(groups.other).toEqual([
+      { hash: 'h4', text: 'refactor: tidy' },
+      { hash: 'h5', text: 'ci: pin' }
+    ]);
+  });
+
+  it('puts every commit in exactly one section', () => {
+    const groups = groupForChangelog(commits);
+    const total = Object.values(groups).reduce((n, list) => n + list.length, 0);
+    expect(total).toBe(commits.length);
+  });
+});
+
+// The CLI release.yml calls on the runner. Only its pure part is exercised here; the
+// `--from-git` path runs git and is not invoked by this file.
+describe('planFromLog (scripts/ci/classify-release-commits.mjs)', () => {
+  it('classifies and groups one window with the shared rules', () => {
+    const plan = planFromLog('h1 feat(cli): add\nh2 ci: pin\nh3 fix: guard');
+    expect(plan.commitCount).toBe(3);
+    expect(plan.releaseType).toBe('minor');
+    expect(plan.rule).toBe('feat / feature');
+    expect(plan.drivers).toEqual(['feat(cli): add']);
+    expect(plan.counts).toEqual({ feat: 1, fix: 1, ci: 1 });
+    expect(plan.changelog.features).toEqual([{ hash: 'h1', text: 'add' }]);
+    expect(plan.changelog.fixes).toEqual([{ hash: 'h3', text: 'guard' }]);
+  });
+
+  it('releases a patch for a window of only ci commits', () => {
+    const plan = planFromLog('h1 ci: pin\nh2 test: cases');
+    expect(plan.releaseType).toBe('patch');
+    expect(plan.summary).toBe('2 commit(s) -> patch, decided by test (test: 1, ci: 1).');
+  });
+
+  it('says "no commits" and "nothing classifiable" in different words', () => {
+    const empty = planFromLog('');
+    const unrecognised = planFromLog('h1 deps: bump jose\nh2 wip');
+    expect(empty.releaseType).toBe('none');
+    expect(unrecognised.releaseType).toBe('none');
+    expect(empty.summary).toContain('No commits in this window');
+    expect(unrecognised.summary).toContain(
+      '2 commit(s), none of them carrying a recognised conventional-commit type'
+    );
+    expect(unrecognised.summary).toContain('unclassified: 2');
+    expect(empty.summary).not.toBe(unrecognised.summary);
+  });
+
+  it('summarises a releasing window with its type, rule and mix', () => {
+    const plan = planFromLog('h1 perf: faster\nh2 ci: pin');
+    expect(plan.summary).toBe('2 commit(s) -> patch, decided by perf (perf: 1, ci: 1).');
   });
 });
 
@@ -293,7 +547,8 @@ describe('renderPreview', () => {
     drivers: ['feat!: remove providers', 'fix!: honour the settings'],
     collisions: [],
     headSha: '4e18a53',
-    dryRun: false
+    dryRun: false,
+    breakdown: 'breaking change / !: 2, ci: 3'
   };
 
   it('prints the version transition, type, tag, count, drivers and the tag target', () => {
@@ -303,6 +558,7 @@ describe('renderPreview', () => {
     expect(text).toContain('Release type:   major (auto: breaking change / !:)');
     expect(text).toContain('Last tag:       v1.7.20');
     expect(text).toContain('Commits:        129 since v1.7.20 on origin/main (no merges)');
+    expect(text).toContain('Commit mix:     breaking change / !: 2, ci: 3');
     expect(text).toContain('Tag target:     origin/main @ 4e18a53');
     expect(text).toContain('Decided by (breaking change / !:):');
     expect(text).toContain('    - feat!: remove providers');
@@ -345,6 +601,22 @@ describe('renderPreview', () => {
     expect(text).toContain('Skipped 1 existing tag(s): v1.8.0');
     expect(text).toContain('DRY RUN');
     expect(text).not.toContain('Decided by');
+  });
+
+  it('says what it saw when nothing classified, and omits an absent mix', () => {
+    const text = renderPreview({
+      ...base,
+      releaseType: 'none',
+      rule: null,
+      drivers: [],
+      nextVersion: '1.7.20',
+      breakdown: 'unclassified: 11'
+    });
+    expect(text).toContain(
+      'Release type:   none (auto: no commit subject matched a recognised type)'
+    );
+    expect(text).toContain('Commit mix:     unclassified: 11');
+    expect(renderPreview({ ...base, breakdown: '' })).not.toContain('Commit mix:');
   });
 
   it('handles a repository with no tag yet', () => {

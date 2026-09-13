@@ -402,8 +402,34 @@ Follow conventional commits format:
 - `docs:` Documentation changes
 - `style:` Code style changes (formatting, etc.)
 - `refactor:` Code refactoring
+- `perf:` Performance improvements
 - `test:` Adding or updating tests
+- `build:` Build, packaging or dependency-manifest changes
+- `ci:` CI/workflow changes
+- `revert:` Reverting an earlier change
 - `chore:` Maintenance tasks
+
+### Your PR title is the one that counts
+
+PRs are squash-merged, and GitHub names the resulting commit on `main` after the **PR
+title**. The release workflow reads those subjects to decide whether to release and at what
+level, so the PR title — not the messages on your branch — is what drives it:
+
+- `feat:` / `feature:` → minor release
+- `fix:` / `bugfix:`, `docs:`, `chore:`, `perf:`, `refactor:`, `revert:`, `build:`,
+  `test:`, `ci:`, `style:` → patch release
+- `BREAKING CHANGE` or `!:` anywhere in the title (e.g. `feat!:`) → major release
+- anything else → release nothing, and the release run warns that the subject matched no type
+
+Every recognised type releases at least a patch, `test:`, `ci:` and `style:` included. The
+prefix you pick is a label, not a promise about which files your PR touched, and plenty of
+the published tarball is documentation — `docs/**/*.md`, `README.md` and `CHANGELOG.md` are
+all packed, and `ci:`-titled PRs here routinely edit them. Over-releasing costs a patch
+version; under-releasing ships your work nowhere and says nothing.
+
+A scope is fine everywhere (`feat(cli): …`). The only title that releases nothing is one
+that matches no type at all, so give yours a type. The mapping lives in
+`scripts/lib/release-plan.mjs`; see WARP.md's Release Process for the full table.
 
 Example:
 

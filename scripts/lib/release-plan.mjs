@@ -6,9 +6,14 @@
  * without a repository or a network (test/unit/release-script.test.js), and so the CLI
  * stays small enough to read in one sitting.
  *
- * The rules in detectReleaseType() and resolveNextVersion() are transcriptions of
- * `.github/workflows/release.yml` - its "Check conventional commits" and "Bump version"
- * steps - and must stay in step with them. The workflow makes the final decision on the
+ * detectReleaseType() and groupForChangelog() are the ONLY copy of the conventional-commit
+ * rules: `.github/workflows/release.yml` reaches them on the runner through
+ * `scripts/ci/classify-release-commits.mjs`, which imports this file, so its "Check
+ * conventional commits" and "Generate changelog" steps and this preview cannot disagree
+ * (#1158 - they used to be three separate transcriptions, and two of them had drifted).
+ *
+ * resolveNextVersion() is still a transcription, of the workflow's "Bump version" step,
+ * and must be kept in step with it by hand. The workflow makes the final decision on the
  * runner; this module exists so the operator sees the same decision before the tag exists.
  */
 
@@ -265,48 +270,216 @@ export function parseArgs(argv) {
 }
 
 /**
- * The release type release.yml's "Check conventional commits" step would compute from these
- * commit subjects, plus the subjects that drove it.
+ * The conventional-commit classification, in ONE place.
  *
- * Each subject is lowercased and lands in the FIRST bucket it matches, so `feat!: x` is
- * breaking, not a feature:
+ * Three consumers must agree or the release is wrong:
+ *   1. release.yml's "Check conventional commits" step - decides the release type,
+ *   2. release.yml's "Generate changelog" step - groups the same commits for the notes,
+ *   3. `npm run release`'s preview - tells the operator what (1) will decide.
+ * (1) and (2) reach these rules through scripts/ci/classify-release-commits.mjs, which
+ * imports this module; (3) imports it directly. There is no second copy to drift.
  *
- *   - contains `breaking change` or `!:`                       -> breaking  -> major
- *   - starts with `feat:` / `feat(`, or contains `feature:`     -> feature   -> minor
- *   - starts with `fix:` / `fix(`, or contains `bugfix:`        -> fix       -> patch
- *   - starts with `docs:`/`docs(`/`chore:`/`chore(`, or contains `doc:` -> docs/chore -> patch
- *   - anything else                                             -> ignored
+ * Rules are ordered and the FIRST match wins, so `feat!: x` is breaking, not a feature.
+ * The first four rules are the historical ones, unchanged and in their original order, so
+ * no subject that classified before classifies differently now; the rules after them only
+ * ever capture subjects that used to fall through unrecognised (#1158).
  *
- * Returns { type, rule, drivers }: `type` is major | minor | patch | none, `rule` names the
- * bucket that decided it, and `drivers` are that bucket's subjects in commit order.
+ * `release` is the version bump the rule asks for:
+ *
+ *   major  breaking change / !:                          a compatibility break
+ *   minor  feat / feature                                new functionality
+ *   patch  EVERY other recognised type - fix / bugfix,   anything else that ships
+ *          docs / chore, perf, refactor, revert, build,
+ *          test, ci, style
+ *
+ * No recognised type maps to `none`. The only window that releases nothing is one in which
+ * NO subject matches any rule at all, and that is a defect in the subjects rather than a
+ * decision this table makes.
+ *
+ * Why `perf` is patch and not minor: SemVer's MINOR is "functionality added in a
+ * backwards compatible manner", and Conventional Commits maps only `feat` to it. A faster
+ * implementation of the same API adds no functionality, and this project already puts
+ * every other shipping-but-not-new change (`docs`, `chore`) in patch.
+ *
+ * Why `test`, `ci` and `style` are patch too - the correction #1158 originally asked for:
+ * an earlier revision of this table made them non-releasing, on the argument that `test/`
+ * and `.github/` are not in package.json's `files`, so such commits provably cannot change
+ * the published tarball. That argument is wrong twice over.
+ *
+ *   1. The packed tree is not only runtime code. The markdown under `docs/`, plus
+ *      `README.md` and `CHANGELOG.md`, is published, and `ci:`-subjected commits here
+ *      routinely edit it:
+ *      ac38c51 `ci(publish): pin the npm used to publish` changed
+ *      docs/operations/RELEASE-TOKEN-SETUP.md, c4cb6d8 `ci(publish): authenticate to npm`
+ *      changed CHANGELOG.md and two docs files, 38293d9 `ci(release): bump
+ *      package-lock.json` changed two docs files.
+ *   2. More fundamentally, a conventional-commit prefix is a LABEL THE AUTHOR CHOOSES, not
+ *      a guarantee about which paths the commit touched. A release decision that assumes a
+ *      prefix constrains the diff cannot be sound, whatever `files` happens to contain.
+ *
+ * And the asymmetry favours releasing: over-releasing spends a patch version, which costs
+ * nothing anyone notices; under-releasing ships the work nowhere and says nothing, which is
+ * precisely the #1158 defect (#1155 removed a module from the tarball and a field from a
+ * public MCP tool response under a `refactor:` subject and shipped no release at all).
+ */
+const startsWithType = (msg, type) => msg.startsWith(`${type}:`) || msg.startsWith(`${type}(`);
+
+export const CLASSIFICATION_RULES = [
+  {
+    id: 'breaking',
+    label: 'breaking change / !:',
+    release: 'major',
+    match: msg => msg.includes('breaking change') || msg.includes('!:')
+  },
+  {
+    id: 'feat',
+    label: 'feat / feature',
+    release: 'minor',
+    match: msg => startsWithType(msg, 'feat') || msg.includes('feature:')
+  },
+  {
+    id: 'fix',
+    label: 'fix / bugfix',
+    release: 'patch',
+    match: msg => startsWithType(msg, 'fix') || msg.includes('bugfix:')
+  },
+  {
+    id: 'docs',
+    label: 'docs / chore',
+    release: 'patch',
+    match: msg =>
+      startsWithType(msg, 'docs') || msg.includes('doc:') || startsWithType(msg, 'chore')
+  },
+  { id: 'perf', label: 'perf', release: 'patch', match: msg => startsWithType(msg, 'perf') },
+  {
+    id: 'refactor',
+    label: 'refactor',
+    release: 'patch',
+    match: msg => startsWithType(msg, 'refactor')
+  },
+  {
+    id: 'revert',
+    label: 'revert',
+    release: 'patch',
+    // `Revert "..."` is the subject git and GitHub's revert button generate; a revert of a
+    // `feat!:` still reads as breaking above, which is the right answer.
+    match: msg => startsWithType(msg, 'revert') || msg.startsWith('revert "')
+  },
+  { id: 'build', label: 'build', release: 'patch', match: msg => startsWithType(msg, 'build') },
+  { id: 'test', label: 'test', release: 'patch', match: msg => startsWithType(msg, 'test') },
+  { id: 'ci', label: 'ci', release: 'patch', match: msg => startsWithType(msg, 'ci') },
+  { id: 'style', label: 'style', release: 'patch', match: msg => startsWithType(msg, 'style') }
+];
+
+/** The first rule `subject` matches, or null when nothing recognises it. */
+export function classifySubject(subject) {
+  const msg = String(subject).toLowerCase();
+  return CLASSIFICATION_RULES.find(rule => rule.match(msg)) ?? null;
+}
+
+/** Release levels in descending precedence: one breaking subject outranks any number of feats. */
+const LEVELS = ['major', 'minor', 'patch'];
+
+/**
+ * The release type release.yml's "Check conventional commits" step computes from these
+ * commit subjects, plus the evidence behind it.
+ *
+ * Returns { type, rule, drivers, counts, unclassified }:
+ *   type          major | minor | patch | none
+ *   rule          the label of the bucket that decided it, or null for none
+ *   drivers       that bucket's subjects, in commit order, not deduplicated
+ *   counts        commits per rule id, plus `unclassified`, for the "why not" message
+ *   unclassified  subjects no rule recognised (a malformed or unprefixed subject)
+ *
+ * Since every recognised type releases, `type: 'none'` on a non-empty window means every
+ * subject in it was unclassified. That is still NOT the same outcome as an empty window,
+ * and every caller must say which one it is - that ambiguity is the whole of #1158.
  */
 export function detectReleaseType(subjects) {
-  const breaking = [];
-  const features = [];
-  const fixes = [];
-  const docsOrChore = [];
+  const buckets = new Map();
+  const unclassified = [];
 
   for (const subject of subjects) {
-    const msg = subject.toLowerCase();
-    const startsWith = type => msg.startsWith(`${type}:`) || msg.startsWith(`${type}(`);
-
-    if (msg.includes('breaking change') || msg.includes('!:')) {
-      breaking.push(subject);
-    } else if (startsWith('feat') || msg.includes('feature:')) {
-      features.push(subject);
-    } else if (startsWith('fix') || msg.includes('bugfix:')) {
-      fixes.push(subject);
-    } else if (startsWith('docs') || msg.includes('doc:') || startsWith('chore')) {
-      docsOrChore.push(subject);
+    const rule = classifySubject(subject);
+    if (!rule) {
+      unclassified.push(subject);
+      continue;
     }
+    if (!buckets.has(rule.id)) buckets.set(rule.id, []);
+    buckets.get(rule.id).push(subject);
   }
 
-  if (breaking.length > 0)
-    return { type: 'major', rule: 'breaking change / !:', drivers: breaking };
-  if (features.length > 0) return { type: 'minor', rule: 'feat / feature', drivers: features };
-  if (fixes.length > 0) return { type: 'patch', rule: 'fix / bugfix', drivers: fixes };
-  if (docsOrChore.length > 0) return { type: 'patch', rule: 'docs / chore', drivers: docsOrChore };
-  return { type: 'none', rule: null, drivers: [] };
+  const counts = {};
+  for (const rule of CLASSIFICATION_RULES) {
+    if (buckets.has(rule.id)) counts[rule.id] = buckets.get(rule.id).length;
+  }
+  if (unclassified.length > 0) counts.unclassified = unclassified.length;
+
+  const evidence = { counts, unclassified };
+
+  for (const level of LEVELS) {
+    const rule = CLASSIFICATION_RULES.find(
+      candidate => candidate.release === level && buckets.has(candidate.id)
+    );
+    if (rule) return { type: level, rule: rule.label, drivers: buckets.get(rule.id), ...evidence };
+  }
+
+  return { type: 'none', rule: null, drivers: [], ...evidence };
+}
+
+/**
+ * The commit mix as one line - `ci: 8, test: 3, unclassified: 1` - so a run that releases
+ * nothing can say what it saw instead of just "none". Empty string for no commits.
+ */
+export function describeCommitMix(detected) {
+  const parts = CLASSIFICATION_RULES.filter(rule => detected.counts[rule.id]).map(
+    rule => `${rule.label}: ${detected.counts[rule.id]}`
+  );
+  if (detected.counts.unclassified) parts.push(`unclassified: ${detected.counts.unclassified}`);
+  return parts.join(', ');
+}
+
+/** `<hash> <subject>` lines, as `git log --pretty=format:'%h %s'` writes them. */
+export function parseCommitLines(text) {
+  return String(text)
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const space = line.indexOf(' ');
+      if (space === -1) return { hash: line, subject: '' };
+      return { hash: line.slice(0, space), subject: line.slice(space + 1) };
+    });
+}
+
+/** The conventional-commit type prefix removed, scope and `!` included. */
+export function stripTypePrefix(subject) {
+  return String(subject).replace(/^\s*(feat|feature|fix|bugfix)(\([^)]*\))?!?:\s*/i, '');
+}
+
+/** Which changelog section each rule id feeds; anything unlisted is "other". */
+const CHANGELOG_SECTIONS = { breaking: 'breaking', feat: 'features', fix: 'fixes' };
+
+/**
+ * Commits grouped for the GitHub Release notes, by the SAME rules that pick the release
+ * type. This used to be a second, narrower copy inside release.yml that tested
+ * `startsWith('feat:')` and so filed every `feat(scope):` under "Other Changes" (#1158).
+ *
+ * Takes { hash, subject } and returns { breaking, features, fixes, other } of
+ * { hash, text }, where `text` has the type prefix stripped in the feature and fix
+ * sections (the heading already says which they are) and is left whole elsewhere.
+ */
+export function groupForChangelog(commits) {
+  const groups = { breaking: [], features: [], fixes: [], other: [] };
+
+  for (const { hash, subject } of commits) {
+    const rule = classifySubject(subject);
+    const section = (rule && CHANGELOG_SECTIONS[rule.id]) ?? 'other';
+    const text = section === 'features' || section === 'fixes' ? stripTypePrefix(subject) : subject;
+    groups[section].push({ hash, text });
+  }
+
+  return groups;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -384,6 +557,22 @@ export function sanitizeForTerminal(text) {
 }
 
 /** The preview block, as printed. Pure so its shape is pinned by a test. */
+/**
+ * Why the preview shows the release type it does: an explicit --type, the rule that matched,
+ * or nothing having matched at all.
+ */
+function releaseTypeReason(requestedType, rule) {
+  if (requestedType) {
+    return ` (forced by --type ${requestedType})`;
+  }
+
+  if (rule) {
+    return ` (auto: ${rule})`;
+  }
+
+  return ' (auto: no commit subject matched a recognised type)';
+}
+
 export function renderPreview(preview) {
   const {
     repo,
@@ -397,21 +586,22 @@ export function renderPreview(preview) {
     drivers,
     collisions,
     headSha,
-    dryRun
+    dryRun,
+    breakdown
   } = preview;
 
-  const lines = [];
-  lines.push('Release preview (computed locally with the rules release.yml applies)');
-  lines.push('');
-  lines.push(`  Repository:     ${repo} (from git remote origin; every gh call is pinned to it)`);
-  lines.push(`  Version:        ${currentVersion} -> ${nextVersion}`);
-  lines.push(
-    `  Release type:   ${releaseType}${requestedType ? ` (forced by --type ${requestedType})` : rule ? ` (auto: ${rule})` : ' (auto: no release-worthy commits)'}`
-  );
-  lines.push(`  Last tag:       ${lastTag ?? '(none - every commit counts)'}`);
-  lines.push(
+  const lines = [
+    'Release preview (computed locally with the rules release.yml applies)',
+    '',
+    `  Repository:     ${repo} (from git remote origin; every gh call is pinned to it)`,
+    `  Version:        ${currentVersion} -> ${nextVersion}`,
+    `  Release type:   ${releaseType}${releaseTypeReason(requestedType, rule)}`,
+    `  Last tag:       ${lastTag ?? '(none - every commit counts)'}`,
     `  Commits:        ${commitCount} since ${lastTag ?? 'the beginning'} on origin/${RELEASE_BRANCH} (no merges)`
-  );
+  ];
+  // The mix is printed whatever the outcome: when the type is `none` it is the only thing
+  // that distinguishes "commits, none of them release-triggering" from an empty window.
+  if (breakdown) lines.push(`  Commit mix:     ${breakdown}`);
   lines.push(`  Tag target:     origin/${RELEASE_BRANCH} @ ${headSha}`);
   if (dryRun) lines.push('  Mode:           DRY RUN - the workflow creates no tag, Release or PR');
 

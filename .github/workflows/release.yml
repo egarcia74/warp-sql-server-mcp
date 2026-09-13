@@ -57,7 +57,7 @@ jobs:
     name: Check for Release-worthy Changes
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # Required to read git history and commits
+      contents: read # Required to read git history and commits
     outputs:
       # These outputs are dynamically set by the github-script action below
       should_release: ${{ steps.check.outputs.should_release }} # yamllint disable-line rule:line-length
@@ -84,73 +84,115 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # This job spawns `node` to run the classifier. GitHub-hosted runners ship a Node,
+      # but which one is theirs to change, so pin it the way every other job here does
+      # rather than depend on the image. No `cache: npm` - the classifier has no
+      # dependencies and this job never runs `npm ci`.
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+
+      # The conventional-commit rules are NOT written here, and must never be written here
+      # again. They live in scripts/lib/release-plan.mjs and reach this step - and the
+      # "Generate changelog" step below, and `npm run release`'s local preview - through
+      # scripts/ci/classify-release-commits.mjs. Before #1158 the rules were transcribed
+      # three times; two of the copies had already drifted (the changelog one matched
+      # `feat:` but not `feat(scope):`) and six standard commit types - refactor, perf,
+      # test, build, ci, style - matched nothing at all, so a window of only those computed
+      # `none` and shipped nothing, indistinguishable from an empty window.
+      #
+      # The mapping, in full (scripts/lib/release-plan.mjs documents the reasoning):
+      #
+      #   major  BREAKING CHANGE / !:
+      #   minor  feat / feature
+      #   patch  every other recognised type - fix / bugfix, docs / chore, perf, refactor,
+      #          revert, build, test, ci, style
+      #
+      # No recognised type releases nothing. `test`, `ci` and `style` were briefly mapped to
+      # `none` on the argument that test/ and .github/ are not in package.json "files", so
+      # they could not change the published tarball; that argument is false. The markdown
+      # under docs/, README.md and CHANGELOG.md ARE packed, and `ci:`-subjected commits here
+      # routinely edit them (ac38c51, c4cb6d8, 38293d9 all carry a ci(...) subject and all
+      # changed packed files). More generally a commit-type prefix is a label the PR author
+      # chooses, not a guarantee about which paths the diff touched, so a release decision
+      # cannot rest on it. The asymmetry settles the rest: over-releasing spends a patch
+      # version, under-releasing ships work nowhere and silently - which is #1158 itself.
+      # So the only window that releases nothing is one whose subjects match NO type at all.
+      #
+      # Because a squash merge names the commit from the PR TITLE, this is in practice a
+      # constraint on PR titles. See WARP.md "Release Process" and CONTRIBUTING.md.
       - name: Check conventional commits
         id: check
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          # Through the environment, not `${{ }}` inside the script body.
+          MANUAL_TYPE: ${{ inputs.release_type }}
+          DRY_RUN: ${{ inputs.dry_run }}
         with:
           script: |
-            const { execSync } = require('child_process');
-            
-            // Get commits since last release
-            let commits = [];
-            try {
-              const output = execSync('git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges', { encoding: 'utf8' });
-              commits = output.trim().split('\n').filter(line => line.trim());
-            } catch (e) {
-              // If no tags exist, get all commits
-              const output = execSync('git log --oneline --no-merges', { encoding: 'utf8' });
-              commits = output.trim().split('\n').filter(line => line.trim());
-            }
-            
-            if (commits.length === 0 || (commits.length === 1 && !commits[0])) {
-              console.log('No new commits found');
+            const { execFileSync } = require('child_process');
+
+            // git is spawned by the script, with an argument array - no shell, so a tag or
+            // a commit subject is never word-split, globbed or expanded.
+            const plan = JSON.parse(
+              execFileSync('node', ['scripts/ci/classify-release-commits.mjs', '--from-git'], {
+                encoding: 'utf8',
+                maxBuffer: 64 * 1024 * 1024
+              })
+            );
+
+            const since = plan.lastTag ?? 'the beginning of history';
+
+            if (plan.commitCount === 0) {
+              core.info(`No new commits since ${since} - nothing to release.`);
               core.setOutput('should_release', 'false');
+              core.setOutput('release_type', 'none');
               return;
             }
-            
-            console.log(`Analyzing ${commits.length} commits:`);
-            commits.forEach(commit => console.log(`  ${commit}`));
-            
-            let hasBreaking = false;
-            let hasFeature = false;
-            let hasFix = false;
-            let hasDocsOrChore = false;
-            
-            for (const commit of commits) {
-              // Strip leading hash and whitespace, analyze only the subject
-              const subject = commit.replace(/^[a-f0-9]+\s+/, '');
-              const msg = subject.toLowerCase();
-              const startsWith = (type) => msg.startsWith(`${type}:`) || msg.startsWith(`${type}(`);
-              if (msg.includes('breaking change') || msg.includes('!:')) {
-                hasBreaking = true;
-              } else if (startsWith('feat') || msg.includes('feature:')) {
-                hasFeature = true;
-              } else if (startsWith('fix') || msg.includes('bugfix:')) {
-                hasFix = true;
-              } else if (startsWith('docs') || msg.includes('doc:') || startsWith('chore')) {
-                hasDocsOrChore = true;
-              }
+
+            core.info(`Analyzing ${plan.commitCount} commits since ${since}:`);
+            for (const commit of plan.commits) {
+              core.info(`  ${commit.hash} ${commit.subject}`);
+            }
+            core.info(plan.summary);
+
+            // A subject matching no type at all is the one case the author has to fix.
+            if (plan.unclassified.length > 0) {
+              const shown = plan.unclassified.slice(0, 10).map(s => `  - ${s}`).join('\n');
+              const more = plan.unclassified.length > 10
+                ? `\n  ... and ${plan.unclassified.length - 10} more`
+                : '';
+              core.warning(
+                `${plan.unclassified.length} commit subject(s) match no conventional-commit ` +
+                `type, so they contributed nothing to the release type:\n${shown}${more}`
+              );
             }
 
-            let releaseType = 'none';
-            if (hasBreaking) {
-              releaseType = 'major';
-            } else if (hasFeature) {
-              releaseType = 'minor';
-            } else if (hasFix || hasDocsOrChore) {
-              releaseType = 'patch';
+            const manualType = process.env.MANUAL_TYPE;
+            const forced = Boolean(manualType) && manualType !== 'auto';
+            const releaseType = forced ? manualType : plan.releaseType;
+            const shouldRelease = releaseType !== 'none' || process.env.DRY_RUN === 'true';
+
+            // The point of #1158: "commits, but none of them classifiable" must never look
+            // like "no commits". It is a warning, not a silent `none`. Every recognised type
+            // releases, so reaching here means every subject in the window was unclassified.
+            if (!forced && plan.releaseType === 'none') {
+              core.warning(`No release from this window: ${plan.summary}`);
             }
-            
-            // Override with manual input if provided
-            const manualType = '${{ github.event.inputs.release_type }}';
-            if (manualType && manualType !== 'auto') {
-              releaseType = manualType;
-            }
-            
-            const shouldRelease = releaseType !== 'none' || '${{ github.event.inputs.dry_run }}' === 'true';
-            
-            console.log(`Release decision: ${shouldRelease ? 'YES' : 'NO'} (type: ${releaseType})`);
-            
+
+            await core.summary
+              .addHeading('Release type', 3)
+              .addRaw(
+                `**Decision:** \`${releaseType}\`` +
+                (forced ? ` (forced by release_type=\`${manualType}\`)` : '')
+              )
+              .addBreak()
+              .addRaw(`${plan.commitCount} commit(s) since ${since}. ${plan.summary}`)
+              .write();
+
+            core.info(`Release decision: ${shouldRelease ? 'YES' : 'NO'} (type: ${releaseType})`);
+
             core.setOutput('should_release', shouldRelease.toString());
             core.setOutput('release_type', releaseType);
 
@@ -170,7 +212,7 @@ jobs:
       # Without write permissions, repositories lacking RELEASE_TOKEN configuration would fail
       # during tag creation and release publishing, breaking automated release workflows.
       # This is an intentional security trade-off for release pipeline functionality.
-      contents: write  # Required for fallback GITHUB_TOKEN to push tags and create releases
+      contents: write # Required for fallback GITHUB_TOKEN to push tags and create releases
     steps:
       # Tag creation and release creation both use
       # `${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}`. `||` falls through only on
@@ -208,67 +250,44 @@ jobs:
       - name: Run linting
         run: npm run lint || npx --no-install eslint@10.10.0 .
 
+      # Grouped by the SAME classifier that picked the release type in the check-changes
+      # job above - scripts/ci/classify-release-commits.mjs over the rules in
+      # scripts/lib/release-plan.mjs. This block used to carry its own narrower copy, which
+      # filed every `feat(scope):` under "Other Changes" (#1158). Only the rendering below
+      # belongs here; do not add classification to it.
       - name: Generate changelog
         id: changelog # This step dynamically sets the 'changelog' output
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: |
-            const { execSync } = require('child_process');
-            
-            // Get current version
-            const package = require('./package.json');
-            const currentVersion = package.version;
-            
-            // Get commits since last release
-            let commits = [];
-            try {
-              const output = execSync('git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%h %s" --no-merges', { encoding: 'utf8' });
-              commits = output.trim().split('\n').filter(line => line.trim());
-            } catch (e) {
-              const output = execSync('git log --pretty=format:"%h %s" --no-merges', { encoding: 'utf8' });
-              commits = output.trim().split('\n').filter(line => line.trim());
-            }
-            
-            // Categorize commits
-            const features = [];
-            const fixes = [];
-            const breaking = [];
-            const other = [];
-            
-            commits.forEach(commit => {
-              const [hash, ...msgParts] = commit.split(' ');
-              const msg = msgParts.join(' ');
-              const lowerMsg = msg.toLowerCase();
-              
-              if (lowerMsg.includes('breaking change') || lowerMsg.includes('!:')) {
-                breaking.push(`- ${msg} (${hash})`);
-              } else if (lowerMsg.startsWith('feat:') || lowerMsg.startsWith('feature:')) {
-                features.push(`- ${msg.replace(/^feat:\s?/i, '').replace(/^feature:\s?/i, '')} (${hash})`);
-              } else if (lowerMsg.startsWith('fix:') || lowerMsg.startsWith('bugfix:')) {
-                fixes.push(`- ${msg.replace(/^fix:\s?/i, '').replace(/^bugfix:\s?/i, '')} (${hash})`);
-              } else {
-                other.push(`- ${msg} (${hash})`);
-              }
-            });
-            
-            // Generate changelog
+            const { execFileSync } = require('child_process');
+            const { readFileSync } = require('fs');
+
+            // Read, not require: a bare `require('./package.json')` inside github-script
+            // resolves relative to the action's own bundle, not the checkout. Every path
+            // here is relative to the workspace, which is the step's working directory.
+            const currentVersion = JSON.parse(readFileSync('package.json', 'utf8')).version;
+
+            const plan = JSON.parse(
+              execFileSync('node', ['scripts/ci/classify-release-commits.mjs', '--from-git'], {
+                encoding: 'utf8',
+                maxBuffer: 64 * 1024 * 1024
+              })
+            );
+
+            const section = (title, entries) =>
+              entries.length === 0
+                ? ''
+                : `### ${title}\n${entries.map(e => `- ${e.text} (${e.hash})`).join('\n')}\n\n`;
+
             let changelog = `## Changes\n\n`;
-            
-            if (breaking.length > 0) {
-              changelog += `### 💥 Breaking Changes\n${breaking.join('\n')}\n\n`;
-            }
-            if (features.length > 0) {
-              changelog += `### ✨ New Features\n${features.join('\n')}\n\n`;
-            }
-            if (fixes.length > 0) {
-              changelog += `### 🐛 Bug Fixes\n${fixes.join('\n')}\n\n`;
-            }
-            if (other.length > 0) {
-              changelog += `### 📝 Other Changes\n${other.join('\n')}\n\n`;
-            }
-            
+            changelog += section('💥 Breaking Changes', plan.changelog.breaking);
+            changelog += section('✨ New Features', plan.changelog.features);
+            changelog += section('🐛 Bug Fixes', plan.changelog.fixes);
+            changelog += section('📝 Other Changes', plan.changelog.other);
+
             changelog += `**Full Changelog**: https://github.com/${{ github.repository }}/compare/v${currentVersion}...HEAD`;
-            
+
             core.setOutput('changelog', changelog);
             return changelog;
 
@@ -277,7 +296,7 @@ jobs:
         run: |
           RELEASE_TYPE="${{ needs.check-changes.outputs.release_type }}"
           echo "Release type: $RELEASE_TYPE"
-          
+
           if [ "$RELEASE_TYPE" = "none" ]; then
             echo "No version bump needed"
             echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
@@ -359,7 +378,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            
+
             await github.rest.issues.create({
               owner,
               repo,
@@ -446,21 +465,21 @@ jobs:
             const version = process.env.VERSION || '${{ needs.release.outputs.version }}';
             const branch = process.env.BRANCH || `chore/release/v${{ needs.release.outputs.version }}`;
             const { owner, repo } = context.repo;
-            
+
             // Check if PR already exists
             const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', head: `${owner}:${branch}` });
             if (prs.length > 0) {
               core.info(`PR already exists: #${prs[0].number}`);
               return;
             }
-            
+
             const body = [
               `This automated PR bumps package.json and package-lock.json to v${version} to match the released tag.`,
               '',
               `- Version: v${version}`,
               `- Source workflow: Release Automation`,
             ].join('\n');
-            
+
             const pr = await github.rest.pulls.create({
               owner,
               repo,
@@ -488,7 +507,10 @@ jobs:
           if [ "${{ needs.release.result }}" = "success" ]; then
             echo "✅ **Release Status**: Completed successfully" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.check-changes.outputs.should_release }}" = "false" ]; then
-            echo "⏭️ **Release Status**: Skipped (no release-worthy changes)" >> $GITHUB_STEP_SUMMARY
+            # The check-changes job's own summary says which of the two it was: no commits
+            # at all, or commits whose subjects matched no conventional-commit type at all
+            # (every recognised type releases). See #1158.
+            echo "⏭️ **Release Status**: Skipped - see \"Release type\" above for why" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Release Status**: Failed" >> $GITHUB_STEP_SUMMARY
           fi
