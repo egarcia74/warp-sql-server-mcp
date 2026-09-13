@@ -94,7 +94,11 @@ function main() {
 
   if (!result.ok) {
     console.error(`run-one-test: ${result.reason}`);
-    console.error('usage: npm run test:one -- test/unit/<name>.test.js');
+    // The node form is what the review Action is granted; the npm script is a human
+    // convenience and is deliberately NOT in the allowlist, because npm accepts its own
+    // options first and --script-shell would run something else entirely.
+    console.error('usage: node scripts/ci/run-one-test.mjs test/unit/<name>.test.js');
+    console.error('       npm run test:one -- test/unit/<name>.test.js   (interactive use)');
     process.exit(2);
   }
 

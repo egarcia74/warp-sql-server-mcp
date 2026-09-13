@@ -9,11 +9,21 @@ import {
   resolveVitest
 } from '../../scripts/ci/run-one-test.mjs';
 
-// The point of scripts/ci/run-one-test.mjs is that the Claude review Action can
-// be granted `Bash(npm run test:one:*)` without that being arbitrary code
-// execution. vitest executes whatever --config, --setupFiles and --globalSetup
-// name, so these tests pin the refusals, not just the happy path.
-describe('resolveTestFile (guard for npm run test:one, #1213)', () => {
+// The point of scripts/ci/run-one-test.mjs is that the Claude review Action can run ONE
+// test file without that being arbitrary code execution in a job holding GITHUB_TOKEN and
+// an OAuth token. The granted form is `Bash(node scripts/ci/run-one-test.mjs:*)`, and that
+// spelling is load-bearing: two narrower-looking grants were tried and rejected, both
+// verified against the real tools rather than reasoned about.
+//
+//   Bash(npx vitest run:*)     vitest executes whatever --config, --setupFiles and
+//                              --globalSetup name.
+//   Bash(npm run test:one:*)   npm accepts its own options before the script runs at all,
+//                              so `npm run test:one --script-shell=<path>` makes npm
+//                              execute that path as the shell and the guard never runs.
+//
+// Naming the script leaves no launcher options in front of it. These tests therefore pin
+// the refusals, not just the happy path.
+describe('resolveTestFile (guard for node scripts/ci/run-one-test.mjs, #1213)', () => {
   const root = resolve(process.cwd(), 'test');
   const opts = { root, exists: () => true, isFile: () => true, realpath: p => p };
 
