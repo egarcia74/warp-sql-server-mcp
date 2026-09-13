@@ -147,15 +147,31 @@ jobs:
 
             const since = plan.lastTag ?? 'the beginning of history';
 
+            const manualType = process.env.MANUAL_TYPE;
+            const forced = Boolean(manualType) && manualType !== 'auto';
+
             if (plan.commitCount === 0) {
-              core.info(`No new commits since ${since} - nothing to release.`);
+              // #1158 from the other side: "no commits at all" and "commits that carry no
+              // recognised type" are different outcomes and the run has to say which. The
+              // skip notice at the end of this workflow reads "see \"Release type\" above
+              // for why", so returning without writing that heading leaves the operator
+              // pointed at a summary section that was never rendered.
+              const reason = `No commits since ${since} - nothing to release.` +
+                (forced
+                  ? ` release_type=\`${manualType}\` cannot apply: there is nothing new to tag.`
+                  : '');
+              core.info(reason);
+              await core.summary
+                .addHeading('Release type', 3)
+                .addRaw('**Decision:** `none`')
+                .addBreak()
+                .addRaw(reason)
+                .write();
               core.setOutput('should_release', 'false');
               core.setOutput('release_type', 'none');
               return;
             }
 
-            const manualType = process.env.MANUAL_TYPE;
-            const forced = Boolean(manualType) && manualType !== 'auto';
             const releaseType = forced ? manualType : plan.releaseType;
             const shouldRelease = releaseType !== 'none' || process.env.DRY_RUN === 'true';
 

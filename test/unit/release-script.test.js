@@ -248,6 +248,31 @@ describe('detectReleaseType: the types added by #1158', () => {
     expect(classifySubject('update doc: thing')?.id).toBe('docs');
   });
 
+  it('needs a complete prefix, so an unclosed scope is unclassified rather than a release', () => {
+    // `startsWithType` used to accept `type(` with no closing `):`. That released a patch
+    // off `ci(release update workflow`, and filed `feat(cli: thing` under New Features with
+    // the broken prefix still showing, because `stripTypePrefix` requires the whole form.
+    expect(classifySubject('ci(release update workflow')).toBeNull();
+    expect(classifySubject('feat(cli: thing')).toBeNull();
+    expect(detectReleaseType(['ci(release update workflow'])).toMatchObject({
+      type: 'none',
+      unclassified: ['ci(release update workflow']
+    });
+
+    // Every complete spelling still classifies, `!` and scopes included.
+    expect(classifySubject('ci: a')?.id).toBe('ci');
+    expect(classifySubject('ci(release): a')?.id).toBe('ci');
+    expect(classifySubject('feat(cli): a')?.id).toBe('feat');
+    expect(classifySubject('feat(cli)!: a')?.id).toBe('breaking');
+    expect(classifySubject('feat!: a')?.id).toBe('breaking');
+
+    // The two grammars agree by construction now: anything filed under features or fixes
+    // has a prefix `stripTypePrefix` can remove.
+    for (const subject of ['feat: a', 'feat(cli): a', 'feat(cli)!: a', 'bugfix(x): a']) {
+      expect(stripTypePrefix(subject)).toBe('a');
+    }
+  });
+
   it('lets every anchored type outrank the loose doc: alias', () => {
     // The loose alias lives outside CLASSIFICATION_RULES precisely so it cannot win here.
     // As a table entry it sat above `perf` and friends, so these all reported `docs / chore`

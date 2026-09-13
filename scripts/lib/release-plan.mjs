@@ -322,7 +322,28 @@ export function parseArgs(argv) {
  * precisely the #1158 defect (#1155 removed a module from the tarball and a field from a
  * public MCP tool response under a `refactor:` subject and shipped no release at all).
  */
-const startsWithType = (msg, type) => msg.startsWith(`${type}:`) || msg.startsWith(`${type}(`);
+/**
+ * A COMPLETE conventional-commit prefix: `type:`, `type(scope):`, `type!:` or
+ * `type(scope)!:`. An earlier version tested `msg.startsWith(`${type}(`)`, which accepted a
+ * prefix that never closed - `ci(release update workflow` classified as `ci` and released a
+ * patch, and `feat(cli: thing` released a minor and appeared under New Features with its
+ * broken prefix still attached, because `stripTypePrefix` requires the complete form and so
+ * stripped nothing. Sharing one grammar with `stripTypePrefix` is what keeps those two
+ * agreeing; a malformed subject is now unclassified, which is the case #1158 made loud.
+ *
+ * Replayed over 1,155 non-merge subjects in this repository's history, the tightened form
+ * differs on three - `feat!:` and `fix!:` subjects, which it recognises and the old one did
+ * not. Their release level is unchanged either way: the breaking rule runs first and claims
+ * them.
+ *
+ * `msg` is already lowercased by `classifySubject`; the flag only keeps a direct caller from
+ * being surprised.
+ */
+const TYPE_PREFIX = /^([a-z]+)(?:\([^)]*\))?!?:/i;
+const startsWithType = (msg, type) => {
+  const match = TYPE_PREFIX.exec(msg);
+  return match !== null && match[1].toLowerCase() === type;
+};
 
 export const CLASSIFICATION_RULES = [
   {
