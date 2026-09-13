@@ -84,8 +84,14 @@ const SHELL_CALLEES = '/^(exec|execSync)$/';
 const ARGV_CALLEES = '/^(execFile|execFileSync|spawn|spawnSync)$/';
 /** git as a whole word, wherever it appears in a shell command. */
 const GIT_MENTION = String.raw`/\bgit(\.exe)?\b/i`;
-/** An executable named git, allowing the Windows spelling. Anchored - no shell involved. */
-const GIT_EXECUTABLE = String.raw`/^\s*git(\.exe)?$/i`;
+/**
+ * An executable named git, with or without a directory. No shell is involved, so the name is
+ * exact - but `/usr/bin/git` and `./git` run git just as surely as the bare name, and no
+ * leading whitespace is stripped by these APIs, unlike a shell command.
+ */
+const GIT_EXECUTABLE = String.raw`/(^|[\\/])git(\.exe)?$/i`;
+/** Options carrying `shell: true`, which turns an argv API into a shell one. */
+const SHELL_OPTION = ":has(Property[key.name='shell'][value.value=true])";
 
 /** The one sanctioned shape for a direct spawn: the options object names the scrub. */
 const NOT_SCRUBBED =
@@ -95,17 +101,28 @@ export const UNSCRUBBED_GIT_SPAWN_SELECTORS = [
   // Shell commands: a string that mentions git...
   `CallExpression[callee.name=${SHELL_CALLEES}][arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
   `CallExpression[callee.property.name=${SHELL_CALLEES}][arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
-  // ...or a template ANY of whose quasis does. Checking only quasis.0 missed
-  // execSync(`cd ${dir} && git status`), a routine way to build a command.
-  `CallExpression[callee.name=${SHELL_CALLEES}]:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${SHELL_CALLEES}]:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
-  `CallExpression[callee.name=${SHELL_CALLEES}]:has(TemplateElement[value.cooked=${GIT_MENTION}])${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${SHELL_CALLEES}]:has(TemplateElement[value.cooked=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  // ...a template ANY of whose quasis does. Checking only quasis.0 missed
+  // execSync(`cd ${dir} && git status`). Requiring arguments.0 to BE the template keeps a
+  // template elsewhere in the call - an options value, say - from triggering this.
+  `CallExpression[callee.name=${SHELL_CALLEES}][arguments.0.type='TemplateLiteral']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${SHELL_CALLEES}][arguments.0.type='TemplateLiteral']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.name=${SHELL_CALLEES}][arguments.0.type='TemplateLiteral']:has(TemplateElement[value.cooked=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${SHELL_CALLEES}][arguments.0.type='TemplateLiteral']:has(TemplateElement[value.cooked=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  // ...or a concatenation, whose `.value` does not exist at all: execSync('git ' + sub) was
+  // silent because the first argument is a BinaryExpression, not a Literal.
+  `CallExpression[callee.name=${SHELL_CALLEES}][arguments.0.type='BinaryExpression']:has(Literal[value=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${SHELL_CALLEES}][arguments.0.type='BinaryExpression']:has(Literal[value=${GIT_MENTION}])${NOT_SCRUBBED}`,
   // Executable names: exact, since no shell reinterprets them.
   `CallExpression[callee.name=${ARGV_CALLEES}][arguments.0.value=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
   `CallExpression[callee.property.name=${ARGV_CALLEES}][arguments.0.value=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
   `CallExpression[callee.name=${ARGV_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${ARGV_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`
+  `CallExpression[callee.property.name=${ARGV_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
+  // ...except with `shell: true`, which hands the first argument to a shell after all, so
+  // the mention policy applies: spawnSync('mkdir -p f && git init', { shell: true }).
+  `CallExpression[callee.name=${ARGV_CALLEES}]${SHELL_OPTION}[arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${ARGV_CALLEES}]${SHELL_OPTION}[arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.name=${ARGV_CALLEES}]${SHELL_OPTION}[arguments.0.type='TemplateLiteral']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${ARGV_CALLEES}]${SHELL_OPTION}[arguments.0.type='TemplateLiteral']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`
 ];
 
 export const UNSCRUBBED_GIT_SPAWN_MESSAGE =

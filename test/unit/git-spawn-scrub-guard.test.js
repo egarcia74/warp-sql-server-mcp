@@ -86,6 +86,16 @@ export const show = dir => execSync('cd fixture; ${GIT} status', { cwd: dir });`
 export const show = dir => execSync('GIT_PAGER=cat ${GIT} log', { cwd: dir });`,
   'git with the empty quotes a shell erases': `import { execSync } from 'node:child_process';
 export const show = dir => execSync('${GIT}"" status', { cwd: dir });`,
+  'git behind an absolute path': `import { execFileSync } from 'node:child_process';
+export const show = dir => execFileSync('/usr/bin/${GIT}', ['status'], { cwd: dir });`,
+  'git behind a relative path': `import { spawnSync } from 'node:child_process';
+export const show = dir => spawnSync('./${GIT}', ['status'], { cwd: dir });`,
+  // shell: true turns an argv API into a shell one, so the mention policy applies.
+  'an argv API put into shell mode': `import { spawnSync } from 'node:child_process';
+export const show = () => spawnSync('mkdir -p fixture && ${GIT} init', { shell: true });`,
+  // The first argument is a BinaryExpression, so it has no `.value` for a selector to read.
+  'a command built by concatenation': `import { execSync } from 'node:child_process';
+export const show = (sub, dir) => execSync('${GIT} ' + sub, { cwd: dir });`,
   'a shell command delimited by a redirection': `import { execSync } from 'node:child_process';
 export const show = dir => execSync('${GIT}>/dev/null init', { cwd: dir });`,
   'a shell command delimited by a semicolon': `import { execSync } from 'node:child_process';
@@ -115,6 +125,9 @@ export const show = dir => runGit(['status'], { cwd: dir });`,
 export const a = dir => execFileSync('npm', ['run', 'build'], { cwd: dir });
 export const b = () => execSync('docker ps', { stdio: 'ignore' });
 export const c = script => spawn('node', [script]);`,
+  // The template is an options value, not the command, so it is not a git spawn.
+  'a git-mentioning template somewhere other than the command': `import { execSync } from 'node:child_process';
+export const show = () => execSync('echo hi', { note: \`${GIT}\` });`,
   'a command that merely starts with the same letters': `import { execFileSync } from 'node:child_process';
 export const show = () => execFileSync('${GIT}leaks', ['detect']);`
 };
