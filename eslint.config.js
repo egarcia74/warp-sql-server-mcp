@@ -61,8 +61,11 @@ const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSyn
  * for `execFile`/`spawn`, whose first argument is an executable name rather than a shell
  * command - a file literally called `git;` would be reported - which is a harmless false
  * positive in a guard whose remedy is to route the call through runGit().
+ *
+ * Quotes and a backslash count as boundaries too: a POSIX shell removes them before
+ * execution, so `git"" status` and a backslash-newline continuation both run git status.
  */
-const GIT_BOUNDARY = String.raw`[\s;|&<>()\`]`;
+const GIT_BOUNDARY = String.raw`[\s;|&<>()\`'"\\]`;
 const GIT_COMMAND = String.raw`/^\s*git(\.exe)?($|${GIT_BOUNDARY})/i`;
 /**
  * The same, but requiring the boundary to be PRESENT. A template's first cooked quasi ends
@@ -82,8 +85,10 @@ export const UNSCRUBBED_GIT_SPAWN_SELECTORS = [
   // cp.execFileSync('git', ...) / child_process.spawnSync('git', ...)
   `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.value=${GIT_COMMAND}]${NOT_SCRUBBED}`,
   // execSync(`git ${subcommand}`) - a template literal has no `.value` to match on.
-  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND_BOUNDED}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND_BOUNDED}]${NOT_SCRUBBED}`,
   // ...and on the COOKED text too: node runs the cooked value, so execSync(`\x67it status`)
   // launches git while its raw text reads `\x67it status` and matches nothing above.
   // A template with no interpolation may end at the quasi; one with an interpolation must

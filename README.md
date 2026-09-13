@@ -194,7 +194,7 @@ npm install
 
 **✅ PRODUCTION-VALIDATED**: This MCP server has been **fully tested** through:
 
-- **1,312 Tests**: All MCP tools, security boundaries, error scenarios - **every one of them runs
+- **1,379 Tests**: All MCP tools, security boundaries, error scenarios - **every one of them runs
   automatically on every pull request** (1,312 unit + 27 integration + 40 live-database against a
   Docker SQL Server CI starts itself)
 - **40 Live-Database Integration Tests**: Live database validation across all security phases, run in CI
@@ -364,7 +364,7 @@ showcases rigorous engineering standards that can be applied to any production s
 
 **Key Engineering Highlights:**
 
-- 🔬 **1,312 Tests** covering all functionality and edge cases - every one of them runs automatically on every pull request
+- 🔬 **1,379 Tests** covering all functionality and edge cases - every one of them runs automatically on every pull request
 - 🛡️ **Multi-layered Security** with defense-in-depth architecture
 - 📊 **Production Observability** with structured logging and performance monitoring
 - ⚡ **Enterprise Reliability** featuring connection pooling and graceful error handling
