@@ -15,7 +15,7 @@
  * without spawning anything.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, realpathSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -106,11 +106,19 @@ function main() {
     process.exit(2);
   }
 
-  const ambiguous = siblingsSharingPrefix(result.file);
-  if (ambiguous.length > 0) {
+  let selected;
+  try {
+    selected = filesVitestWouldRun(vitest, result.file);
+  } catch (error) {
+    console.error(`run-one-test: could not ask vitest what it would run: ${error.message}`);
+    process.exit(2);
+  }
+
+  if (selected.length !== 1 || selected[0] !== result.file) {
     console.error(
-      `run-one-test: ${result.file} is a prefix of ${ambiguous.join(', ')}, and vitest filters ` +
-        'by prefix, so it would run those too. Rename one of them.'
+      `run-one-test: vitest would run ${selected.length} file(s) for ${result.file}` +
+        (selected.length > 0 ? `:\n  ${selected.join('\n  ')}` : '') +
+        '\nRefusing: this runs exactly one test file or none.'
     );
     process.exit(2);
   }
@@ -119,25 +127,31 @@ function main() {
 }
 
 /**
- * Vitest matches a CLI filter by prefix, not equality, so asking for `foo.test.js` also runs
- * `foo.test.js.extra.test.js` - verified, two files ran. Nothing in the CLI expresses "this
- * file only", so the one-file guarantee is kept by refusing the ambiguous case outright.
+ * Ask vitest which files this filter selects, rather than modelling its filter here.
+ *
+ * Its predicate is not a plain prefix match: it falls through to a case-insensitive
+ * relative-path `includes`, and its traversal follows directory symlinks. Both were found
+ * by reimplementing it badly - a nested `test/nested/test/unit/a.test.js` was selected
+ * alongside the requested `test/unit/a.test.js` while a prefix check saw no ambiguity. The
+ * only description of vitest's behaviour that cannot drift from vitest is vitest, the same
+ * reason scripts/ci/verify-publish-tree.mjs asks npm for the packlist instead of globbing.
  */
-export function siblingsSharingPrefix(file, { root = TEST_ROOT, list = listTestFiles } = {}) {
-  return list(root).filter(other => other !== file && other.startsWith(file));
-}
+export function filesVitestWouldRun(
+  vitest,
+  file,
+  { run = execFileSync, cwd = process.cwd() } = {}
+) {
+  const out = run(process.execPath, [vitest, 'list', '--filesOnly', file], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    cwd
+  });
 
-function listTestFiles(root) {
-  const found = [];
-  const walk = dir => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = resolve(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.name.endsWith('.test.js')) found.push(full);
-    }
-  };
-  walk(root);
-  return found;
+  return out
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => resolve(cwd, line));
 }
 
 /**

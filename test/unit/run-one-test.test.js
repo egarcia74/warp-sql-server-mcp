@@ -4,9 +4,9 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 
 import {
+  filesVitestWouldRun,
   resolveTestFile,
-  resolveVitest,
-  siblingsSharingPrefix
+  resolveVitest
 } from '../../scripts/ci/run-one-test.mjs';
 
 // The point of scripts/ci/run-one-test.mjs is that the Claude review Action can
@@ -137,7 +137,7 @@ describe('resolveVitest confines the runner to this repository', () => {
   const root = process.cwd();
 
   it('accepts the vitest installed in this repo', () => {
-    expect(resolveVitest()).toMatch(/node_modules\/vitest\/vitest\.mjs$/);
+    expect(resolveVitest().endsWith(join('node_modules', 'vitest', 'vitest.mjs'))).toBe(true);
   });
 
   it('refuses a node_modules that is itself a symlink out of the repository', () => {
@@ -185,48 +185,46 @@ describe('resolveVitest confines the runner to this repository', () => {
   });
 });
 
-// Codex on #1231: vitest matches a CLI filter by prefix, not equality, so asking for
-// foo.test.js also runs foo.test.js.extra.test.js. Reproduced - two files, 46 tests ran.
-describe('siblingsSharingPrefix keeps the one-file guarantee', () => {
-  const list = files => () => files;
+// Codex on #1231: vitest's filter is not a plain prefix match - it falls through to a
+// case-insensitive relative-path `includes`, and its traversal follows directory symlinks.
+// A hand-written prefix check missed both (a nested test/nested/test/unit/a.test.js was run
+// alongside the request while the check saw no ambiguity), so the wrapper asks vitest.
+describe('filesVitestWouldRun asks vitest rather than modelling its filter', () => {
+  const vitest = '/r/node_modules/vitest/vitest.mjs';
 
-  it('finds a sibling that extends the requested name', () => {
-    expect(
-      siblingsSharingPrefix('/r/test/unit/a.test.js', {
-        list: list(['/r/test/unit/a.test.js', '/r/test/unit/a.test.js.extra.test.js'])
-      })
-    ).toEqual(['/r/test/unit/a.test.js.extra.test.js']);
+  it('resolves the relative paths vitest prints against the working directory', () => {
+    const run = () => 'test/unit/a.test.js\ntest/unit/b.test.js\n';
+    expect(filesVitestWouldRun(vitest, '/r/test/unit/a.test.js', { run, cwd: '/r' })).toEqual([
+      '/r/test/unit/a.test.js',
+      '/r/test/unit/b.test.js'
+    ]);
   });
 
-  it('is empty when the name is unambiguous', () => {
+  it('ignores blank lines and surrounding whitespace', () => {
+    const run = () => '\n  test/unit/a.test.js  \n\n';
+    expect(filesVitestWouldRun(vitest, '/r/test/unit/a.test.js', { run, cwd: '/r' })).toEqual([
+      '/r/test/unit/a.test.js'
+    ]);
+  });
+
+  it('returns nothing when vitest selects nothing', () => {
     expect(
-      siblingsSharingPrefix('/r/test/unit/a.test.js', {
-        list: list(['/r/test/unit/a.test.js', '/r/test/unit/b.test.js'])
-      })
+      filesVitestWouldRun(vitest, '/r/test/unit/a.test.js', { run: () => '', cwd: '/r' })
     ).toEqual([]);
   });
 
-  it('does not count the requested file as its own sibling', () => {
-    expect(
-      siblingsSharingPrefix('/r/test/unit/a.test.js', { list: list(['/r/test/unit/a.test.js']) })
-    ).toEqual([]);
+  it('passes list --filesOnly and the file, and nothing else', () => {
+    const seen = [];
+    const run = (bin, args) => {
+      seen.push([bin, args]);
+      return 'test/unit/a.test.js\n';
+    };
+    filesVitestWouldRun(vitest, '/r/test/unit/a.test.js', { run, cwd: '/r' });
+    expect(seen[0][1]).toEqual([vitest, 'list', '--filesOnly', '/r/test/unit/a.test.js']);
   });
 
-  it('reports every ambiguous sibling, not just the first', () => {
-    expect(
-      siblingsSharingPrefix('/r/test/unit/a.test.js', {
-        list: list([
-          '/r/test/unit/a.test.js',
-          '/r/test/unit/a.test.js.one.test.js',
-          '/r/test/unit/a.test.js.two.test.js'
-        ])
-      })
-    ).toHaveLength(2);
-  });
-
-  it("finds no ambiguity among this repository's own test files", () => {
-    expect(siblingsSharingPrefix(resolve(process.cwd(), 'test/unit/run-one-test.test.js'))).toEqual(
-      []
-    );
+  it('agrees with the real vitest on this repository, selecting exactly this file', () => {
+    const file = resolve(process.cwd(), 'test/unit/run-one-test.test.js');
+    expect(filesVitestWouldRun(resolveVitest(), file)).toEqual([file]);
   });
 });
