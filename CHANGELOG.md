@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Claude review Action can run a single test file.** The allowlist grants
+  `node scripts/ci/run-one-test.mjs <file>`, so a review can check a claim like "this
+  regression test fails on the old code" itself instead of taking it on trust;
+  `npm run test:unit` only ever runs the whole suite. The spelling is load-bearing: this job
+  holds `GITHUB_TOKEN` and the OAuth token while reading author-supplied PR text, and two
+  narrower-looking grants turned out to be arbitrary code execution - `npx vitest run:*`
+  because vitest executes whatever `--config`, `--setupFiles` and `--globalSetup` name, and
+  `npm run test:one:*` because npm accepts its own options first, so
+  `--script-shell=<path>` makes npm run that path as the shell. Naming the script leaves no
+  launcher options in front of it. The script itself takes exactly one argument, refuses
+  anything option-shaped, requires an existing `.test.js` whose canonical path is inside
+  `test/`, and runs only the vitest installed in this repository.
+  ([#1213](https://github.com/egarcia74/warp-sql-server-mcp/issues/1213))
 - **`npm-publish.yml` now authenticates to npmjs.com with npm Trusted Publishing (GitHub OIDC) instead of an
   `NPM_TOKEN` secret.** The 2.0.0 publish failed because the granular token (90-day maximum lifetime) had expired
   under the release; a trusted publisher bound to this repository and workflow file has nothing to expire. The job
