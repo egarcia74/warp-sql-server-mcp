@@ -18,8 +18,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-const TEST_ROOT = resolve(process.cwd(), 'test');
+const REPO_ROOT = process.cwd();
+const TEST_ROOT = resolve(REPO_ROOT, 'test');
 
 export function resolveTestFile(
   argv,
@@ -96,15 +98,52 @@ function main() {
     process.exit(2);
   }
 
-  // Not `npx vitest`: that resolves the binary through PATH (Sonar S4036) and
-  // puts a package manager between this guard and the runner. Resolve the
-  // installed vitest from the module graph and run it on this same node.
-  const require = createRequire(`${process.cwd()}${sep}`);
-  const vitest = resolve(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
+  let vitest;
+  try {
+    vitest = resolveVitest();
+  } catch (error) {
+    console.error(`run-one-test: ${error.message}`);
+    process.exit(2);
+  }
 
   execFileSync(process.execPath, [vitest, 'run', result.file], { stdio: 'inherit' });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Locate this repository's own vitest.
+ *
+ * Not `npx vitest`: that resolves the binary through PATH (Sonar S4036) and puts a package
+ * manager between this guard and the runner. `createRequire` anchors lookup at the working
+ * directory but does not confine it there - with the dependency absent or NODE_PATH set it
+ * can reach an ancestor or global install - so the resolved entry point is required to sit
+ * under this repository's own node_modules before it is executed.
+ */
+export function resolveVitest({
+  root = REPO_ROOT,
+  require = createRequire(`${REPO_ROOT}${sep}`)
+} = {}) {
+  const modules = resolve(root, 'node_modules');
+  const entry = resolve(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
+
+  let canonicalEntry;
+  let canonicalModules;
+  try {
+    canonicalEntry = realpathSync(entry);
+    canonicalModules = realpathSync(modules);
+  } catch {
+    throw new Error(`cannot resolve vitest under ${modules}`);
+  }
+
+  if (canonicalEntry !== canonicalModules && !canonicalEntry.startsWith(canonicalModules + sep)) {
+    throw new Error(`refusing a vitest outside ${modules}: ${entry}`);
+  }
+
+  return canonicalEntry;
+}
+
+// pathToFileURL, not a hand-built `file://` string: a checkout path containing a space or a
+// Windows drive letter percent-encodes differently, and a mismatched comparison would exit
+// zero without running anything.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }

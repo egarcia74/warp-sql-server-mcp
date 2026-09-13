@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolve, sep } from 'node:path';
 
-import { resolveTestFile } from '../../scripts/ci/run-one-test.mjs';
+import { resolveTestFile, resolveVitest } from '../../scripts/ci/run-one-test.mjs';
 
 // The point of scripts/ci/run-one-test.mjs is that the Claude review Action can
 // be granted `Bash(npm run test:one:*)` without that being arbitrary code
@@ -120,5 +120,39 @@ describe('resolveTestFile (guard for npm run test:one, #1213)', () => {
     const sneaky = `unit${sep}..${sep}..${sep}package.json.test.js`;
     const result = resolveTestFile([`test/${sneaky}`], opts);
     expect(result.ok).toBe(false);
+  });
+});
+
+// Codex on #1231: createRequire anchors lookup at a directory but does not confine it
+// there, so with the dependency absent or NODE_PATH set it can reach an ancestor or
+// global install - and that package's entry point would then run with the job's
+// credentials.
+describe('resolveVitest confines the runner to this repository', () => {
+  const root = process.cwd();
+
+  it('accepts the vitest installed in this repo', () => {
+    expect(resolveVitest()).toMatch(/node_modules\/vitest\/vitest\.mjs$/);
+  });
+
+  it('refuses a vitest resolved outside the repo node_modules', () => {
+    expect(() =>
+      resolveVitest({
+        root,
+        require: { resolve: () => '/somewhere/else/vitest/package.json' }
+      })
+    ).toThrow(/cannot resolve vitest|refusing a vitest outside/);
+  });
+
+  it('refuses rather than falling back when resolution throws', () => {
+    expect(() =>
+      resolveVitest({
+        root,
+        require: {
+          resolve: () => {
+            throw new Error('MODULE_NOT_FOUND');
+          }
+        }
+      })
+    ).toThrow();
   });
 });
