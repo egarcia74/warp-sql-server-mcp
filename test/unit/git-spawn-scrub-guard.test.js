@@ -76,6 +76,16 @@ export const show = dir => cp.execFileSync('${GIT}', ['status'], { cwd: dir });`
 export const show = dir => execSync('${GIT} status', { cwd: dir });`,
   'execSync with a template-literal command': `import { execSync } from 'node:child_process';
 export const show = (dir, sub) => execSync(\`${GIT} \${sub}\`, { cwd: dir });`,
+  // Not obfuscation - an ordinary compound command. git is not the first word, so an
+  // anchored pattern missed it entirely while it still inherited GIT_*.
+  'git after && in a compound command': `import { execSync } from 'node:child_process';
+export const show = dir => execSync('mkdir -p fixture && ${GIT} init', { cwd: dir });`,
+  'git after a semicolon': `import { execSync } from 'node:child_process';
+export const show = dir => execSync('cd fixture; ${GIT} status', { cwd: dir });`,
+  'git behind an environment assignment': `import { execSync } from 'node:child_process';
+export const show = dir => execSync('GIT_PAGER=cat ${GIT} log', { cwd: dir });`,
+  'git with the empty quotes a shell erases': `import { execSync } from 'node:child_process';
+export const show = dir => execSync('${GIT}"" status', { cwd: dir });`,
   'a shell command delimited by a redirection': `import { execSync } from 'node:child_process';
 export const show = dir => execSync('${GIT}>/dev/null init', { cwd: dir });`,
   'a shell command delimited by a semicolon': `import { execSync } from 'node:child_process';
@@ -105,6 +115,9 @@ export const show = dir => runGit(['status'], { cwd: dir });`,
 export const a = dir => execFileSync('npm', ['run', 'build'], { cwd: dir });
 export const b = () => execSync('docker ps', { stdio: 'ignore' });
 export const c = script => spawn('node', [script]);`,
+  // Adjacent quoted and unquoted fragments concatenate, so this runs gitleaks, not git.
+  'a quoted fragment that completes another command name': `import { execSync } from 'node:child_process';
+export const show = dir => execSync('${GIT}"leaks" detect', { cwd: dir });`,
   'a cooked template whose interpolation completes another command': `import { execSync } from 'node:child_process';
 export const show = () => execSync(\`\\x67it\${'leaks'}\`);`,
   'a command that merely starts with the same letters': `import { execFileSync } from 'node:child_process';

@@ -65,15 +65,26 @@ const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSyn
  * Quotes and a backslash count as boundaries too: a POSIX shell removes them before
  * execution, so `git"" status` and a backslash-newline continuation both run git status.
  */
-const GIT_BOUNDARY = String.raw`[\s;|&<>()\`'"\\]`;
-const GIT_COMMAND = String.raw`/^\s*git(\.exe)?($|${GIT_BOUNDARY})/i`;
+/** A shell word break AFTER the name: whitespace, an operator, or end of string. */
+const GIT_END = String.raw`(?:[\s;|&<>()]|$)`;
+/** Empty quotes are erased by the shell, so `git\"\" status` is still git. */
+const GIT_QUOTES = String.raw`(?:\"\"|'')*`;
+/**
+ * Where a command word may START: the beginning, or after an operator that ends the
+ * previous command, optionally past environment assignments. Without this, git is only
+ * found as the FIRST command, and `mkdir -p f && git init` - an ordinary thing to write,
+ * needing no obfuscation - inherited GIT_* unguarded.
+ */
+const GIT_WORD_START = String.raw`(?:^|[;&|(\n])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s;|&<>()]*\s+)*`;
+const GIT_COMMAND = `/${GIT_WORD_START}git(\\.exe)?${GIT_QUOTES}${GIT_END}/i`;
+/** The same, but the word break must be PRESENT - used where a quasi's end is not the command's end. */
+const GIT_COMMAND_BOUNDED = `/${GIT_WORD_START}git(\\.exe)?${GIT_QUOTES}[\\s;|&<>()]/i`;
 /**
  * The same, but requiring the boundary to be PRESENT. A template's first cooked quasi ends
  * where an interpolation begins, so `` execSync(`\x67it${'leaks'}`) `` has the cooked quasi
  * `git` exactly - end-of-quasi is not end-of-command, and treating it as one reported
  * gitleaks. Templates that carry an interpolation must show the boundary inside the quasi.
  */
-const GIT_COMMAND_BOUNDED = String.raw`/^\s*git(\.exe)?${GIT_BOUNDARY}/i`;
 
 /** The one sanctioned shape for a direct spawn: the options object names the scrub. */
 const NOT_SCRUBBED =
