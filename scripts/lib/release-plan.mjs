@@ -354,12 +354,7 @@ export const CLASSIFICATION_RULES = [
     id: 'docs',
     label: 'docs / chore',
     release: 'patch',
-    match: msg =>
-      // `doc:` stays unanchored on purpose, unlike `bugfix:`/`feature:`. Anchoring it would
-      // make an untyped subject such as `update doc: thing` release nothing, and #1158 is
-      // precisely about not silently shipping nothing. `docs` and `chore` share this rule,
-      // so a loose match here cannot send a commit to the wrong release level either.
-      startsWithType(msg, 'docs') || msg.includes('doc:') || startsWithType(msg, 'chore')
+    match: msg => startsWithType(msg, 'docs') || startsWithType(msg, 'chore')
   },
   { id: 'perf', label: 'perf', release: 'patch', match: msg => startsWithType(msg, 'perf') },
   {
@@ -382,10 +377,25 @@ export const CLASSIFICATION_RULES = [
   { id: 'style', label: 'style', release: 'patch', match: msg => startsWithType(msg, 'style') }
 ];
 
+/**
+ * The loose `doc:` alias, kept out of the rule table so it cannot outrank an anchored type.
+ *
+ * `doc:` is the one alias that stays unanchored, unlike `bugfix:`/`feature:`. Anchoring it
+ * would make an untyped subject such as `update doc: thing` release nothing, and #1158 is
+ * precisely about not silently shipping nothing. But as a table entry it ran BEFORE the
+ * anchored `perf`/`refactor`/`revert`/`build`/`test`/`ci`/`style` rules, so
+ * `perf: update doc: benchmarks` reported `docs / chore` in `rule`, `counts`, the summary
+ * and the CLI commit mix. The level was still patch, but the evidence named the wrong type.
+ * Evaluating it only after every anchored rule has declined keeps both properties.
+ */
+const DOCS_RULE = CLASSIFICATION_RULES.find(rule => rule.id === 'docs');
+
 /** The first rule `subject` matches, or null when nothing recognises it. */
 export function classifySubject(subject) {
   const msg = String(subject).toLowerCase();
-  return CLASSIFICATION_RULES.find(rule => rule.match(msg)) ?? null;
+  const matched = CLASSIFICATION_RULES.find(rule => rule.match(msg));
+  if (matched) return matched;
+  return msg.includes('doc:') ? DOCS_RULE : null;
 }
 
 /** Release levels in descending precedence: one breaking subject outranks any number of feats. */

@@ -154,11 +154,30 @@ jobs:
               return;
             }
 
+            const manualType = process.env.MANUAL_TYPE;
+            const forced = Boolean(manualType) && manualType !== 'auto';
+            const releaseType = forced ? manualType : plan.releaseType;
+            const shouldRelease = releaseType !== 'none' || process.env.DRY_RUN === 'true';
+
+            // `plan.summary` states the AUTO-DETECTED outcome, and for `none` it ends
+            // "Nothing will be tagged or published - ... dispatch with an explicit
+            // release_type to force a release". Printed unconditionally it contradicts the
+            // run it is describing in exactly the case that advice was taken. When an
+            // override is in force, report the detection as evidence and say what wins.
+            const decision = forced
+              ? (plan.releaseType === 'none'
+                  ? `Auto-detection recognised no conventional-commit type among them; ` +
+                    `release_type=\`${manualType}\` overrides that, so a \`${manualType}\` ` +
+                    'release will be tagged and published.'
+                  : `Auto-detection said \`${plan.releaseType}\`; release_type=` +
+                    `\`${manualType}\` overrides it.`)
+              : plan.summary;
+
             core.info(`Analyzing ${plan.commitCount} commits since ${since}:`);
             for (const commit of plan.commits) {
               core.info(`  ${commit.hash} ${commit.subject}`);
             }
-            core.info(plan.summary);
+            core.info(decision);
 
             // A subject matching no type at all is the one case the author has to fix.
             if (plan.unclassified.length > 0) {
@@ -171,11 +190,6 @@ jobs:
                 `type, so they contributed nothing to the release type:\n${shown}${more}`
               );
             }
-
-            const manualType = process.env.MANUAL_TYPE;
-            const forced = Boolean(manualType) && manualType !== 'auto';
-            const releaseType = forced ? manualType : plan.releaseType;
-            const shouldRelease = releaseType !== 'none' || process.env.DRY_RUN === 'true';
 
             // The point of #1158: "commits, but none of them classifiable" must never look
             // like "no commits". It is a warning, not a silent `none`. Every recognised type
@@ -191,7 +205,7 @@ jobs:
                 (forced ? ` (forced by release_type=\`${manualType}\`)` : '')
               )
               .addBreak()
-              .addRaw(`${plan.commitCount} commit(s) since ${since}. ${plan.summary}`)
+              .addRaw(`${plan.commitCount} commit(s) since ${since}. ${decision}`)
               .write();
 
             core.info(`Release decision: ${shouldRelease ? 'YES' : 'NO'} (type: ${releaseType})`);

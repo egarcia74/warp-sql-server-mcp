@@ -248,6 +248,23 @@ describe('detectReleaseType: the types added by #1158', () => {
     expect(classifySubject('update doc: thing')?.id).toBe('docs');
   });
 
+  it('lets every anchored type outrank the loose doc: alias', () => {
+    // The loose alias lives outside CLASSIFICATION_RULES precisely so it cannot win here.
+    // As a table entry it sat above `perf` and friends, so these all reported `docs / chore`
+    // in `rule`, `counts`, the summary and the CLI commit mix - the right level, named wrong.
+    expect(classifySubject('perf: update doc: benchmarks')?.id).toBe('perf');
+    expect(classifySubject('ci: publish doc: pages')?.id).toBe('ci');
+    expect(classifySubject('refactor(cli): drop doc: helper')?.id).toBe('refactor');
+    expect(classifySubject('test: cover doc: parsing')?.id).toBe('test');
+    expect(classifySubject('style: reflow doc: comments')?.id).toBe('style');
+    expect(classifySubject('build: package doc: assets')?.id).toBe('build');
+    expect(classifySubject('feat: add doc: support')?.id).toBe('feat');
+
+    const detected = detectReleaseType(['perf: update doc: benchmarks']);
+    expect(detected.rule).toBe('perf');
+    expect(describeCommitMix(detected)).toBe('perf: 1');
+  });
+
   // The breaking matchers are the one deliberate exception: Conventional Commits puts
   // `BREAKING CHANGE` in the body or footer and `!` after the type, so anchoring them
   // would break the spec rather than tighten it.
