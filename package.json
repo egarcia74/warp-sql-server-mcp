@@ -23,6 +23,7 @@
     "dev": "node --watch index.js",
     "test": "npm run test:unit && npm run test:integration && node scripts/test-summary.js",
     "test:unit": "vitest run test/unit",
+    "test:one": "node scripts/ci/run-one-test.mjs",
     "test:unit:watch": "vitest test/unit",
     "test:integration": "npm run docker:start:init && npm run test:integration:run && npm run docker:stop",
     "test:integration:run": "npm run test:integration:manual && npm run test:integration:protocol && npm run test:integration:performance",

@@ -24,8 +24,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CONTRIBUTING.md and the release checklist document the mapping and, for the first time, that it is the
   **PR title** that drives it.
 
+### Added
+
+- **An ESLint rule now fails the build when a test spawns `git` without stripping the inherited `GIT_*`
+  environment.** `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE` beat `cwd`, and a linked git worktree exports
+  them into hook environments - which is how, on 2026-09-11, a suite operating on temp-directory fixtures
+  rewrote the real repository (#1207 fixed that one file with `scrubbedEnv()`). The guard is scoped to
+  `test/**` and leaves the deliberate git spawns in `scripts/` and `lib/` alone; the sanctioned path is the
+  new `runGit()` helper in `test/helpers/git.js`, which imports `scrubbedEnv()` from
+  `scripts/ci/verify-publish-tree.mjs` rather than copying it. `test/unit/git-spawn-scrub-guard.test.js`
+  runs the project's real ESLint config to prove the guard fires on every unscrubbed spawn shape, stays
+  silent on the scrubbed ones and outside `test/`, and pins the single documented suppression so a new
+  `eslint-disable` cannot appear silently. Closes #1214.
+
+- **ESLint's ignore list actually ignores things now.** `ignores` shared a config object with
+  `rules`, which in flat config narrows that one block instead of setting global ignores, so
+  `coverage/`, `dist/`, `build/` and `.codacy/` were still being linted - `eslint .` covered 89
+  files, three of them generated files under `coverage/`. Split into its own entry, and extended
+  to the gitignored agent worktrees under `.claude/worktrees/` and `.worktrees/`, whose
+  work-in-progress could fail an unrelated branch's pre-push hook.
+
 ### Changed
 
+- **The Claude review Action can run a single test file.** The allowlist grants
+  `node scripts/ci/run-one-test.mjs <file>`, so a review can check a claim like "this
+  regression test fails on the old code" itself instead of taking it on trust;
+  `npm run test:unit` only ever runs the whole suite. The spelling is load-bearing: this job
+  holds `GITHUB_TOKEN` and the OAuth token while reading author-supplied PR text, and two
+  narrower-looking grants turned out to be arbitrary code execution - `npx vitest run:*`
+  because vitest executes whatever `--config`, `--setupFiles` and `--globalSetup` name, and
+  `npm run test:one:*` because npm accepts its own options first, so
+  `--script-shell=<path>` makes npm run that path as the shell. Naming the script leaves no
+  launcher options in front of it. The script itself takes exactly one argument, refuses
+  anything option-shaped, requires an existing `.test.js` whose canonical path is inside
+  `test/`, and runs only the vitest installed in this repository.
+  ([#1213](https://github.com/egarcia74/warp-sql-server-mcp/issues/1213))
 - **`npm-publish.yml` now authenticates to npmjs.com with npm Trusted Publishing (GitHub OIDC) instead of an
   `NPM_TOKEN` secret.** The 2.0.0 publish failed because the granular token (90-day maximum lifetime) had expired
   under the release; a trusted publisher bound to this repository and workflow file has nothing to expire. The job
