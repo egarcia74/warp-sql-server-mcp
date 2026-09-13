@@ -69,7 +69,11 @@ export const UNSCRUBBED_GIT_SPAWN_SELECTORS = [
   `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.value=${GIT_COMMAND}]${NOT_SCRUBBED}`,
   // execSync(`git ${subcommand}`) - a template literal has no `.value` to match on.
   `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`
+  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  // ...and on the COOKED text too: node runs the cooked value, so execSync(`\x67it status`)
+  // launches git while its raw text reads `\x67it status` and matches nothing above.
+  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.cooked=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.cooked=${GIT_COMMAND}]${NOT_SCRUBBED}`
 ];
 
 export const UNSCRUBBED_GIT_SPAWN_MESSAGE =

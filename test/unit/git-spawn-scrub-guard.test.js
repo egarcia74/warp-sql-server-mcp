@@ -26,11 +26,14 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint, Linter } from 'eslint';
 
-import { UNSCRUBBED_GIT_SPAWN_MESSAGE } from '../../eslint.config.js';
+import {
+  UNSCRUBBED_GIT_SPAWN_MESSAGE,
+  UNSCRUBBED_GIT_SPAWN_SELECTORS
+} from '../../eslint.config.js';
 import { runGit } from '../helpers/git.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -73,8 +76,13 @@ export const show = dir => cp.execFileSync('${GIT}', ['status'], { cwd: dir });`
 export const show = dir => execSync('${GIT} status', { cwd: dir });`,
   'execSync with a template-literal command': `import { execSync } from 'node:child_process';
 export const show = (dir, sub) => execSync(\`${GIT} \${sub}\`, { cwd: dir });`,
+  'a shell command with leading whitespace': `import { execSync } from 'node:child_process';
+export const show = dir => execSync(' ${GIT} status', { cwd: dir });`,
   // Windows resolves executables without regard to case, so these launch the same binary
   // and inherit the same GIT_* variables as the lowercase spelling.
+  // node runs the COOKED value, so this launches git while its raw text reads \x67it.
+  'a template command hidden behind a JavaScript escape': `import { execSync } from 'node:child_process';
+export const show = () => execSync(\`\\x67it status\`);`,
   'the Windows-cased Git': `import { execFileSync } from 'node:child_process';
 export const show = dir => execFileSync('${GIT.replace('g', 'G')}', ['status'], { cwd: dir });`,
   'the Windows executable GIT.EXE': `import { execFileSync } from 'node:child_process';
@@ -108,6 +116,9 @@ export const show = () => execFileSync('${GIT}leaks', ['detect']);`
  * text inside a string or template literal is not a directive, and this file's own fixtures
  * are strings.
  */
+/** Repo-relative and always forward-slashed, so comparisons hold on Windows too. */
+const repoPath = file => relative(REPO_ROOT, file).split(sep).join('/');
+
 function commentsOf(source) {
   const collected = [];
   new Linter().verify(source, {
@@ -142,7 +153,10 @@ describe('the #1214 guard fires on an unscrubbed git spawn under test/', () => {
     it(`reports ${shape}`, async () => {
       const result = await lintSource(source, 'test/unit/generated-unscrubbed-fixture.js');
       const reports = guardReports(result);
-      expect(reports).toHaveLength(1);
+      // At least one, not exactly one: a template-literal command matches both the raw and
+      // the cooked selector when no escape makes them differ, and reporting twice is
+      // harmless. What matters is that it is reported at all.
+      expect(reports.length).toBeGreaterThanOrEqual(1);
       expect(reports[0].severity).toBe(2); // an error, so `eslint .` exits non-zero
       expect(reports[0].message).toMatch(/runGit\(\) from test\/helpers\/git\.js/);
     });
@@ -240,7 +254,7 @@ describe('the escape hatch is pinned, not pretended away', () => {
             message.ruleId === 'no-restricted-syntax' &&
             message.message === UNSCRUBBED_GIT_SPAWN_MESSAGE
         )
-        .map(() => relative(REPO_ROOT, result.filePath))
+        .map(() => repoPath(result.filePath))
     );
     expect(suppressed).toEqual(['test/unit/verify-publish-tree.test.js']);
   });
@@ -285,7 +299,7 @@ describe('the escape hatch is pinned, not pretended away', () => {
         const labels = comment.type === 'Line' ? lineLabels : blockLabels;
         if (!labels.has(text.split(/\s+/)[0])) continue;
         const marker = comment.type === 'Line' ? '//' : '/*';
-        found.push(`${relative(REPO_ROOT, result.filePath)}: ${marker} ${text}`);
+        found.push(`${repoPath(result.filePath)}: ${marker} ${text}`);
       }
     }
 
@@ -308,8 +322,15 @@ describe('the escape hatch is pinned, not pretended away', () => {
       const config = await eslint.calculateConfigForFile(file);
       const entry = config.rules?.['no-restricted-syntax'];
       const options = Array.isArray(entry) ? entry.slice(1) : [];
-      const guards = options.some(option => option?.message === UNSCRUBBED_GIT_SPAWN_MESSAGE);
-      if (!guards) unguarded.push(relative(REPO_ROOT, file));
+      const selectors = new Set(
+        options
+          .filter(option => option?.message === UNSCRUBBED_GIT_SPAWN_MESSAGE)
+          .map(option => option.selector)
+      );
+      // The shared message is not proof the whole guard is present: a scoped config could
+      // keep one selector and drop the rest, leaving the other spawn shapes unguarded.
+      const guards = UNSCRUBBED_GIT_SPAWN_SELECTORS.every(selector => selectors.has(selector));
+      if (!guards) unguarded.push(repoPath(file));
     }
 
     expect(unguarded).toEqual([]);
@@ -318,7 +339,7 @@ describe('the escape hatch is pinned, not pretended away', () => {
   it('lints the whole test tree clean under the guard', async () => {
     const results = await eslint.lintFiles([resolve(REPO_ROOT, 'test')]);
     const live = results.flatMap(result =>
-      guardReports(result).map(message => `${result.filePath}:${message.line}`)
+      guardReports(result).map(message => `${repoPath(result.filePath)}:${message.line}`)
     );
     expect(live).toEqual([]);
   });
