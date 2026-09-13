@@ -30,14 +30,29 @@ import js from '@eslint/js';
  * property of the options object all slip past it. So does an aliased import
  * (`import { execFileSync as run }`), since the selectors match on the callee's name. It
  * also cannot see the runtime value of what `scrubbedEnv` returns - only that the name is
- * there. An `eslint-disable` comment
- * defeats it outright, which is why `test/unit/git-spawn-scrub-guard.test.js` pins the
- * complete set of suppressions in the test tree: adding one fails that test until the
- * allow-list is updated in the same change, where a reviewer sees it.
+ * there.
+ *
+ * Matching on the name alone also errs the other way: the selectors never check that the
+ * callee was imported from `node:child_process`, so an unrelated `runner.execFileSync(...)`
+ * or a locally shadowed `execSync` is reported even though it cannot inherit git's
+ * environment. esquery cannot resolve bindings, so this is accepted rather than solved -
+ * route such a call through `runGit()`, or suppress it and let the pin below surface it.
+ *
+ * An `eslint-disable` comment defeats the rule outright, and so does an inline
+ * configuration such as `/* eslint no-restricted-syntax: off *\/`, which produces no
+ * problem at all and therefore appears in neither ESLint's reports nor its
+ * `suppressedMessages`. `test/unit/git-spawn-scrub-guard.test.js` pins BOTH: the complete
+ * set of suppressions, and the complete set of ESLint directive comments in the test tree.
+ * Adding either fails a test until the allow-list is updated in the same change, where a
+ * reviewer sees it.
  */
 const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSync)$/';
-/** `git`, `git.exe`, or a shell-command string that starts with one of them. */
-const GIT_COMMAND = String.raw`/^git(\.exe)?($|\s)/`;
+/**
+ * `git`, `git.exe`, or a shell-command string that starts with one of them. Matched
+ * case-insensitively: Windows resolves executables without regard to case, so `Git` and
+ * `GIT.EXE` launch the same binary and inherit the same GIT_* variables.
+ */
+const GIT_COMMAND = String.raw`/^git(\.exe)?($|\s)/i`;
 /** The one sanctioned shape for a direct spawn: the options object names the scrub. */
 const NOT_SCRUBBED =
   ":not(:has(Property[key.name='env'] > CallExpression[callee.name='scrubbedEnv']))";

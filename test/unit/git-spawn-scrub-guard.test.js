@@ -24,6 +24,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { glob } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,7 +73,13 @@ export const show = dir => cp.execFileSync('${GIT}', ['status'], { cwd: dir });`
   'execSync with a string command': `import { execSync } from 'node:child_process';
 export const show = dir => execSync('${GIT} status', { cwd: dir });`,
   'execSync with a template-literal command': `import { execSync } from 'node:child_process';
-export const show = (dir, sub) => execSync(\`${GIT} \${sub}\`, { cwd: dir });`
+export const show = (dir, sub) => execSync(\`${GIT} \${sub}\`, { cwd: dir });`,
+  // Windows resolves executables without regard to case, so these launch the same binary
+  // and inherit the same GIT_* variables as the lowercase spelling.
+  'the Windows-cased Git': `import { execFileSync } from 'node:child_process';
+export const show = dir => execFileSync('${GIT.replace('g', 'G')}', ['status'], { cwd: dir });`,
+  'the Windows executable GIT.EXE': `import { execFileSync } from 'node:child_process';
+export const show = dir => execFileSync('${GIT.toUpperCase()}.EXE', ['status'], { cwd: dir });`
 };
 
 /** Spawns that must stay legal, so the guard is not a blanket ban on child processes. */
@@ -196,6 +204,40 @@ describe('the escape hatch is pinned, not pretended away', () => {
         .map(() => relative(REPO_ROOT, result.filePath))
     );
     expect(suppressed).toEqual(['test/unit/verify-publish-tree.test.js']);
+  });
+
+  // A suppression is not the only escape hatch. An inline CONFIGURATION comment can turn
+  // the rule off outright, in which case ESLint produces no problem at all and the file
+  // shows up in neither the reports nor the suppressed messages - both assertions around
+  // this one pass while an unscrubbed spawn sits in the file. Verified against real ESLint.
+  // So pin every directive in the test tree whatever its shape, including a blanket one
+  // that names no rule.
+  //
+  // The directive words are assembled rather than written, for the same reason the git
+  // fixtures above are: this file must contain no directive text of its own, or the scan
+  // would match its own source. That also means this file cannot exempt itself.
+  it('allows exactly the known ESLint directive comments in the whole test tree', async () => {
+    const word = `${'esl'}int`;
+    const directive = new RegExp(
+      `\\/\\*\\s*${word}[-\\w]*[\\s\\S]*?\\*\\/|\\/\\/\\s*${word}-disable[-\\w]*[^\\n]*`,
+      'g'
+    );
+    const nextLine = `${word}-disable-next-line`;
+    const found = [];
+
+    for await (const file of glob('test/**/*.{js,mjs,cjs}', { cwd: REPO_ROOT })) {
+      const source = await readFile(resolve(REPO_ROOT, file), 'utf8');
+      for (const [text] of source.matchAll(directive)) {
+        found.push(`${file}: ${text.trim()}`);
+      }
+    }
+
+    expect(found.sort()).toEqual(
+      [
+        `test/unit/classify-dependabot-pr.test.js: // ${nextLine} no-control-regex`,
+        `test/unit/verify-publish-tree.test.js: // ${nextLine} no-restricted-syntax -- deliberate unscrubbed control, see above`
+      ].sort()
+    );
   });
 
   it('lints the whole test tree clean under the guard', async () => {
