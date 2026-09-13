@@ -91,6 +91,18 @@ export const show = dir => execFileSync('/usr/bin/${GIT}', ['status'], { cwd: di
   'git behind a relative path': `import { spawnSync } from 'node:child_process';
 export const show = dir => spawnSync('./${GIT}', ['status'], { cwd: dir });`,
   // shell: true turns an argv API into a shell one, so the mention policy applies.
+  'an argv API put into shell mode by a shell path': `import { spawnSync } from 'node:child_process';
+export const show = () => spawnSync('mkdir -p fixture && ${GIT} init', { shell: '/bin/bash' });`,
+  'a shell-mode command given as a cooked template': `import { spawnSync } from 'node:child_process';
+export const show = () => spawnSync(\`\\x67it status\`, { shell: true });`,
+  'a shell-mode command built by concatenation': `import { spawnSync } from 'node:child_process';
+export const show = sub => spawnSync('${GIT} ' + sub, { shell: true });`,
+  'a concatenation whose git segment is a template': `import { execSync } from 'node:child_process';
+export const show = sub => execSync(\`${GIT} \` + sub);`,
+  // The spread lands after the scrub, so opts.env can restore the inherited environment.
+  'a scrub a later spread can undo': `import { execFileSync } from 'node:child_process';
+import { scrubbedEnv } from '../../scripts/ci/verify-publish-tree.mjs';
+export const show = (args, opts) => execFileSync('${GIT}', args, { env: scrubbedEnv(), ...opts });`,
   'an argv API put into shell mode': `import { spawnSync } from 'node:child_process';
 export const show = () => spawnSync('mkdir -p fixture && ${GIT} init', { shell: true });`,
   // The first argument is a BinaryExpression, so it has no `.value` for a selector to read.
@@ -119,6 +131,14 @@ const ALLOWED_FIXTURES = {
 import { scrubbedEnv } from '../../scripts/ci/verify-publish-tree.mjs';
 export const show = dir =>
   execFileSync('${GIT}', ['status'], { cwd: dir, encoding: 'utf8', env: scrubbedEnv() });`,
+  // A spread BEFORE the scrub is safe: the later env wins. This is runGit()'s own shape.
+  'a spread that lands before the scrub': `import { execFileSync } from 'node:child_process';
+import { scrubbedEnv } from '../../scripts/ci/verify-publish-tree.mjs';
+export const show = (args, opts) =>
+  execFileSync('${GIT}', args, { encoding: 'utf8', ...opts, env: scrubbedEnv() });`,
+  'an argv API explicitly not in shell mode': `import { spawnSync } from 'node:child_process';
+import { scrubbedEnv } from '../../scripts/ci/verify-publish-tree.mjs';
+export const show = () => spawnSync('${GIT}', ['status'], { shell: false, env: scrubbedEnv() });`,
   'a spawn routed through the shared helper': `import { runGit } from '../helpers/git.js';
 export const show = dir => runGit(['status'], { cwd: dir });`,
   'npm, node and docker, which carry no GIT_* hazard': `import { execFileSync, execSync, spawn } from 'node:child_process';

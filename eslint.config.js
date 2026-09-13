@@ -23,14 +23,17 @@ import js from '@eslint/js';
  * `test/helpers/git.js` is not a `child_process` call at all and so never matches.
  *
  * WHAT IS NOT MATCHED (the residual, deliberately stated rather than implied): the check is
- * syntactic. A command held in a variable (`const cmd = 'git'; execFileSync(cmd, ...)`), an
- * absolute path (`/usr/bin/git`), a git invoked through a shell wrapper or through `npm`,
- * an options object built elsewhere and spread in, a local function that is *named*
- * `scrubbedEnv` but scrubs nothing, and an `env: scrubbedEnv()` nested inside some other
- * property of the options object all slip past it. So does an aliased import
- * (`import { execFileSync as run }`), since the selectors match on the callee's name. It
- * also cannot see the runtime value of what `scrubbedEnv` returns - only that the name is
- * there.
+ * syntactic. A command held in a variable (`const cmd = 'git'; execFileSync(cmd, ...)`), a
+ * fully dynamic command with no literal git segment, a git invoked through a shell wrapper
+ * or through `npm`, a local function that is *named* `scrubbedEnv` but scrubs nothing, and
+ * an `env: scrubbedEnv()` nested inside some other property of the options object all slip
+ * past it, and so does an aliased import (`import { execFileSync as run }`), since the
+ * selectors match on the callee's name. It also cannot see the runtime value of what
+ * `scrubbedEnv` returns - only that the name is there.
+ *
+ * Matched, though earlier revisions of this block said otherwise: a path-qualified name
+ * (`/usr/bin/git`, `./git`), an options spread that lands after the scrub, and an argv API
+ * put into shell mode by `shell: true` or `shell: '/bin/sh'`.
  *
  * Matching on the name alone also errs the other way: the selectors never check that the
  * callee was imported from `node:child_process`, so an unrelated `runner.execFileSync(...)`
@@ -90,12 +93,23 @@ const GIT_MENTION = String.raw`/\bgit(\.exe)?\b/i`;
  * leading whitespace is stripped by these APIs, unlike a shell command.
  */
 const GIT_EXECUTABLE = String.raw`/(^|[\\/])git(\.exe)?$/i`;
-/** Options carrying `shell: true`, which turns an argv API into a shell one. */
-const SHELL_OPTION = ":has(Property[key.name='shell'][value.value=true])";
+/**
+ * Options that turn an argv API into a shell one. Node accepts `shell: true` or a path to a
+ * shell, and `{ shell: '/bin/bash' }` runs a shell just as surely as `{ shell: true }`.
+ */
+const SHELL_OPTION_TRUE = ":has(Property[key.name='shell'][value.value=true])";
+const SHELL_OPTION_PATH = ":has(Property[key.name='shell'][value.value=/.+/])";
 
 /** The one sanctioned shape for a direct spawn: the options object names the scrub. */
 const NOT_SCRUBBED =
   ":not(:has(Property[key.name='env'] > CallExpression[callee.name='scrubbedEnv']))";
+/**
+ * A spread AFTER the scrub can put the inherited environment back:
+ * `{ env: scrubbedEnv(), ...opts }` is unscrubbed at runtime whenever `opts.env` is
+ * `process.env`. A spread BEFORE it is fine - the later `env` wins - which is the shape
+ * `runGit()` itself uses, so order is what this checks rather than mere presence.
+ */
+const SPREAD_AFTER_SCRUB = ":has(Property[key.name='env'] ~ SpreadElement)";
 
 export const UNSCRUBBED_GIT_SPAWN_SELECTORS = [
   // Shell commands: a string that mentions git...
@@ -112,17 +126,32 @@ export const UNSCRUBBED_GIT_SPAWN_SELECTORS = [
   // silent because the first argument is a BinaryExpression, not a Literal.
   `CallExpression[callee.name=${SHELL_CALLEES}][arguments.0.type='BinaryExpression']:has(Literal[value=${GIT_MENTION}])${NOT_SCRUBBED}`,
   `CallExpression[callee.property.name=${SHELL_CALLEES}][arguments.0.type='BinaryExpression']:has(Literal[value=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.name=${SHELL_CALLEES}][arguments.0.type='BinaryExpression']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${SHELL_CALLEES}][arguments.0.type='BinaryExpression']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
   // Executable names: exact, since no shell reinterprets them.
   `CallExpression[callee.name=${ARGV_CALLEES}][arguments.0.value=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
   `CallExpression[callee.property.name=${ARGV_CALLEES}][arguments.0.value=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
   `CallExpression[callee.name=${ARGV_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
   `CallExpression[callee.property.name=${ARGV_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_EXECUTABLE}]${NOT_SCRUBBED}`,
-  // ...except with `shell: true`, which hands the first argument to a shell after all, so
-  // the mention policy applies: spawnSync('mkdir -p f && git init', { shell: true }).
-  `CallExpression[callee.name=${ARGV_CALLEES}]${SHELL_OPTION}[arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${ARGV_CALLEES}]${SHELL_OPTION}[arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.name=${ARGV_CALLEES}]${SHELL_OPTION}[arguments.0.type='TemplateLiteral']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${ARGV_CALLEES}]${SHELL_OPTION}[arguments.0.type='TemplateLiteral']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`
+  // ...except in shell mode, which hands the first argument to a shell after all, so the
+  // mention policy applies - in every form the shell family accepts, not only plain strings.
+  ...[SHELL_OPTION_TRUE, SHELL_OPTION_PATH].flatMap(shell => [
+    `CallExpression[callee.name=${ARGV_CALLEES}]${shell}[arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
+    `CallExpression[callee.property.name=${ARGV_CALLEES}]${shell}[arguments.0.value=${GIT_MENTION}]${NOT_SCRUBBED}`,
+    `CallExpression[callee.name=${ARGV_CALLEES}]${shell}[arguments.0.type='TemplateLiteral']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+    `CallExpression[callee.property.name=${ARGV_CALLEES}]${shell}[arguments.0.type='TemplateLiteral']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+    `CallExpression[callee.name=${ARGV_CALLEES}]${shell}[arguments.0.type='TemplateLiteral']:has(TemplateElement[value.cooked=${GIT_MENTION}])${NOT_SCRUBBED}`,
+    `CallExpression[callee.property.name=${ARGV_CALLEES}]${shell}[arguments.0.type='TemplateLiteral']:has(TemplateElement[value.cooked=${GIT_MENTION}])${NOT_SCRUBBED}`,
+    `CallExpression[callee.name=${ARGV_CALLEES}]${shell}[arguments.0.type='BinaryExpression']:has(Literal[value=${GIT_MENTION}])${NOT_SCRUBBED}`,
+    `CallExpression[callee.property.name=${ARGV_CALLEES}]${shell}[arguments.0.type='BinaryExpression']:has(Literal[value=${GIT_MENTION}])${NOT_SCRUBBED}`,
+    `CallExpression[callee.name=${ARGV_CALLEES}]${shell}[arguments.0.type='BinaryExpression']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`,
+    `CallExpression[callee.property.name=${ARGV_CALLEES}]${shell}[arguments.0.type='BinaryExpression']:has(TemplateElement[value.raw=${GIT_MENTION}])${NOT_SCRUBBED}`
+  ]),
+  // A scrub a later spread can undo is not a scrub.
+  `CallExpression[callee.name=${ARGV_CALLEES}][arguments.0.value=${GIT_EXECUTABLE}]${SPREAD_AFTER_SCRUB}`,
+  `CallExpression[callee.property.name=${ARGV_CALLEES}][arguments.0.value=${GIT_EXECUTABLE}]${SPREAD_AFTER_SCRUB}`,
+  `CallExpression[callee.name=${SHELL_CALLEES}][arguments.0.value=${GIT_MENTION}]${SPREAD_AFTER_SCRUB}`,
+  `CallExpression[callee.property.name=${SHELL_CALLEES}][arguments.0.value=${GIT_MENTION}]${SPREAD_AFTER_SCRUB}`
 ];
 
 export const UNSCRUBBED_GIT_SPAWN_MESSAGE =
