@@ -25,7 +25,6 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { glob } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -210,25 +209,34 @@ describe('the escape hatch is pinned, not pretended away', () => {
   // the rule off outright, in which case ESLint produces no problem at all and the file
   // shows up in neither the reports nor the suppressed messages - both assertions around
   // this one pass while an unscrubbed spawn sits in the file. Verified against real ESLint.
-  // So pin every directive in the test tree whatever its shape, including a blanket one
-  // that names no rule.
+  //
+  // The scanned set comes from ESLint itself rather than a glob, so it cannot drift from
+  // what is actually linted: a glob of `test/**/*.js` silently omits hidden paths, and a
+  // file such as `test/.hidden-bypass.js` IS linted - verified - so it could have carried
+  // the override and gone unseen.
   //
   // The directive words are assembled rather than written, for the same reason the git
   // fixtures above are: this file must contain no directive text of its own, or the scan
   // would match its own source. That also means this file cannot exempt itself.
-  it('allows exactly the known ESLint directive comments in the whole test tree', async () => {
+  it('allows exactly the known ESLint directive comments in everything it lints under test/', async () => {
     const word = `${'esl'}int`;
+    // Every inline form ESLint honours: the rule-config and disable families, plus the
+    // environment ones, which are directives too even though they cannot disable a rule.
+    const labels = [word, `${word}-disable`, `${word}-enable`, 'global', 'globals', 'exported'];
     const directive = new RegExp(
-      `\\/\\*\\s*${word}[-\\w]*[\\s\\S]*?\\*\\/|\\/\\/\\s*${word}-disable[-\\w]*[^\\n]*`,
+      `\\/\\*\\s*(?:${labels.join('|')})[-\\w]*[\\s\\S]*?\\*\\/|` +
+        `\\/\\/\\s*${word}-(?:disable|enable)[-\\w]*[^\\n]*`,
       'g'
     );
     const nextLine = `${word}-disable-next-line`;
+
+    const results = await eslint.lintFiles([resolve(REPO_ROOT, 'test')]);
     const found = [];
 
-    for await (const file of glob('test/**/*.{js,mjs,cjs}', { cwd: REPO_ROOT })) {
-      const source = await readFile(resolve(REPO_ROOT, file), 'utf8');
+    for (const result of results) {
+      const source = await readFile(result.filePath, 'utf8');
       for (const [text] of source.matchAll(directive)) {
-        found.push(`${file}: ${text.trim()}`);
+        found.push(`${relative(REPO_ROOT, result.filePath)}: ${text.trim()}`);
       }
     }
 

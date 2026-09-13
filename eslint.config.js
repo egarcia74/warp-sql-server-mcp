@@ -42,7 +42,9 @@ import js from '@eslint/js';
  * configuration such as `/* eslint no-restricted-syntax: off *\/`, which produces no
  * problem at all and therefore appears in neither ESLint's reports nor its
  * `suppressedMessages`. `test/unit/git-spawn-scrub-guard.test.js` pins BOTH: the complete
- * set of suppressions, and the complete set of ESLint directive comments in the test tree.
+ * set of suppressions, and the complete set of ESLint directive comments across everything
+ * ESLint lints under `test/` - the set is taken from ESLint itself rather than a glob,
+ * because a glob omits hidden paths and a hidden file is still linted.
  * Adding either fails a test until the allow-list is updated in the same change, where a
  * reviewer sees it.
  */
