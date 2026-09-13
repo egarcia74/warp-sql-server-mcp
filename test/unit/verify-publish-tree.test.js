@@ -569,6 +569,14 @@ describe('against a real repository, following the actual release sequence', () 
       // that the scrub below is what prevents the damage, not luck.
       const scratch = mkdtempSync(join(tmpdir(), 'verify-publish-tree-'));
       repos.push(scratch);
+      // The ONE deliberately unscrubbed spawn in the whole test tree, and the only
+      // suppression of the #1214 guard. It is safe because it only reads
+      // (`rev-parse --show-toplevel`) and because the GIT_DIR it is redirected at is this
+      // test's own `victim` fixture, never the real repository. Removing the suppression
+      // would remove the control, leaving the assertion below unable to distinguish "the
+      // scrub worked" from "the variables were never set". `test/unit/
+      // git-spawn-scrub-guard.test.js` pins this as the only suppression that may exist.
+      // eslint-disable-next-line no-restricted-syntax -- deliberate unscrubbed control, see above
       const redirected = execFileSync('git', ['rev-parse', '--show-toplevel'], {
         cwd: scratch,
         encoding: 'utf8'

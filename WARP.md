@@ -20,8 +20,8 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, and **comprehensive performance monitoring**. Built with a
 modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 1,348 tests, every
-one of which runs automatically on every pull request (1,281 unit + 27 integration + 40
+**✅ Production Status**: This MCP server has been **fully validated** through 1,398 tests, every
+one of which runs automatically on every pull request (1,331 unit + 27 integration + 40
 live-database). Covers all security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/user/QUICKSTART.md) for a 5-minute setup walkthrough.
@@ -884,8 +884,8 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 1,348 tests total, **all of them automated** on every pull request:
-  1,281 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
+- **Comprehensive Coverage**: 1,398 tests total, **all of them automated** on every pull request:
+  1,331 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
   drives against a Docker SQL Server the CI `Tests` job starts itself. Together they cover all MCP
   tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
@@ -923,14 +923,14 @@ npm run docker:clean                  # Remove all data and containers
 ### Test Structure
 
 Counts below are the vitest suite sizes measured with `npm run test:unit`
-(29 files, 1,281 tests); the live-database suites are counted from their own runners.
+(30 files, 1,331 tests); the live-database suites are counted from their own runners.
 
 ```text
 test/
 ├── README.md                                # Comprehensive test documentation
 ├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
 ├── setup.js                                 # Vitest global setup
-├── unit/                                    # Vitest unit suites - 29 files, 1,281 tests
+├── unit/                                    # Vitest unit suites - 30 files, 1,331 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
 │   ├── query-optimizer.test.js              # 136 - Query analysis and optimization engine
 │   ├── sql-injection-battery.test.js        # 103 - Authoritative behavioral injection guard
@@ -994,9 +994,9 @@ test/
 
 ### Test Categories
 
-#### **Unit Tests (1,281 across 29 files)**
+#### **Unit Tests (1,331 across 30 files)**
 
-Grouped by area; the group totals sum to 1,281:
+Grouped by area; the group totals sum to 1,331:
 
 - **Core MCP server** (144): `index.test.js` - entry point, tool dispatch, `validateQuery`
 - **SQL safety and injection guards** (317): `sql-injection-battery` (103), `where-clause-guard` (81),
@@ -1009,7 +1009,7 @@ Grouped by area; the group totals sum to 1,281:
 - **Tools and handlers** (147): `tool-registry` (59), `database-tools-handler` (59),
   `get-server-info` (29)
 - **Configuration** (24): `server-config` (24)
-- **Repository and CLI tooling** (260): `cleanup-test-processes` (48), `release-script` (105), `verify-publish-tree` (40),
+- **Repository and CLI tooling** (310): `cleanup-test-processes` (48), `release-script` (105), `git-spawn-scrub-guard` (50), `verify-publish-tree` (40),
   `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6),
   `cli` (4), `docker-command-utils` (4), `dependabot-config` (2)
 
@@ -1209,7 +1209,7 @@ This project maintains high code quality through automated tooling and architect
 > This document captures real-world metrics from the WARP project including:
 >
 > - **525 automated tests** with 100% pass rate enforcement (the figure captured by that case study; the
->   suite has since grown to 1,281 automated unit tests)
+>   suite has since grown to 1,331 automated unit tests)
 > - **74% code coverage** with strict quality gates
 > - **3x development time** vs. 90% reduction in debugging time
 > - **The five critical challenges** teams face with no-compromise quality
@@ -1276,7 +1276,7 @@ The project includes comprehensive system maintenance tools to manage developmen
 
 #### **Process Cleanup Infrastructure**
 
-During intensive testing sessions (like our 1,281-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
+During intensive testing sessions (like our 1,331-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
 
 The project includes tools to inspect them:
 
