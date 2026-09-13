@@ -76,6 +76,10 @@ export const show = dir => cp.execFileSync('${GIT}', ['status'], { cwd: dir });`
 export const show = dir => execSync('${GIT} status', { cwd: dir });`,
   'execSync with a template-literal command': `import { execSync } from 'node:child_process';
 export const show = (dir, sub) => execSync(\`${GIT} \${sub}\`, { cwd: dir });`,
+  'a shell command delimited by a redirection': `import { execSync } from 'node:child_process';
+export const show = dir => execSync('${GIT}>/dev/null init', { cwd: dir });`,
+  'a shell command delimited by a semicolon': `import { execSync } from 'node:child_process';
+export const show = dir => execSync('${GIT};echo hi', { cwd: dir });`,
   'a shell command with leading whitespace': `import { execSync } from 'node:child_process';
 export const show = dir => execSync(' ${GIT} status', { cwd: dir });`,
   // Windows resolves executables without regard to case, so these launch the same binary
@@ -101,6 +105,8 @@ export const show = dir => runGit(['status'], { cwd: dir });`,
 export const a = dir => execFileSync('npm', ['run', 'build'], { cwd: dir });
 export const b = () => execSync('docker ps', { stdio: 'ignore' });
 export const c = script => spawn('node', [script]);`,
+  'a cooked template whose interpolation completes another command': `import { execSync } from 'node:child_process';
+export const show = () => execSync(\`\\x67it\${'leaks'}\`);`,
   'a command that merely starts with the same letters': `import { execFileSync } from 'node:child_process';
 export const show = () => execFileSync('${GIT}leaks', ['detect']);`
 };
@@ -328,9 +334,13 @@ describe('the escape hatch is pinned, not pretended away', () => {
           .map(option => option.selector)
       );
       // The shared message is not proof the whole guard is present: a scoped config could
-      // keep one selector and drop the rest, leaving the other spawn shapes unguarded.
-      const guards = UNSCRUBBED_GIT_SPAWN_SELECTORS.every(selector => selectors.has(selector));
-      if (!guards) unguarded.push(repoPath(file));
+      // keep one selector and drop the rest, leaving the other spawn shapes unguarded. Nor
+      // are the options proof it is ON - ['off', ...sameOptions] keeps every selector here
+      // while ESLint reports nothing, so the severity has to be checked too.
+      const severity = Array.isArray(entry) ? entry[0] : entry;
+      const enabled = severity === 2 || severity === 'error';
+      const complete = UNSCRUBBED_GIT_SPAWN_SELECTORS.every(selector => selectors.has(selector));
+      if (!enabled || !complete) unguarded.push(repoPath(file));
     }
 
     expect(unguarded).toEqual([]);

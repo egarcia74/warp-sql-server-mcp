@@ -50,14 +50,28 @@ import js from '@eslint/js';
  */
 const GIT_SPAWN_CALLEES = '/^(exec|execSync|execFile|execFileSync|spawn|spawnSync)$/';
 /**
- * `git`, `git.exe`, or a shell-command string that starts with one of them.
+ * `git`, `git.exe`, or a shell command starting with one of them.
  *
  * Case-insensitive: Windows resolves executables without regard to case, so `Git` and
  * `GIT.EXE` launch the same binary and inherit the same GIT_* variables. Leading whitespace
- * is allowed because `exec`/`execSync` take a shell command, where `' git status'` is valid
- * and launches git just the same.
+ * is allowed because `exec`/`execSync` take a shell command, where `' git status'` is valid.
+ *
+ * The boundary after the name accepts shell metacharacters, not only whitespace: in a shell
+ * command `git>/dev/null init` and `git;echo hi` both run git. That over-matches slightly
+ * for `execFile`/`spawn`, whose first argument is an executable name rather than a shell
+ * command - a file literally called `git;` would be reported - which is a harmless false
+ * positive in a guard whose remedy is to route the call through runGit().
  */
-const GIT_COMMAND = String.raw`/^\s*git(\.exe)?($|\s)/i`;
+const GIT_BOUNDARY = String.raw`[\s;|&<>()\`]`;
+const GIT_COMMAND = String.raw`/^\s*git(\.exe)?($|${GIT_BOUNDARY})/i`;
+/**
+ * The same, but requiring the boundary to be PRESENT. A template's first cooked quasi ends
+ * where an interpolation begins, so `` execSync(`\x67it${'leaks'}`) `` has the cooked quasi
+ * `git` exactly - end-of-quasi is not end-of-command, and treating it as one reported
+ * gitleaks. Templates that carry an interpolation must show the boundary inside the quasi.
+ */
+const GIT_COMMAND_BOUNDED = String.raw`/^\s*git(\.exe)?${GIT_BOUNDARY}/i`;
+
 /** The one sanctioned shape for a direct spawn: the options object names the scrub. */
 const NOT_SCRUBBED =
   ":not(:has(Property[key.name='env'] > CallExpression[callee.name='scrubbedEnv']))";
@@ -72,8 +86,12 @@ export const UNSCRUBBED_GIT_SPAWN_SELECTORS = [
   `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.raw=${GIT_COMMAND}]${NOT_SCRUBBED}`,
   // ...and on the COOKED text too: node runs the cooked value, so execSync(`\x67it status`)
   // launches git while its raw text reads `\x67it status` and matches nothing above.
-  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.cooked=${GIT_COMMAND}]${NOT_SCRUBBED}`,
-  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.cooked=${GIT_COMMAND}]${NOT_SCRUBBED}`
+  // A template with no interpolation may end at the quasi; one with an interpolation must
+  // show the boundary inside the quasi, or `\x67it${'leaks'}` would read as git.
+  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=${GIT_COMMAND}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.cooked=${GIT_COMMAND_BOUNDED}]${NOT_SCRUBBED}`,
+  `CallExpression[callee.property.name=${GIT_SPAWN_CALLEES}][arguments.0.quasis.0.value.cooked=${GIT_COMMAND_BOUNDED}]${NOT_SCRUBBED}`
 ];
 
 export const UNSCRUBBED_GIT_SPAWN_MESSAGE =
