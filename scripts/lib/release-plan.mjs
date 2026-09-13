@@ -580,16 +580,15 @@ export function renderPreview(preview) {
     breakdown
   } = preview;
 
-  const lines = [];
-  lines.push('Release preview (computed locally with the rules release.yml applies)');
-  lines.push('');
-  lines.push(`  Repository:     ${repo} (from git remote origin; every gh call is pinned to it)`);
-  lines.push(`  Version:        ${currentVersion} -> ${nextVersion}`);
-  lines.push(`  Release type:   ${releaseType}${releaseTypeReason(requestedType, rule)}`);
-  lines.push(`  Last tag:       ${lastTag ?? '(none - every commit counts)'}`);
-  lines.push(
+  const lines = [
+    'Release preview (computed locally with the rules release.yml applies)',
+    '',
+    `  Repository:     ${repo} (from git remote origin; every gh call is pinned to it)`,
+    `  Version:        ${currentVersion} -> ${nextVersion}`,
+    `  Release type:   ${releaseType}${releaseTypeReason(requestedType, rule)}`,
+    `  Last tag:       ${lastTag ?? '(none - every commit counts)'}`,
     `  Commits:        ${commitCount} since ${lastTag ?? 'the beginning'} on origin/${RELEASE_BRANCH} (no merges)`
-  );
+  ];
   // The mix is printed whatever the outcome: when the type is `none` it is the only thing
   // that distinguishes "commits, none of them release-triggering" from an empty window.
   if (breakdown) lines.push(`  Commit mix:     ${breakdown}`);
