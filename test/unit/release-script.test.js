@@ -273,6 +273,25 @@ describe('detectReleaseType: the types added by #1158', () => {
     }
   });
 
+  it('sends a malformed prefix on to the unanchored rules, not straight to unclassified', () => {
+    // Requiring a complete prefix stops a malformed one being read as THAT type; it does not
+    // make every malformed subject unclassified, because two rules are unanchored by design.
+    // Worth pinning because the difference is invisible in the release level and only shows up
+    // in the warning: the first two release a patch/major silently, the third is named.
+    expect(classifySubject('feat(cli: update doc: help')?.id).toBe('docs');
+    expect(classifySubject('feat(cli!: drop a thing')?.id).toBe('breaking');
+    expect(classifySubject('ci(release update workflow')).toBeNull();
+
+    expect(detectReleaseType(['feat(cli: update doc: help'])).toMatchObject({
+      type: 'patch',
+      unclassified: []
+    });
+    expect(detectReleaseType(['feat(cli!: drop a thing'])).toMatchObject({
+      type: 'major',
+      unclassified: []
+    });
+  });
+
   it('lets every anchored type outrank the loose doc: alias', () => {
     // The loose alias lives outside CLASSIFICATION_RULES precisely so it cannot win here.
     // As a table entry it sat above `perf` and friends, so these all reported `docs / chore`
