@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.1] - 2026-09-14
+## [Unreleased]
+
+## [2.0.1] - 2026-09-15
 
 ### Fixed
 
@@ -31,9 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `feat(cli: thing` released a **minor** and appeared under New Features with its broken prefix still
   attached, because the changelog's prefix-stripper requires the complete form and so stripped nothing.
   Classification and stripping now share one grammar (`type:`, `type(scope):`, `type!:`,
-  `type(scope)!:`), and a malformed subject is unclassified - warned about by name rather than silently
-  counted. Replayed over 1,155 non-merge subjects of this repository's history, the stricter form
-  changes no historical release.
+  `type(scope)!:`), so a malformed prefix is no longer read as that type. What happens to it then
+  depends on the rest of the subject, because two rules are deliberately unanchored: one containing
+  `!:` is still breaking, and one mentioning `doc:` still files under docs. Anything else is
+  unclassified - warned about by name rather than silently counted. Replayed over 1,155 non-merge
+  subjects of this repository's history, the stricter form changes no historical release.
 
 - **The release run's summary no longer contradicts the release it is performing.** Dispatching with an
   explicit `release_type` over a window that auto-detection scores as `none` tags and publishes
@@ -1312,3 +1316,5 @@ This release represents a significant architectural evolution with enterprise-gr
   - Prominent Quick Start links in README.md, SECURITY.md, CONTRIBUTING.md, WARP.md
   - Improved navigation for new users
   - Better documentation discoverability
+
+[2.0.1]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.0.0...v2.0.1
