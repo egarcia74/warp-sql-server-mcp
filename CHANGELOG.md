@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`0`, `false` and `0.0` rendered as blank cells, indistinguishable from NULL, in the default
+  output of every tool.** Both table formatters built cells with `String(row[header] || '')`, and
+  `0 || ''` is `''` — so a `COUNT(*)` of zero, a `BIT` flag of false, or a zero amount displayed
+  as nothing at all, reading as "no value" rather than the value it was. This affected the primary
+  text output of every tool that renders a recordset — `execute_query`, `list_databases`,
+  `list_tables`, `describe_table`, `get_table_data` and `list_foreign_keys`, all of which route
+  through the same formatter — and was found by smoke-testing a foreign-key count that came back
+  empty when `COUNT(*)` can never be NULL. Cells now use `??`, so only `null` and `undefined` collapse to empty.
+
+  As with the CSV writers, the cause was duplication: `BaseToolHandler` carried a byte-identical
+  copy of `createTextTable` plus its own `formatAsTable`, while `lib/utils/result-formatter.js`
+  claimed in its own header to be "the only result formatter". Both drifted into the same defect.
+  `BaseToolHandler` now delegates to that module, as `index.js` already did, and the two entry
+  points are asserted to produce identical output. Neither formatter had a single test before
+  this; `test/unit/result-formatter.test.js` adds seven, three of which fail once the `||`
+  semantics are restored.
+
 - **`export_table_csv` produced a single line with a literal `\n` between records instead of real
   line breaks, so no CSV reader could parse it.** The row terminator in `batchToCsv` was written
   `'\\n'`, which in JavaScript is a two-character string (backslash, `n`), not a newline. This
