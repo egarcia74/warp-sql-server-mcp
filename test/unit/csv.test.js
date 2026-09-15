@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { CSV_ROW_TERMINATOR, csvEscapeCell, csvRow } from '../../lib/utils/csv.js';
+import { StreamingHandler } from '../../lib/utils/streaming-handler.js';
+import { DatabaseToolsHandler } from '../../lib/tools/handlers/database-tools.js';
+import { BaseToolHandler } from '../../lib/tools/handlers/base-handler.js';
 
 // This module exists because there were two CSV writers that disagreed: the streaming one
 // terminated rows with a literal backslash-n for a year while the non-streaming one was
@@ -89,6 +92,30 @@ describe('csv helpers', () => {
 
     it('quotes a field holding CR, which the RFC field rules do require', () => {
       expect(csvEscapeCell('x\ry')).toBe('"x\ry"');
+    });
+
+    // The property that actually matters, and the one I wrongly told a reviewer was already
+    // covered: it is not enough for the shared helpers to be correct - all three writers have
+    // to CALL them. Testing the helpers alone would still pass if a writer quietly grew its
+    // own implementation again, which is exactly how this bug survived a year.
+    it('produces byte-identical output from all three writers', () => {
+      const streamed = new StreamingHandler().batchToCsv(awkward, {});
+      const nonStreamed = DatabaseToolsHandler.prototype.recordsetToCsv.call(null, awkward);
+      const formatted = BaseToolHandler.prototype.formatAsCsv.call(null, awkward)[0].text;
+
+      expect(nonStreamed).toBe(streamed);
+      expect(formatted).toBe(streamed);
+    });
+
+    it('serialises the whole awkward batch exactly, header escaping included', () => {
+      const expected = [
+        '"last,name",note,cr,quote',
+        '"Doe, John","a\nb","x\ry","say ""hi"""',
+        'Jane,plain,ok,none',
+        ''
+      ].join('\n');
+
+      expect(new StreamingHandler().batchToCsv(awkward, {})).toBe(expected);
     });
   });
 });
