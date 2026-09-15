@@ -30,7 +30,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24' # latest 24.x; trusted publishing needs Node 22.14.0+ and 24 bundles npm 11.x
+          # Pinned to an exact release, not '24'. This job holds the publish credential, so the
+          # npm that runs in it is reviewed like any other dependency (Sonar githubactions:S8543)
+          # - the same rationale that pinned `npm@11.19.1` before it was removed. A floating '24'
+          # would resolve a new runtime, and a different bundled npm, with no change to this
+          # repository and no review. 24.21.0 is LTS (Krypton) and bundles npm 11.19.0, above the
+          # 11.5.1 trusted-publishing floor; the check below is the floor, not the pin.
+          node-version: '24.21.0'
           # No dependency cache in the publishing job. setup-node's trusted-publisher guide:
           # "a poisoned cache may expose credentials (including OIDC tokens) to
           # attacker-controlled code". package.json sets no packageManager, so this only
