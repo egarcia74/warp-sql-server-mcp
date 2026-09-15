@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-09-15
+
 ### Fixed
 
 - **The release workflow no longer ignores `refactor:`, `perf:`, `revert:`, `build:`, `test:`, `ci:` and
@@ -25,6 +27,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are actually read: the workflow skips merge commits, so a squash-merge contributes the **PR title** while
   a merge commit contributes **every commit on the branch**. This repository permits both, so both need a
   conventional type.
+
+- **A malformed commit prefix no longer buys a release.** The matcher accepted any subject starting
+  `type(`, so `ci(release update workflow` - a scope that never closes - released a patch, and
+  `feat(cli: thing` released a **minor** and appeared under New Features with its broken prefix still
+  attached, because the changelog's prefix-stripper requires the complete form and so stripped nothing.
+  Classification and stripping now share one grammar (`type:`, `type(scope):`, `type!:`,
+  `type(scope)!:`), so a malformed prefix is no longer read as that type. What happens to it then
+  depends on the rest of the subject, because two rules are deliberately unanchored: one containing
+  `!:` is still breaking, and one mentioning `doc:` still files under docs. Anything else is
+  unclassified - warned about by name rather than silently counted. Replayed over 1,155 non-merge
+  subjects of this repository's history, the stricter form changes no historical release.
+
+- **The release run's summary no longer contradicts the release it is performing.** Dispatching with an
+  explicit `release_type` over a window that auto-detection scores as `none` tags and publishes
+  correctly, but the job summary still read "Nothing will be tagged or published - ... dispatch with an
+  explicit release_type to force a release", in exactly the case that advice had been taken. A forced run
+  now reports auto-detection as evidence and states what overrides it. Separately, a window with **no
+  commits at all** returned before writing any summary, while the run's own skip notice says "see
+  \"Release type\" above for why" - a pointer to a heading that was never rendered; it is now written,
+  and says when a supplied `release_type` cannot apply because there is nothing new to tag.
 
 ### Added
 
@@ -1294,3 +1316,5 @@ This release represents a significant architectural evolution with enterprise-gr
   - Prominent Quick Start links in README.md, SECURITY.md, CONTRIBUTING.md, WARP.md
   - Improved navigation for new users
   - Better documentation discoverability
+
+[2.0.1]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.0.0...v2.0.1
