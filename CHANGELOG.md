@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pretty-print test (which looked for an escaped newline where pretty-printing emits a real one)
   is corrected too.
 
+  The root cause was duplication: there were **two** CSV writers for the same format —
+  `StreamingHandler.batchToCsv` on the streaming export path and `DatabaseTools.recordsetToCsv`
+  on the non-streaming one — and only the streaming one was broken, which is why the defect
+  survived a year. Both now go through a single `lib/utils/csv.js`, so the two paths produce
+  byte-identical output and cannot drift again. `recordsetToCsv` also gains CR handling, which
+  it never had.
+
 ## [2.0.1] - 2026-09-15
 
 ### Fixed
