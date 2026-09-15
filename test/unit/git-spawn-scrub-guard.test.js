@@ -22,7 +22,7 @@
  * path under `test/`. They are never written to disk, so `npm run lint` cannot see them and
  * nothing can execute them.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -35,6 +35,15 @@ import {
   UNSCRUBBED_GIT_SPAWN_SELECTORS
 } from '../../eslint.config.js';
 import { runGit } from '../helpers/git.js';
+
+// Six tests here run the project's REAL ESLint over every file under `test/`, so their cost
+// grows with the test tree and swings with machine load: 2.6s alone and 5.7s in a full
+// parallel run on the same machine, against vitest's default 5s budget. That failed roughly
+// one run in three, and the flake cost three separate misdiagnoses - an unidentified gate
+// failure, a reviewer's CI timeout, and two failures I wrongly blamed on an unformatted file
+// - before it was measured. Generous on purpose: this budget exists to catch a hang, not to
+// police how long ESLint takes on a loaded machine.
+vi.setConfig({ testTimeout: 60_000 });
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
