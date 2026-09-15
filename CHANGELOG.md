@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-09-15
+
 ### Fixed
 
 - **`0`, `false` and `0.0` rendered as blank cells, indistinguishable from NULL, in the default
@@ -58,21 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the test file itself wrote. They fail against the old code. The same vacuous assertion in the
   JSON pretty-print test (which looked for an escaped newline where pretty-printing emits a real
   one) is corrected too.
-
-### Changed
-
-- **The npm publish workflow no longer installs npm inside the credentialed job.** The alert fix for
-  #167 removed `npm install -g npm@11.19.1 --ignore-scripts` from `npm-publish.yml`; the job now
-  runs on Node 24, relies on the bundled npm, and keeps the explicit `npm >= 11.5.1` fail-fast
-  check required by npm Trusted Publishing. The runtime is pinned to an exact release
-  (`node-version: '24.21.0'`, which bundles npm 11.19.0) rather than a floating `'24'`: this job
-  holds the publish credential, so the npm that runs in it has to change by a reviewed commit -
-  the same rationale that pinned `npm@11.19.1` before the install was removed. Bump the pin
-  deliberately; the version check is the floor, not the pin.
-
-## [2.0.1] - 2026-09-15
-
-### Fixed
 
 - **The release workflow no longer ignores `refactor:`, `perf:`, `revert:`, `build:`, `test:`, `ci:` and
   `style:` commits.** `release.yml` recognised only breaking/feat/fix/docs/chore, so a release window of only
@@ -132,6 +119,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   work-in-progress could fail an unrelated branch's pre-push hook.
 
 ### Changed
+
+- **The npm publish workflow no longer installs npm inside the credentialed job.** The alert fix for
+  #167 removed `npm install -g npm@11.19.1 --ignore-scripts` from `npm-publish.yml`; the job now
+  runs on Node 24, relies on the bundled npm, and keeps the explicit `npm >= 11.5.1` fail-fast
+  check required by npm Trusted Publishing. The runtime is pinned to an exact release
+  (`node-version: '24.21.0'`, which bundles npm 11.19.0) rather than a floating `'24'`: this job
+  holds the publish credential, so the npm that runs in it has to change by a reviewed commit -
+  the same rationale that pinned `npm@11.19.1` before the install was removed. Bump the pin
+  deliberately; the version check is the floor, not the pin.
 
 - **The Claude review Action can run a single test file.** The allowlist grants
   `node scripts/ci/run-one-test.mjs <file>`, so a review can check a claim like "this
