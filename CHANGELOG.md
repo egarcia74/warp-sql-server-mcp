@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`export_table_csv` produced a single line with a literal `\n` between records instead of real
+  line breaks, so no CSV reader could parse it.** The row terminator in `batchToCsv` was written
+  `'\\n'`, which in JavaScript is a two-character string (backslash, `n`), not a newline. This
+  affected the **streaming** export path, which is the default: `ENABLE_STREAMING=false` routed
+  exports through a second implementation that emitted real newlines all along. Every streamed
+  export since 2025-08-29 has shipped broken, 2.0.0 included. The same defect sat in the quoting
+  test: it asked whether a value contained a literal `\n` sequence, so a field holding a **real**
+  line break was left unquoted and silently split the record in two.
+
+  The root cause was duplication: **three** separate CSV writers for one format —
+  `StreamingHandler.batchToCsv` (streaming export), `DatabaseTools.recordsetToCsv` (non-streaming
+  export) and `BaseToolHandler.formatAsCsv` (the `formatResults(result, 'csv')` path) — of which
+  only one was correct. That is why a one-character defect survived a year: the path most
+  exercised by tests and small exports produced valid CSV. All three now go through a single
+  `lib/utils/csv.js` and emit byte-identical output. `recordsetToCsv` gains CR quoting it never
+  had, and `formatAsCsv` gains header escaping and CR/LF quoting it never had — it quoted on
+  comma and double quote only, so a value containing a line break corrupted the record there too.
+
+  Quoting follows **RFC 4180's field rules**: a field is quoted if it contains a comma, a double
+  quote, CR or LF, embedded quotes are doubled, and header names are escaped by the same rule (a
+  column named `last,name` previously emitted two header fields against one data field). Records
+  are terminated with **LF, not CRLF** — a deliberate deviation from the RFC's grammar, matching
+  the implementation here that was already correct, avoiding stray `\r` in MCP text responses, and
+  accepted by every mainstream reader including Excel.
+
+  The suite did not catch any of it because the fixtures asserted the broken output on purpose,
+  using `String.raw` so they matched the literal backslash-n; the tests had been made to agree
+  with the bug. They now use real newlines, and new tests assert the _shape_ of the output —
+  splitting it back into records and checking the grid — rather than comparing against a string
+  the test file itself wrote. They fail against the old code. The same vacuous assertion in the
+  JSON pretty-print test (which looked for an escaped newline where pretty-printing emits a real
+  one) is corrected too.
+
 ### Changed
 
 - **The npm publish workflow no longer installs npm inside the credentialed job.** The alert fix for

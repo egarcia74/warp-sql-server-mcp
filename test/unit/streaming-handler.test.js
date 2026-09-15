@@ -1,15 +1,18 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
-const ESCAPED_NEWLINE = String.raw`\n`;
-const CSV_BATCH_OUTPUT = String.raw`1,John\n2,Jane\n`;
-const CSV_HEADER_OUTPUT = String.raw`id,name,age\n`;
-const CSV_FIRST_ROW_OUTPUT = String.raw`1,John,30\n`;
-const CSV_SECOND_ROW_OUTPUT = String.raw`2,Jane,25\n`;
-const CSV_THIRD_ROW_OUTPUT = String.raw`3,Bob,35\n`;
-const CSV_NULL_VALUES_OUTPUT = String.raw`1,,,true\n`;
-const RECONSTRUCTED_CSV_PART_ONE = String.raw`id,name\n1,John\n2,Jane\n`;
-const RECONSTRUCTED_CSV_PART_TWO = String.raw`3,Bob\n4,Alice\n`;
-const RECONSTRUCTED_CSV_OUTPUT = String.raw`id,name\n1,John\n2,Jane\n3,Bob\n4,Alice\n`;
+// These were written with String.raw until 2026-09-15, which made every one of them assert
+// a literal backslash-n instead of a newline - the exact defect in batchToCsv, copied into
+// the fixtures, so a full green suite proved nothing about the CSV being parseable.
+const REAL_NEWLINE = '\n';
+const CSV_BATCH_OUTPUT = '1,John\n2,Jane\n';
+const CSV_HEADER_OUTPUT = 'id,name,age\n';
+const CSV_FIRST_ROW_OUTPUT = '1,John,30\n';
+const CSV_SECOND_ROW_OUTPUT = '2,Jane,25\n';
+const CSV_THIRD_ROW_OUTPUT = '3,Bob,35\n';
+const CSV_NULL_VALUES_OUTPUT = '1,,,true\n';
+const RECONSTRUCTED_CSV_PART_ONE = 'id,name\n1,John\n2,Jane\n';
+const RECONSTRUCTED_CSV_PART_TWO = '3,Bob\n4,Alice\n';
+const RECONSTRUCTED_CSV_OUTPUT = 'id,name\n1,John\n2,Jane\n3,Bob\n4,Alice\n';
 
 // Define hoisted mocks
 const mocks = vi.hoisted(() => {
@@ -510,6 +513,48 @@ describe('StreamingHandler', () => {
       expect(csvData).toContain(CSV_NULL_VALUES_OUTPUT);
     });
 
+    // The regression that motivated the fixture rewrite: every assertion above compares
+    // against a string this same file wrote, so all of them passed while batchToCsv emitted
+    // a two-character `\n` that no reader could parse. These assert the SHAPE of the output
+    // instead - split it back into records and check the grid - so a terminator that is not
+    // a real line break fails here no matter what the fixtures say.
+    it('emits real line breaks, so the output splits back into a parseable grid', () => {
+      const batch = [
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' }
+      ];
+
+      const csvData = handler.batchToCsv(batch, {});
+
+      expect(csvData).not.toContain(String.raw`\n`);
+      const lines = csvData.split('\n').filter(Boolean);
+      expect(lines).toEqual(['id,name', '1,John', '2,Jane']);
+      expect(lines.every(line => line.split(',').length === 2)).toBe(true);
+    });
+
+    it('quotes the fields RFC 4180 requires, and doubles embedded quotes', () => {
+      const batch = [
+        {
+          comma: 'Doe, John',
+          quote: 'He said "hi"',
+          newline: 'line one\nline two',
+          carriage: 'line one\rline two',
+          plain: 'nothing special'
+        }
+      ];
+
+      const csvData = handler.batchToCsv(batch, {});
+
+      expect(csvData).toContain('"Doe, John"');
+      expect(csvData).toContain('"He said ""hi"""');
+      // A field holding a line break must be quoted, or it silently becomes a new record.
+      expect(csvData).toContain('"line one\nline two"');
+      expect(csvData).toContain('"line one\rline two"');
+      // ...and a field needing none must not gain them.
+      expect(csvData).toContain(',nothing special');
+      expect(csvData).not.toContain('"nothing special"');
+    });
+
     it('should escape CSV special characters', () => {
       const batch = [
         {
@@ -545,7 +590,7 @@ describe('StreamingHandler', () => {
       const jsonData = handler.batchToJson(batch, context);
 
       expect(jsonData).toBe('[{"id":1,"name":"John"},{"id":2,"name":"Jane"}]');
-      expect(jsonData).not.toContain(ESCAPED_NEWLINE); // No pretty printing
+      expect(jsonData).not.toContain(REAL_NEWLINE); // No pretty printing
     });
 
     it('should convert batch to pretty JSON when requested', () => {
