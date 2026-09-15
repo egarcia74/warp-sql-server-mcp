@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`export_table_csv` produced a single line with a literal `\n` between records instead of real
+  line breaks, so no CSV reader could parse it.** The row terminator in `batchToCsv` was written
+  `'\\n'`, which in JavaScript is a two-character string (backslash, `n`), not a newline — every
+  export since 2025-08-29 has shipped this way, 2.0.0 included. The same defect sat in the
+  quoting test: it asked whether a value contained a literal `\n` sequence, so a field holding a
+  **real** line break was left unquoted and silently split the record in two. Quoting now follows
+  RFC 4180 — a field is quoted if it contains a comma, a double quote, CR or LF, and embedded
+  quotes are doubled.
+
+  The suite did not catch it because the fixtures asserted the broken output on purpose, using
+  `String.raw` so they matched the literal backslash-n; the tests had been made to agree with the
+  bug. They now use real newlines, and two new tests assert the _shape_ of the output — splitting
+  it back into records and checking the grid — rather than comparing against a string the test
+  file itself wrote. Both fail against the old code. The same vacuous assertion in the JSON
+  pretty-print test (which looked for an escaped newline where pretty-printing emits a real one)
+  is corrected too.
+
 ## [2.0.1] - 2026-09-15
 
 ### Fixed
