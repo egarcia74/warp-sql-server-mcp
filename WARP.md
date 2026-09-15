@@ -1668,8 +1668,9 @@ that safe at any time:
 - It authenticates with npm Trusted Publishing: the job's OIDC `id-token` is exchanged for a
   short-lived npm credential, so there is no `NPM_TOKEN` secret to rotate or to expire under a
   release (the 2.0.0 publish failed exactly that way). The trusted publisher is configured on
-  npmjs.com - see `docs/operations/RELEASE-TOKEN-SETUP.md`. Trusted publishing needs npm 11.5.1+
-  and Node 22 bundles npm 10.x, so the job upgrades npm before publishing.
+  npmjs.com - see `docs/operations/RELEASE-TOKEN-SETUP.md`. Trusted publishing needs npm 11.5.1+;
+  the workflow runs on Node 24, uses its bundled npm, and fails early if `npm --version` is below
+  that floor.
 - It publishes with `npm publish --access public --provenance`, so each tarball carries a Sigstore
   provenance attestation binding it to the workflow run and commit that built it (trusted
   publishing generates the attestation even without the flag; the flag is kept explicit). Verify

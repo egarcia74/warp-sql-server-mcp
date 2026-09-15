@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The npm publish workflow no longer installs npm inside the credentialed job.** The alert fix for
+  #167 removed `npm install -g npm@11.19.1 --ignore-scripts` from `npm-publish.yml`; the job now
+  runs on Node 24, relies on the bundled npm, and keeps the explicit `npm >= 11.5.1` fail-fast
+  check required by npm Trusted Publishing. This leaves the released 2.0.1 entry intact as history
+  and records the security hardening as a new unreleased change.
+
 ## [2.0.1] - 2026-09-15
 
 ### Fixed
