@@ -11,27 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`export_table_csv` produced a single line with a literal `\n` between records instead of real
   line breaks, so no CSV reader could parse it.** The row terminator in `batchToCsv` was written
-  `'\\n'`, which in JavaScript is a two-character string (backslash, `n`), not a newline — every
-  export since 2025-08-29 has shipped this way, 2.0.0 included. The same defect sat in the
-  quoting test: it asked whether a value contained a literal `\n` sequence, so a field holding a
-  **real** line break was left unquoted and silently split the record in two. Quoting now follows
-  RFC 4180 — a field is quoted if it contains a comma, a double quote, CR or LF, and embedded
-  quotes are doubled.
+  `'\\n'`, which in JavaScript is a two-character string (backslash, `n`), not a newline. This
+  affected the **streaming** export path, which is the default: `ENABLE_STREAMING=false` routed
+  exports through a second implementation that emitted real newlines all along. Every streamed
+  export since 2025-08-29 has shipped broken, 2.0.0 included. The same defect sat in the quoting
+  test: it asked whether a value contained a literal `\n` sequence, so a field holding a **real**
+  line break was left unquoted and silently split the record in two.
 
-  The suite did not catch it because the fixtures asserted the broken output on purpose, using
-  `String.raw` so they matched the literal backslash-n; the tests had been made to agree with the
-  bug. They now use real newlines, and two new tests assert the _shape_ of the output — splitting
-  it back into records and checking the grid — rather than comparing against a string the test
-  file itself wrote. Both fail against the old code. The same vacuous assertion in the JSON
-  pretty-print test (which looked for an escaped newline where pretty-printing emits a real one)
-  is corrected too.
+  The root cause was duplication: **three** separate CSV writers for one format —
+  `StreamingHandler.batchToCsv` (streaming export), `DatabaseTools.recordsetToCsv` (non-streaming
+  export) and `BaseToolHandler.formatAsCsv` (the `formatResults(result, 'csv')` path) — of which
+  only one was correct. That is why a one-character defect survived a year: the path most
+  exercised by tests and small exports produced valid CSV. All three now go through a single
+  `lib/utils/csv.js` and emit byte-identical output. `recordsetToCsv` gains CR quoting it never
+  had, and `formatAsCsv` gains header escaping and CR/LF quoting it never had — it quoted on
+  comma and double quote only, so a value containing a line break corrupted the record there too.
 
-  The root cause was duplication: there were **two** CSV writers for the same format —
-  `StreamingHandler.batchToCsv` on the streaming export path and `DatabaseTools.recordsetToCsv`
-  on the non-streaming one — and only the streaming one was broken, which is why the defect
-  survived a year. Both now go through a single `lib/utils/csv.js`, so the two paths produce
-  byte-identical output and cannot drift again. `recordsetToCsv` also gains CR handling, which
-  it never had.
+  Quoting follows **RFC 4180's field rules**: a field is quoted if it contains a comma, a double
+  quote, CR or LF, embedded quotes are doubled, and header names are escaped by the same rule (a
+  column named `last,name` previously emitted two header fields against one data field). Records
+  are terminated with **LF, not CRLF** — a deliberate deviation from the RFC's grammar, matching
+  the implementation here that was already correct, avoiding stray `\r` in MCP text responses, and
+  accepted by every mainstream reader including Excel.
+
+  The suite did not catch any of it because the fixtures asserted the broken output on purpose,
+  using `String.raw` so they matched the literal backslash-n; the tests had been made to agree
+  with the bug. They now use real newlines, and new tests assert the _shape_ of the output —
+  splitting it back into records and checking the grid — rather than comparing against a string
+  the test file itself wrote. They fail against the old code. The same vacuous assertion in the
+  JSON pretty-print test (which looked for an escaped newline where pretty-printing emits a real
+  one) is corrected too.
+
+### Changed
+
+- **The npm publish workflow no longer installs npm inside the credentialed job.** The alert fix for
+  #167 removed `npm install -g npm@11.19.1 --ignore-scripts` from `npm-publish.yml`; the job now
+  runs on Node 24, relies on the bundled npm, and keeps the explicit `npm >= 11.5.1` fail-fast
+  check required by npm Trusted Publishing. The runtime is pinned to an exact release
+  (`node-version: '24.21.0'`, which bundles npm 11.19.0) rather than a floating `'24'`: this job
+  holds the publish credential, so the npm that runs in it has to change by a reviewed commit -
+  the same rationale that pinned `npm@11.19.1` before the install was removed. Bump the pin
+  deliberately; the version check is the floor, not the pin.
 
 ## [2.0.1] - 2026-09-15
 

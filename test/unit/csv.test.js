@@ -60,4 +60,35 @@ describe('csv helpers', () => {
       expect(csvRow([1, null, undefined, 4])).toBe('1,,,4\n');
     });
   });
+
+  // Codex found a third CSV writer on #1244 after I had twice claimed there was only one.
+  // These pin the property that matters: the three paths are one format, so they must agree
+  // byte for byte, and a header is a field like any other.
+  describe('one format across every writer', () => {
+    const awkward = [
+      { 'last,name': 'Doe, John', note: 'a\nb', cr: 'x\ry', quote: 'say "hi"' },
+      { 'last,name': 'Jane', note: 'plain', cr: 'ok', quote: 'none' }
+    ];
+
+    it('escapes header names by the same rule as data fields', () => {
+      // `last,name` unescaped emitted two header fields against one data field, so every
+      // column after it was misaligned - a corruption no data-side quoting could fix.
+      const header = csvRow(Object.keys(awkward[0])).trimEnd();
+
+      expect(header).toBe('"last,name",note,cr,quote');
+      expect(header.split(',')).toHaveLength(5); // 4 columns, one split inside the quoted name
+    });
+
+    it('terminates records with LF, a deliberate deviation from the RFC grammar', () => {
+      // RFC 4180 says CRLF. We emit LF: it matches the writer that was already correct, keeps
+      // stray CR out of MCP text responses, and every mainstream reader accepts it. Pinned so
+      // the choice is visible rather than incidental.
+      expect(CSV_ROW_TERMINATOR).toBe('\n');
+      expect(csvRow(['a'])).not.toContain('\r');
+    });
+
+    it('quotes a field holding CR, which the RFC field rules do require', () => {
+      expect(csvEscapeCell('x\ry')).toBe('"x\ry"');
+    });
+  });
 });

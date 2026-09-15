@@ -270,11 +270,10 @@ to store in GitHub, rotate, or watch for expiry.
 Taken from [docs.npmjs.com/trusted-publishers](https://docs.npmjs.com/trusted-publishers):
 
 - **npm CLI and Node**: "Trusted publishing requires npm CLI version 11.5.1 or later and Node
-  version 22.14.0 or higher." The workflow uses `node-version: '22'`, which resolves to the latest
-  22.x, but Node 22 bundles npm 10.x - so the job installs an exact npm version (currently
-  `npm@11.19.1`) and fails early if `npm --version` is still below 11.5.1. The pin is deliberate:
-  this job holds the publish credential, so bump it as a reviewed change rather than letting a
-  range pull in an unreviewed release.
+  version 22.14.0 or higher." The workflow pins `node-version: '24.21.0'` - an exact release, so
+  the npm that runs in the credentialed job changes only by a reviewed commit - and keeps a
+  fail-fast check that aborts if `npm --version` is below 11.5.1 before publishing. Bump the pin
+  deliberately; the check is the floor, not the pin.
 - **OIDC permission**: "The critical requirement is the `id-token: write` permission, which allows
   GitHub Actions to generate OIDC tokens." The `publish` job declares it.
 - **Provenance**: "When you publish using trusted publishing from GitHub Actions or GitLab CI/CD,
@@ -326,7 +325,7 @@ npm's own migration order: "Set up trusted publishers first and verify they work
 token access... Revoke any existing automation tokens that are no longer needed."
 
 1. Merge the workflow change (step order above: publisher first, workflow second).
-2. On the next release, check the `npm-publish.yml` run: the **Upgrade npm for trusted
+2. On the next release, check the `npm-publish.yml` run: the **Verify npm version for trusted
    publishing** step prints an npm version of 11.5.1 or higher, and **Publish to npm** succeeds.
 3. Verify the registry: `npm view @egarcia74/warp-sql-server-mcp@X.Y.Z dist.attestations` is
    non-empty.
@@ -355,7 +354,7 @@ run skips. Use it after a failed publish has been fixed, or after a tag was crea
 - **Authentication error at `npm publish`** - re-check the three required fields against the table
   above; the npm docs' first advice is to "verify that the workflow filename matches exactly what you
   configured on npmjs.com, including the `.yml` extension." Then confirm the run's
-  `Upgrade npm for trusted publishing` step printed 11.5.1 or higher.
+  `Verify npm version for trusted publishing` step printed 11.5.1 or higher.
 - **The workflow was renamed** - the trusted publisher is bound to the file name. Renaming
   `npm-publish.yml` requires updating the entry on npmjs.com first.
 - **`NODE_AUTH_TOKEN` reappears in the publish step** - do not add it back "just in case". npm
