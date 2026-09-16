@@ -2,7 +2,7 @@ name: Documentation Automation
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - '**.md'
       - 'docs/**'
@@ -16,7 +16,7 @@ on:
       - 'package.json'
       - 'scripts/docs/**'
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - '**.md'
       - 'docs/**'
@@ -72,14 +72,14 @@ jobs:
         run: |
           echo "## 🔍 Documentation Link Validation" > link-report.md
           echo "" >> link-report.md
-          
+
           # Check if we have any markdown files
           if find . -name "*.md" -not -path "./node_modules/*" | head -1 | grep -q .; then
             echo "✅ Markdown files found, validation completed by link checker" >> link-report.md
           else
             echo "⚠️ No markdown files found for validation" >> link-report.md
           fi
-          
+
           # Check README sections
           if grep -q "## Table of Contents\|## Features\|## Installation" README.md; then
             echo "✅ README.md has proper sections" >> link-report.md
@@ -92,7 +92,7 @@ jobs:
           echo "" >> link-report.md
           echo "### 🔧 MCP Tool Documentation Check" >> link-report.md
           echo "" >> link-report.md
-          
+
           # Extract tools from index.js and check if documented
           node -e "
             const fs = require('fs');
@@ -131,13 +131,20 @@ jobs:
             
             fs.writeFileSync('tool-docs-report.txt', report);
           "
-          
+
           cat tool-docs-report.txt >> link-report.md
 
       # The two checks below fail the job on drift, unlike the reporting steps above.
       # They run before the artifact upload, which is `if: always()` so the report is
       # still published when one of them fails - that report is how you see what drifted.
       - name: Check every doc is reachable from the nav
+        # `if: always()` for the same reason as the step below, and for the step above it
+        # too: without it this inherits the implicit `success()` condition and is SKIPPED
+        # whenever an earlier step in the job fails - the link validation, for instance. A
+        # run that reports only the first drift, then publishes a report with the
+        # reachability section missing entirely, hides orphan drift behind a broken link.
+        # Both gates are independent and both should be visible from one run.
+        if: always()
         run: |
           set -o pipefail
           echo "" >> link-report.md
@@ -146,11 +153,12 @@ jobs:
           node scripts/docs/check-orphan-docs.mjs | tee -a link-report.md
 
       - name: Check environment variable documentation matches the code
-        # `if: always()` because without it this step inherits the implicit `success()`
-        # condition and is SKIPPED whenever the orphan check above fails. The two gates are
+        # `if: always()` for the same reason as the step above: without it this inherits
+        # the implicit `success()` condition and is SKIPPED whenever ANY earlier step in
+        # the job fails - the orphan check, or the link validation before it. The gates are
         # independent, and a run that reports only the first drift - then publishes a
-        # report with the env-var section missing entirely - hides the second one behind
-        # the first. Both should be visible from one run.
+        # report with the env-var section missing entirely - hides the second behind the
+        # first. Both should be visible from one run.
         if: always()
         run: |
           set -o pipefail
@@ -178,18 +186,18 @@ jobs:
         run: |
           echo "## 📑 Table of Contents Check" > toc-check-report.md
           echo "" >> toc-check-report.md
-          
+
           # Simple check for basic README structure
           if grep -q "## Table of Contents" README.md; then
             echo "✅ Table of Contents section exists" >> toc-check-report.md
           else
             echo "ℹ️ No Table of Contents found - could be added for better navigation" >> toc-check-report.md
           fi
-          
+
           # Check for proper heading structure
           heading_count=$(grep -c "^#" README.md || true)
           echo "📊 Found $heading_count headings in README.md" >> toc-check-report.md
-          
+
           if [ $heading_count -gt 5 ]; then
             echo "💡 With $heading_count headings, a Table of Contents would improve navigation" >> toc-check-report.md
           fi
@@ -214,13 +222,13 @@ jobs:
         run: |
           echo "## 📅 Documentation Freshness Report" > freshness-report.md
           echo "" >> freshness-report.md
-          
+
           # Check when each markdown file was last updated
           echo "### File Last Modified Dates" >> freshness-report.md
           echo "" >> freshness-report.md
           echo "| File | Last Modified | Days Ago |" >> freshness-report.md
           echo "|------|---------------|----------|" >> freshness-report.md
-          
+
           find . -name "*.md" -not -path "./node_modules/*" | while read file; do
             if [ -f "$file" ]; then
               last_modified=$(git log -1 --format="%ci" -- "$file" 2>/dev/null || echo "Unknown")
@@ -232,13 +240,13 @@ jobs:
               fi
             fi
           done
-          
+
           echo "" >> freshness-report.md
-          
+
           # Check for very old files (>90 days)
           echo "### 🚨 Potentially Outdated Files" >> freshness-report.md
           echo "" >> freshness-report.md
-          
+
           old_files_found=false
           find . -name "*.md" -not -path "./node_modules/*" | while read file; do
             if [ -f "$file" ]; then
@@ -252,7 +260,7 @@ jobs:
               fi
             fi
           done
-          
+
           if [ "$old_files_found" != "true" ]; then
             echo "✅ All documentation files are reasonably fresh" >> freshness-report.md
           fi
@@ -296,12 +304,12 @@ jobs:
           echo "🏗️ Generating comprehensive HTML documentation..."
           node scripts/docs/generate-tools-html.js
           node scripts/docs/generate-landing-page.js
-          
+
           echo "📊 Documentation generation complete:"
           echo "- Landing page: docs/index.html"
           echo "- Tools documentation: docs/tools.html"
           echo "- Tools data: docs-data/tools.json"
-          
+
           # Show tool count for verification
           tool_count=$(node -e "const data = require('./docs-data/tools.json'); console.log(data.toolsCount);")
           echo "✅ Successfully generated documentation for $tool_count MCP tools"
@@ -318,10 +326,10 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
+
           # Stage all generated documentation files
           git add docs/index.html docs/tools.html docs-data/tools.json
-          
+
           # Only proceed if there are changes
           if git diff --staged --quiet; then
             echo "No documentation changes to commit"
@@ -435,15 +443,15 @@ jobs:
       - name: Run spell check
         uses: streetsidesoftware/cspell-action@6f3c77c1406bc930f944ba97e9801a22e42caf58 # v7
         with:
-          files: "**/*.md"
-          config: ".github/cspell.json"
-          inline: "error"
+          files: '**/*.md'
+          config: '.github/cspell.json'
+          inline: 'error'
           incremental_files_only: false
           strict: false
           verbose: true
 
   accessibility-check:
-    name: Documentation Accessibility Check  
+    name: Documentation Accessibility Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -453,11 +461,11 @@ jobs:
         run: |
           echo "## ♿ Accessibility Check Report" > accessibility-report.md
           echo "" >> accessibility-report.md
-          
+
           # Check for alt text on images
           echo "### 🖼️ Image Alt Text Check" >> accessibility-report.md
           echo "" >> accessibility-report.md
-          
+
           images_without_alt=0
           find . -name "*.md" -not -path "./node_modules/*" | xargs grep -n "!\[" | while read line; do
             if echo "$line" | grep -q "!\[\]"; then
@@ -465,17 +473,17 @@ jobs:
               images_without_alt=$((images_without_alt + 1))
             fi
           done
-          
+
           if [ $images_without_alt -eq 0 ]; then
             echo "✅ All images have alt text" >> accessibility-report.md
           fi
-          
+
           echo "" >> accessibility-report.md
-          
+
           # Check for proper heading hierarchy
           echo "### 📝 Heading Hierarchy Check" >> accessibility-report.md
           echo "" >> accessibility-report.md
-          
+
           find . -name "*.md" -not -path "./node_modules/*" | while read file; do
             echo "**$file:**" >> accessibility-report.md
             grep "^#" "$file" | head -5 >> accessibility-report.md || echo "No headings found" >> accessibility-report.md
@@ -504,7 +512,7 @@ jobs:
         run: |
           echo "## 📚 Documentation Review" > pr-docs-report.md
           echo "" >> pr-docs-report.md
-          
+
           # Check if code changes require doc updates
           if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "index.js"; then
             echo "🔍 **Code changes detected in index.js**" >> pr-docs-report.md
@@ -517,11 +525,11 @@ jobs:
             fi
             echo "" >> pr-docs-report.md
           fi
-          
+
           # Check for new MCP tools
           new_tools=$(git diff origin/${{ github.base_ref }}...HEAD index.js | grep "^+" | grep -c "name:" || echo "0")
           removed_tools=$(git diff origin/${{ github.base_ref }}...HEAD index.js | grep "^-" | grep -c "name:" || echo "0")
-          
+
           if [ "$new_tools" -gt 0 ] || [ "$removed_tools" -gt 0 ]; then
             echo "🔧 **MCP Tool Changes Detected:**" >> pr-docs-report.md
             echo "- New tools: $new_tools" >> pr-docs-report.md
@@ -536,7 +544,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            
+
             try {
               const report = fs.readFileSync('pr-docs-report.md', 'utf8');
               
