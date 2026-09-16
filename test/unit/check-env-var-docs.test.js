@@ -435,14 +435,61 @@ describe('the gate actually runs', () => {
     return [...onBlock.matchAll(/^\s+-\s+'([^']+)'\s*$/gm)].map(match => match[1]);
   };
 
-  /** GitHub's path-filter globbing, narrowed to the forms this workflow uses. */
-  const filterMatches = (pattern, file) => {
-    const source = pattern
-      .split('**')
-      .map(part => part.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`).replaceAll('*', '[^/]*'))
-      .join('.*');
-    return new RegExp(`^${source}$`).test(file);
+  /**
+   * A path-filter pattern as the pieces it is made of: literal text, `*` (which never
+   * crosses a `/`), and `**` (which does).
+   */
+  const tokenise = pattern => {
+    const tokens = [];
+    let literal = '';
+
+    for (let i = 0; i < pattern.length; i++) {
+      if (pattern[i] !== '*') {
+        literal += pattern[i];
+        continue;
+      }
+      if (literal !== '') {
+        tokens.push({ literal });
+        literal = '';
+      }
+      if (pattern[i + 1] === '*') {
+        tokens.push({ wildcard: 'globstar' });
+        i++;
+      } else {
+        tokens.push({ wildcard: 'star' });
+      }
+    }
+    if (literal !== '') tokens.push({ literal });
+
+    return tokens;
   };
+
+  /**
+   * GitHub's path-filter globbing, spelled out rather than translated into a regular
+   * expression: a `RegExp` built from a non-literal pattern is a static-analysis finding
+   * (Semgrep's non-literal-regexp DoS rule), and matching the tokens directly says what a
+   * glob means here more plainly than an escaped translation of it would.
+   *
+   * Backtracking is fine at this size - the patterns are a handful of characters and the
+   * candidates are repository paths.
+   */
+  const matchTokens = (tokens, file) => {
+    if (tokens.length === 0) return file === '';
+
+    const [head, ...rest] = tokens;
+    if (head.literal !== undefined) {
+      return file.startsWith(head.literal) && matchTokens(rest, file.slice(head.literal.length));
+    }
+
+    for (let taken = 0; taken <= file.length; taken++) {
+      // `*` stops at a segment boundary; `**` keeps going through it.
+      if (head.wildcard === 'star' && file.slice(0, taken).includes('/')) break;
+      if (matchTokens(rest, file.slice(taken))) return true;
+    }
+    return false;
+  };
+
+  const filterMatches = (pattern, file) => matchTokens(tokenise(pattern), file);
 
   // This one guards the future rather than fixing the present: today's filter does cover
   // today's publication scope. The hazard is drift - publish a new top-level path and the
@@ -467,6 +514,24 @@ describe('the gate actually runs', () => {
     );
 
     expect(uncovered).toEqual(['plugins/b.js']);
+  });
+
+  it('matches the glob shapes the workflow uses, and only those files', () => {
+    // The guard is only as trustworthy as the matcher underneath it, so the semantics are
+    // pinned here rather than left implicit in the two assertions above.
+    expect(filterMatches('index.js', 'index.js')).toBe(true);
+    expect(filterMatches('index.js', 'lib/index.js')).toBe(false);
+
+    expect(filterMatches('lib/**', 'lib/utils/logger.js')).toBe(true);
+    expect(filterMatches('lib/**', 'libexec/a.js')).toBe(false);
+
+    expect(filterMatches('**.md', 'docs/user/QUICKSTART.md')).toBe(true);
+    expect(filterMatches('**.md', 'docs/user/QUICKSTART.mdx')).toBe(false);
+
+    // `*` stops at a segment boundary; `**` crosses it.
+    expect(filterMatches('docs/*.md', 'docs/README.md')).toBe(true);
+    expect(filterMatches('docs/*.md', 'docs/user/README.md')).toBe(false);
+    expect(filterMatches('docs/**/*.md', 'docs/user/README.md')).toBe(true);
   });
 
   it('runs the documentation checks as part of the full local gate', () => {
