@@ -379,11 +379,16 @@ jobs:
       # executed as shell. This governs BOTH shell steps below. `--notes "$CHANGELOG"` reads
       # the value; `--notes ${{ ... }}` would paste it into the script and is a regression.
       #
-      # `gh release create` replaces the archived actions/create-release (#1251), which
-      # targeted Node 20 and emitted three `set-output` deprecation warnings. `gh` reads
-      # GH_TOKEN, not GITHUB_TOKEN, so the RELEASE_TOKEN -> GITHUB_TOKEN fallback is assigned
-      # there; it needs the job's contents: write exactly as the action did. This step runs
-      # AFTER the tag has been pushed, so a failure here leaves a tag with no Release.
+      # `gh release create` replaces the archived actions/create-release (#1251). At the SHA
+      # that was pinned, its action.yml declares `using: 'node12'`; the runner silently remaps
+      # node12 to node20 and then warns that node20 is deprecated and is being forced onto
+      # node24, which is how the run annotation came to name Node 20. Two runtime migrations
+      # deep on an action archived by GitHub, plus three `set-output` deprecation warnings.
+      # `gh` honours GH_TOKEN and GITHUB_TOKEN both, GH_TOKEN taking precedence; the
+      # RELEASE_TOKEN -> GITHUB_TOKEN fallback is assigned to GH_TOKEN so the selection is
+      # explicit rather than relying on precedence. It needs the job's contents: write exactly
+      # as the action did. This step runs AFTER the tag has been pushed, so a failure here
+      # leaves a tag with no Release.
       - name: Create GitHub Release
         if: ${{ github.event.inputs.dry_run != 'true' }}
         env:
