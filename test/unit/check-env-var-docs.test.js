@@ -184,6 +184,25 @@ describe('readEnvVarsFromSource, on the shapes that used to fool it', () => {
   it('still counts a read in an arrow function body', () => {
     expect([...readEnvVarsFromSource('const f = () => process.env.D;')]).toEqual(['D']);
   });
+
+  // Regression: the assignment exclusion was wired into the dotted-form loop only, so
+  // `process.env['X'] = '1'` still counted as a read - the exact class of bug the dotted
+  // fix closed, left open on the other spelling. Latent when found (no shipped file writes
+  // a bracket-form literal), but an asymmetry between two scanners of the same thing is
+  // how they drift apart.
+  it('ignores a plain assignment in the bracket form too', () => {
+    expect([...readEnvVarsFromSource("process.env['CHILD_FLAG'] = '1';")]).toEqual([]);
+    expect([...readEnvVarsFromSource('process.env["SPACED"]   =   "1";')]).toEqual([]);
+  });
+
+  it('still counts bracket-form reads, comparisons and compound assignments', () => {
+    expect([...readEnvVarsFromSource("const x = process.env['REAL_READ'];")]).toEqual([
+      'REAL_READ'
+    ]);
+    expect([...readEnvVarsFromSource("if (process.env['E'] === 'x') {}")]).toEqual(['E']);
+    expect([...readEnvVarsFromSource("process.env['C'] ||= 'd';")]).toEqual(['C']);
+    expect([...readEnvVarsFromSource("const f = () => process.env['F'];")]).toEqual(['F']);
+  });
 });
 
 describe('maskNonCode', () => {

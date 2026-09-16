@@ -200,7 +200,9 @@ function isAssignmentTarget(masked, after) {
  * Every `process.env.NAME` / `process.env['NAME']` that is actually code in one file.
  *
  * Both spellings are matched because both appear in JavaScript generally; only the dotted
- * one appears in this repo today.
+ * one appears in this repo today with a literal name (`cli.js` writes `process.env[key]`
+ * with a computed one, which no static scan can name). Both spellings apply the same
+ * assignment exclusion - leaving it on one spelling only is how the two drift apart.
  */
 export function readEnvVarsFromSource(source) {
   const masked = maskNonCode(source);
@@ -227,7 +229,17 @@ export function readEnvVarsFromSource(source) {
       end++;
     }
     const name = source.slice(start, end);
-    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) found.add(name);
+    if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) continue;
+
+    // Past the closing quote AND the closing bracket, so the assignment check sees the same
+    // thing it sees for the dotted form. Skipping only to the quote would read `]` as the
+    // next token and never match `=`. The bracket form needs this exactly as much as the
+    // dotted one does: `process.env['X'] = '1'` is a write, not a setting a user supplies,
+    // and demanding a doc entry for it is the false failure the dotted-form check avoids.
+    const closingBracket = source.indexOf(']', end);
+    if (closingBracket !== -1 && isAssignmentTarget(masked, closingBracket + 1)) continue;
+
+    found.add(name);
   }
 
   return found;

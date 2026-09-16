@@ -10,7 +10,7 @@ test/
 ├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
 ├── setup.js                                 # Vitest global setup and mocks
 │
-├── unit/                                    # Vitest unit suites - 35 files, 1,511 tests
+├── unit/                                    # Vitest unit suites - 35 files, 1,513 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
 │   ├── query-optimizer.test.js              # 136 - Query analysis and optimization engine
 │   ├── sql-injection-battery.test.js        # 103 - Behavioral SQL injection guard
@@ -93,8 +93,8 @@ Get the MCP server running first, then return here to understand the testing arc
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 1,578 - **every one of them runs automatically on every pull request**
-  - 1,511 unit tests (`npm run test:unit`, 35 files, mocked)
+- **Total Tests**: 1,580 - **every one of them runs automatically on every pull request**
+  - 1,513 unit tests (`npm run test:unit`, 35 files, mocked)
   - 27 Vitest integration tests (`test/integration/*.test.js`, mocked, run by a bare `vitest run`)
   - 40 live-database tests (`test/integration/manual/`, 20 + 10 + 10, run against a Docker SQL
     Server that CI starts itself)
@@ -115,7 +115,7 @@ and the CI jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 
 | Suite                                      | Tests           | Command                                | Runs in CI?                                |
 | ------------------------------------------ | --------------- | -------------------------------------- | ------------------------------------------ |
-| `test/unit/**`                             | 1,511           | `npm run test:unit`                    | Yes - required `Tests (22)` / `(24)`       |
+| `test/unit/**`                             | 1,513           | `npm run test:unit`                    | Yes - required `Tests (22)` / `(24)`       |
 | `test/integration/*.test.js`               | 27              | `npm run test:coverage` / `npm run ci` | Yes - `coverage` job                       |
 | `test/integration/manual/phase*.js`        | 40              | `npm run test:integration:manual`      | Yes - required `Tests` job, via `npm test` |
 | `test/protocol/mcp-server-startup-test.js` | handshake check | `npm run test:integration:protocol`    | Yes - required `Tests` job                 |
@@ -172,7 +172,7 @@ The test suite has been organized into focused, modular files for better maintai
 
 #### 🎯 **Unit Suites by Area**
 
-The 1,511 unit tests are spread across 35 files. Grouped by area, the totals sum to 1,511:
+The 1,513 unit tests are spread across 35 files. Grouped by area, the totals sum to 1,513:
 
 | Area                            | Tests | Suites                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -182,7 +182,7 @@ The 1,511 unit tests are spread across 35 files. Grouped by area, the totals sum
 | Query analysis                  | 158   | `query-optimizer` (136), `query-optimizer-security` (13), `bottleneck-detector` (9)                                                                                                                                                                                                                                                                              |
 | Tools and handlers              | 147   | `tool-registry` (59), `database-tools-handler` (59), `get-server-info` (29)                                                                                                                                                                                                                                                                                      |
 | Configuration                   | 24    | `server-config` (24)                                                                                                                                                                                                                                                                                                                                             |
-| Repository and CLI tooling      | 468   | `cleanup-test-processes` (48), `release-script` (145), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (40), `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6), `check-orphan-docs` (43), `check-env-var-docs` (46), `cli` (4), `docker-command-utils` (4), `dependabot-config` (2) |
+| Repository and CLI tooling      | 470   | `cleanup-test-processes` (48), `release-script` (145), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (40), `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6), `check-orphan-docs` (43), `check-env-var-docs` (48), `cli` (4), `docker-command-utils` (4), `dependabot-config` (2) |
 
 The earlier per-area suites (`mcp-connection`, `mcp-core-tools`, `mcp-data-tools`,
 `mcp-performance-tools`, `mcp-server-lifecycle`) and the original monolithic `sqlserver-mcp.test.js`
