@@ -1353,9 +1353,15 @@ with proper versioning, changelog maintenance, and artifact creation.
 
 Follows [Semantic Versioning](https://semver.org/):
 
-- **Patch (x.x.X)**: Bug fixes, documentation updates, minor improvements
-- **Minor (x.X.x)**: New features, dependency updates, significant enhancements
+- **Patch (x.x.X)**: Bug fixes, documentation updates, dependency updates, minor improvements
+- **Minor (x.X.x)**: New features, significant enhancements
 - **Major (X.x.x)**: Breaking changes, major architectural changes
+
+Dependency updates are a **patch**, matching what the classifier does with Dependabot's `deps` and
+`deps-dev` prefixes (#1232). A dependency bump does change the published bytes - `package.json` ships
+in the tarball with both dependency lists verbatim - but it adds no feature, so it does not earn a
+minor. Do not select a minor by hand for a dependency-only window; that would disagree with the
+release automation for the very same commits.
 
 ### Prerequisites
 
@@ -1379,7 +1385,7 @@ npm run ci
 
 Review the `[Unreleased]` section in `CHANGELOG.md` to determine the appropriate version bump:
 
-- **Security updates** (like dependency upgrades): Usually minor or patch
+- **Security updates** (like dependency upgrades): Patch, as above
 - **New features**: Minor version bump
 - **Breaking changes**: Major version bump
 - **Bug fixes only**: Patch version bump
