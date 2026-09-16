@@ -29,10 +29,14 @@
   - `feat:` / `feat(scope):` / `feature:` → minor
   - `fix:` / `bugfix:`, `docs:` / `chore:`, `perf:`, `refactor:`, `revert:`, `build:`,
     `test:` / `ci:` / `style:` → patch
+  - `deps:` / `deps-dev:` (Dependabot's own prefixes, not Conventional Commits types) → patch
   - anything else → **no release**, and the run warns, naming the unclassified subjects
   - Every recognised type releases at least a patch: the prefix is a label the PR author
     chooses, not a guarantee about which paths changed, and `docs/**/*.md`, `README.md` and
     `CHANGELOG.md` are packed, so a `ci:` PR can and does change the tarball (#1158)
+  - `deps-dev:` is patch too, not `none`: `package.json` is always in the tarball and carries
+    `devDependencies` verbatim, and a recognised-but-non-releasing type would silence the
+    warning above and send a dependency-only window back to shipping nothing silently (#1232)
   - Highest level in the window wins; a window with commits but nothing classifiable says so
     explicitly rather than looking like an empty one (#1158)
 - Manual override: choose `patch | minor | major | prerelease`
@@ -149,8 +153,9 @@ not a silent gap.
 ## ℹ️ Notes about Automation
 
 - `release_type=auto` respects conventional commits and treats every recognised type other
-  than `feat:` and a breaking change as patch — `docs:`/`chore:`/`test:`/`ci:`/`style:`
-  included; the full mapping is in “Choose Release Type” above and lives in code in
+  than `feat:` and a breaking change as patch — `docs:`/`chore:`/`test:`/`ci:`/`style:` and
+  Dependabot's `deps:`/`deps-dev:` included; the full mapping is in “Choose Release Type”
+  above and lives in code in
   `scripts/lib/release-plan.mjs`, which both `release.yml` steps and `npm run release` share
 - Tag collision avoidance is built-in (keeps bumping patch until a free tag exists)
 - `package.json` is not committed on `main` by the workflow; the version-bump PR keeps `main` in sync while honoring branch protection

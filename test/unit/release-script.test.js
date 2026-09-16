@@ -159,9 +159,11 @@ describe('detectReleaseType: the types added by #1158', () => {
     expect(detectReleaseType(['ci: pin action', 'fix: a bug']).rule).toBe('fix / bugfix');
   });
 
+  // `deps:` / `deps(deps):` used to be the example of an unrecognised subject here. They are
+  // recognised types now (#1232), so these cases use subjects that carry no prefix at all.
   it('distinguishes an empty window from a window of only unclassified commits', () => {
     const empty = detectReleaseType([]);
-    const unrecognised = detectReleaseType(['deps: a', 'wip', 'rebase onto main']);
+    const unrecognised = detectReleaseType(['amend', 'wip', 'rebase onto main']);
     expect(empty.type).toBe(unrecognised.type);
     // Same verdict, different evidence - which is the whole point of #1158.
     expect(describeCommitMix(empty)).toBe('');
@@ -169,13 +171,13 @@ describe('detectReleaseType: the types added by #1158', () => {
   });
 
   it('reports subjects that match no type at all as unclassified', () => {
-    const result = detectReleaseType(['deps(deps): bump jose', 'wip']);
+    const result = detectReleaseType(['ci(release update workflow', 'wip']);
     expect(result.type).toBe('none');
-    expect(result.unclassified).toEqual(['deps(deps): bump jose', 'wip']);
+    expect(result.unclassified).toEqual(['ci(release update workflow', 'wip']);
     expect(result.counts).toEqual({ unclassified: 2 });
     expect(describeCommitMix(result)).toBe('unclassified: 2');
     // One recognised subject is enough to release, whatever else is in the window.
-    expect(detectReleaseType(['deps(deps): bump jose', 'wip', 'ci: pin']).type).toBe('patch');
+    expect(detectReleaseType(['wip', 'ci: pin']).type).toBe('patch');
   });
 
   it('keeps breaking > feat > fix > docs/chore ahead of every added type', () => {
@@ -333,6 +335,98 @@ describe('detectReleaseType: the types added by #1158', () => {
   });
 });
 
+// Dependabot writes `deps` / `deps-dev`, which are not Conventional Commits types, so the
+// classifier did not recognise them and a window of nothing but dependency bumps computed
+// `none` and shipped nothing (#1232). Both are patch: `package.json` is always in the npm
+// tarball and carries `devDependencies` verbatim, so a `deps-dev` bump changes the published
+// bytes exactly as a `deps` one does.
+describe("detectReleaseType: Dependabot's deps / deps-dev prefixes (#1232)", () => {
+  it('classifies both prefixes as patch, bare and scoped', () => {
+    expect(detectReleaseType(['deps: bump mssql']).type).toBe('patch');
+    expect(detectReleaseType(['deps(deps): bump mssql']).type).toBe('patch');
+    expect(detectReleaseType(['deps-dev: bump vitest']).type).toBe('patch');
+    expect(detectReleaseType(['deps-dev(deps-dev): bump vitest']).type).toBe('patch');
+  });
+
+  it('names each prefix as its own bucket, so the mix says which kind of window it was', () => {
+    expect(detectReleaseType(['deps(deps): bump mssql']).rule).toBe('deps');
+    expect(detectReleaseType(['deps-dev(deps-dev): bump vitest']).rule).toBe('deps-dev');
+    const mixed = detectReleaseType([
+      'deps(deps): bump mssql',
+      'deps-dev(deps-dev): bump vitest',
+      'deps(deps): bump tedious'
+    ]);
+    expect(mixed.counts).toEqual({ deps: 2, 'deps-dev': 1 });
+    expect(describeCommitMix(mixed)).toBe('deps: 2, deps-dev: 1');
+    expect(mixed.unclassified).toEqual([]);
+  });
+
+  // The exact subjects Dependabot wrote on this repository.
+  it('classifies the real subjects from this history', () => {
+    const real = [
+      'deps(deps): bump mssql in the security-critical group across 1 directory',
+      'deps-dev(deps-dev): bump magicast from 0.5.4 to 0.5.5 (#1239)'
+    ];
+    const result = detectReleaseType(real);
+    expect(result.type).toBe('patch');
+    expect(result.unclassified).toEqual([]);
+    expect(result.counts).toEqual({ deps: 1, 'deps-dev': 1 });
+    // A dependency-only window is no longer the silent `none` of #1232.
+    expect(detectReleaseType([real[1]]).type).toBe('patch');
+  });
+
+  // `deps-dev` shares a prefix with `deps`, and `startsWithType` compares the CAPTURED type
+  // for equality rather than testing startsWith, so the earlier `deps` rule cannot claim it.
+  it('does not let the deps rule swallow deps-dev', () => {
+    expect(classifySubject('deps-dev(deps-dev): bump vitest')?.id).toBe('deps-dev');
+    expect(classifySubject('deps-dev: bump vitest')?.id).toBe('deps-dev');
+    expect(classifySubject('deps(deps): bump mssql')?.id).toBe('deps');
+  });
+
+  // The anchoring #1158 tightened must not be weakened to let a hyphenated type in.
+  it('reads deps as a prefix, not as a word appearing anywhere in the subject', () => {
+    expect(classifySubject('docs: explain the deps: prefix')?.id).toBe('docs');
+    expect(detectReleaseType(['docs: explain the deps: prefix']).rule).toBe('docs / chore');
+    expect(classifySubject('chore: audit deps-dev entries')?.id).toBe('docs');
+    expect(classifySubject('bump deps in the lockfile')).toBeNull();
+    expect(classifySubject('deps-dev without a colon')).toBeNull();
+    // An unclosed scope is still malformed, hyphenated type or not (#1158).
+    expect(classifySubject('deps-dev(deps-dev bump vitest')).toBeNull();
+  });
+
+  // Widening the type pattern to allow inner hyphens must not make a hyphenated word match
+  // a shorter type that is a prefix of it.
+  it('does not let a hyphenated word match a shorter type', () => {
+    expect(classifySubject('ci-cd: move the runner')).toBeNull();
+    expect(classifySubject('test-utils: extract helpers')).toBeNull();
+    expect(classifySubject('build-tools: retire gulp')).toBeNull();
+  });
+
+  it('keeps every older rule ahead of the dependency ones', () => {
+    expect(detectReleaseType(['deps(deps): bump mssql', 'fix: a bug']).rule).toBe('fix / bugfix');
+    expect(detectReleaseType(['deps(deps): bump mssql', 'feat: a thing']).type).toBe('minor');
+    expect(detectReleaseType(['deps(deps): bump mssql', 'ci: pin']).rule).toBe('ci');
+  });
+
+  it('files dependency bumps under Other Changes, with their prefix intact', () => {
+    const groups = groupForChangelog([
+      { hash: 'aaa1111', subject: 'deps(deps): bump mssql' },
+      { hash: 'bbb2222', subject: 'deps-dev(deps-dev): bump vitest' }
+    ]);
+    expect(groups.features).toEqual([]);
+    expect(groups.fixes).toEqual([]);
+    expect(groups.other).toEqual([
+      { hash: 'aaa1111', text: 'deps(deps): bump mssql' },
+      { hash: 'bbb2222', text: 'deps-dev(deps-dev): bump vitest' }
+    ]);
+  });
+
+  it('is case-insensitive, as every other type is', () => {
+    expect(detectReleaseType(['Deps(deps): bump mssql']).rule).toBe('deps');
+    expect(detectReleaseType(['DEPS-DEV(deps-dev): bump vitest']).rule).toBe('deps-dev');
+  });
+});
+
 describe('describeCommitMix', () => {
   it('lists every bucket that matched, in rule order, and is empty for no commits', () => {
     expect(describeCommitMix(detectReleaseType([]))).toBe('');
@@ -424,7 +518,8 @@ describe('planFromLog (scripts/ci/classify-release-commits.mjs)', () => {
 
   it('says "no commits" and "nothing classifiable" in different words', () => {
     const empty = planFromLog('');
-    const unrecognised = planFromLog('h1 deps: bump jose\nh2 wip');
+    // `deps:` was the example here until #1232 made it a recognised type.
+    const unrecognised = planFromLog('h1 amend\nh2 wip');
     expect(empty.releaseType).toBe('none');
     expect(unrecognised.releaseType).toBe('none');
     expect(empty.summary).toContain('No commits in this window');

@@ -290,7 +290,7 @@ export function parseArgs(argv) {
  *   minor  feat / feature                                new functionality
  *   patch  EVERY other recognised type - fix / bugfix,   anything else that ships
  *          docs / chore, perf, refactor, revert, build,
- *          test, ci, style
+ *          test, ci, style, deps, deps-dev
  *
  * No recognised type maps to `none`. The only window that releases nothing is one in which
  * NO subject matches any rule at all, and that is a defect in the subjects rather than a
@@ -321,6 +321,36 @@ export function parseArgs(argv) {
  * nothing anyone notices; under-releasing ships the work nowhere and says nothing, which is
  * precisely the #1158 defect (#1155 removed a module from the tarball and a field from a
  * public MCP tool response under a `refactor:` subject and shipped no release at all).
+ *
+ * Why `deps` and `deps-dev` are here at all, and why BOTH are patch (#1232):
+ * they are not Conventional Commits types - they are what `.github/dependabot.yml` writes,
+ * via `commit-message.prefix: "deps"` and `prefix-development: "deps-dev"`. Because the
+ * table did not know them, every Dependabot bump was unclassified, and a window of nothing
+ * but bumps computed `none` and shipped nothing. That is not a rare shape: 739 of this
+ * repository's non-merge commits carry one of the two prefixes, 414 `deps` and 325
+ * `deps-dev`.
+ *
+ * `deps` is uncontroversial - a runtime dependency bump changes what `npm install` resolves
+ * for a consumer, security bumps included. #1232 proposed `deps-dev` -> `none` on the
+ * grounds that dev dependencies do not reach consumers. That premise is false about what
+ * actually ships: `package.json` is always in the npm tarball and it carries
+ * `devDependencies` verbatim - `npm pack` on v2.0.1 produces a `package/package.json` with
+ * 15 of them - so a `deps-dev` bump provably changes the published bytes. It is the same
+ * argument that put `test`, `ci` and `style` at patch above, and here it is not even an
+ * argument about labels: the diff is package.json itself.
+ *
+ * The structural reason matters as much. `LEVELS` has no `none`, by design: a `none` level
+ * would make a type RECOGNISED yet non-releasing, which silences the "match no
+ * conventional-commit type" warning that is the whole of #1158's fix. A dependency-only
+ * window would then ship nothing and say nothing - worse than the defect this fixes. Either
+ * both prefixes release, or `deps-dev` needs a second loud-reporting path for a state that
+ * would otherwise be invisible; the first is simpler and provably correct.
+ *
+ * Cost, measured rather than assumed: replayed over all 30 `v*` tag windows in this
+ * repository, adding these two rules changes NO window's release level - every window that
+ * contains a bump also contains something else that already released. No window in the
+ * whole history consisted only of Dependabot commits, so `deps-dev` -> patch has never once
+ * spent a version that `deps` -> patch would not have spent anyway.
  */
 /**
  * A COMPLETE conventional-commit prefix: `type:`, `type(scope):`, `type!:` or
@@ -338,8 +368,16 @@ export function parseArgs(argv) {
  *
  * `msg` is already lowercased by `classifySubject`; the flag only keeps a direct caller from
  * being surprised.
+ *
+ * The type may contain INNER hyphens (`[a-z]+(?:-[a-z]+)*`), which the standard types never
+ * use but Dependabot's `deps-dev` does (#1232). The captured type is compared for EQUALITY
+ * below, so widening the character class cannot make a hyphenated word match a shorter type:
+ * `ci-cd: x` captures `ci-cd`, which is not `ci`, exactly as before - the old pattern simply
+ * failed to match it at all, and both outcomes are "unclassified". Replayed over every
+ * non-merge subject in this repository's history, the widened pattern changes no subject's
+ * classification other than the `deps`/`deps-dev` ones it is here to capture.
  */
-const TYPE_PREFIX = /^([a-z]+)(?:\([^)]*\))?!?:/i;
+const TYPE_PREFIX = /^([a-z]+(?:-[a-z]+)*)(?:\([^)]*\))?!?:/i;
 const startsWithType = (msg, type) => {
   const match = TYPE_PREFIX.exec(msg);
   return match !== null && match[1].toLowerCase() === type;
@@ -395,7 +433,18 @@ export const CLASSIFICATION_RULES = [
   { id: 'build', label: 'build', release: 'patch', match: msg => startsWithType(msg, 'build') },
   { id: 'test', label: 'test', release: 'patch', match: msg => startsWithType(msg, 'test') },
   { id: 'ci', label: 'ci', release: 'patch', match: msg => startsWithType(msg, 'ci') },
-  { id: 'style', label: 'style', release: 'patch', match: msg => startsWithType(msg, 'style') }
+  { id: 'style', label: 'style', release: 'patch', match: msg => startsWithType(msg, 'style') },
+  // Dependabot's own prefixes (see the mapping note above). Anchored like every type rule:
+  // `docs: note the deps: prefix` must stay a docs commit, and `startsWithType` compares the
+  // captured type for equality, so `deps-dev(deps-dev): ...` captures `deps-dev` and cannot
+  // be claimed by the `deps` rule that precedes it.
+  { id: 'deps', label: 'deps', release: 'patch', match: msg => startsWithType(msg, 'deps') },
+  {
+    id: 'deps-dev',
+    label: 'deps-dev',
+    release: 'patch',
+    match: msg => startsWithType(msg, 'deps-dev')
+  }
 ];
 
 /**

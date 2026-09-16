@@ -427,6 +427,7 @@ merged, something you wrote has to carry the type:
 - `feat:` / `feature:` → minor release
 - `fix:` / `bugfix:`, `docs:`, `chore:`, `perf:`, `refactor:`, `revert:`, `build:`,
   `test:`, `ci:`, `style:` → patch release
+- `deps:` / `deps-dev:` (Dependabot writes these; see below) → patch release
 - `BREAKING CHANGE` or `!:` anywhere in a classified subject (e.g. `feat!:`) → major release
 - anything else → release nothing, and the release run warns that the subject matched no type
 
@@ -435,6 +436,14 @@ prefix you pick is a label, not a promise about which files your PR touched, and
 the published tarball is documentation — `docs/**/*.md`, `README.md` and `CHANGELOG.md` are
 all packed, and `ci:`-titled PRs here routinely edit them. Over-releasing costs a patch
 version; under-releasing ships your work nowhere and says nothing.
+
+`deps:` and `deps-dev:` are not Conventional Commits types — they are the prefixes
+`.github/dependabot.yml` gives Dependabot's PRs, and they are classified so that a release
+window of nothing but dependency bumps does not ship nothing (#1232). Both are patch,
+`deps-dev:` included: `package.json` is always in the npm tarball and carries
+`devDependencies` verbatim, so a dev-dependency bump changes the published bytes too. You
+do not need to write these prefixes yourself; use `chore:` or `build:` for a hand-written
+dependency change.
 
 A scope is fine everywhere (`feat(cli): …`). The only subject that releases nothing is
 one that matches no type at all, so make sure whichever one gets classified carries a
