@@ -417,6 +417,23 @@ describe('shippedJsFiles', () => {
 
     // scripts/ and test/ are not published, so their env knobs are out of scope, and the
     // markdown and HTML entries carry no `process.env` reads.
+    // Regression: negations were gathered up and applied after every positive, so a
+    // re-include after a negation was dropped. npm applies `files` in ARRAY ORDER with the
+    // LAST match winning - verified with `npm pack --dry-run --json`, which packs
+    // lib/internal/public.js for exactly this entry list. A file dropped here is one the
+    // gate never scans, so its `process.env` reads would be invisible.
+    [
+      'a re-include after a negation, which npm packs',
+      ['lib/top.js', 'lib/internal/public.js', 'lib/internal/hidden.js'],
+      ['lib/**', '!lib/internal/**', 'lib/internal/public.js'],
+      ['lib/internal/public.js', 'lib/top.js']
+    ],
+    [
+      'a negation after a re-include, where the negation is what wins',
+      ['lib/top.js', 'lib/internal/public.js'],
+      ['lib/**', 'lib/internal/public.js', '!lib/internal/**'],
+      ['lib/top.js']
+    ],
     [
       'plain entries and directories, and nothing else',
       ['index.js', 'cli.js', 'lib/config/server-config.js', 'lib/notes.md', 'test/a.test.js'],

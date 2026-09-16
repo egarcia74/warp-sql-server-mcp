@@ -413,9 +413,10 @@ kind of environment it is running in. They are listed because setting them **doe
   is the variable to set under any stdio client - not just VS Code - to keep logs out of the
   JSON-RPC stream. It is not the only thing that turns the handling on:
   `Logger._isMcpEnvironment()` also returns true when VS Code sets `VSCODE_PID` or
-  `VSCODE_IPC_HOOK`, or when the parent process looks like an MCP client. `VSCODE_MCP` is the
-  only one of those a user sets deliberately, which is why it is the one documented here as
-  configuration. The security-audit console transport is unaffected; leave
+  `VSCODE_IPC_HOOK`. Those are the only three signals it reads - it inspects `process.ppid`
+  but tests nothing about it and then returns false, so there is no parent-process detection
+  for log routing. `VSCODE_MCP` is the only signal a user sets deliberately, which is why it
+  is the one documented here as configuration. The security-audit console transport is unaffected; leave
   [`ENABLE_SECURITY_AUDIT`](#enable_security_audit) at `false` under a stdio client.
 - **Values**:
   - `true` (force MCP environment; main log transport goes to stderr)

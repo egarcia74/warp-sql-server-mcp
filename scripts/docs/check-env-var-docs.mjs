@@ -550,7 +550,6 @@ export function shippedJsFiles(pkgFiles, root = repoRoot) {
   };
 
   const positives = pkgFiles.filter(entry => !entry.startsWith('!'));
-  const negatives = pkgFiles.filter(entry => entry.startsWith('!')).map(entry => entry.slice(1));
 
   for (const entry of positives) {
     const clean = entry.replace(/\/$/, '');
@@ -577,16 +576,29 @@ export function shippedJsFiles(pkgFiles, root = repoRoot) {
     else if (isJsModule(clean)) found.add(clean);
   }
 
-  // A negation can name a file (`!lib/internal.js`) or a subtree (`!docs/superpowers/**`).
-  const excluded = file =>
-    negatives.some(pattern => {
-      const clean = pattern.replace(/\/$/, '');
-      return matchesGlob(clean, file) || file === clean || file.startsWith(`${clean}/`);
-    });
+  // npm applies `files` in ARRAY ORDER and the LAST match wins, so a re-include after a
+  // negation packs the file: `['lib/**', '!lib/internal/**', 'lib/internal/public.js']`
+  // ships `public.js`. Collecting the negations and applying them all at the end instead
+  // dropped it unconditionally, and a dropped file is one this gate never scans - its
+  // `process.env` reads would be invisible and the workflow-trigger guard would not
+  // require coverage for it. A negation can name a file (`!lib/internal.js`) or a subtree
+  // (`!docs/superpowers/**`).
+  const matchesEntry = (entry, file) => {
+    const clean = entry.replace(/^!/, '').replace(/\/$/, '');
+    return matchesGlob(clean, file) || file === clean || file.startsWith(`${clean}/`);
+  };
+
+  const published = file => {
+    let included = false;
+    for (const entry of pkgFiles) {
+      if (matchesEntry(entry, file)) included = !entry.startsWith('!');
+    }
+    return included;
+  };
 
   return [...found]
     .map(file => (file.startsWith('./') ? file.slice(2) : file))
-    .filter(file => !excluded(file))
+    .filter(published)
     .sort(byCodeUnit);
 }
 
