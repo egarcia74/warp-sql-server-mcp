@@ -26,7 +26,7 @@ Run these before proposing a change as finished:
 - `npm run format:check` - Prettier formatting check (`npm run format` to fix)
 - `npm run markdown:lint` - markdownlint over all Markdown (`npm run markdown:fix` to fix)
 - `npm run test:unit` - Vitest unit suite in `test/unit`; fast, no database required
-- `npm run ci` - full local gate: lint, format, markdown, link check, coverage, npm audit
+- `npm run ci` - full local gate: lint, format, markdown, doc checks, link check, coverage, npm audit
 
 `npm test` and `npm run test:integration` start a SQL Server container, so they need a working
 Docker daemon.

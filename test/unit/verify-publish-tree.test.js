@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,15 @@ import {
   gitReader,
   scrubbedEnv
 } from '../../scripts/ci/verify-publish-tree.mjs';
+
+// The suite below builds REAL git repositories in a temp dir - init, commit, tag, one
+// `execFileSync` per step - so its cost swings with machine load rather than with anything
+// it asserts. Against vitest's default 5s budget, three of those tests timed out during a
+// full parallel run on 2026-09-16 while all 40 passed in 1.4s when the file ran alone.
+// Same shape, and the same remedy, as the ESLint-driven budget in
+// `git-spawn-scrub-guard.test.js`: generous on purpose, because this budget exists to catch
+// a hang, not to police how long git takes on a busy machine.
+vi.setConfig({ testTimeout: 60_000 });
 
 /** A git reader backed by plain objects, so the logic is testable without a repository. */
 function fakeGit({ changes = [], blobs = {}, tagError, worktree = [] } = {}) {

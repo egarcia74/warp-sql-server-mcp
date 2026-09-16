@@ -334,6 +334,103 @@ accidental certificate trust in cloud production environments using private IP a
   - `true` (enable security audit logging)
   - `false` (standard security logging)
 
+### `LOG_FILE`
+
+- **Default**: _(none - no log file is written)_
+- **Description**: Path of the general server log file. **Unset means there is no file transport at
+  all**, not a default path: the file transport is added only when this variable is set, and
+  `get_server_info` reports `Not configured (console only)` until then. The per-environment paths
+  that appear under "Log File Locations" are display values only - nothing writes to them.
+- **Note**: Setting this **duplicates** output to disk; it does not redirect output away from the
+  console. See [Debug Logging Guide](../developer/DEBUG-LOGGING.md).
+- **Examples**:
+  - `./logs/server.log` (what `npm run logs` reads)
+  - `/var/log/warp-sql-server-mcp/server.log`
+
+### `SECURITY_LOG_FILE`
+
+- **Default**: _(none - no audit file is written)_
+- **Description**: Path of the dedicated security audit log. **Requires
+  [`ENABLE_SECURITY_AUDIT=true`](#enable_security_audit)**: while that stays at its default `false`
+  the whole security logger is `null` and this path is ignored, so setting it alone does nothing.
+- **Examples**:
+  - `./logs/security-audit.log` (what `npm run logs:audit` reads)
+  - `/var/log/warp-sql-server-mcp/security-audit.log`
+
+### `ENABLE_TEST_LOGGING`
+
+- **Default**: `false`
+- **Description**: Restores console log output when `NODE_ENV=test`, which otherwise suppresses it so
+  test runs stay readable. A test-suite aid, not a production setting.
+- **Values**:
+  - `true` (log to the console even under `NODE_ENV=test`)
+  - _(unset)_ (silent during tests)
+
+## Environment Detection Settings
+
+These are read rather than configured in the usual sense: the server inspects them to work out what
+kind of environment it is running in. They are listed because setting them **does** change what the server does.
+
+### `NODE_ENV`
+
+- **Default**: _(unset)_ - **and unset does not mean "production"**. Two subsystems read this
+  variable and they apply different rules, so there is no single answer for the unset case:
+  - **Log formatting**: the human-readable development format is used for **any** value that is not
+    literally `production`, unset included. Only `NODE_ENV=production` selects JSON output.
+  - **Console output**: `test` suppresses it, unless
+    [`ENABLE_TEST_LOGGING=true`](#enable_test_logging).
+  - **SSL certificate trust**: `development` and `test` are the explicit development indicators that
+    let a private IP or a `.local` host be trusted. They are **not** the only route to trust: with
+    the default `SQL_SERVER_HOST=localhost` the environment is classified as development and the
+    certificate is trusted whatever `NODE_ENV` says.
+- **Recommendation**: do not rely on `NODE_ENV` to secure the connection - set
+  [`SQL_SERVER_TRUST_CERT`](#sql_server_trust_cert) explicitly in production.
+- **Values**:
+  - `development` / `test` (explicit development indicator - see the SSL section above)
+  - `production` (JSON logs; no development SSL indicator)
+  - _(unset)_ (development log formatting; SSL trust decided by the host - see above)
+
+### `MCP_TRANSPORT`
+
+- **Default**: _(unset)_
+- **Description**: Set to `stdio` by an MCP client to declare that stdout carries the protocol
+  handshake. The server uses it - with `VSCODE_MCP` and `PARENT_PROCESS` - to keep its **startup**
+  output (such as dotenv's banner) off stdout.
+- **⚠️ It does not redirect the server's ongoing log output.** `Logger` routes logs to stderr only
+  when `Logger._isMcpEnvironment()` is true, and that helper tests just `VSCODE_MCP`, `VSCODE_PID`
+  and `VSCODE_IPC_HOOK`. Under a stdio client that sets none of those, Winston still writes to
+  stdout - the same stream as JSON-RPC. Set [`VSCODE_MCP=true`](#vscode_mcp) for that, and see the
+  [Debug Logging Guide](../developer/DEBUG-LOGGING.md) for the full picture.
+- **Values**:
+  - `stdio` (MCP stdio transport)
+  - _(unset)_ (auto-detected from the TTY state and the other indicators below)
+
+### `VSCODE_MCP`
+
+- **Default**: _(unset)_
+- **Description**: Set to `true` to force MCP-environment handling on, regardless of what
+  auto-detection concludes. That handling is what moves the main log transport to stderr, so this
+  is the variable to set under any stdio client - not just VS Code - to keep logs out of the
+  JSON-RPC stream. It is not the only thing that turns the handling on:
+  `Logger._isMcpEnvironment()` also returns true when VS Code sets `VSCODE_PID` or
+  `VSCODE_IPC_HOOK`. Those are the only three signals it reads - it inspects `process.ppid`
+  but tests nothing about it and then returns false, so there is no parent-process detection
+  for log routing. `VSCODE_MCP` is the only signal a user sets deliberately, which is why it
+  is the one documented here as configuration. The security-audit console transport is unaffected; leave
+  [`ENABLE_SECURITY_AUDIT`](#enable_security_audit) at `false` under a stdio client.
+- **Values**:
+  - `true` (force MCP environment; main log transport goes to stderr)
+  - _(unset)_ (auto-detect)
+
+### `PARENT_PROCESS`
+
+- **Default**: _(unset)_
+- **Description**: Optional hint naming the process that launched the server. A value containing
+  `code` or `mcp` is treated as an MCP environment indicator.
+- **Examples**:
+  - `code` (launched by VS Code)
+  - `mcp-client`
+
 ## Security Configuration Examples
 
 ### 🔒 Maximum Security (Default - Production)
