@@ -107,7 +107,20 @@ jobs:
       #   major  BREAKING CHANGE / !:
       #   minor  feat / feature
       #   patch  every other recognised type - fix / bugfix, docs / chore, perf, refactor,
-      #          revert, build, test, ci, style
+      #          revert, build, test, ci, style, deps, deps-dev
+      #
+      # `deps` and `deps-dev` are not Conventional Commits types: they are what
+      # .github/dependabot.yml writes (commit-message.prefix / prefix-development). Until
+      # #1232 the classifier did not know them, so 739 of this repository's commits were
+      # unclassified and a window of nothing but dependency bumps computed `none` and
+      # shipped nothing. BOTH are patch, `deps-dev` included: package.json is always in the
+      # npm tarball and carries devDependencies verbatim (npm pack on v2.0.1 produces a
+      # package/package.json with 15 of them), so a dev-dependency bump changes the
+      # published bytes just as a runtime one does. Mapping `deps-dev` to `none` instead
+      # would make it a RECOGNISED yet non-releasing type, which would silence the
+      # unclassified-subjects warning below and put a dependency-only window back to
+      # shipping nothing silently - the #1158 defect again. Replayed over all 30 v* tag
+      # windows, adding both rules changes no window's release level.
       #
       # No recognised type releases nothing. `test`, `ci` and `style` were briefly mapped to
       # `none` on the argument that test/ and .github/ are not in package.json "files", so
