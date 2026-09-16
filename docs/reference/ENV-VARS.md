@@ -334,6 +334,80 @@ accidental certificate trust in cloud production environments using private IP a
   - `true` (enable security audit logging)
   - `false` (standard security logging)
 
+### `LOG_FILE`
+
+- **Default**: _(smart)_ - `./logs/server.log` in a development checkout, otherwise
+  `warp-sql-server-mcp.log` in the OS temp directory
+- **Description**: Path of the general server log file. Set it only to override the smart default;
+  leaving it unset is what selects the per-environment path above.
+- **Note**: This controls the **file** transport only. Console output is separate - see
+  [Debug Logging Guide](../developer/DEBUG-LOGGING.md).
+- **Examples**:
+  - `./logs/server.log` (what `npm run logs` reads)
+  - `/var/log/warp-sql-server-mcp/server.log`
+
+### `SECURITY_LOG_FILE`
+
+- **Default**: _(smart)_ - `./logs/security-audit.log` in a development checkout, otherwise
+  `warp-sql-server-mcp-security.log` in the OS temp directory
+- **Description**: Path of the dedicated security audit log. Setting it also enables the audit file
+  transport, independently of [`ENABLE_SECURITY_AUDIT`](#enable_security_audit).
+- **Examples**:
+  - `./logs/security-audit.log` (what `npm run logs:audit` reads)
+  - `/var/log/warp-sql-server-mcp/security-audit.log`
+
+### `ENABLE_TEST_LOGGING`
+
+- **Default**: `false`
+- **Description**: Restores console log output when `NODE_ENV=test`, which otherwise suppresses it so
+  test runs stay readable. A test-suite aid, not a production setting.
+- **Values**:
+  - `true` (log to the console even under `NODE_ENV=test`)
+  - _(unset)_ (silent during tests)
+
+## Environment Detection Settings
+
+These are read rather than configured in the usual sense: the server inspects them to work out what
+kind of environment it is running in. They are listed because setting them **does** change what the server does.
+
+### `NODE_ENV`
+
+- **Default**: _(unset - treated as production)_
+- **Description**: Standard Node environment marker. Here it is a **strong development indicator**:
+  it decides the [`SQL_SERVER_TRUST_CERT`](#sql_server_trust_cert) default for private IPs and
+  `.local` hosts, and `test` suppresses console logging (see
+  [`ENABLE_TEST_LOGGING`](#enable_test_logging)).
+- **Values**:
+  - `development` / `test` (development indicator - see the SSL section above)
+  - `production` or _(unset)_ (conservative, production-safe defaults)
+
+### `MCP_TRANSPORT`
+
+- **Default**: _(unset)_
+- **Description**: Set to `stdio` by an MCP client to declare that stdout carries the protocol
+  handshake. The server then routes its own chatter to stderr so it cannot corrupt the stream.
+- **Values**:
+  - `stdio` (MCP stdio transport)
+  - _(unset)_ (auto-detected from the TTY state and the other indicators below)
+
+### `VSCODE_MCP`
+
+- **Default**: _(unset)_
+- **Description**: Set to `true` in a VS Code MCP server configuration to force MCP-environment
+  handling on, regardless of what auto-detection concludes.
+- **Values**:
+  - `true` (force MCP environment)
+  - _(unset)_ (auto-detect)
+
+### `PARENT_PROCESS`
+
+- **Default**: _(unset)_
+- **Description**: Optional hint naming the process that launched the server. A value containing
+  `code` or `mcp` is treated as an MCP environment indicator.
+- **Examples**:
+  - `code` (launched by VS Code)
+  - `mcp-client`
+
 ## Security Configuration Examples
 
 ### 🔒 Maximum Security (Default - Production)

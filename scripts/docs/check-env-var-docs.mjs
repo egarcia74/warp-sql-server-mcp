@@ -1,0 +1,238 @@
+#!/usr/bin/env node
+/**
+ * Fails when `docs/reference/ENV-VARS.md` and the shipped code disagree about which
+ * environment variables exist, in either direction.
+ *
+ * This mirrors the MCP tool-doc-sync check already in `docs.yml` (the "Validate MCP tool
+ * documentation" step): extract what the code declares, compare it against what the docs
+ * declare, report both counts and the difference. The difference is that the tool check
+ * only reports, while this one exits non-zero - ENV-VARS.md calls itself "the single
+ * source of truth" for configuration, and a source of truth that is allowed to drift is
+ * just another document.
+ *
+ * ## How the code's variables are found, and what that can miss
+ *
+ * There is no manifest to read. `lib/config/server-config.js` is the central config
+ * module and it does centralise *loading*, but it enumerates nothing: each setting is a
+ * separate `process.env.NAME` expression inside `_loadConfiguration()`, and four more
+ * modules (`index.js`, `cli.js`, `lib/database/connection-manager.js`,
+ * `lib/utils/logger.js`) read `process.env` directly for logging paths and environment
+ * detection. Instantiating `ServerConfig` behind a `process.env` Proxy was considered and
+ * rejected for the same reason: it would observe only the variables read during
+ * construction, missing everything `ConnectionManager` reads at connect time and
+ * everything the logger reads when a transport is built.
+ *
+ * So the method is a static scan for `process.env.NAME` and `process.env['NAME']` over
+ * the JavaScript npm actually publishes - the `.js` entries and directories in
+ * package.json's `files` list. Deriving the scan scope from `files` rather than hardcoding
+ * it means a new shipped directory is covered without touching this script, and keeps the
+ * check aligned with the thing the docs describe: the published server, not the repo's
+ * test and CI tooling (which has its own knobs - MCP_TESTING_MODE, TESTING_MODE,
+ * GITHUB_OUTPUT - that are not user configuration and are deliberately out of scope).
+ *
+ * What the scan misses, stated plainly:
+ *
+ *  - **Computed names.** `cli.js`'s `loadConfigToEnv()` does `process.env[key]` over the
+ *    keys of `~/.warp-sql-server-mcp.json`. A variable that only ever arrives that way is
+ *    invisible here. In practice that path only re-exports names the server then reads by
+ *    literal name, so it is covered indirectly - but a genuinely dynamic name would not be.
+ *  - **Destructuring.** `const { FOO } = process.env` would not match. There is none today.
+ *  - **Reads in dependencies.** Anything `mssql` or `winston` consults on their own.
+ *  - **Dead reads.** A `process.env.FOO` on an unreachable branch still counts as read,
+ *    so the check can demand documentation for something no longer used. That direction
+ *    is a cheap failure: the fix is deleting the read.
+ */
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** The document being held to the code. */
+export const ENV_VARS_DOC = 'docs/reference/ENV-VARS.md';
+
+/**
+ * Variables read by the shipped code that ENV-VARS.md is *not* expected to document,
+ * because they are not settings of this server: the OS, the editor or the test runner
+ * puts them in the environment, and documenting them would invite users to set them.
+ *
+ * Anything this server actually responds to as configuration - including the awkward
+ * cases like NODE_ENV, which changes the SSL certificate-trust default - belongs in the
+ * document instead of on this list.
+ */
+export const AMBIENT_VARS = new Map([
+  ['HOME', 'set by the OS; used only to locate ~/.warp-sql-server-mcp.json'],
+  ['USERPROFILE', 'the Windows spelling of HOME'],
+  ['VSCODE_PID', 'set by VS Code itself; read as an MCP-environment indicator'],
+  ['VSCODE_IPC_HOOK', 'set by VS Code itself; read as an MCP-environment indicator'],
+  ['VITEST', 'set by the test runner; guards a test-only branch']
+]);
+
+/**
+ * Every `process.env.NAME` / `process.env['NAME']` in one source file.
+ *
+ * Both spellings are matched because both appear in JavaScript generally; only the dotted
+ * one appears in this repo today.
+ */
+export function readEnvVarsFromSource(source) {
+  const found = new Set();
+  for (const match of source.matchAll(/process\.env\.([A-Za-z_$][A-Za-z0-9_$]*)/g)) {
+    found.add(match[1]);
+  }
+  for (const match of source.matchAll(/process\.env\[\s*['"]([^'"]+)['"]\s*\]/g)) {
+    found.add(match[1]);
+  }
+  return found;
+}
+
+/**
+ * The variables ENV-VARS.md documents, taken from its `### \`NAME\`` headings.
+ *
+ * Headings rather than every backticked capitalised token: the prose legitimately
+ * mentions values (`CORP`, `WORKGROUP`) and cross-references other variables, and only a
+ * heading means "this document defines this variable".
+ */
+export function readDocumentedEnvVars(markdown) {
+  const found = new Set();
+  for (const match of markdown.matchAll(/^#{2,4}\s+`([A-Z][A-Z0-9_]*)`\s*$/gm)) {
+    found.add(match[1]);
+  }
+  return found;
+}
+
+/**
+ * The comparison, as a pure function so it is testable without a checkout.
+ *
+ * @param {object} input
+ * @param {Iterable<string>} input.read variables the code reads
+ * @param {Iterable<string>} input.documented variables ENV-VARS.md defines
+ * @param {Map<string,string>} [input.ambient] variables exempt from documentation
+ */
+export function compareEnvVarDocs({ read, documented, ambient = AMBIENT_VARS }) {
+  const readSet = new Set(read);
+  const documentedSet = new Set(documented);
+
+  const configurable = [...readSet].filter(name => !ambient.has(name)).sort();
+  const ignored = [...readSet].filter(name => ambient.has(name)).sort();
+
+  const undocumented = configurable.filter(name => !documentedSet.has(name));
+  // An ambient variable that someone documented anyway is a contradiction between this
+  // list and the document, so it is reported rather than quietly accepted either way.
+  const unread = [...documentedSet].filter(name => !readSet.has(name) || ambient.has(name)).sort();
+
+  return {
+    ok: undocumented.length === 0 && unread.length === 0,
+    read: [...readSet].sort(),
+    configurable,
+    ignored,
+    documented: [...documentedSet].sort(),
+    undocumented,
+    unread
+  };
+}
+
+/**
+ * The `.js` files npm publishes, from package.json's `files` list.
+ *
+ * Entries that are neither a `.js` file nor a directory (the markdown and HTML globs, and
+ * the `!` negations) are skipped: they carry no `process.env` reads, and expanding globs
+ * here would be a second, worse copy of npm's own packing rules.
+ */
+export function shippedJsFiles(pkgFiles, root = repoRoot) {
+  const found = [];
+
+  const walk = relative => {
+    const absolute = path.resolve(root, relative);
+    for (const entry of readdirSync(absolute, { withFileTypes: true })) {
+      const child = path.posix.join(relative, entry.name);
+      if (entry.isDirectory()) walk(child);
+      else if (entry.name.endsWith('.js')) found.push(child);
+    }
+  };
+
+  for (const entry of pkgFiles) {
+    if (entry.startsWith('!') || entry.includes('*')) continue;
+    const clean = entry.replace(/\/$/, '');
+    let stats;
+    try {
+      stats = statSync(path.resolve(root, clean));
+    } catch {
+      continue; // listed but absent - npm's own packing already warns about that
+    }
+    if (stats.isDirectory()) walk(clean);
+    else if (clean.endsWith('.js')) found.push(clean);
+  }
+
+  return found.sort();
+}
+
+/** Reads the shipped sources and the doc off disk, and runs the comparison. */
+export function checkEnvVarDocs(root = repoRoot) {
+  const pkg = JSON.parse(readFileSync(path.resolve(root, 'package.json'), 'utf8'));
+  const sources = shippedJsFiles(pkg.files ?? [], root);
+
+  const read = new Set();
+  for (const file of sources) {
+    for (const name of readEnvVarsFromSource(readFileSync(path.resolve(root, file), 'utf8'))) {
+      read.add(name);
+    }
+  }
+
+  const documented = readDocumentedEnvVars(readFileSync(path.resolve(root, ENV_VARS_DOC), 'utf8'));
+
+  return { sources, ...compareEnvVarDocs({ read, documented }) };
+}
+
+/**
+ * The report body, in the shape the existing tool-doc-sync check in `docs.yml` writes, so
+ * both land in `link-report.md` reading like one document.
+ */
+export function formatReport(result) {
+  const list = names => names.map(name => `\`${name}\``).join(', ');
+  const lines = [
+    `**Variables read by shipped code**: ${result.configurable.length}` +
+      (result.ignored.length > 0 ? ` (plus ${result.ignored.length} ambient, not settings)` : ''),
+    `**Variables documented in \`${ENV_VARS_DOC}\`**: ${result.documented.length}`
+  ];
+
+  if (result.undocumented.length > 0) {
+    lines.push(`❌ **Read but undocumented**: ${list(result.undocumented)}`);
+  }
+  if (result.unread.length > 0) {
+    lines.push(`❌ **Documented but not read by any shipped code**: ${list(result.unread)}`);
+  }
+  if (result.ok) {
+    lines.push('✅ **Environment variable documentation matches the code**');
+  }
+
+  return lines.join('\n');
+}
+
+function main() {
+  const result = checkEnvVarDocs();
+  console.log(formatReport(result));
+
+  if (result.ok) return;
+
+  console.error(
+    `\n::error::${ENV_VARS_DOC} has drifted from the code: ` +
+      `${result.undocumented.length} undocumented, ${result.unread.length} stale.`
+  );
+  if (result.undocumented.length > 0) {
+    console.error(`  - document: ${result.undocumented.join(', ')}`);
+  }
+  if (result.unread.length > 0) {
+    console.error(`  - remove from the doc, or restore the read: ${result.unread.join(', ')}`);
+  }
+  console.error(
+    '\nIf a variable is not a setting of this server - the OS, the editor or the test\n' +
+      'runner supplies it - add it to AMBIENT_VARS in scripts/docs/check-env-var-docs.mjs\n' +
+      'with the reason, instead of documenting it as configuration.'
+  );
+  process.exitCode = 1;
+}
+
+// Compare as file URLs: process.argv[1] is a plain filesystem path while import.meta.url
+// is percent-encoded, so a hand-built `file://` + path string fails to match whenever the
+// checkout contains a space, and main() would be skipped silently - exit 0, gate never run.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

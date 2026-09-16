@@ -8,6 +8,11 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'index.js'
+      # cli.js and lib/** are the rest of the shipped code the env-var doc-sync
+      # check scans; without them a new process.env read lands without the gate
+      # ever running on the PR that introduced it.
+      - 'cli.js'
+      - 'lib/**'
       - 'package.json'
       - 'scripts/docs/**'
   pull_request:
@@ -17,6 +22,11 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'index.js'
+      # cli.js and lib/** are the rest of the shipped code the env-var doc-sync
+      # check scans; without them a new process.env read lands without the gate
+      # ever running on the PR that introduced it.
+      - 'cli.js'
+      - 'lib/**'
       - 'package.json'
       - 'scripts/docs/**'
   schedule:
@@ -124,7 +134,27 @@ jobs:
           
           cat tool-docs-report.txt >> link-report.md
 
+      # The two checks below fail the job on drift, unlike the reporting steps above.
+      # They run before the artifact upload, which is `if: always()` so the report is
+      # still published when one of them fails - that report is how you see what drifted.
+      - name: Check every doc is reachable from the nav
+        run: |
+          set -o pipefail
+          echo "" >> link-report.md
+          echo "### 🗺️ Documentation Nav Reachability" >> link-report.md
+          echo "" >> link-report.md
+          node scripts/docs/check-orphan-docs.mjs | tee -a link-report.md
+
+      - name: Check environment variable documentation matches the code
+        run: |
+          set -o pipefail
+          echo "" >> link-report.md
+          echo "### ⚙️ Environment Variable Doc Sync" >> link-report.md
+          echo "" >> link-report.md
+          node scripts/docs/check-env-var-docs.mjs | tee -a link-report.md
+
       - name: Upload documentation report
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
           name: documentation-validation-report
