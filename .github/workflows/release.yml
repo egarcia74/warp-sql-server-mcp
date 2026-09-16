@@ -254,7 +254,7 @@ jobs:
       # CodeQL Token-Permissions: Write permissions required for release operations
       # This job needs contents:write for both RELEASE_TOKEN and GITHUB_TOKEN fallback scenarios:
       # - the "Create Git tag" step's git push: requires repository write access
-      # - the "Create GitHub Release" step (actions/create-release): requires contents write
+      # - the "Create GitHub Release" step (`gh release create`): requires contents write
       # Without write permissions, repositories lacking RELEASE_TOKEN configuration would fail
       # during tag creation and release publishing, breaking automated release workflows.
       # This is an intentional security trade-off for release pipeline functionality.
@@ -373,22 +373,34 @@ jobs:
           echo "✅ Created and pushed tag v${{ steps.version.outputs.version }}"
           echo "ℹ️  Note: Version bump not committed to main due to branch protection"
 
-      - name: Create GitHub Release
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          release_name: Release v${{ steps.version.outputs.version }}
-          body: ${{ steps.changelog.outputs.changelog }} # Dynamic output from changelog step
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
-
       # The changelog is built from commit subjects, so it must reach the shell through the
       # environment, never by interpolating it into the script: a subject containing a quote
       # broke the single-quoted echo (2026-09-11 dry run), and a crafted subject could have
-      # executed as shell.
+      # executed as shell. This governs BOTH shell steps below. `--notes "$CHANGELOG"` reads
+      # the value; `--notes ${{ ... }}` would paste it into the script and is a regression.
+      #
+      # `gh release create` replaces the archived actions/create-release (#1251), which
+      # targeted Node 20 and emitted three `set-output` deprecation warnings. `gh` reads
+      # GH_TOKEN, not GITHUB_TOKEN, so the RELEASE_TOKEN -> GITHUB_TOKEN fallback is assigned
+      # there; it needs the job's contents: write exactly as the action did. This step runs
+      # AFTER the tag has been pushed, so a failure here leaves a tag with no Release.
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+          CHANGELOG: ${{ steps.changelog.outputs.changelog }}
+          # Same rule the action's `prerelease:` input carried: any version with a hyphen.
+          PRERELEASE: ${{ contains(steps.version.outputs.version, '-') }}
+        run: |
+          args=(--title "Release v$VERSION" --notes "$CHANGELOG")
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "v$VERSION" "${args[@]}"
+          echo "✅ Created GitHub Release v$VERSION (prerelease: $PRERELEASE)"
+
       - name: Dry run summary
         if: ${{ github.event.inputs.dry_run == 'true' }}
         env:
