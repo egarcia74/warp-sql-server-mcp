@@ -146,6 +146,12 @@ jobs:
           node scripts/docs/check-orphan-docs.mjs | tee -a link-report.md
 
       - name: Check environment variable documentation matches the code
+        # `if: always()` because without it this step inherits the implicit `success()`
+        # condition and is SKIPPED whenever the orphan check above fails. The two gates are
+        # independent, and a run that reports only the first drift - then publishes a
+        # report with the env-var section missing entirely - hides the second one behind
+        # the first. Both should be visible from one run.
+        if: always()
         run: |
           set -o pipefail
           echo "" >> link-report.md

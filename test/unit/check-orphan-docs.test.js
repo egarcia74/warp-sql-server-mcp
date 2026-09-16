@@ -67,11 +67,6 @@ describe('collectLinkTargets', () => {
     expect(collectLinkTargets(markdown)).toEqual([]);
   });
 
-  it('ignores tilde-fenced blocks too', () => {
-    const markdown = ['~~~markdown', '[example](developer/SAMPLE.md)', '~~~'].join('\n');
-    expect(collectLinkTargets(markdown)).toEqual([]);
-  });
-
   // Regression: an HTML comment renders as nothing, so a commented-out nav entry is a link
   // a reader cannot follow. Counting it kept the target "reachable" and the gate silent.
   it('ignores links inside HTML comments, single and multi-line', () => {
@@ -164,6 +159,204 @@ describe('collectLinkTargets', () => {
   it('still follows a real link that sits next to an image', () => {
     const markdown = '![diagram](diagram.png) and [the guide](user/GUIDE.md)';
     expect(collectLinkTargets(markdown)).toEqual(['user/GUIDE.md']);
+  });
+
+  // The fence variations themselves are covered once in `markdown-blocks.test.js`, where
+  // the shared stripper lives. This pins that the gate actually applies it.
+  it('ignores links inside fences longer than three characters', () => {
+    expect(collectLinkTargets(['~~~~', '[example](SAMPLE.md)', '~~~~'].join('\n'))).toEqual([]);
+    expect(collectLinkTargets(['````', '[example](SAMPLE.md)', '````'].join('\n'))).toEqual([]);
+  });
+
+  // Regression: the destination pattern stopped at the first `)`, so a filename containing
+  // balanced parentheses was truncated, failed the `.md` test in resolveTarget, and the
+  // document it named was reported orphaned even though every renderer follows the link.
+  it('keeps balanced parentheses inside an inline link destination', () => {
+    expect(collectLinkTargets('[guide](user/Guide_(advanced).md)')).toEqual([
+      'user/Guide_(advanced).md'
+    ]);
+  });
+
+  it('keeps balanced parentheses when the link also carries a title', () => {
+    expect(collectLinkTargets('[guide](user/Guide_(advanced).md "Advanced")')).toEqual([
+      'user/Guide_(advanced).md'
+    ]);
+  });
+
+  it('handles nested and repeated parentheses in a destination', () => {
+    expect(collectLinkTargets('[x](a_((b))_(c).md)')).toEqual(['a_((b))_(c).md']);
+  });
+
+  it('still stops at the closing parenthesis of an ordinary link', () => {
+    expect(collectLinkTargets('[a](one.md) and [b](two.md)')).toEqual(['one.md', 'two.md']);
+  });
+
+  it('treats an escaped parenthesis as a literal character, not as nesting', () => {
+    expect(collectLinkTargets(String.raw`[x](a\(b.md)`)).toEqual(['a(b.md']);
+  });
+
+  // Regression: `href` had no attribute-name boundary, so any attribute ending in those
+  // four letters was read as a real one. `<a data-href="X.md">` renders no link at all.
+  it('ignores an attribute that merely ends in href', () => {
+    expect(collectLinkTargets('<a data-href="ORPHAN.md">text</a>')).toEqual([]);
+    expect(collectLinkTargets('<a xhref="ORPHAN.md">text</a>')).toEqual([]);
+  });
+
+  it('still reads a real href, wherever it sits among the attributes', () => {
+    expect(collectLinkTargets('<a href="user/GUIDE.md">g</a>')).toEqual(['user/GUIDE.md']);
+    expect(collectLinkTargets('<a class="x" href="user/GUIDE.md">g</a>')).toEqual([
+      'user/GUIDE.md'
+    ]);
+  });
+
+  it('reads the real href on a tag that also carries a data-href', () => {
+    const markdown = '<a data-href="ORPHAN.md" href="user/GUIDE.md">g</a>';
+    expect(collectLinkTargets(markdown)).toEqual(['user/GUIDE.md']);
+  });
+
+  // Regression: an image used as a link's own text - the badge shape this README is built
+  // from - had its *inner* destination collected and the outer one missed. That
+  // contradicts the rule that an image is not an edge, and it would report a document
+  // linked only through an icon as an orphan.
+  it('follows the outer destination of an image used as link text, not the image', () => {
+    const markdown = '[![diagram](d.png)](docs/user/GUIDE.md)';
+    expect(collectLinkTargets(markdown)).toEqual(['docs/user/GUIDE.md']);
+  });
+
+  it('still treats a bare image as no edge at all', () => {
+    expect(collectLinkTargets('![diagram](ORPHAN.md)')).toEqual([]);
+  });
+
+  // The label classes exclude `[` as well as `]`, which is what keeps these passes linear.
+  // A CommonMark link label cannot contain an unescaped bracket, so this is the stricter
+  // and more correct reading rather than a convenience.
+  it('does not treat a bracket-containing run as a reference label', () => {
+    expect(collectLinkTargets(['[a[b]', '', '[a[b]: ORPHAN.md'].join('\n'))).toEqual([]);
+  });
+
+  // Regression: an escaped opener renders as literal text - it is how a document shows
+  // link syntax without creating a link - but the pattern still started matching at the
+  // `[`, so a target named only in such an example counted as reachable.
+  it('ignores an escaped link opener, which renders as literal text', () => {
+    expect(collectLinkTargets(String.raw`\[example](ORPHAN.md)`)).toEqual([]);
+    expect(collectLinkTargets(String.raw`\[lbl][ref]` + '\n\n[ref]: ORPHAN.md')).toEqual([]);
+    expect(collectLinkTargets(String.raw`\[lbl]` + '\n\n[lbl]: ORPHAN.md')).toEqual([]);
+  });
+
+  it('still follows a real link on a line that also contains an escaped example', () => {
+    const markdown = String.raw`write \[text](url) to link, as in [the guide](user/GUIDE.md)`;
+    expect(collectLinkTargets(markdown)).toEqual(['user/GUIDE.md']);
+  });
+
+  // Regression: these passes were quadratic, and they run over every Markdown file in the
+  // repository on every CI job - the symptom of a blow-up would be a hung build, not an
+  // error.
+  //
+  // The input is deliberately large and the budget deliberately loose, because this runs
+  // alongside the Docker suite where wall-clock timings are noisy: a tighter budget on a
+  // smaller input failed here under parallel load without anything being wrong. At 200k
+  // characters the linear scanners take ~16ms while the patterns they replaced took ~200s
+  // extrapolated, so five seconds sits about 300x above the honest cost and 40x below the
+  // regression it is there to catch. That gap is what makes the assertion meaningful
+  // rather than flaky.
+  it('stays linear on pathological bracket and backtick runs', () => {
+    for (const input of ['['.repeat(200000), '`'.repeat(200000), '[`'.repeat(100000)]) {
+      const started = Date.now();
+      collectLinkTargets(input);
+      expect(Date.now() - started).toBeLessThan(5000);
+    }
+  });
+
+  // Regression: the link-text character class refused a nested `[`, so a valid descriptive
+  // label collected no destination and its target was reported orphaned. Balancing the
+  // brackets with a single left-to-right scan fixes that without reintroducing the
+  // quadratic re-scan that a nesting-aware pattern would need.
+  it('follows a link whose text contains balanced brackets', () => {
+    expect(collectLinkTargets('[Advanced [preview]](user/Guide.md)')).toEqual(['user/Guide.md']);
+    expect(collectLinkTargets('[a [b [c]] d](user/Deep.md)')).toEqual(['user/Deep.md']);
+  });
+
+  // Regression: a destination was returned even with no closing `)`. A half-written link
+  // renders as literal text, so counting it let a genuinely orphaned document pass on the
+  // strength of a typo - which is exactly the state such a link is in.
+  it('refuses an unterminated inline link', () => {
+    expect(collectLinkTargets('[x](ORPHAN.md')).toEqual([]);
+    expect(collectLinkTargets('[x](ORPHAN.md "a title"')).toEqual([]);
+  });
+
+  it('still accepts a link whose destination is followed by a title', () => {
+    expect(collectLinkTargets('[x](user/G.md "a title")')).toEqual(['user/G.md']);
+  });
+
+  it('still refuses an unclosed bracket run rather than inventing a link', () => {
+    expect(collectLinkTargets('[[[[ not a link')).toEqual([]);
+  });
+
+  // Regression: only quoted attribute values were accepted, but `<a href=x.md>` is valid
+  // HTML that renders a navigable anchor, so its target was reported orphaned.
+  it('reads an unquoted href value', () => {
+    expect(collectLinkTargets('<a href=user/Guide.md>Guide</a>')).toEqual(['user/Guide.md']);
+    expect(collectLinkTargets('<a href=user/Guide.md class=x>G</a>')).toEqual(['user/Guide.md']);
+  });
+
+  it('does not read an unquoted value from an attribute merely ending in href', () => {
+    expect(collectLinkTargets('<a data-href=ORPHAN.md>t</a>')).toEqual([]);
+  });
+
+  // Regression: CommonMark lets a definition put its destination on the next line, and the
+  // same-line-only pattern collected nothing - so a document reached only through that
+  // reference was reported orphaned despite rendering as a working link.
+  it('accepts a reference definition whose destination is on the next line', () => {
+    const markdown = ['[guide]:', '  user/Guide.md', '', 'see [guide]'].join('\n');
+    expect(collectLinkTargets(markdown)).toEqual(['user/Guide.md']);
+  });
+
+  it('does not read across a blank line, where the definition has no destination', () => {
+    const markdown = ['[guide]:', '', 'user/Guide.md', '', 'see [guide]'].join('\n');
+    expect(collectLinkTargets(markdown)).toEqual([]);
+  });
+
+  // Regression: `isImage` looked only at the preceding character, so `\![guide](x)` - a
+  // literal `!` followed by a real link - was discarded as an image. The escape is exactly
+  // what stops it being one.
+  it('follows a link whose bang is escaped, which makes it not an image', () => {
+    expect(collectLinkTargets(String.raw`\![guide](user/Guide.md)`)).toEqual(['user/Guide.md']);
+  });
+
+  // Regression: the scan continued through the rest of a link after taking its destination,
+  // so brackets inside a title were pushed onto the stack and could be misread as a link.
+  it('does not read a link out of another link title', () => {
+    expect(collectLinkTargets('[outer](some.md "[inner]")')).toEqual(['some.md']);
+    expect(collectLinkTargets('[outer](some.md "[a](ORPHAN.md)")')).toEqual(['some.md']);
+  });
+
+  // Regression: reference destinations kept their backslashes, so `Guide\(advanced\).md`
+  // produced a path no file matches and the document it named was reported orphaned. The
+  // inline form already decoded them; this is the same rule on the other spelling.
+  it('decodes backslash escapes in a reference destination', () => {
+    const markdown = ['[g][r]', '', String.raw`[r]: Guide\(advanced\).md`].join('\n');
+    expect(collectLinkTargets(markdown)).toEqual(['Guide(advanced).md']);
+  });
+
+  // Regression: `[^>]*` ended the tag at a `>` inside a quoted value, hiding the href.
+  it('reads an href past a greater-than sign inside a quoted attribute', () => {
+    expect(collectLinkTargets('<a title="1 > 0" href="Guide.md">g</a>')).toEqual(['Guide.md']);
+  });
+
+  // Regression: CommonMark does not parse the contents of raw-text elements, so a
+  // link-shaped line inside one renders as literal text - the HTML equivalent of a fence,
+  // and the one block type the gate still read through.
+  it('ignores links inside raw-text HTML elements', () => {
+    expect(collectLinkTargets('<pre>[x](ORPHAN.md)</pre>')).toEqual([]);
+    expect(collectLinkTargets('<script>var a = "[x](ORPHAN.md)";</script>')).toEqual([]);
+    expect(collectLinkTargets('<style>/* [x](ORPHAN.md) */</style>')).toEqual([]);
+    expect(collectLinkTargets('<textarea>[x](ORPHAN.md)</textarea>')).toEqual([]);
+  });
+
+  it('treats an unterminated raw-text element as running to the end of the document', () => {
+    expect(collectLinkTargets('[live](user/OK.md)\n\n<pre>[dead](ORPHAN.md)')).toEqual([
+      'user/OK.md'
+    ]);
   });
 });
 

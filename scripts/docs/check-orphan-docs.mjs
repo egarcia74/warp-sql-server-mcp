@@ -25,6 +25,13 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import {
+  stripFencedBlocks,
+  stripHtmlComments,
+  stripRawTextHtml,
+  byCodeUnit
+} from './markdown-blocks.mjs';
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** The nav. Reachability is defined as "walkable from here". */
@@ -88,14 +95,89 @@ export const EXEMPTIONS = [
  */
 const normaliseLabel = label => label.trim().toLowerCase().replaceAll(/\s+/g, ' ');
 
-/** Strips the target of its optional angle brackets. */
-const bareTarget = target => target.replace(/^<|>$/g, '');
+/**
+ * Strips the target of its optional angle brackets and decodes its backslash escapes.
+ *
+ * `[g]: Guide\(advanced\).md` renders as a link to `Guide(advanced).md`, so leaving the
+ * backslashes in produces a path no file matches and reports a reachable document orphaned.
+ * The inline form already decodes them in `readBareDestination`; this is the same rule for
+ * the reference form, which is the asymmetry that let one spelling drift from the other.
+ */
+const bareTarget = target => target.replace(/^<|>$/g, '').replace(/\\([^\w\s])/g, '$1');
+
+/**
+ * Reads one inline link destination starting just after the `](`, returning it bare.
+ *
+ * CommonMark allows an unbracketed destination to contain parentheses as long as they
+ * balance, which is why this counts depth instead of stopping at the first `)`. Filenames
+ * of the `Guide_(advanced).md` shape are ordinary, and treating one as a truncated path
+ * turns a working link into a reported orphan - a false alarm, which costs more than a
+ * miss because it teaches maintainers to distrust the gate rather than the documentation.
+ *
+ * A `<...>` destination is taken verbatim; otherwise the scan ends at the first whitespace
+ * (the title begins there) or at a `)` that is not matched by an earlier `(`. Backslash
+ * escapes are honoured so `\(` counts as a literal character, not as nesting.
+ */
+function readInlineDestination(text, from) {
+  let i = from;
+  while (i < text.length && /\s/.test(text[i])) i++;
+
+  if (text[i] === '<') {
+    const close = text.indexOf('>', i + 1);
+    if (close === -1) return null;
+    const paren = text.indexOf(')', close);
+    return paren === -1 ? null : { destination: text.slice(i + 1, close), end: paren };
+  }
+
+  const { destination, end, closed } = readBareDestination(text, i);
+
+  // The link has to close. `[x](ORPHAN.md` with no `)` renders as literal text, so counting
+  // it would let a genuinely orphaned document pass on the strength of a typo - and a typo
+  // is exactly the state a half-written link is in. Whitespace ends the destination but the
+  // title still has to be followed by `)`, so scan on for it.
+  const paren = closed ? end : text.indexOf(')', end);
+  if (paren === -1 || destination === '') return null;
+
+  return { destination, end: paren };
+}
+
+/**
+ * The unbracketed form of a destination: everything up to the first whitespace (where a
+ * title would begin) or to a `)` that no earlier `(` opened. Backslash escapes are honoured
+ * so `\(` is a literal character rather than nesting.
+ */
+function readBareDestination(text, from) {
+  let depth = 0;
+  let destination = '';
+  let i = from;
+
+  for (; i < text.length; i++) {
+    const character = text[i];
+    if (character === '\\' && i + 1 < text.length) {
+      destination += text[i + 1];
+      i++;
+      continue;
+    }
+    if (/\s/.test(character)) break;
+    if (character === ')' && depth === 0) return { destination, end: i, closed: true };
+    if (character === '(') depth++;
+    else if (character === ')') depth--;
+    destination += character;
+  }
+
+  return { destination, end: i, closed: false };
+}
 
 /**
  * Everything in a document that is not navigable prose.
  *
  *  - **Fenced code blocks.** A link inside a fence is sample text; counting it would let a
- *    documented example silently satisfy the nav requirement.
+ *    documented example silently satisfy the nav requirement. Fences are matched
+ *    line by line (see `stripFencedBlocks`) because CommonMark allows runs longer than
+ *    three characters and indents the opener and closer independently; the previous
+ *    single-regex form recognised neither, so a link inside a valid `~~~~` block counted
+ *    as navigation. The same function is duplicated in `check-env-var-docs.mjs`, which
+ *    needs the identical rule, and both copies are pinned by tests in both suites.
  *  - **HTML comments.** `<!-- [x](y.md) -->` renders as nothing, so a reader cannot follow
  *    it. Commenting a nav entry out instead of deleting it is the ordinary way a link
  *    stops working, and it is exactly the case the gate has to notice rather than excuse.
@@ -113,23 +195,143 @@ const bareTarget = target => target.replace(/^<|>$/g, '');
  * incomplete-sanitization shape CodeQL flags (alert 168): replacing once is not a fixed
  * point. Truncating at the first surviving `<!--` settles both, and terminates because the
  * string only ever gets shorter.
+ *
+ * ## One block type deliberately not stripped
+ *
+ * **Four-space indented code blocks.** They render as code, so a link inside one is not
+ * navigable and counting it can let a real orphan pass. They are not removed anyway,
+ * because "indented four spaces" does not identify one: an indented code block cannot
+ * interrupt a paragraph, and inside a list item indentation is measured from the list
+ * marker, so a list continuation is routinely indented four spaces and is prose.
+ * Telling the two apart needs to know which block is open and at what indent - a Markdown
+ * block parser, which is the same dependency this repository declines in
+ * `check-env-var-docs.mjs` for the same reason.
+ *
+ * The trade was measured rather than assumed. Every four-space-indented line containing a
+ * link in this repository - `CONTRIBUTING.md:356`, `:357` and
+ * `docs/reference/ENV-VARS.md:381` - is a list continuation, and two of them point at
+ * `docs/README.md` and `docs/TEMPLATE.md`. A line-based strip would delete real links
+ * today to close a miss that needs someone to put a link to an otherwise-unreferenced
+ * document inside an indented example. If that miss ever becomes real, the honest fix is a
+ * block parser replacing this whole chain, not another pass bolted onto it.
  */
 function stripNonProse(markdown) {
-  const withoutFences = markdown.replace(/^(\s*)(```|~~~)[\s\S]*?^\1\2\s*$/gm, '');
+  return stripCodeSpans(stripHtmlComments(stripRawTextHtml(stripFencedBlocks(markdown))));
+}
 
-  let prose = withoutFences;
-  let previous;
-  do {
-    previous = prose;
-    prose = prose.replaceAll(/<!--[\s\S]*?-->/g, '');
-  } while (prose !== previous);
+/**
+ * Removes inline code spans, longest fence first so ``a ` b`` is consumed as one span
+ * rather than as two single-backtick spans around it.
+ *
+ * Hand-rolled rather than `/(`+)(?:(?!\1)[\s\S])*\1/g`, which is quadratic: the greedy
+ * `(`+)` offers one alternative per backtick and each is retried against the rest of the
+ * document, so a long run of backticks - a table border, ASCII art, a pasted diff - made
+ * the pass super-linear (measured 4x per doubling: 10ms at 4k backticks, 158ms at 16k).
+ * These scanners run over every Markdown file in the repository on every CI job, where the
+ * symptom would be a mysteriously hung build rather than an error.
+ *
+ * The behaviour is deliberately identical to that regular expression, backtracking
+ * included: the longest opening run is tried first and the span ends at the next literal
+ * occurrence of that same run, then progressively shorter openers are tried, and a run
+ * with no closer stays in the text as ordinary characters. That equivalence is pinned by a
+ * differential test over the repository's own Markdown plus randomised backtick soup,
+ * because "passes the suite" is not the same claim as "matches the old pattern".
+ */
+function stripCodeSpans(text) {
+  let out = '';
+  let i = 0;
 
-  const unterminated = prose.indexOf('<!--');
-  const visible = unterminated === -1 ? prose : prose.slice(0, unterminated);
+  while (i < text.length) {
+    if (text[i] !== '`') {
+      out += text[i];
+      i += 1;
+      continue;
+    }
 
-  // Inline code spans, longest fence first so ``a ` b`` is consumed as one span rather
-  // than as two single-backtick spans around it.
-  return visible.replaceAll(/(`+)(?:(?!\1)[\s\S])*\1/g, '');
+    const openStart = i;
+    while (i < text.length && text[i] === '`') i += 1;
+
+    // The closer is searched for from `openStart + length`, which for a shortened opener
+    // still lies *inside* the run - so a lone ``` does close against its own third
+    // backtick, and the search cannot be clamped to the text after the run. A differential
+    // test caught exactly that: clamping made `   ``` ` survive whole where the regular
+    // expression leaves `   ` `.
+    let end = -1;
+    for (let length = i - openStart; length >= 1; length -= 1) {
+      const closer = text.indexOf('`'.repeat(length), openStart + length);
+      if (closer !== -1) {
+        end = closer + length;
+        break;
+      }
+    }
+
+    if (end === -1) {
+      out += text.slice(openStart, i); // no closer: the run is literal text
+      continue;
+    }
+    i = end; // drop opener, content and closer together
+  }
+
+  return out;
+}
+
+/**
+ * Every inline link destination in `body`, found by one left-to-right scan.
+ *
+ * A stack of open brackets rather than a regular expression, for two reasons that pull the
+ * same way. Correctness: CommonMark allows balanced brackets in link text, so
+ * `[Advanced [preview]](user/Guide.md)` is a link a reader can follow, and a character
+ * class that refuses the nested `[` collected nothing and reported the target orphaned.
+ * Cost: matching nested brackets with a pattern means re-scanning from every `[`, which is
+ * the quadratic behaviour this file was just rewritten to remove - a run of brackets took
+ * over a second at 16k characters. Pushing each `[` and popping at the matching `]` is
+ * linear in the length of the document and exact about nesting at the same time.
+ *
+ * An opener whose preceding character is `!` is an image. Its destination is fetched, not
+ * navigated to, so it is not an edge - and because the stack pops the *inner* pair first,
+ * `[![CI](badge.svg)](workflow-url)` skips the image and still yields the outer link, which
+ * is the one a reader clicks.
+ *
+ * A backslash escapes the character after it, so `\[example](ORPHAN.md)` never opens a
+ * bracket at all: it renders as literal text, which is how a document shows link syntax
+ * without creating a link.
+ */
+function collectInlineLinks(body) {
+  const targets = [];
+  const open = [];
+  let lastEscaped = -1;
+
+  for (let i = 0; i < body.length; i++) {
+    const character = body[i];
+
+    if (character === '\\') {
+      lastEscaped = i + 1; // the escaped character is literal, whatever it is
+      i++;
+      continue;
+    }
+    if (character === '[') {
+      // `\![x](y)` is a literal `!` followed by a real link, so an escaped bang does not
+      // make this an image - the escape is what stops it being one.
+      open.push({ isImage: i > 0 && body[i - 1] === '!' && lastEscaped !== i - 1 });
+      continue;
+    }
+    if (character !== ']') continue;
+
+    const opener = open.pop();
+    if (opener === undefined || body[i + 1] !== '(') continue;
+
+    const link = readInlineDestination(body, i + 2);
+    if (link === null) continue;
+
+    if (!opener.isImage) targets.push(link.destination);
+
+    // Jump past the closing `)`. Everything between is the destination and the title, and a
+    // title may legitimately contain brackets - `[outer](some.md "[inner]")` - which would
+    // otherwise be pushed onto the stack and misread as another link.
+    i = link.end;
+  }
+
+  return targets;
 }
 
 /**
@@ -147,11 +349,17 @@ export function collectLinkTargets(markdown) {
 
   // Reference definitions: [label]: target. Collected first, then removed, so that the
   // definition line cannot later look like a shortcut reference to itself.
+  // `[ \t]{0,3}` rather than `\s{0,3}`: a definition's indent is spaces or tabs, and `\s`
+  // also matches the newline that `^` has just anchored to, which let one `^` position
+  // reach into the following lines and gave the engine overlapping ways to reach the same
+  // match. Restricting it is both closer to CommonMark and one less backtracking source.
   const definitions = new Map();
-  for (const match of prose.matchAll(/^\s{0,3}\[([^\]]+)\]:\s*(<[^>]*>|\S+)/gm)) {
+  for (const match of prose.matchAll(
+    /^[ \t]{0,3}\[([^[\]]+)\]:[ \t]*(?:\n[ \t]+)?(<[^>]*>|\S+)/gm
+  )) {
     definitions.set(normaliseLabel(match[1]), bareTarget(match[2]));
   }
-  const body = prose.replace(/^\s{0,3}\[[^\]]+\]:\s*(?:<[^>]*>|\S+).*$/gm, '');
+  const body = prose.replace(/^[ \t]{0,3}\[[^[\]]+\]:[ \t]*(?:\n[ \t]+)?(?:<[^>]*>|\S+).*$/gm, '');
 
   // Inline links: [text](target), [text](<target>), [text](target "title").
   //
@@ -159,13 +367,28 @@ export function collectLinkTargets(markdown) {
   // fetches, not somewhere a reader can navigate to, so an image is not an edge in a
   // reachability graph - and a doc "reachable" only as somebody's image source is
   // unreachable in every sense that matters.
-  for (const match of body.matchAll(/(?<!!)\[[^\]]*\]\(\s*(<[^>]*>|[^\s)]+)[^)]*\)/g)) {
-    targets.push(bareTarget(match[1]));
-  }
+  //
+  // Only the `](` opener is matched here; the destination itself is scanned by hand,
+  // because a bare destination may contain balanced parentheses and a regular expression
+  // that stops at the first `)` truncates them. `[guide](user/Guide_(advanced).md)` is a
+  // link every renderer and the repository's own link checker follow, and truncating it to
+  // `user/Guide_(advanced` made `resolveTarget` discard it as non-Markdown - so the gate
+  // called a perfectly navigable document an orphan and failed CI over it.
+  targets.push(...collectInlineLinks(body));
 
   // Raw HTML anchors, which markdown permits and this repo's generated pages use.
-  for (const match of body.matchAll(/<a\s[^>]*href\s*=\s*["']([^"']+)["']/gi)) {
-    targets.push(match[1]);
+  //
+  // The lookbehind pins the attribute name: without it any attribute *ending* in `href` -
+  // `data-href`, `x-href` - is read as a real one, and `<a data-href="ORPHAN.md">` renders
+  // no link at all while marking its target reachable. Metadata is not navigation.
+  // The tag is matched as a sequence of quoted and unquoted runs rather than `[^>]*`, so a
+  // `>` inside a quoted value - `<a title="1 > 0" href="Guide.md">` - does not end the tag
+  // early and hide the href behind it.
+  for (const tag of body.matchAll(/<a(?=[\s>])((?:"[^"]*"|'[^']*'|[^>"'])*)>/gi)) {
+    const href = /(?<![-\w:])href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'`=]+))/i.exec(tag[1]);
+    if (href === null) continue;
+    const value = href[1] ?? href[2] ?? href[3];
+    if (value !== undefined && value !== '') targets.push(value);
   }
 
   // Labels a link actually uses: full `[text][label]`, collapsed `[label][]`, and
@@ -174,14 +397,20 @@ export function collectLinkTargets(markdown) {
   // cannot invent an edge.
   // The lookbehinds drop reference-style images (`![alt][label]`, `![label]`) for the same
   // reason the inline pass drops `![alt](x)`: an image destination is not navigation.
+  //
+  // The character classes exclude `[` as well as `]`. A CommonMark link label cannot
+  // contain an unescaped bracket anyway, so this is the stricter reading - and it is what
+  // makes the pass linear: with `[^\]]` a run of `[` gave every one of them a scan to the
+  // end of the document (measured 4x per doubling, 382ms at 16k brackets), whereas a class
+  // that cannot consume `[` fails at once and moves on.
   const used = new Set();
-  for (const match of body.matchAll(/(?<!!)\[([^\]]*)\]\[([^\]]*)\]/g)) {
+  for (const match of body.matchAll(/(?<![!\\])\[([^[\]]*)\]\[([^[\]]*)\]/g)) {
     used.add(normaliseLabel(match[2].trim() === '' ? match[1] : match[2]));
   }
   // `(?<!\])` keeps the second half of a full reference out of the shortcut pass: in
   // `![alt][img]` the `[img]` is not preceded by `!` and would otherwise sneak the image
   // back in. Nothing is lost - the full-reference pass above already records that label.
-  for (const match of body.matchAll(/(?<![!\]])\[([^\]]+)\](?![([:])/g)) {
+  for (const match of body.matchAll(/(?<![!\]\\])\[([^[\]]+)\](?![([:])/g)) {
     used.add(normaliseLabel(match[1]));
   }
   for (const label of used) {
@@ -271,7 +500,7 @@ export function reachableFrom(docs, entry = ENTRY) {
  * @param {Array<{reason: string, matches: (file: string) => boolean}>} [options.exemptions]
  */
 export function findOrphanDocs(docs, { entry = ENTRY, exemptions = EXEMPTIONS } = {}) {
-  const files = [...docs.keys()].sort();
+  const files = [...docs.keys()].sort(byCodeUnit);
   const reachable = reachableFrom(docs, entry);
 
   const orphans = [];
@@ -317,7 +546,7 @@ export function listMarkdownFiles(dir, root = repoRoot) {
     found.push(path.posix.join(dir, entry.name));
   }
 
-  return found.sort();
+  return found.sort(byCodeUnit);
 }
 
 /** Reads the docs tree off disk into the map `findOrphanDocs` consumes. */

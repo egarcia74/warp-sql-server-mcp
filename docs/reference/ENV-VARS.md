@@ -409,9 +409,13 @@ kind of environment it is running in. They are listed because setting them **doe
 
 - **Default**: _(unset)_
 - **Description**: Set to `true` to force MCP-environment handling on, regardless of what
-  auto-detection concludes. This is the **only** variable that currently moves the main log
-  transport to stderr, so it is the one to set under any stdio client - not just VS Code - to keep
-  logs out of the JSON-RPC stream. The security-audit console transport is unaffected; leave
+  auto-detection concludes. That handling is what moves the main log transport to stderr, so this
+  is the variable to set under any stdio client - not just VS Code - to keep logs out of the
+  JSON-RPC stream. It is not the only thing that turns the handling on:
+  `Logger._isMcpEnvironment()` also returns true when VS Code sets `VSCODE_PID` or
+  `VSCODE_IPC_HOOK`, or when the parent process looks like an MCP client. `VSCODE_MCP` is the
+  only one of those a user sets deliberately, which is why it is the one documented here as
+  configuration. The security-audit console transport is unaffected; leave
   [`ENABLE_SECURITY_AUDIT`](#enable_security_audit) at `false` under a stdio client.
 - **Values**:
   - `true` (force MCP environment; main log transport goes to stderr)
