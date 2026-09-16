@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   AMBIENT_VARS,
   ENV_VARS_DOC,
+  maskNonCode,
   readEnvVarsFromSource,
   readDocumentedEnvVars,
   compareEnvVarDocs,
@@ -60,6 +61,88 @@ describe('readEnvVarsFromSource', () => {
 
   it('does not match destructuring, the other documented blind spot', () => {
     expect([...readEnvVarsFromSource('const { SOME_VAR } = process.env;')]).toEqual([]);
+  });
+
+  // Regression: matching inside comments made the gate demand an ENV-VARS.md entry for a
+  // variable nothing reads. The cheapest way to silence that is a bogus entry, so the
+  // check would have corrupted the very document it protects.
+  it('ignores a mention inside a line comment', () => {
+    const source = [
+      '// SQL_SERVER_LEGACY was removed; we no longer read process.env.SQL_SERVER_LEGACY',
+      'const host = process.env.SQL_SERVER_HOST;'
+    ].join('\n');
+
+    expect([...readEnvVarsFromSource(source)]).toEqual(['SQL_SERVER_HOST']);
+  });
+
+  it('ignores a mention inside a block comment, including a JSDoc example', () => {
+    const source = [
+      '/**',
+      ' * Reads process.env.DOC_ONLY_VAR in the example below.',
+      ' * @example process.env.ANOTHER_DOC_VAR',
+      ' */',
+      'const real = process.env.REAL_VAR;'
+    ].join('\n');
+
+    expect([...readEnvVarsFromSource(source)]).toEqual(['REAL_VAR']);
+  });
+
+  it('ignores a mention inside a string or template literal', () => {
+    const source = [
+      'const help = "set process.env.HELP_TEXT_VAR to configure";',
+      "const single = 'process.env.SINGLE_QUOTED_VAR';",
+      'const tpl = `process.env.TEMPLATE_VAR`;',
+      'const real = process.env.REAL_VAR;'
+    ].join('\n');
+
+    expect([...readEnvVarsFromSource(source)]).toEqual(['REAL_VAR']);
+  });
+
+  it('still reads the bracket form, whose name legitimately lives inside a string', () => {
+    const source = [
+      '// not this one: process.env["COMMENTED_BRACKET"]',
+      "const a = process.env['BRACKET_VAR'];",
+      'const b = process.env["OTHER_BRACKET_VAR"];'
+    ].join('\n');
+
+    expect([...readEnvVarsFromSource(source)].sort()).toEqual(['BRACKET_VAR', 'OTHER_BRACKET_VAR']);
+  });
+
+  it('is not fooled by an apostrophe inside a comment', () => {
+    const source = [
+      "// don't read process.env.COMMENTED_VAR here",
+      'const real = process.env.REAL_VAR;'
+    ].join('\n');
+
+    expect([...readEnvVarsFromSource(source)]).toEqual(['REAL_VAR']);
+  });
+
+  it('handles an escaped quote inside a string without losing the following code', () => {
+    const source = [
+      'const s = "a \\" process.env.INSIDE";',
+      'const real = process.env.AFTER;'
+    ].join('\n');
+
+    expect([...readEnvVarsFromSource(source)]).toEqual(['AFTER']);
+  });
+});
+
+describe('maskNonCode', () => {
+  it('preserves length and newlines so offsets and line numbers still line up', () => {
+    const source = ['// comment', 'const a = "text";', '/* block */'].join('\n');
+    const masked = maskNonCode(source);
+
+    expect(masked).toHaveLength(source.length);
+    expect(masked.split('\n')).toHaveLength(source.split('\n').length);
+  });
+
+  it('keeps string delimiters so a bracket access stays recognisable', () => {
+    expect(maskNonCode("process.env['NAME']")).toBe("process.env['    ']");
+  });
+
+  it('leaves ordinary code untouched', () => {
+    const code = 'const x = process.env.FOO || 1;';
+    expect(maskNonCode(code)).toBe(code);
   });
 });
 
@@ -189,6 +272,45 @@ describe('shippedJsFiles', () => {
     withTempPackage(root => {
       write(root, 'index.js', '');
       expect(shippedJsFiles(['index.js', 'not-here/'], root)).toEqual(['index.js']);
+    });
+  });
+
+  // Regression: only `.js` was accepted, so a published .mjs/.cjs module was skipped in
+  // silence - npm ships it, the server reads its variables, and the gate said "in sync".
+  it('walks .mjs and .cjs modules inside a published directory, not just .js', () => {
+    withTempPackage(root => {
+      write(root, 'lib/classic.js', '');
+      write(root, 'lib/modern.mjs', '');
+      write(root, 'lib/legacy.cjs', '');
+      write(root, 'lib/notes.md', '');
+      write(root, 'lib/styles.css', '');
+
+      expect(shippedJsFiles(['lib/'], root)).toEqual([
+        'lib/classic.js',
+        'lib/legacy.cjs',
+        'lib/modern.mjs'
+      ]);
+    });
+  });
+
+  it('accepts a top-level .mjs or .cjs entry listed directly in files', () => {
+    withTempPackage(root => {
+      write(root, 'server.mjs', '');
+      write(root, 'shim.cjs', '');
+      expect(shippedJsFiles(['server.mjs', 'shim.cjs'], root)).toEqual(['server.mjs', 'shim.cjs']);
+    });
+  });
+
+  it('finds variables a published .mjs module reads', () => {
+    withTempPackage(root => {
+      write(root, 'package.json', JSON.stringify({ files: ['lib/'] }));
+      write(root, 'lib/modern.mjs', 'export const v = process.env.ONLY_IN_MJS;');
+      write(root, ENV_VARS_DOC, '### `SOMETHING_ELSE`\n');
+
+      const result = checkEnvVarDocs(root);
+
+      expect(result.sources).toEqual(['lib/modern.mjs']);
+      expect(result.undocumented).toEqual(['ONLY_IN_MJS']);
     });
   });
 });

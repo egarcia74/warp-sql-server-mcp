@@ -69,19 +69,108 @@ export const AMBIENT_VARS = new Map([
 ]);
 
 /**
- * Every `process.env.NAME` / `process.env['NAME']` in one source file.
+ * Blanks out everything that is not executable code - the body of every comment and of
+ * every string or template literal - replacing each character with a space so that offsets
+ * into the result still line up with the original source.
+ *
+ * Without this, `// SQL_SERVER_LEGACY was removed, we no longer read process.env.X` or a
+ * usage string quoting `process.env.X` counts as a read, and the gate then demands an
+ * ENV-VARS.md entry for a variable nothing reads. The failure mode is worse than a miss:
+ * the cheapest way out is to add a bogus entry, so the check would actively corrupt the
+ * document it exists to protect.
+ *
+ * Newlines survive so that line numbers are preserved for anything that reports them.
+ *
+ * Not a JavaScript parser: regular-expression literals are not tracked, so a literal
+ * containing an unescaped `//` could be mistaken for a line comment. No such literal
+ * exists in the shipped sources, and the alternative - taking on a parser dependency for
+ * a lint script - costs more than it buys here.
+ */
+export function maskNonCode(source) {
+  const out = [...source];
+  const blank = (from, to) => {
+    for (let k = from; k < to && k < out.length; k++) {
+      if (out[k] !== '\n') out[k] = ' ';
+    }
+  };
+
+  let i = 0;
+  while (i < source.length) {
+    const pair = source.slice(i, i + 2);
+
+    if (pair === '//') {
+      let j = i;
+      while (j < source.length && source[j] !== '\n') j++;
+      blank(i, j);
+      i = j;
+      continue;
+    }
+    if (pair === '/*') {
+      const end = source.indexOf('*/', i + 2);
+      const j = end === -1 ? source.length : end + 2;
+      blank(i, j);
+      i = j;
+      continue;
+    }
+    if (source[i] === '"' || source[i] === "'" || source[i] === '`') {
+      const quote = source[i];
+      let j = i + 1;
+      while (j < source.length) {
+        if (source[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (source[j] === quote) {
+          j++;
+          break;
+        }
+        j++;
+      }
+      // Blank the body, keep the delimiters: `process.env['NAME']` must stay recognisable
+      // as a bracket access even though NAME itself is read back from the original source.
+      blank(i + 1, j - 1);
+      i = j;
+      continue;
+    }
+    i++;
+  }
+
+  return out.join('');
+}
+
+/**
+ * Every `process.env.NAME` / `process.env['NAME']` that is actually code in one file.
  *
  * Both spellings are matched because both appear in JavaScript generally; only the dotted
  * one appears in this repo today.
  */
 export function readEnvVarsFromSource(source) {
+  const masked = maskNonCode(source);
   const found = new Set();
-  for (const match of source.matchAll(/process\.env\.([A-Za-z_$][A-Za-z0-9_$]*)/g)) {
+
+  for (const match of masked.matchAll(/process\.env\.([A-Za-z_$][A-Za-z0-9_$]*)/g)) {
     found.add(match[1]);
   }
-  for (const match of source.matchAll(/process\.env\[\s*['"]([^'"]+)['"]\s*\]/g)) {
-    found.add(match[1]);
+
+  // The bracket form is located in the masked source (so a quoted mention inside a comment
+  // cannot match) and its name is then read back from the original, where the string body
+  // still exists.
+  for (const match of masked.matchAll(/process\.env\[\s*(['"])/g)) {
+    const quote = match[1];
+    const start = match.index + match[0].length;
+    let end = start;
+    while (end < source.length) {
+      if (source[end] === '\\') {
+        end += 2;
+        continue;
+      }
+      if (source[end] === quote) break;
+      end++;
+    }
+    const name = source.slice(start, end);
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) found.add(name);
   }
+
   return found;
 }
 
@@ -132,7 +221,18 @@ export function compareEnvVarDocs({ read, documented, ambient = AMBIENT_VARS }) 
 }
 
 /**
- * The `.js` files npm publishes, from package.json's `files` list.
+ * Every extension Node treats as a JavaScript module. `.js` alone would skip a shipped
+ * `.mjs` or `.cjs` silently - and silently is the problem: npm packs the file, the server
+ * reads its variables at runtime, and the gate would report "in sync" regardless. The repo
+ * already writes `.mjs` elsewhere (`scripts/lib/release-plan.mjs`), so a published one is
+ * a matter of time rather than a hypothetical.
+ */
+const JS_MODULE_EXTENSIONS = ['.js', '.mjs', '.cjs'];
+
+const isJsModule = name => JS_MODULE_EXTENSIONS.some(extension => name.endsWith(extension));
+
+/**
+ * The JavaScript files npm publishes, from package.json's `files` list.
  *
  * Entries that are neither a `.js` file nor a directory (the markdown and HTML globs, and
  * the `!` negations) are skipped: they carry no `process.env` reads, and expanding globs
@@ -146,7 +246,7 @@ export function shippedJsFiles(pkgFiles, root = repoRoot) {
     for (const entry of readdirSync(absolute, { withFileTypes: true })) {
       const child = path.posix.join(relative, entry.name);
       if (entry.isDirectory()) walk(child);
-      else if (entry.name.endsWith('.js')) found.push(child);
+      else if (isJsModule(entry.name)) found.push(child);
     }
   };
 
@@ -160,7 +260,7 @@ export function shippedJsFiles(pkgFiles, root = repoRoot) {
       continue; // listed but absent - npm's own packing already warns about that
     }
     if (stats.isDirectory()) walk(clean);
-    else if (clean.endsWith('.js')) found.push(clean);
+    else if (isJsModule(clean)) found.push(clean);
   }
 
   return found.sort();

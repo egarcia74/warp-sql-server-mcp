@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  ARCHIVE_INDEX,
   ENTRY,
   EXEMPTIONS,
   SKIPPED_DIRS,
@@ -43,20 +44,21 @@ describe('collectLinkTargets', () => {
         '[inline](user/QUICKSTART.md)',
         '[angled](<user/with space.md>)',
         '[titled](reference/ENV-VARS.md "the reference")',
+        'and the [maintenance guide][ref]',
         '[ref]: operations/MAINTENANCE.md',
         '<a href="architecture/ARCHITECTURE.md">html</a>'
       ].join('\n\n')
     );
 
-    // Collection order is by spelling: inline links, then reference definitions,
-    // then HTML anchors. Order does not matter to the walk, but asserting it keeps
-    // a regression in one of the three regexes from hiding behind the others.
+    // Collection order is by spelling: inline links, then HTML anchors, then the
+    // definitions a reference actually uses. Order does not matter to the walk, but
+    // asserting it keeps a regression in one of the regexes from hiding behind the others.
     expect(targets).toEqual([
       'user/QUICKSTART.md',
       'user/with space.md',
       'reference/ENV-VARS.md',
-      'operations/MAINTENANCE.md',
-      'architecture/ARCHITECTURE.md'
+      'architecture/ARCHITECTURE.md',
+      'operations/MAINTENANCE.md'
     ]);
   });
 
@@ -68,6 +70,54 @@ describe('collectLinkTargets', () => {
   it('ignores tilde-fenced blocks too', () => {
     const markdown = ['~~~markdown', '[example](developer/SAMPLE.md)', '~~~'].join('\n');
     expect(collectLinkTargets(markdown)).toEqual([]);
+  });
+
+  // Regression: an HTML comment renders as nothing, so a commented-out nav entry is a link
+  // a reader cannot follow. Counting it kept the target "reachable" and the gate silent.
+  it('ignores links inside HTML comments, single and multi-line', () => {
+    const markdown = [
+      '# Nav',
+      '',
+      '<!-- [commented out](user/HIDDEN.md) -->',
+      '',
+      '<!--',
+      '[block commented](developer/ALSO-HIDDEN.md)',
+      '-->',
+      '',
+      '[live](user/VISIBLE.md)'
+    ].join('\n');
+
+    expect(collectLinkTargets(markdown)).toEqual(['user/VISIBLE.md']);
+  });
+
+  it('ignores an HTML-commented reference definition and its reference', () => {
+    const markdown = ['<!-- [hidden]: user/HIDDEN.md -->', '', 'see [hidden]'].join('\n');
+    expect(collectLinkTargets(markdown)).toEqual([]);
+  });
+
+  // Regression: a definition nobody references renders as nothing at all, so it must not
+  // count as an edge. Previously every definition was collected unconditionally.
+  it('ignores a reference definition whose label is never used', () => {
+    const markdown = ['# Nav', '', '[old]: user/STALE.md', '', 'No link uses that label.'].join(
+      '\n'
+    );
+
+    expect(collectLinkTargets(markdown)).toEqual([]);
+  });
+
+  it('follows a definition that a full, collapsed or shortcut reference actually uses', () => {
+    const full = ['[text][full]', '', '[full]: user/FULL.md'].join('\n');
+    const collapsed = ['[collapsed][]', '', '[collapsed]: user/COLLAPSED.md'].join('\n');
+    const shortcut = ['see [shortcut] here', '', '[shortcut]: user/SHORTCUT.md'].join('\n');
+
+    expect(collectLinkTargets(full)).toEqual(['user/FULL.md']);
+    expect(collectLinkTargets(collapsed)).toEqual(['user/COLLAPSED.md']);
+    expect(collectLinkTargets(shortcut)).toEqual(['user/SHORTCUT.md']);
+  });
+
+  it('matches reference labels case-insensitively, as markdown does', () => {
+    const markdown = ['[text][See Also]', '', '[see   also]: user/A.md'].join('\n');
+    expect(collectLinkTargets(markdown)).toEqual(['user/A.md']);
   });
 });
 
@@ -172,10 +222,12 @@ describe('findOrphanDocs', () => {
     expect(formatReport(result)).toContain('❌');
   });
 
-  it('exempts the doc template and the archive subtree, and says why', () => {
+  it('exempts the doc template and the archive contents, and says why', () => {
     const result = findOrphanDocs(
       docsMap({
-        'docs/README.md': 'nav with no links at all',
+        // The archive pointer is the one link the nav must carry; TEMPLATE.md and the
+        // archived documents themselves are not required to be in it.
+        'docs/README.md': '[archive](archive/README.md)',
         'docs/TEMPLATE.md': 'template',
         'docs/archive/README.md': 'archive index',
         'docs/archive/OLD.md': 'historical'
@@ -186,14 +238,44 @@ describe('findOrphanDocs', () => {
     expect(result.orphans).toEqual([]);
     expect(result.exempted.map(item => item.file)).toEqual([
       'docs/TEMPLATE.md',
-      'docs/archive/OLD.md',
-      'docs/archive/README.md'
+      'docs/archive/OLD.md'
     ]);
     // Reported, never silent: each exemption carries its reason into the report.
     const report = formatReport(result);
-    expect(report).toContain('Exempt (by design, 3)');
+    expect(report).toContain('Exempt (by design, 2)');
     expect(report).toContain('linked from CONTRIBUTING.md');
-    expect(report).toContain('docs/archive/README.md pointer');
+    expect(report).toContain('docs/archive/README.md');
+  });
+
+  // Regression: the exemption used to cover docs/archive/README.md itself, so deleting the
+  // single nav pointer left the whole archive unreachable with the check still passing -
+  // the "single pointer" invariant enforced nothing.
+  it('fails when the nav drops its pointer to the archive index', () => {
+    const result = findOrphanDocs(
+      docsMap({
+        'docs/README.md': 'nav with no archive pointer',
+        [ARCHIVE_INDEX]: '[old](OLD.md)',
+        'docs/archive/OLD.md': 'historical'
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.orphans).toEqual([ARCHIVE_INDEX]);
+    // The descendants stay exempt - only the pointer is being enforced.
+    expect(result.exempted.map(item => item.file)).toEqual(['docs/archive/OLD.md']);
+  });
+
+  it('passes when the nav keeps the archive pointer, however sparse the archive index is', () => {
+    const result = findOrphanDocs(
+      docsMap({
+        'docs/README.md': 'see [archive](archive/README.md)',
+        [ARCHIVE_INDEX]: 'index that links to nothing',
+        'docs/archive/OLD.md': 'historical, linked from nowhere'
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.exempted.map(item => item.file)).toEqual(['docs/archive/OLD.md']);
   });
 
   it('exempts nothing else - a docs/ root file still has to be in the nav', () => {

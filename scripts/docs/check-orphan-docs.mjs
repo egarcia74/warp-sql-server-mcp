@@ -48,6 +48,10 @@ export const DOCS_ROOT = 'docs';
  */
 export const SKIPPED_DIRS = new Set(['node_modules', '.git', '.claude', 'superpowers', 'coverage']);
 
+/** The archive subtree, and the one file in it that must stay reachable from the nav. */
+export const ARCHIVE_INDEX_DIR = 'docs/archive';
+export const ARCHIVE_INDEX = `${ARCHIVE_INDEX_DIR}/README.md`;
+
 /**
  * Files allowed to be unreachable from the nav, each with the reason it is allowed.
  *
@@ -67,32 +71,85 @@ export const EXEMPTIONS = [
     // and that pointer is what the nav is expected to carry. Its contents are historical
     // and unmaintained by design, so requiring each of them in the index would push
     // superseded material back into the nav, which is the opposite of archiving.
-    reason: 'archive - entered through the single docs/archive/README.md pointer',
-    matches: file => file.startsWith('docs/archive/')
+    //
+    // ARCHIVE_INDEX itself is deliberately NOT exempt. Exempting it too would make the
+    // "single pointer" a claim nothing enforces: delete the one nav link and the whole
+    // archive, index included, becomes unreachable with the check still reporting success.
+    // The invariant only means something if the pointer is the one file that must stay
+    // reachable, so the exemption covers the descendants and stops there.
+    reason: 'archive contents - reached through the (non-exempt) docs/archive/README.md',
+    matches: file => file.startsWith(`${ARCHIVE_INDEX_DIR}/`) && file !== ARCHIVE_INDEX
   }
 ];
 
 /**
- * Markdown link targets in a document, in the three spellings this repo uses.
+ * Markdown link labels are matched case-insensitively and with runs of whitespace
+ * collapsed, so `[See Also]` and `[see   also]` are the same label.
+ */
+const normaliseLabel = label => label.trim().toLowerCase().replaceAll(/\s+/g, ' ');
+
+/** Strips the target of its optional angle brackets. */
+const bareTarget = target => target.replace(/^<|>$/g, '');
+
+/**
+ * Everything in a document that is not navigable prose.
  *
- * Fenced code blocks are stripped first: a link inside a fence is sample text, and
- * counting it would let a documented example silently satisfy the nav requirement.
+ *  - **Fenced code blocks.** A link inside a fence is sample text; counting it would let a
+ *    documented example silently satisfy the nav requirement.
+ *  - **HTML comments.** `<!-- [x](y.md) -->` renders as nothing, so a reader cannot follow
+ *    it. Commenting a nav entry out instead of deleting it is the ordinary way a link
+ *    stops working, and it is exactly the case the gate has to notice rather than excuse.
+ */
+function stripNonProse(markdown) {
+  return markdown
+    .replace(/^(\s*)(```|~~~)[\s\S]*?^\1\2\s*$/gm, '')
+    .replaceAll(/<!--[\s\S]*?-->/g, '');
+}
+
+/**
+ * Markdown link targets a reader can actually follow, in the spellings this repo uses.
+ *
+ * Reference *definitions* are deliberately not edges on their own. `[old]: child.md` with
+ * no `[...][old]` anywhere renders as nothing at all - the definition is invisible and the
+ * child is unreachable - so counting every definition would let a stale leftover keep a
+ * document "reachable" that no reader can navigate to. A definition contributes its target
+ * only when some link actually uses its label.
  */
 export function collectLinkTargets(markdown) {
-  const prose = markdown.replace(/^(\s*)(```|~~~)[\s\S]*?^\1\2\s*$/gm, '');
+  const prose = stripNonProse(markdown);
   const targets = [];
 
+  // Reference definitions: [label]: target. Collected first, then removed, so that the
+  // definition line cannot later look like a shortcut reference to itself.
+  const definitions = new Map();
+  for (const match of prose.matchAll(/^\s{0,3}\[([^\]]+)\]:\s*(<[^>]*>|\S+)/gm)) {
+    definitions.set(normaliseLabel(match[1]), bareTarget(match[2]));
+  }
+  const body = prose.replace(/^\s{0,3}\[[^\]]+\]:\s*(?:<[^>]*>|\S+).*$/gm, '');
+
   // Inline links: [text](target), [text](<target>), [text](target "title").
-  for (const match of prose.matchAll(/\[[^\]]*\]\(\s*(<[^>]*>|[^\s)]+)[^)]*\)/g)) {
-    targets.push(match[1].replace(/^<|>$/g, ''));
+  for (const match of body.matchAll(/\[[^\]]*\]\(\s*(<[^>]*>|[^\s)]+)[^)]*\)/g)) {
+    targets.push(bareTarget(match[1]));
   }
-  // Reference definitions: [label]: target
-  for (const match of prose.matchAll(/^\s{0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)/gm)) {
-    targets.push(match[1].replace(/^<|>$/g, ''));
-  }
+
   // Raw HTML anchors, which markdown permits and this repo's generated pages use.
-  for (const match of prose.matchAll(/<a\s[^>]*href\s*=\s*["']([^"']+)["']/gi)) {
+  for (const match of body.matchAll(/<a\s[^>]*href\s*=\s*["']([^"']+)["']/gi)) {
     targets.push(match[1]);
+  }
+
+  // Labels a link actually uses: full `[text][label]`, collapsed `[label][]`, and
+  // shortcut `[label]`. A shortcut only renders as a link when a definition exists, which
+  // is precisely the condition applied below, so over-matching plain bracketed text here
+  // cannot invent an edge.
+  const used = new Set();
+  for (const match of body.matchAll(/\[([^\]]*)\]\[([^\]]*)\]/g)) {
+    used.add(normaliseLabel(match[2].trim() === '' ? match[1] : match[2]));
+  }
+  for (const match of body.matchAll(/\[([^\]]+)\](?![([:])/g)) {
+    used.add(normaliseLabel(match[1]));
+  }
+  for (const label of used) {
+    if (definitions.has(label)) targets.push(definitions.get(label));
   }
 
   return targets;
