@@ -86,7 +86,7 @@
     "logs:tail:audit": "./scripts/show-logs.sh audit --follow",
     "precommit": "npm run lint && npm run format:check && npm run markdown:lint && npm test",
     "prepush": "npm run precommit && npm run security:audit",
-    "ci": "npm run lint && npm run format:check && npm run markdown:lint && npm run fences:check && npm run links:check:ci && npm run test:coverage && npm run security:audit",
+    "ci": "npm run lint && npm run format:check && npm run markdown:lint && npm run fences:check && npm run docs:check && npm run links:check:ci && npm run test:coverage && npm run security:audit",
     "security:audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix",
     "clean": "rm -rf node_modules coverage .vitest",

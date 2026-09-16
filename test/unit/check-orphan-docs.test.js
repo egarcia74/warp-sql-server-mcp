@@ -137,6 +137,34 @@ describe('collectLinkTargets', () => {
     const markdown = ['[text][See Also]', '', '[see   also]: user/A.md'].join('\n');
     expect(collectLinkTargets(markdown)).toEqual(['user/A.md']);
   });
+
+  // Regression: an inline code span renders as literal text, exactly like a fenced
+  // example but on one line. A doc reachable only from someone's illustration of link
+  // syntax is not reachable at all.
+  it('ignores links inside inline code spans', () => {
+    expect(collectLinkTargets('Write it as `[example](ORPHAN.md)` in the nav.')).toEqual([]);
+  });
+
+  it('ignores a link in a multi-backtick span and keeps a real link beside it', () => {
+    const markdown = 'Use ``[a](ORPHAN.md)`` but follow [real](user/REAL.md).';
+    expect(collectLinkTargets(markdown)).toEqual(['user/REAL.md']);
+  });
+
+  // Regression: `![alt](x)` matched from the `[` after the `!`, so an image destination
+  // counted as navigation. An image is fetched, not followed.
+  it('ignores inline image destinations', () => {
+    expect(collectLinkTargets('![diagram](ORPHAN.md)')).toEqual([]);
+  });
+
+  it('ignores reference-style and collapsed image destinations', () => {
+    expect(collectLinkTargets(['![alt][img]', '', '[img]: ORPHAN.md'].join('\n'))).toEqual([]);
+    expect(collectLinkTargets(['![img][]', '', '[img]: ORPHAN.md'].join('\n'))).toEqual([]);
+  });
+
+  it('still follows a real link that sits next to an image', () => {
+    const markdown = '![diagram](diagram.png) and [the guide](user/GUIDE.md)';
+    expect(collectLinkTargets(markdown)).toEqual(['user/GUIDE.md']);
+  });
 });
 
 describe('resolveTarget', () => {
@@ -171,6 +199,36 @@ describe('resolveTarget', () => {
 
   it('treats a root-relative link as repo-relative', () => {
     expect(resolveTarget('/docs/user/QUICKSTART.md', from)).toBe('docs/user/QUICKSTART.md');
+  });
+
+  // Regression: a percent-encoded filename never matched the on-disk key, so a perfectly
+  // navigable document was reported as an orphan and failed CI. A false alarm is worse
+  // than a miss - it teaches maintainers that the gate is wrong rather than the docs.
+  it('percent-decodes a path so it matches the file on disk', () => {
+    expect(resolveTarget('user/My%20Guide.md', from)).toBe('docs/user/My Guide.md');
+    expect(resolveTarget('user/Caf%C3%A9.md', from)).toBe('docs/user/Café.md');
+  });
+
+  it('keeps a malformed escape as written rather than throwing', () => {
+    expect(resolveTarget('user/100%.md', from)).toBe('docs/user/100%.md');
+  });
+
+  it('does not let an encoded traversal smuggle a path out of docs/', () => {
+    expect(resolveTarget('%2E%2E/%2E%2E/etc/passwd.md', from)).toBeNull();
+  });
+});
+
+describe('a percent-encoded link end to end', () => {
+  it('reaches the document it names, instead of reporting it orphaned', () => {
+    const result = findOrphanDocs(
+      docsMap({
+        'docs/README.md': '[guide](user/My%20Guide.md)',
+        'docs/user/My Guide.md': 'a doc whose name has a space'
+      })
+    );
+
+    expect(result.orphans).toEqual([]);
+    expect(result.ok).toBe(true);
   });
 });
 

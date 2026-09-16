@@ -87,7 +87,13 @@ export const AMBIENT_VARS = new Map([
  * a lint script - costs more than it buys here.
  */
 export function maskNonCode(source) {
-  const out = [...source];
+  // Split into UTF-16 code units, NOT code points: every index below - `i`, `j`,
+  // `source.length`, `indexOf` - is a code-unit offset, and `[...source]` would yield a
+  // code-point array whose indices drift left of those by one per astral character. The
+  // drift silently relocates each blanked span, and past a dozen emoji it erases a real
+  // `process.env` read outright, so the scan reports "in sync" while a variable goes
+  // undocumented. `Array.from` with a length is the spelling that stays in code units.
+  const out = Array.from({ length: source.length }, (_, index) => source[index]);
   const blank = (from, to) => {
     for (let k = from; k < to && k < out.length; k++) {
       if (out[k] !== '\n') out[k] = ' ';
@@ -112,7 +118,43 @@ export function maskNonCode(source) {
       i = j;
       continue;
     }
-    if (source[i] === '"' || source[i] === "'" || source[i] === '`') {
+    // A template literal is not simply a string: everything inside `${...}` is executable
+    // code, so blanking the whole body would hide a real read - `` `${process.env.X}` ``
+    // is exactly how a URL or connection string gets built. The literal text around the
+    // substitutions is still masked; only the substitutions are left standing.
+    if (source[i] === '`') {
+      let j = i + 1;
+      let literalStart = i + 1;
+      while (j < source.length) {
+        if (source[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (source[j] === '`') break;
+        if (source[j] === '$' && source[j + 1] === '{') {
+          blank(literalStart, j);
+          // Walk to the matching close brace, counting nesting so that an object literal
+          // or a nested template inside the substitution does not end it early.
+          let depth = 0;
+          let k = j + 1;
+          for (; k < source.length; k++) {
+            if (source[k] === '{') depth++;
+            else if (source[k] === '}') {
+              depth--;
+              if (depth === 0) break;
+            }
+          }
+          j = k < source.length ? k + 1 : source.length;
+          literalStart = j;
+          continue;
+        }
+        j++;
+      }
+      blank(literalStart, j);
+      i = j < source.length ? j + 1 : source.length;
+      continue;
+    }
+    if (source[i] === '"' || source[i] === "'") {
       const quote = source[i];
       let j = i + 1;
       while (j < source.length) {
@@ -139,6 +181,22 @@ export function maskNonCode(source) {
 }
 
 /**
+ * True when the access ending at `after` is being written to rather than read.
+ *
+ * `process.env.CHILD_FLAG = '1'` sets a variable for a child process; it is an output of
+ * this program, not a setting a user supplies, so demanding an ENV-VARS.md entry for it
+ * would document a knob that does not exist and push someone towards a bogus entry.
+ *
+ * Only a plain `=` counts. `==`, `===` and `=>` are not assignments at all, and the
+ * compound forms (`+=`, `||=`, `??=`) read the current value before writing it back, which
+ * makes them genuine reads.
+ */
+function isAssignmentTarget(masked, after) {
+  const rest = masked.slice(after);
+  return /^\s*=(?![=>])/.test(rest);
+}
+
+/**
  * Every `process.env.NAME` / `process.env['NAME']` that is actually code in one file.
  *
  * Both spellings are matched because both appear in JavaScript generally; only the dotted
@@ -149,6 +207,7 @@ export function readEnvVarsFromSource(source) {
   const found = new Set();
 
   for (const match of masked.matchAll(/process\.env\.([A-Za-z_$][A-Za-z0-9_$]*)/g)) {
+    if (isAssignmentTarget(masked, match.index + match[0].length)) continue;
     found.add(match[1]);
   }
 
@@ -175,15 +234,46 @@ export function readEnvVarsFromSource(source) {
 }
 
 /**
+ * Markdown a reader never sees: fenced blocks and HTML comments.
+ *
+ * The comment pass loops to a fixed point and then truncates at the first surviving
+ * opener, matching the orphan check's treatment - an unterminated `<!--` hides the rest of
+ * the document, and removing one balanced pair can expose an opener that was inside it.
+ */
+export function stripHiddenMarkdown(markdown) {
+  const withoutFences = markdown.replace(/^(\s*)(```|~~~)[\s\S]*?^\1\2\s*$/gm, '');
+
+  let visible = withoutFences;
+  let previous;
+  do {
+    previous = visible;
+    visible = visible.replaceAll(/<!--[\s\S]*?-->/g, '');
+  } while (visible !== previous);
+
+  const unterminated = visible.indexOf('<!--');
+  return unterminated === -1 ? visible : visible.slice(0, unterminated);
+}
+
+/**
  * The variables ENV-VARS.md documents, taken from its `### \`NAME\`` headings.
  *
  * Headings rather than every backticked capitalised token: the prose legitimately
  * mentions values (`CORP`, `WORKGROUP`) and cross-references other variables, and only a
  * heading means "this document defines this variable".
+ *
+ * Fenced blocks and HTML comments are removed first. A heading-shaped line inside either
+ * renders as nothing - a `.env` sample in a fence is exactly the shape that collides - and
+ * counting it would let a shipped read satisfy the gate against documentation no reader
+ * can see, which is the precise failure this check exists to prevent.
+ *
+ * Inline code is deliberately NOT stripped here, unlike in the orphan check: every heading
+ * in this document is written `### \`NAME\``, so removing code spans would delete the very
+ * thing being collected.
  */
 export function readDocumentedEnvVars(markdown) {
+  const rendered = stripHiddenMarkdown(markdown);
   const found = new Set();
-  for (const match of markdown.matchAll(/^#{2,4}\s+`([A-Z][A-Z0-9_]*)`\s*$/gm)) {
+  for (const match of rendered.matchAll(/^#{2,4}\s+`([A-Z][A-Z0-9_]*)`\s*$/gm)) {
     found.add(match[1]);
   }
   return found;

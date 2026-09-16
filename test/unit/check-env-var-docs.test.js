@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -127,6 +127,65 @@ describe('readEnvVarsFromSource', () => {
   });
 });
 
+describe('readEnvVarsFromSource, on the shapes that used to fool it', () => {
+  // Regression: `[...source]` indexed by code POINT while every offset was a code UNIT,
+  // so each blanked span drifted left of its target by one per astral character. At
+  // twelve emoji the drift was wide enough to blank the real read instead of the comment,
+  // and the scan returned nothing at all while reporting "in sync".
+  it('neither loses a real read nor leaks a commented one after astral characters', () => {
+    const source = [
+      `const banner = "${'🎉'.repeat(12)}";`,
+      '// removed: process.env.GHOST',
+      'const r = process.env.REAL;'
+    ].join('\n');
+
+    expect([...readEnvVarsFromSource(source)]).toEqual(['REAL']);
+  });
+
+  // Regression: a template literal was masked like a plain string, so the executable
+  // `${...}` inside it was blanked and a real read disappeared.
+  it('reads a variable used inside a template substitution', () => {
+    const source = 'const url = `${process.env.NEW_SETTING}/path`;';
+    expect([...readEnvVarsFromSource(source)]).toEqual(['NEW_SETTING']);
+  });
+
+  it('still masks the literal text of a template literal', () => {
+    const source = 'const help = `set process.env.NOT_A_READ to configure`;';
+    expect([...readEnvVarsFromSource(source)]).toEqual([]);
+  });
+
+  it('handles nested braces inside a substitution', () => {
+    const source = 'const v = `${ { a: process.env.NESTED }.a }`;';
+    expect([...readEnvVarsFromSource(source)]).toEqual(['NESTED']);
+  });
+
+  it('handles several substitutions in one template', () => {
+    const source = 'const dsn = `${process.env.HOST_A}:${process.env.PORT_B}/x`;';
+    expect([...readEnvVarsFromSource(source)].sort()).toEqual(['HOST_A', 'PORT_B']);
+  });
+
+  // Regression: an assignment is this program's output, not a user-supplied setting, so
+  // demanding an ENV-VARS.md entry for it would document a knob that does not exist.
+  it('ignores a plain assignment to process.env', () => {
+    expect([...readEnvVarsFromSource('process.env.CHILD_FLAG = "1";')]).toEqual([]);
+    expect([...readEnvVarsFromSource('process.env.SPACED   =   "1";')]).toEqual([]);
+  });
+
+  it('still counts comparisons, which only look like assignments', () => {
+    expect([...readEnvVarsFromSource('if (process.env.A === "x") {}')]).toEqual(['A']);
+    expect([...readEnvVarsFromSource('if (process.env.B == "x") {}')]).toEqual(['B']);
+  });
+
+  it('still counts compound assignments, which read before they write', () => {
+    const source = 'process.env.C ||= "d"; process.env.E += "f"; process.env.G ??= "h";';
+    expect([...readEnvVarsFromSource(source)].sort()).toEqual(['C', 'E', 'G']);
+  });
+
+  it('still counts a read in an arrow function body', () => {
+    expect([...readEnvVarsFromSource('const f = () => process.env.D;')]).toEqual(['D']);
+  });
+});
+
 describe('maskNonCode', () => {
   it('preserves length and newlines so offsets and line numbers still line up', () => {
     const source = ['// comment', 'const a = "text";', '/* block */'].join('\n');
@@ -143,6 +202,11 @@ describe('maskNonCode', () => {
   it('leaves ordinary code untouched', () => {
     const code = 'const x = process.env.FOO || 1;';
     expect(maskNonCode(code)).toBe(code);
+  });
+
+  it('preserves length in UTF-16 code units, astral characters included', () => {
+    const source = 'const a = "🎉🎉🎉"; const b = `x${1}`;';
+    expect(maskNonCode(source)).toHaveLength(source.length);
   });
 });
 
@@ -171,6 +235,29 @@ describe('readDocumentedEnvVars', () => {
   it('ignores a lower-case or non-variable heading', () => {
     const markdown = ['### `npm run logs`', '', '## Overview', ''].join('\n');
     expect([...readDocumentedEnvVars(markdown)]).toEqual([]);
+  });
+
+  // Regression: a heading-shaped line inside a fence renders as nothing, so counting it
+  // let a shipped read satisfy the gate against documentation no reader can see - the
+  // precise failure this check exists to prevent.
+  it('ignores a heading-shaped line inside a fenced block', () => {
+    const markdown = ['### `REAL_VAR`', '', '```markdown', '### `FENCED_VAR`', '```', ''].join(
+      '\n'
+    );
+
+    expect([...readDocumentedEnvVars(markdown)]).toEqual(['REAL_VAR']);
+  });
+
+  it('ignores a heading inside an HTML comment, terminated or not', () => {
+    const commented = ['### `REAL_VAR`', '', '<!--', '### `COMMENTED_VAR`', '-->'].join('\n');
+    const unterminated = ['### `REAL_VAR`', '', '<!--', '### `DANGLING_VAR`'].join('\n');
+
+    expect([...readDocumentedEnvVars(commented)]).toEqual(['REAL_VAR']);
+    expect([...readDocumentedEnvVars(unterminated)]).toEqual(['REAL_VAR']);
+  });
+
+  it('keeps inline code, since every heading in the reference is backticked', () => {
+    expect([...readDocumentedEnvVars('### `STILL_COUNTED`')]).toEqual(['STILL_COUNTED']);
   });
 });
 
@@ -334,6 +421,57 @@ describe('checkEnvVarDocs against a synthetic package', () => {
       expect(result.unread).toEqual(['STALE_VAR']);
       expect(result.ok).toBe(false);
     });
+  });
+});
+
+describe('the gate actually runs', () => {
+  const repoRoot = join(import.meta.dirname, '..', '..');
+  const readRepo = relative => readFileSync(join(repoRoot, relative), 'utf8');
+
+  /** The quoted entries of every `paths:` list in the workflow. */
+  const workflowPathFilters = () => {
+    const yaml = readRepo('.github/workflows/docs.yml');
+    const onBlock = yaml.slice(0, yaml.indexOf('\njobs:'));
+    return [...onBlock.matchAll(/^\s+-\s+'([^']+)'\s*$/gm)].map(match => match[1]);
+  };
+
+  /** GitHub's path-filter globbing, narrowed to the forms this workflow uses. */
+  const filterMatches = (pattern, file) => {
+    const source = pattern
+      .split('**')
+      .map(part => part.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`).replaceAll('*', '[^/]*'))
+      .join('.*');
+    return new RegExp(`^${source}$`).test(file);
+  };
+
+  // This one guards the future rather than fixing the present: today's filter does cover
+  // today's publication scope. The hazard is drift - publish a new top-level path and the
+  // `package.json` change itself still triggers the workflow, but every later commit to
+  // that path merges without the gate running. Deriving the assertion from the scanner's
+  // own source list makes that impossible to land silently: widening `files` fails here
+  // until the trigger is widened in the same change.
+  it('triggers the documentation workflow for every file the env-var scan reads', () => {
+    const filters = workflowPathFilters();
+    const { sources } = checkEnvVarDocs();
+
+    const uncovered = sources.filter(file => !filters.some(p => filterMatches(p, file)));
+
+    expect(uncovered).toEqual([]);
+  });
+
+  it('would notice a published path the trigger does not cover', () => {
+    // The guard above is only meaningful if it can fail; this pins that it can.
+    const filters = ['index.js', 'lib/**'];
+    const uncovered = ['index.js', 'lib/a.js', 'plugins/b.js'].filter(
+      file => !filters.some(p => filterMatches(p, file))
+    );
+
+    expect(uncovered).toEqual(['plugins/b.js']);
+  });
+
+  it('runs the documentation checks as part of the full local gate', () => {
+    // Otherwise `npm run ci` passes locally while the CI workflow fails on the same tree.
+    expect(JSON.parse(readRepo('package.json')).scripts.ci).toContain('npm run docs:check');
   });
 });
 

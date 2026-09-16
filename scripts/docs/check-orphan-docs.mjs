@@ -99,6 +99,12 @@ const bareTarget = target => target.replace(/^<|>$/g, '');
  *  - **HTML comments.** `<!-- [x](y.md) -->` renders as nothing, so a reader cannot follow
  *    it. Commenting a nav entry out instead of deleting it is the ordinary way a link
  *    stops working, and it is exactly the case the gate has to notice rather than excuse.
+ *  - **Inline code spans.** `` `[example](X.md)` `` renders as literal text, exactly like a
+ *    fenced example but on one line. This document is full of them, and a doc reachable
+ *    only from somebody's illustration of link syntax is not reachable at all.
+ *
+ * Inline code is stripped last, after fences: a backtick inside a fenced block belongs to
+ * the fence, and stripping spans first could pair one of those with a later real span.
  *
  * The second pass is not redundant. An UNTERMINATED `<!--` comments out the rest of the
  * document when rendered, so nothing after it is navigable either - but the balanced-pair
@@ -119,7 +125,11 @@ function stripNonProse(markdown) {
   } while (prose !== previous);
 
   const unterminated = prose.indexOf('<!--');
-  return unterminated === -1 ? prose : prose.slice(0, unterminated);
+  const visible = unterminated === -1 ? prose : prose.slice(0, unterminated);
+
+  // Inline code spans, longest fence first so ``a ` b`` is consumed as one span rather
+  // than as two single-backtick spans around it.
+  return visible.replaceAll(/(`+)(?:(?!\1)[\s\S])*\1/g, '');
 }
 
 /**
@@ -144,7 +154,12 @@ export function collectLinkTargets(markdown) {
   const body = prose.replace(/^\s{0,3}\[[^\]]+\]:\s*(?:<[^>]*>|\S+).*$/gm, '');
 
   // Inline links: [text](target), [text](<target>), [text](target "title").
-  for (const match of body.matchAll(/\[[^\]]*\]\(\s*(<[^>]*>|[^\s)]+)[^)]*\)/g)) {
+  //
+  // The lookbehind excludes images. `![diagram](X.md)` is a destination the browser
+  // fetches, not somewhere a reader can navigate to, so an image is not an edge in a
+  // reachability graph - and a doc "reachable" only as somebody's image source is
+  // unreachable in every sense that matters.
+  for (const match of body.matchAll(/(?<!!)\[[^\]]*\]\(\s*(<[^>]*>|[^\s)]+)[^)]*\)/g)) {
     targets.push(bareTarget(match[1]));
   }
 
@@ -157,11 +172,16 @@ export function collectLinkTargets(markdown) {
   // shortcut `[label]`. A shortcut only renders as a link when a definition exists, which
   // is precisely the condition applied below, so over-matching plain bracketed text here
   // cannot invent an edge.
+  // The lookbehinds drop reference-style images (`![alt][label]`, `![label]`) for the same
+  // reason the inline pass drops `![alt](x)`: an image destination is not navigation.
   const used = new Set();
-  for (const match of body.matchAll(/\[([^\]]*)\]\[([^\]]*)\]/g)) {
+  for (const match of body.matchAll(/(?<!!)\[([^\]]*)\]\[([^\]]*)\]/g)) {
     used.add(normaliseLabel(match[2].trim() === '' ? match[1] : match[2]));
   }
-  for (const match of body.matchAll(/\[([^\]]+)\](?![([:])/g)) {
+  // `(?<!\])` keeps the second half of a full reference out of the shortcut pass: in
+  // `![alt][img]` the `[img]` is not preceded by `!` and would otherwise sneak the image
+  // back in. Nothing is lost - the full-reference pass above already records that label.
+  for (const match of body.matchAll(/(?<![!\]])\[([^\]]+)\](?![([:])/g)) {
     used.add(normaliseLabel(match[1]));
   }
   for (const label of used) {
@@ -169,6 +189,26 @@ export function collectLinkTargets(markdown) {
   }
 
   return targets;
+}
+
+/**
+ * Percent-decodes a link path so it can be compared against a filename on disk.
+ *
+ * A filename with a space is written `user/My%20Guide.md` in markdown and renders as a
+ * working link, but the raw text never equals the `docs/user/My Guide.md` key in the map.
+ * Left encoded, the check calls a perfectly navigable document an orphan and fails CI over
+ * it - a false alarm, which costs more than a miss: it teaches maintainers that the gate
+ * is wrong rather than that the docs are.
+ *
+ * A malformed escape (a bare `%` in a filename, say) makes `decodeURIComponent` throw. The
+ * original is the right answer then: it is what the filename actually looks like.
+ */
+function decodePath(target) {
+  try {
+    return decodeURIComponent(target);
+  } catch {
+    return target;
+  }
 }
 
 /**
@@ -180,7 +220,7 @@ export function resolveTarget(target, fromFile) {
   // Absolute URLs, protocol-relative URLs and mailto: never point at a file here.
   if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('//')) return null;
 
-  const withoutFragment = target.split('#')[0].split('?')[0].trim();
+  const withoutFragment = decodePath(target.split('#')[0].split('?')[0].trim());
   if (withoutFragment === '') return null; // same-page anchor
   if (!withoutFragment.toLowerCase().endsWith('.md')) return null; // folder or .html
 
