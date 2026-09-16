@@ -11,6 +11,31 @@
  * What stays duplicated is the part that genuinely differs: the orphan gate also strips
  * inline code spans, and the env-var gate deliberately does not, because every heading it
  * collects is written `### \`NAME\``.
+ *
+ * ## Known limitations
+ *
+ * These are decisions, not oversights. This module reads Markdown block structure well
+ * enough to answer the two questions the gates ask; it is not a CommonMark parser, and the
+ * cases below were each raised in review, checked against this repository, and left open
+ * because closing them means tracking container state (blockquote depth, list-item indent)
+ * - the same "become a parser" step already declined for `maskNonCode`, for the same
+ * reason: a lint script should not carry a parser dependency. Every one of them was
+ * verified to have ZERO instances in `docs/` when written, and both files a wrong verdict
+ * would actually bite - `docs/README.md` and `docs/reference/ENV-VARS.md` - are clean of
+ * all of them. Tracked in #1257; if one of these ever appears in a real document, the
+ * answer is to fix it then, with the instance in hand.
+ *
+ *  - **Fenced blocks inside a blockquote or list item.** A `> ` or list-marker prefix sits
+ *    before the fence, so the line-anchored scan never enters the block. Fences indented
+ *    0-3 spaces ARE handled; only container-prefixed ones are not.
+ *  - **Code-span closers of a different backtick-run length.** CommonMark closes a span
+ *    only with a run of the same length; `stripCodeSpans` will also accept a shorter one.
+ *  - **HTML-comment openers inside a code span.** A literal `<!--` shown as code reads as
+ *    an unterminated comment and truncates the rest of the document.
+ *  - **Reference definitions inside containers, and ones that interrupt a paragraph.**
+ *    CommonMark treats a definition immediately after paragraph text as paragraph content.
+ *    This repository uses inline links exclusively and contains no reference definitions
+ *    at all, so both rules are currently moot.
  */
 
 /**
@@ -74,6 +99,24 @@ export function stripFencedBlocks(markdown) {
  * an opening tag has no closing one: every opener would rescan to end of document. An
  * unterminated opener takes the rest of the document, which is what a renderer does with it.
  */
+/**
+ * The first `</name` in `lower` at or after `from` whose tag name actually ends there.
+ *
+ * Scanning rather than a regex keeps the linear behaviour the caller documents above.
+ */
+function findCloser(lower, name, from) {
+  const needle = `</${name}`;
+  let at = lower.indexOf(needle, from);
+
+  while (at !== -1) {
+    const after = lower[at + needle.length];
+    if (after === undefined || after === '>' || /\s/.test(after)) return at;
+    at = lower.indexOf(needle, at + needle.length);
+  }
+
+  return -1;
+}
+
 export function stripRawTextHtml(markdown) {
   const lower = markdown.toLowerCase();
   const opener = /<(pre|script|style|textarea)\b/gi;
@@ -85,7 +128,11 @@ export function stripRawTextHtml(markdown) {
   while ((match = opener.exec(markdown)) !== null) {
     out += markdown.slice(cursor, match.index);
 
-    const closer = lower.indexOf(`</${match[1].toLowerCase()}`, match.index);
+    // The character after the tag name has to end it. `indexOf('</pre')` alone also matches
+    // `</pretend>`, which closes the block early and lets everything between the impostor
+    // and the real closer out - the same boundary mistake `href` needed `(?<![-\w:])` for,
+    // on the closing side. Only whitespace or `>` may follow (`</pre >` is valid HTML).
+    const closer = findCloser(lower, match[1].toLowerCase(), match.index);
     const tagEnd = closer === -1 ? -1 : markdown.indexOf('>', closer);
     if (tagEnd === -1) return out; // unterminated: the rest is raw text
 

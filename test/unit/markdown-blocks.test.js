@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   stripFencedBlocks,
   stripHtmlComments,
+  stripRawTextHtml,
   byCodeUnit
 } from '../../scripts/docs/markdown-blocks.mjs';
 
@@ -87,6 +88,34 @@ describe('stripHtmlComments', () => {
   it('reaches a fixed point rather than replacing once', () => {
     expect(stripHtmlComments('a <!-- <!-- inner --> --> b')).not.toContain('<!--');
     expect(stripHtmlComments('a <!--x<!--y-->z--> b')).not.toContain('<!--');
+  });
+});
+
+describe('stripRawTextHtml', () => {
+  // Regression: the closer was found with a bare `indexOf('</pre')`, so `</pretend>` ended
+  // the block - everything between the impostor and the real closer escaped and counted as
+  // navigable. The same boundary mistake `href` needed `(?<![-\w:])` for, on the other side.
+  it('does not close a raw-text block on a tag that merely starts with its name', () => {
+    const markdown = '<pre>a </pretend> [hidden](H.md) </pre> [live](L.md)';
+
+    expect(stripRawTextHtml(markdown)).not.toContain('H.md');
+    expect(stripRawTextHtml(markdown)).toContain('L.md');
+  });
+
+  it('still closes on the real tag, with or without trailing space', () => {
+    expect(stripRawTextHtml('<pre>[a](A.md)</pre> [live](L.md)')).not.toContain('A.md');
+    expect(stripRawTextHtml('<pre>[a](A.md)</pre > [live](L.md)')).toContain('L.md');
+  });
+
+  it('applies the same boundary to every raw-text tag, not just pre', () => {
+    const markdown = '<script>x</scripty> [hidden](H.md) </script> [live](L.md)';
+
+    expect(stripRawTextHtml(markdown)).not.toContain('H.md');
+    expect(stripRawTextHtml(markdown)).toContain('L.md');
+  });
+
+  it('takes the rest of the document when the opener is never closed', () => {
+    expect(stripRawTextHtml('<pre>[a](A.md) [b](B.md)')).toBe('');
   });
 });
 
