@@ -99,11 +99,27 @@ const bareTarget = target => target.replace(/^<|>$/g, '');
  *  - **HTML comments.** `<!-- [x](y.md) -->` renders as nothing, so a reader cannot follow
  *    it. Commenting a nav entry out instead of deleting it is the ordinary way a link
  *    stops working, and it is exactly the case the gate has to notice rather than excuse.
+ *
+ * The second pass is not redundant. An UNTERMINATED `<!--` comments out the rest of the
+ * document when rendered, so nothing after it is navigable either - but the balanced-pair
+ * regex above cannot match it and would leave those links looking like edges. Removing one
+ * pair can also expose an opener that was previously inside the matched span, which is the
+ * incomplete-sanitization shape CodeQL flags (alert 168): replacing once is not a fixed
+ * point. Truncating at the first surviving `<!--` settles both, and terminates because the
+ * string only ever gets shorter.
  */
 function stripNonProse(markdown) {
-  return markdown
-    .replace(/^(\s*)(```|~~~)[\s\S]*?^\1\2\s*$/gm, '')
-    .replaceAll(/<!--[\s\S]*?-->/g, '');
+  const withoutFences = markdown.replace(/^(\s*)(```|~~~)[\s\S]*?^\1\2\s*$/gm, '');
+
+  let prose = withoutFences;
+  let previous;
+  do {
+    previous = prose;
+    prose = prose.replaceAll(/<!--[\s\S]*?-->/g, '');
+  } while (prose !== previous);
+
+  const unterminated = prose.indexOf('<!--');
+  return unterminated === -1 ? prose : prose.slice(0, unterminated);
 }
 
 /**

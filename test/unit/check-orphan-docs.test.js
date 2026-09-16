@@ -90,6 +90,24 @@ describe('collectLinkTargets', () => {
     expect(collectLinkTargets(markdown)).toEqual(['user/VISIBLE.md']);
   });
 
+  // Regression (CodeQL alert 168): an UNTERMINATED `<!--` comments out the rest of the
+  // rendered document, so nothing after it is navigable - but the balanced-pair regex
+  // cannot match it, and a single replace pass left the links behind looking like edges.
+  it('ignores links after an unterminated HTML comment', () => {
+    const markdown = ['[live](user/VISIBLE.md)', '', '<!--', '[dead](user/HIDDEN.md)'].join('\n');
+    expect(collectLinkTargets(markdown)).toEqual(['user/VISIBLE.md']);
+  });
+
+  it('ignores an opener left exposed by removing a balanced comment', () => {
+    const markdown = '<!-- x --> <!-- [dead](user/HIDDEN.md)';
+    expect(collectLinkTargets(markdown)).toEqual([]);
+  });
+
+  it('strips nested openers rather than leaving a stray marker behind', () => {
+    const markdown = '<!-- <!-- [dead](user/HIDDEN.md) --> [live](user/VISIBLE.md)';
+    expect(collectLinkTargets(markdown)).not.toContain('user/HIDDEN.md');
+  });
+
   it('ignores an HTML-commented reference definition and its reference', () => {
     const markdown = ['<!-- [hidden]: user/HIDDEN.md -->', '', 'see [hidden]'].join('\n');
     expect(collectLinkTargets(markdown)).toEqual([]);
