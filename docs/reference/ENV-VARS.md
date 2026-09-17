@@ -370,6 +370,8 @@ accidental certificate trust in cloud production environments using private IP a
 
 These are read rather than configured in the usual sense: the server inspects them to work out what
 kind of environment it is running in. They are listed because setting them **does** change what the server does.
+Variables that used to belong here and no longer do are recorded at the end of the section, so that
+an existing configuration that still sets them is easy to understand.
 
 ### `NODE_ENV`
 
@@ -390,45 +392,23 @@ kind of environment it is running in. They are listed because setting them **doe
   - `production` (JSON logs; no development SSL indicator)
   - _(unset)_ (development log formatting; SSL trust decided by the host - see above)
 
-### `MCP_TRANSPORT`
+### Removed: `MCP_TRANSPORT`, `VSCODE_MCP` and `PARENT_PROCESS`
 
-- **Default**: _(unset)_
-- **Description**: Set to `stdio` by an MCP client to declare that stdout carries the protocol
-  stream. Setting it is sufficient, on its own, to keep **everything** the server writes off
-  stdout: the startup banners (dotenv's included) and every Winston line, on both the main and
-  the security-audit channels, go to stderr instead.
-- **Note**: this was not always true. Until #1256 the variable gated only the startup banners,
-  while the logger keyed its stderr routing off the VS Code variables alone - so a client that
-  declared `MCP_TRANSPORT=stdio` and nothing else still had log lines interleaved with its
-  JSON-RPC. The decision now follows the transport and is made in one place
-  (`lib/utils/mcp-environment.js`), shared by `index.js`, `cli.js` and `Logger`. See the
-  [Debug Logging Guide](../developer/DEBUG-LOGGING.md) for what reaches which stream.
-- **Values**:
-  - `stdio` (MCP stdio transport)
-  - _(unset)_ (auto-detected from the TTY state and the other indicators below)
+These three used to select where the server's console output went. **They no longer do
+anything, and nothing is lost by removing them from your client configuration** - setting them
+is now a harmless no-op, and leaving them set is equally harmless.
 
-### `VSCODE_MCP`
+The server has exactly one transport, `StdioServerTransport`, so stdout is the JSON-RPC
+protocol channel every time the server runs - for every client, whether or not it declares
+anything. Keeping console output off stdout is therefore not conditional on anything an
+environment variable could say. Every startup banner (dotenv's included) and every Winston
+line, on both the main and the security-audit channels, goes to stderr unconditionally.
 
-- **Default**: _(unset)_
-- **Description**: Set to `true` to force stdio-transport handling on, regardless of what
-  auto-detection concludes - it moves every console transport to stderr. It is the manual
-  override, not the mechanism: [`MCP_TRANSPORT=stdio`](#mcp_transport) does the same thing and
-  is what a client should be setting. `VSCODE_MCP` is documented here as configuration because
-  it is the one signal a user sets deliberately; the others
-  (`VSCODE_PID`, `VSCODE_IPC_HOOK`, [`PARENT_PROCESS`](#parent_process), and a stdin/stdout pair
-  that are both pipes) are set by the environment. Any one of them is enough.
-- **Values**:
-  - `true` (force stdio-transport handling; all console output goes to stderr)
-  - _(unset)_ (auto-detect)
-
-### `PARENT_PROCESS`
-
-- **Default**: _(unset)_
-- **Description**: Optional hint naming the process that launched the server. A value containing
-  `code` or `mcp` is treated as an MCP environment indicator.
-- **Examples**:
-  - `code` (launched by VS Code)
-  - `mcp-client`
+The variables existed because the routing was decided by _detecting_ the client, and a
+detection can be wrong: a client that set none of them had its own log lines interleaved with
+its JSON-RPC (#1256), and `MCP_TRANSPORT=stdio` was honoured by the startup banners but not by
+the logger (#1259). Deleting the question removed both failure modes at once (#1260). See the
+[Debug Logging Guide](../developer/DEBUG-LOGGING.md) for what reaches which stream.
 
 ## Security Configuration Examples
 

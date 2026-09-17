@@ -170,18 +170,17 @@ describe('Logger', () => {
   });
 
   describe('Logger Creation', () => {
-    test('should create logger with development format', () => {
-      // Ensure MCP environment heuristics don't disable color output in dev
-      const mcpSpy = vi.spyOn(Logger.prototype, '_isMcpStdioTransport').mockReturnValue(false);
+    test('should create logger with development format, uncolorized', () => {
       process.env.NODE_ENV = 'development';
 
       logger = new Logger();
 
-      // Verify development-specific formats were used
-      expect(winston.format.colorize).toHaveBeenCalled();
+      // Development uses the human-readable printf format rather than JSON - but never
+      // colorized: this process is always a spawned stdio server, so its output is read
+      // from a client's log pane, where ANSI escapes show as literal garbage (#1260).
       expect(winston.format.printf).toHaveBeenCalled();
       expect(winston.format.json).not.toHaveBeenCalled();
-      mcpSpy.mockRestore();
+      expect(winston.format.colorize).not.toHaveBeenCalled();
     });
 
     test('should create logger with production format', () => {
@@ -855,11 +854,16 @@ describe('Logger', () => {
     });
   });
   describe('Stdio transport stdout protection', () => {
-    // Every environment signal the shared MCP-environment helper reads. Each test states
-    // the whole environment rather than inheriting the developer's shell: running this
-    // suite from a VS Code terminal exports VSCODE_PID, which would otherwise decide the
-    // outcome of the negative control.
-    const MCP_SIGNALS = [
+    // The invariant under test is unconditional (#1260): both console transports route
+    // every level to stderr, whatever the environment, because this Logger only ever
+    // exists inside a server whose only transport is stdio.
+    //
+    // These variables used to *decide* that routing. They are scrubbed here not to set up
+    // the old predicate but to remove it from the picture entirely: the interesting case
+    // is precisely the one with nothing set, which is what used to fall through to stdout.
+    // Each test states the whole environment rather than inheriting the developer's shell,
+    // since running this suite from a VS Code terminal exports VSCODE_PID.
+    const FORMER_MCP_SIGNALS = [
       'MCP_TRANSPORT',
       'VSCODE_MCP',
       'VSCODE_PID',
@@ -877,8 +881,8 @@ describe('Logger', () => {
     const consoleOptions = () => winston.transports.Console.mock.calls.map(([options]) => options);
 
     beforeEach(() => {
-      savedSignals = new Map(MCP_SIGNALS.map(name => [name, process.env[name]]));
-      for (const name of MCP_SIGNALS) delete process.env[name];
+      savedSignals = new Map(FORMER_MCP_SIGNALS.map(name => [name, process.env[name]]));
+      for (const name of FORMER_MCP_SIGNALS) delete process.env[name];
 
       // NODE_ENV is 'test' under vitest, and that suppresses both console transports
       // outright - a transport that is never constructed cannot be asserted on.
@@ -901,9 +905,10 @@ describe('Logger', () => {
       process.stdin.isTTY = savedStdinIsTTY;
     });
 
-    test('routes main logger output to stderr when MCP_TRANSPORT=stdio', () => {
-      process.env.MCP_TRANSPORT = 'stdio';
-
+    test('routes main logger output to stderr with no environment variables set', () => {
+      // The whole point: nothing in the environment says "MCP". This is the case the old
+      // detection got wrong - any client that declared nothing had its log lines written
+      // into its own JSON-RPC stream.
       logger = new Logger({ level: 'debug' });
 
       const [main] = consoleOptions();
@@ -911,9 +916,7 @@ describe('Logger', () => {
       expect(main.stderrLevels).toEqual(expect.arrayContaining(STDERR_LEVELS));
     });
 
-    test('routes security audit output to stderr when MCP_TRANSPORT=stdio', () => {
-      process.env.MCP_TRANSPORT = 'stdio';
-
+    test('routes security audit output to stderr with no environment variables set', () => {
       logger = new Logger({ level: 'debug', enableSecurityAudit: true });
 
       const options = consoleOptions();
@@ -923,18 +926,10 @@ describe('Logger', () => {
       expect(audit.stderrLevels).toEqual(expect.arrayContaining(STDERR_LEVELS));
     });
 
-    test('routes both transports to stderr when VSCODE_MCP=true', () => {
-      process.env.VSCODE_MCP = 'true';
-
-      logger = new Logger({ level: 'debug', enableSecurityAudit: true });
-
-      for (const options of consoleOptions()) {
-        expect(options.stderrLevels).toEqual(expect.arrayContaining(STDERR_LEVELS));
-      }
-    });
-
-    test('leaves both transports on stdout when nothing indicates a protocol stream', () => {
-      // An interactive terminal on both ends: no client is reading stdout for JSON-RPC.
+    test('routes both transports to stderr even with a TTY on both stdio ends', () => {
+      // An interactive terminal on both ends was the old predicate's strongest reason to
+      // answer "not a protocol stream". It no longer buys stdout anything: there is no
+      // predicate, and a terminal displays stderr just the same.
       process.stdout.isTTY = true;
       process.stdin.isTTY = true;
 
@@ -943,7 +938,22 @@ describe('Logger', () => {
       const options = consoleOptions();
       expect(options).toHaveLength(2);
       for (const transportOptions of options) {
-        expect(transportOptions.stderrLevels).toBeUndefined();
+        expect(transportOptions.stderrLevels).toEqual(expect.arrayContaining(STDERR_LEVELS));
+      }
+    });
+
+    test('is unaffected by the environment variables that used to decide this', () => {
+      // Setting them is now a harmless no-op rather than a workaround, which is what
+      // ENV-VARS.md promises a user who still has them in a client config.
+      for (const name of FORMER_MCP_SIGNALS) process.env[name] = 'true';
+      process.env.MCP_TRANSPORT = 'stdio';
+
+      logger = new Logger({ level: 'debug', enableSecurityAudit: true });
+
+      const options = consoleOptions();
+      expect(options).toHaveLength(2);
+      for (const transportOptions of options) {
+        expect(transportOptions.stderrLevels).toEqual(expect.arrayContaining(STDERR_LEVELS));
       }
     });
   });

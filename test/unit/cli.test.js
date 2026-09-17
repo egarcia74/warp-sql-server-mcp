@@ -166,4 +166,62 @@ describe('CLI Security Tests', () => {
     expect(stdout).toContain(pkg.version);
     expect(stdout).toContain('@egarcia74/warp-sql-server-mcp');
   });
+
+  describe('start keeps its banners off stdout', () => {
+    // `start` spawns index.js with `stdio: 'inherit'`, so this process's stdout is the
+    // JSON-RPC channel. The environment here declares *nothing* - no MCP_TRANSPORT, no
+    // VSCODE_* - which is exactly the configuration the deleted detection got wrong
+    // (#1260). The banners must reach stderr anyway.
+    const FORMER_MCP_SIGNALS = [
+      'MCP_TRANSPORT',
+      'VSCODE_MCP',
+      'VSCODE_PID',
+      'VSCODE_IPC_HOOK',
+      'PARENT_PROCESS'
+    ];
+
+    /** Runs `cli.js start` briefly and returns whatever each stream received. */
+    async function captureStart() {
+      const env = { ...process.env, HOME: testConfigDir, USERPROFILE: testConfigDir };
+      for (const name of FORMER_MCP_SIGNALS) delete env[name];
+
+      const proc = spawn('node', [CLI_PATH, 'start'], { env, stdio: 'pipe' });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', data => (stdout += data.toString()));
+      proc.stderr.on('data', data => (stderr += data.toString()));
+
+      const closed = new Promise(resolve => proc.on('close', resolve));
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      proc.kill('SIGTERM');
+      await closed;
+
+      return { stdout, stderr };
+    }
+
+    test('routes the startup and config banners to stderr, leaving stdout clean', async () => {
+      fs.writeFileSync(testConfigFile, JSON.stringify({ SQL_SERVER_HOST: 'localhost' }), {
+        mode: 0o600
+      });
+
+      const { stdout, stderr } = await captureStart();
+
+      expect(stderr).toContain('🚀 Starting Warp SQL Server MCP...');
+      expect(stderr).toContain(`✅ Configuration loaded from: ${testConfigFile}`);
+      expect(stdout).not.toContain('Starting Warp SQL Server MCP');
+      expect(stdout).not.toContain('Configuration loaded from');
+    }, 15000);
+
+    test('routes the missing-config warning to stderr too', async () => {
+      // No config file: loadConfigToEnv() takes its other branch, which has its own pair
+      // of banners.
+      const { stdout, stderr } = await captureStart();
+
+      expect(stderr).toContain('No configuration file found at:');
+      expect(stderr).toContain('Using environment variables only.');
+      expect(stdout).not.toContain('No configuration file found at:');
+      expect(stdout).not.toContain('Using environment variables only.');
+    }, 15000);
+  });
 });

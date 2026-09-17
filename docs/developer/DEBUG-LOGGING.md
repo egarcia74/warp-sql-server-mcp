@@ -93,33 +93,36 @@ This tool provides:
 > `configuration.logging.logFile` field reads `Not configured (console only)` until a path
 > is set.
 >
-> **Under a stdio transport, console output goes to stderr - all of it.** stdout is the
-> JSON-RPC channel, so `Logger` sets Winston's `stderrLevels` to every level
+> **All console output goes to stderr, unconditionally.** stdout is the JSON-RPC protocol
+> channel, so `Logger` sets Winston's `stderrLevels` to every level
 > (`error`, `warn`, `info`, `debug`, `verbose`, `silly`) on **both** console transports, the
 > main logger's and the security audit's. An unset `stderrLevels` maps no level to stderr
 > (`winston/lib/winston/transports/console.js:85-87`), which is why the list is exhaustive
 > rather than a subset.
 >
-> The transport is detected by `isMcpStdioTransport()` in `lib/utils/mcp-environment.js`,
-> which `index.js`, `cli.js` and `Logger` all share. Any one of these is enough:
-> `MCP_TRANSPORT=stdio`, `VSCODE_MCP=true`, `VSCODE_PID`, `VSCODE_IPC_HOOK`, a
-> `PARENT_PROCESS` containing `code` or `mcp`, or stdin and stdout both being pipes. In
-> practice an MCP client satisfies the last one whatever else it sets, so a normal stdio
-> session is covered twice over.
+> **There is nothing to configure and nothing to detect.** `StdioServerTransport` is the only
+> transport `index.js` imports or constructs, and `Logger` is constructed nowhere else, so
+> stdout is the protocol channel every time this code runs. `index.js` swallows dotenv's
+> banner and `cli.js` prints its `start` banners on stderr for the same reason - `start`
+> spawns the server with `stdio: 'inherit'`, handing it the very descriptor it just wrote to.
+> A terminal shows stderr, so a human running the server directly still sees everything.
 >
-> **This was not always so** (#1256). The logger used to read only the three VS Code
+> **This was not always so.** The routing used to be decided by _detecting_ the client, and
+> the detection could be wrong in both directions: the logger read only the three VS Code
 > variables, so under Warp - or any stdio client that sets none of them - every level fell
-> through to `console._stdout.write` and interleaved with the protocol. The audit transport
-> was worse: it set no `stderrLevels` at all, so with `ENABLE_SECURITY_AUDIT=true` its lines
-> reached stdout even under VS Code, where the main logger was correctly routed. Both are
-> fixed; `VSCODE_MCP=true` is no longer a workaround anyone needs, and
-> `ENABLE_SECURITY_AUDIT` is safe to turn on under a stdio client.
+> through to `console._stdout.write` and interleaved with the protocol (#1256); then
+> `MCP_TRANSPORT=stdio` was honoured by the startup banners but not by the logger (#1259). The
+> audit transport was worse still: it set no `stderrLevels` at all, so with
+> `ENABLE_SECURITY_AUDIT=true` its lines reached stdout even under VS Code, where the main
+> logger was correctly routed. #1260 deleted the question rather than improving the answer, so
+> a client can no longer get this wrong by omission. `MCP_TRANSPORT`, `VSCODE_MCP` and
+> `PARENT_PROCESS` are read nowhere now; setting them is a harmless no-op.
 >
 > **Setting `LOG_FILE` still does not redirect anything.** `createLogger()` pushes the
 > console transport whenever `NODE_ENV !== "test"` and only _then_ adds the file transport if
 > a path is set; `createSecurityLogger()` does the same. A log file **duplicates** output to
 > disk. Set it for a readable record, not as a containment measure - containment is the
-> transport detection's job.
+> unconditional stderr routing's job.
 
 ### Smart Log Viewer (Recommended)
 
