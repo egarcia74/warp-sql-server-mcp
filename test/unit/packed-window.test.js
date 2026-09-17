@@ -126,6 +126,30 @@ describe('shipsToConsumers', () => {
     }
   });
 
+  // Codex, round 4 - the lockfile exemption checked the rename DESTINATION and short-circuited
+  // before the source could be accounted for. A rename does two things and both need judging.
+  it('ships a rename whose packed source disappears, even into a lockfile name', () => {
+    const result = shipsToConsumers({
+      changes: [change('R100', 'yarn.lock', 'README.md')],
+      packed: packs('package.json'),
+      manifestBefore: manifest('1.0.0'),
+      manifestAfter: manifest('1.0.0')
+    });
+
+    expect(result.ships).toBe(true);
+  });
+
+  it('ships a rename that moves a packlist-control file away', () => {
+    const result = shipsToConsumers({
+      changes: [change('R100', 'notes.txt', '.npmignore')],
+      packed: packs('package.json'),
+      manifestBefore: manifest('1.0.0'),
+      manifestAfter: manifest('1.0.0')
+    });
+
+    expect(result.ships).toBe(true);
+  });
+
   it('treats a lockfile inside a packed subdirectory as an ordinary file', () => {
     const result = shipsToConsumers({
       changes: [change('D', 'docs/vendor/yarn.lock')],

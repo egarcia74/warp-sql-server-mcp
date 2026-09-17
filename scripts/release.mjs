@@ -79,6 +79,9 @@ const FULL_SHA = /^[0-9a-f]{40}$/;
  */
 const TAG_PATTERN = 'v[0-9]*';
 
+/** `name:` of the workflow job that tags and publishes; skipped when a window is refused. */
+const RELEASE_JOB_NAME = 'Create Release';
+
 // ---------------------------------------------------------------------------------------
 // Subprocesses
 // ---------------------------------------------------------------------------------------
@@ -462,6 +465,24 @@ function report(runId, preview, tagsBefore) {
 
   if (conclusion !== 'success') {
     fail(`the release run did not succeed (${conclusion}). Inspect it at the URL above.`);
+  }
+
+  // A SKIPPED release is a successful run. The workflow refuses a window three ways - no commits,
+  // no recognised subject type, or nothing npm packs (#1235) - and in every one of them
+  // `check-changes` sets should_release=false and the `Create Release` job never runs, while the
+  // run itself still concludes `success`. Reading the run conclusion alone would then print a
+  // version and release follow-up steps for a release that did not happen. Ask the job.
+  const jobs = ghJson('run', 'view', data(runId), '--json', 'jobs')?.jobs ?? [];
+  const releaseJob = jobs.find(job => job.name === RELEASE_JOB_NAME);
+  if (releaseJob?.conclusion === 'skipped') {
+    console.log('');
+    console.log('No release was created: the workflow decided this window does not warrant one.');
+    console.log('  The "Release type" section of the run summary at the URL above says which of');
+    console.log('  the three reasons applied - no commits, no recognised commit type, or the');
+    console.log('  window changes nothing npm packs (#1235).');
+    console.log('');
+    console.log('  To release anyway: npm run release -- --type patch');
+    return;
   }
 
   if (preview.dryRun) {

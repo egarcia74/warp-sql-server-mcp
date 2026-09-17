@@ -169,13 +169,21 @@ function isVersionOnlyManifestChange(before, after) {
 
 /** Whether one change reaches the tarball. Only reached once `packed` is known to be a Set. */
 function shipsChange(change, packed) {
-  // Checked before the deletion assumption below, not after: for these npm's answer is known for
-  // certain and does not depend on the packlist we can see.
-  if (NEVER_PACKED.has(change.file)) return false;
+  // A rename does two things - it removes its SOURCE from the tarball and adds its DESTINATION -
+  // and the two must be judged separately. Testing only `change.file` (the destination) against
+  // NEVER_PACKED would refuse `README.md -> yarn.lock`, where a packed file genuinely left the
+  // tarball even though nothing arrived in its place.
+  const source = change.from ?? change.file;
 
-  return (
-    removesSomething(change.status) || packed.has(change.file) || controlsPacklist(change.file)
-  );
+  // The removal half. A removed path cannot be looked up in a packlist built from the worktree, so
+  // it is assumed to have been packed - except for the lockfiles npm excludes unconditionally,
+  // where the answer is known and does not depend on the packlist we can see.
+  const removesPacked = removesSomething(change.status) && !NEVER_PACKED.has(source);
+
+  // The addition half, plus either end controlling what gets packed at all.
+  const addsPacked = packed.has(change.file);
+
+  return removesPacked || addsPacked || controlsPacklist(change.file) || controlsPacklist(source);
 }
 
 /**
