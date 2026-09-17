@@ -156,6 +156,16 @@ describe('shipsToConsumers', () => {
     }
   });
 
+  // Round 5. The exemption started as a lockfile list and was too narrow: npm's `defaults` exclude
+  // `**/.npmrc` and friends at any depth, so deleting one also read as a shipping change.
+  it('refuses deletions of files npm never packs at any depth', () => {
+    const packed = packs('package.json', 'lib/a.js');
+
+    for (const file of ['.npmrc', 'lib/.npmrc', '.DS_Store', 'notes.orig', 'npm-debug.log']) {
+      expect(verdict([change('D', file)], packed).ships, file).toBe(false);
+    }
+  });
+
   // Round 4 - that exemption checked the rename DESTINATION and short-circuited before the source
   // could be accounted for. A rename does two things and both need judging.
   it('ships a rename whose packed source disappears, even into a lockfile name', () => {

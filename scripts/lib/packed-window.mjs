@@ -64,17 +64,42 @@ function controlsPacklist(file) {
 }
 
 /**
- * Root paths npm-packlist's `strict` rules exclude unconditionally, whatever `files` says.
+ * Paths npm never puts in a tarball, whatever `files` says.
  *
  * These need their own case because `removesSomething` short-circuits ahead of packlist
  * membership: a deleted path cannot be looked up in a packlist built from the worktree, so a
  * removal is normally ASSUMED to have shipped. That assumption is right for an ordinary file and
  * wrong for these, which were never in the tarball in any era - so deleting one would otherwise
- * read as a shipping change. `npm-packlist/lib/index.js` (npm 11.12.1) lists exactly these four.
+ * read as a shipping change.
  *
- * Root-anchored, matching npm: a `yarn.lock` inside a packed subdirectory is an ordinary file.
+ * Mirrors `npm-packlist/lib/index.js` (npm 11.12.1): the four lockfiles in its `strict` rules,
+ * which are root-anchored, plus the entries of its `defaults` list that are stable enough to
+ * enumerate. `.npmignore`/`.gitignore` are in that list too but are deliberately NOT here -
+ * they control what gets packed, so `controlsPacklist` claims them first.
+ *
+ * Deliberately a predicate rather than a Set: npm anchors some of these to the package root and
+ * others at any depth, and collapsing that distinction is what made the first version of this
+ * wrong for a `yarn.lock` inside a packed directory.
  */
-const NEVER_PACKED = new Set(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb']);
+function neverPacked(file) {
+  // Root-anchored in npm's `strict` rules: a lockfile in a subdirectory is an ordinary file.
+  const ROOT_ONLY = new Set([
+    'package-lock.json',
+    'yarn.lock',
+    'pnpm-lock.yaml',
+    'bun.lockb',
+    'npm-debug.log',
+    '.lock-wscript'
+  ]);
+  if (ROOT_ONLY.has(file)) return true;
+
+  // Excluded at any depth by npm's `defaults` (`**/.npmrc`, `**/.DS_Store/**`, `**/._*/**`).
+  const base = file.split('/').pop();
+  if (base === '.npmrc' || base === '.DS_Store' || base.startsWith('._')) return true;
+
+  // `.*.swp` and `*.orig`, likewise at any depth.
+  return /^\..*\.swp$/.test(base) || base.endsWith('.orig');
+}
 
 /**
  * Content equality that ignores object key order, since re-ordering keys cannot alter
@@ -175,14 +200,14 @@ function isVersionOnlyManifestChange(before, after) {
 function shipsChange(change, packed) {
   // A rename does two things - it removes its SOURCE from the tarball and adds its DESTINATION -
   // and the two must be judged separately. Testing only `change.file` (the destination) against
-  // NEVER_PACKED would refuse `README.md -> yarn.lock`, where a packed file genuinely left the
+  // `neverPacked` would refuse `README.md -> yarn.lock`, where a packed file genuinely left the
   // tarball even though nothing arrived in its place.
   const source = change.from ?? change.file;
 
   // The removal half. A removed path cannot be looked up in a packlist built from the worktree, so
   // it is assumed to have been packed - except for the lockfiles npm excludes unconditionally,
   // where the answer is known and does not depend on the packlist we can see.
-  const removesPacked = removesSomething(change.status) && !NEVER_PACKED.has(source);
+  const removesPacked = removesSomething(change.status) && !neverPacked(source);
 
   // The addition half, plus either end controlling what gets packed at all.
   const addsPacked = packed.has(change.file);
