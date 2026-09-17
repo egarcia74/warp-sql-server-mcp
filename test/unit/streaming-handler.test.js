@@ -446,6 +446,55 @@ describe('StreamingHandler', () => {
       expect(chunks[0].size).toBeGreaterThan(0);
     });
 
+    // #1245: the count rides out on the chunk because `chunks` is what streamTableExport
+    // returns - the processing context is rebuilt per call and never reaches the caller.
+    it('records how many cells a spreadsheet would evaluate as formulas', () => {
+      const batch = [
+        { id: 1, note: '=1+1' },
+        { id: 2, note: '@SUM(A1)' },
+        { id: 3, note: 'plain' }
+      ];
+      const chunks = [];
+
+      handler.processBatch(batch, chunks, 1, { outputFormat: 'csv' });
+
+      expect(chunks[0].riskyCells).toBe(2);
+    });
+
+    // Headers are written by whichever batch is first and evaluated like any other cell, so
+    // they count once - on that batch, and never again.
+    it('counts the header row only on the batch that writes it', () => {
+      const context = { outputFormat: 'csv' };
+      const chunks = [];
+
+      handler.processBatch([{ '=total': 1 }], chunks, 1, context);
+      handler.processBatch([{ '=total': 2 }], chunks, 2, context);
+
+      expect(chunks[0].riskyCells).toBe(1);
+      expect(chunks[1].riskyCells).toBe(0);
+    });
+
+    // Negative numbers are the reason the check has a numeric exemption at all: mssql returns
+    // INT and DECIMAL as JS numbers, so a ledger would otherwise flag on every row.
+    it('does not count ordinary negative numbers', () => {
+      const chunks = [];
+
+      handler.processBatch([{ account: 'ops', delta: -1 }], chunks, 1, { outputFormat: 'csv' });
+
+      expect(chunks[0].riskyCells).toBe(0);
+    });
+
+    it('reports zero for formats nobody opens in a spreadsheet', () => {
+      const batch = [{ id: 1, note: '=1+1' }];
+      const chunks = [];
+
+      handler.processBatch(batch, chunks, 1, { outputFormat: 'json' });
+      handler.processBatch(batch, chunks, 2, {});
+
+      expect(chunks[0].riskyCells).toBe(0);
+      expect(chunks[1].riskyCells).toBe(0);
+    });
+
     it('should process batch in CSV format', () => {
       const batch = [
         { id: 1, name: 'John' },
