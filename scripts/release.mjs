@@ -481,7 +481,15 @@ function report(runId, preview, tagsBefore) {
     console.log('  the three reasons applied - no commits, no recognised commit type, or the');
     console.log('  window changes nothing npm packs (#1235).');
     console.log('');
-    console.log('  To release anyway: npm run release -- --type patch');
+    // Deliberately conditional advice. An explicit type overrides the subject rules and the path
+    // gate, but NOT an empty window: that branch returns before the forced type is applied,
+    // because there is nothing new to tag. Recommending `--type patch` unconditionally would send
+    // the operator into a command that cannot work - and an empty window can reach here even when
+    // the preview saw commits, if a release tag lands at the previewed SHA in between.
+    console.log('  If it was one of the last two, release anyway with:');
+    console.log('    npm run release -- --type patch');
+    console.log('  If there were no commits at all, an explicit type cannot help: the workflow');
+    console.log('  returns before applying it, because there is nothing new to tag.');
     return;
   }
 
