@@ -20,6 +20,7 @@ import { PerformanceMonitor, extractRowCounts } from './lib/utils/performance-mo
 import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
+import { isMcpStdioTransport } from './lib/utils/mcp-environment.js';
 import { findForbiddenWhereClauseSyntax } from './lib/security/where-clause-guard.js';
 import { validateQuery as evaluateQuerySafety } from './lib/security/query-policy.js';
 import {
@@ -38,15 +39,8 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'ut
 const VERSION = packageJson.version;
 
 // Load environment variables
-// Suppress dotenv output in MCP environments to avoid parsing warnings
-const isMcpEnvironment =
-  process.env.VSCODE_MCP === 'true' ||
-  process.env.MCP_TRANSPORT === 'stdio' ||
-  process.env.PARENT_PROCESS?.includes('code') ||
-  process.env.PARENT_PROCESS?.includes('mcp') ||
-  (!process.stdout.isTTY &&
-    (!process.stdin.isTTY || process.stdin.isTTY === undefined) &&
-    process.ppid);
+// Suppress dotenv output under a stdio transport to avoid polluting the JSON-RPC stream
+const isMcpEnvironment = isMcpStdioTransport();
 
 if (isMcpEnvironment) {
   // In MCP environments, capture and suppress dotenv output to prevent parsing errors

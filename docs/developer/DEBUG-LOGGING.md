@@ -93,26 +93,33 @@ This tool provides:
 > `configuration.logging.logFile` field reads `Not configured (console only)` until a path
 > is set.
 >
-> **⚠️ Console-only logging writes to stdout for most clients, which is the same stream as
-> JSON-RPC.** `Logger` sets Winston's `stderrLevels` only when
-> `Logger._isMcpEnvironment()` returns true, and that helper tests just three variables -
-> `VSCODE_MCP=true`, `VSCODE_PID`, `VSCODE_IPC_HOOK`. It does **not** apply the broader
-> detection `index.js:43-48` uses (`MCP_TRANSPORT=stdio`, or a non-TTY stdio pair), so
-> under Warp or any other stdio client that sets none of the VS Code variables the
-> transport falls through to `console._stdout.write` for every level
-> (`winston/lib/winston/transports/console.js:85-87` - an unset `stderrLevels` maps no
-> level to stderr). The security-audit console transport never sets `stderrLevels` at all,
-> so with `ENABLE_SECURITY_AUDIT=true` its lines go to stdout even under VS Code.
+> **Under a stdio transport, console output goes to stderr - all of it.** stdout is the
+> JSON-RPC channel, so `Logger` sets Winston's `stderrLevels` to every level
+> (`error`, `warn`, `info`, `debug`, `verbose`, `silly`) on **both** console transports, the
+> main logger's and the security audit's. An unset `stderrLevels` maps no level to stderr
+> (`winston/lib/winston/transports/console.js:85-87`), which is why the list is exhaustive
+> rather than a subset.
 >
-> **Setting `LOG_FILE` does not fix this.** `createLogger()` pushes the console transport
-> whenever `NODE_ENV !== "test"` and only _then_ adds the file transport if a path is set;
-> `createSecurityLogger()` does the same. A log file therefore **duplicates** output to
-> disk - it does not redirect it away from stdout. What does work today is
-> **`VSCODE_MCP=true`**: it forces `_isMcpEnvironment()` true regardless of client, and the
-> main console transport then sends every level to stderr. There is no equivalent for the
-> audit channel, so under a stdio client leave `ENABLE_SECURITY_AUDIT` at its default
-> (`false`) until that transport is fixed. Set `LOG_FILE` for a readable record, not as a
-> containment measure.
+> The transport is detected by `isMcpStdioTransport()` in `lib/utils/mcp-environment.js`,
+> which `index.js`, `cli.js` and `Logger` all share. Any one of these is enough:
+> `MCP_TRANSPORT=stdio`, `VSCODE_MCP=true`, `VSCODE_PID`, `VSCODE_IPC_HOOK`, a
+> `PARENT_PROCESS` containing `code` or `mcp`, or stdin and stdout both being pipes. In
+> practice an MCP client satisfies the last one whatever else it sets, so a normal stdio
+> session is covered twice over.
+>
+> **This was not always so** (#1256). The logger used to read only the three VS Code
+> variables, so under Warp - or any stdio client that sets none of them - every level fell
+> through to `console._stdout.write` and interleaved with the protocol. The audit transport
+> was worse: it set no `stderrLevels` at all, so with `ENABLE_SECURITY_AUDIT=true` its lines
+> reached stdout even under VS Code, where the main logger was correctly routed. Both are
+> fixed; `VSCODE_MCP=true` is no longer a workaround anyone needs, and
+> `ENABLE_SECURITY_AUDIT` is safe to turn on under a stdio client.
+>
+> **Setting `LOG_FILE` still does not redirect anything.** `createLogger()` pushes the
+> console transport whenever `NODE_ENV !== "test"` and only _then_ adds the file transport if
+> a path is set; `createSecurityLogger()` does the same. A log file **duplicates** output to
+> disk. Set it for a readable record, not as a containment measure - containment is the
+> transport detection's job.
 
 ### Smart Log Viewer (Recommended)
 

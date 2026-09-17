@@ -5,6 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 
+import { isMcpStdioTransport } from './lib/utils/mcp-environment.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CONFIG_FILE = path.join(
@@ -123,12 +125,8 @@ function showConfig() {
 }
 
 function loadConfigToEnv() {
-  // Detect MCP/stdio environment to avoid polluting stdout during handshake
-  const isMcpEnv =
-    process.env.VSCODE_MCP === 'true' ||
-    process.env.MCP_TRANSPORT === 'stdio' ||
-    (!process.stdout.isTTY && (!process.stdin.isTTY || process.stdin.isTTY === undefined));
-  const out = isMcpEnv ? console.error : console.log;
+  // Under a stdio transport stdout carries the handshake, so banners go to stderr
+  const out = isMcpStdioTransport() ? console.error : console.log;
 
   if (!fs.existsSync(CONFIG_FILE)) {
     out(`⚠️  No configuration file found at: ${CONFIG_FILE}`);
@@ -154,12 +152,8 @@ function loadConfigToEnv() {
 }
 
 function startServer() {
-  // Detect MCP/stdio environment to avoid polluting stdout during handshake
-  const isMcpEnv =
-    process.env.VSCODE_MCP === 'true' ||
-    process.env.MCP_TRANSPORT === 'stdio' ||
-    (!process.stdout.isTTY && (!process.stdin.isTTY || process.stdin.isTTY === undefined));
-  const out = isMcpEnv ? console.error : console.log;
+  // Under a stdio transport stdout carries the handshake, so banners go to stderr
+  const out = isMcpStdioTransport() ? console.error : console.log;
 
   out('🚀 Starting Warp SQL Server MCP...');
   // Load configuration into environment

@@ -90,11 +90,11 @@ class MCPServerStartupTest {
       }, 10000);
 
       // The startup banner is reported for diagnostics only - it must NOT resolve the
-      // test. The banner reaches stderr whenever the logger detects a VS Code-like
-      // environment (VSCODE_MCP / VSCODE_PID / VSCODE_IPC_HOOK), so resolving on it
-      // let this test report "Responds to MCP initialize protocol" without ever
-      // receiving an initialize response - it passed against a stopped database.
-      // Success is now gated solely on parsing the JSON-RPC initialize result below.
+      // test. It reaches stderr because this spawn puts pipes on both stdio ends, which
+      // isMcpStdioTransport() reads as the stdio transport; resolving on it let this test
+      // report "Responds to MCP initialize protocol" without ever receiving an initialize
+      // response - it passed against a stopped database. Success is now gated solely on
+      // parsing the JSON-RPC initialize result below.
       this.serverProcess.stderr.on('data', data => {
         const message = data.toString();
         console.log('STDERR:', message.trim()); // Debug output
