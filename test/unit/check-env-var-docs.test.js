@@ -627,23 +627,62 @@ describe('the gate actually runs', () => {
   const repoRoot = join(import.meta.dirname, '..', '..');
   const readRepo = relative => readFileSync(join(repoRoot, relative), 'utf8');
   const workflow = () => readRepo('.github/workflows/docs.yml');
+  const ciWorkflow = () => readRepo('.github/workflows/ci.yml');
 
   // The two triggers that gate a merge. `schedule` and `workflow_dispatch` carry no path
   // filter and are not what a contributor's change has to pass through.
   const GATING_TRIGGERS = ['push', 'pull_request'];
 
-  // This one guards the future rather than fixing the present: today's filters do cover
+  // Returns the YAML of one job, from its key to the next top-level job key.
+  const jobBlock = (yaml, jobKey) => {
+    const start = yaml.indexOf(`\n  ${jobKey}:`);
+    if (start === -1) return '';
+    const rest = yaml.slice(start + 1);
+    const end = rest.search(/\n {2}[a-z][\w-]*:\n/);
+    return end === -1 ? rest : rest.slice(0, end);
+  };
+
+  // ENFORCEMENT lives in ci.yml, not docs.yml. `Code Quality & Linting` is a required
+  // status check on main; `Validate Documentation` is not, because its link checker 404s
+  // on still-private GHSA advisories and goes red during a security release. A gate that
+  // only ran in docs.yml would go red and still merge - the failure #1252 was opened to
+  // prevent. Pin the enforcing job so the checks cannot quietly become advisory again.
+  it('enforces the documentation checks in the required CI job', () => {
+    const lint = jobBlock(ciWorkflow(), 'lint');
+
+    expect(lint).toContain('name: Code Quality & Linting');
+    expect(lint).toContain('npm run docs:check');
+  });
+
+  // The enforcing workflow must not be able to skip the gate for a path the scanner reads.
+  // ci.yml carries no `paths:` filter at all, so coverage is total by construction - this
+  // pins that, because adding one would silently exempt whatever it left out.
+  it('runs the required CI job on every change, with no path filter to slip through', () => {
+    for (const trigger of GATING_TRIGGERS) {
+      expect({ trigger, filters: parsePathFilters(ciWorkflow(), trigger) }).toEqual({
+        trigger,
+        filters: []
+      });
+    }
+  });
+
+  // docs.yml no longer gates, but it still produces `link-report.md` - the artifact that
+  // says WHAT drifted, where the required check only says THAT it did. That report is
+  // worthless if the workflow does not run, so its path filters must still cover every
+  // file the scanner reads.
+  //
+  // This guards the future rather than fixing the present: today's filters do cover
   // today's publication scope. The hazard is drift - publish a new top-level path and the
   // `package.json` change itself still triggers the workflow, but every later commit to
-  // that path merges without the gate running. Deriving the assertion from the scanner's
-  // own source list makes that impossible to land silently: widening `files` fails here
-  // until the trigger is widened in the same change.
+  // that path lands without the report being regenerated. Deriving the assertion from the
+  // scanner's own source list makes that impossible to land silently: widening `files`
+  // fails here until the trigger is widened in the same change.
   //
   // Each trigger is checked on its own. A union of the two would accept a source path
   // listed under `push` alone, which is the worst case rather than an acceptable one:
-  // pull requests changing that path would never run the gate, and a pull request is
-  // exactly where a gate is supposed to block.
-  it('triggers the documentation workflow for every file the env-var scan reads', () => {
+  // pull requests changing that path would never produce the report, and a pull request is
+  // exactly where a reviewer needs it.
+  it('triggers the documentation report for every file the env-var scan reads', () => {
     const { sources } = checkEnvVarDocs();
     expect(sources.length).toBeGreaterThan(0);
 
