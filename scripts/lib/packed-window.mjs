@@ -46,6 +46,24 @@ const RELEASE_FILES = new Set(['CHANGELOG.md']);
 const MANIFEST = 'package.json';
 
 /**
+ * Files that decide what npm packs, and therefore change the tarball without appearing in it.
+ *
+ * Intersecting changed paths with the FINAL packlist misses these entirely: editing a nested
+ * `.gitignore` or `.npmignore` can add or remove files whose own paths never changed, so the
+ * window ships different bytes while every changed path is unpacked. `package.json` is handled
+ * separately because it is itself packed and needs the version-only exemption; its `files` array
+ * is the third packlist control and is covered by that same path.
+ *
+ * Matched on basename at any depth, because npm honours these per directory.
+ */
+const PACKLIST_CONTROL = new Set(['.npmignore', '.gitignore']);
+
+/** Whether a path controls what npm packs, at any depth. */
+function controlsPacklist(file) {
+  return PACKLIST_CONTROL.has(file.split('/').pop());
+}
+
+/**
  * Content equality that ignores object key order, since re-ordering keys cannot alter
  * what npm installs and reporting it as divergence would only train maintainers to
  * bypass the gates that use this.
@@ -138,7 +156,9 @@ function isVersionOnlyManifestChange(before, after) {
 
 /** Whether one change reaches the tarball. Only reached once `packed` is known to be a Set. */
 function shipsChange(change, packed) {
-  return removesSomething(change.status) || packed.has(change.file);
+  return (
+    removesSomething(change.status) || packed.has(change.file) || controlsPacklist(change.file)
+  );
 }
 
 /**

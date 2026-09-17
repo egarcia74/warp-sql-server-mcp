@@ -606,18 +606,24 @@ jobs:
           echo "**Release Type**: ${{ needs.check-changes.outputs.release_type }}" >> $GITHUB_STEP_SUMMARY
           echo "**Dry Run**: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.release.result }}" = "success" ]; then
+          # The path verdict is checked FIRST, before the success branch. On a dry run the gate
+          # deliberately leaves should_release=true so the downstream jobs still render a preview
+          # - which means `needs.release.result` is `success` for a window the gate would have
+          # refused, and reporting that as "Completed successfully" would be exactly backwards.
+          if [ "${{ needs.check-changes.outputs.skip_reason }}" = "no-packed-changes" ]; then
+            if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+              echo "⏭️ **Release Status**: Would be REFUSED - this window changes nothing npm packs (#1235). The preview below is what a release would have contained." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⏭️ **Release Status**: Skipped - this window changes nothing npm packs (#1235)" >> $GITHUB_STEP_SUMMARY
+            fi
+          elif [ "${{ needs.release.result }}" = "success" ]; then
             echo "✅ **Release Status**: Completed successfully" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.check-changes.outputs.should_release }}" = "false" ]; then
             # The check-changes job's own summary says which of the two it was: no commits
             # at all, or commits whose subjects matched no conventional-commit type at all
             # (every recognised type releases) - or, per skip_reason below, a window that
             # classifies fine but changes nothing npm packs (#1235). See #1158.
-            if [ "${{ needs.check-changes.outputs.skip_reason }}" = "no-packed-changes" ]; then
-              echo "⏭️ **Release Status**: Skipped - this window changes nothing npm packs (#1235)" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "⏭️ **Release Status**: Skipped - see \"Release type\" above for why" >> $GITHUB_STEP_SUMMARY
-            fi
+            echo "⏭️ **Release Status**: Skipped - see \"Release type\" above for why" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Release Status**: Failed" >> $GITHUB_STEP_SUMMARY
           fi

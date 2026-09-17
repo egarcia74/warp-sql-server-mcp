@@ -71,6 +71,14 @@ const POLL_WINDOW_MS = 60_000;
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
 
+/**
+ * Which tags count as release tags, for `git describe --match`.
+ *
+ * Kept identical to `classify-release-commits.mjs`'s `lastTag()`. `guard()` passes a non-dash
+ * argument through unvalidated, so this is a module constant rather than anything caller-supplied.
+ */
+const TAG_PATTERN = 'v[0-9]*';
+
 // ---------------------------------------------------------------------------------------
 // Subprocesses
 // ---------------------------------------------------------------------------------------
@@ -242,10 +250,16 @@ function lastRemoteTag(tags) {
     );
   }
   const excludes = localOnly.map(tag => `--exclude=${tag}`);
+  // `--match` must mirror classify-release-commits.mjs's lastTag(): the workflow filters to
+  // release tags, so a preview that did not would compute `Ships to npm` from a different window
+  // boundary than the runner uses the moment a non-`v` tag reaches origin. Two spellings of the
+  // window is the #1158 defect relocated into the tag boundary.
   const described = tryCapture('git', [
     'describe',
     '--tags',
     '--abbrev=0',
+    '--match',
+    TAG_PATTERN,
     ...excludes,
     REMOTE_HEAD
   ]);

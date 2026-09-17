@@ -136,6 +136,33 @@ describe('shipsToConsumers', () => {
     expect(result.shipped).toEqual(['lib/packed.js -> docs/notes.txt']);
   });
 
+  // Codex caught this one on #1273 and no amount of desk review had: a nested .gitignore or
+  // .npmignore decides what npm packs, so editing one changes the tarball while its own path is
+  // never in it. Intersecting only changed paths with the final packlist misses it entirely.
+  it('ships when a file that CONTROLS the packlist changed, though it is never packed itself', () => {
+    for (const file of ['.gitignore', '.npmignore', 'docs/.npmignore', 'lib/nested/.gitignore']) {
+      const result = shipsToConsumers({
+        changes: [change('M', file)],
+        packed: packs('package.json'),
+        manifestBefore: manifest('1.0.0'),
+        manifestAfter: manifest('1.0.0')
+      });
+
+      expect(result.ships, `${file} controls the packlist`).toBe(true);
+    }
+  });
+
+  it('does not treat an ordinary unpacked file as packlist control', () => {
+    const result = shipsToConsumers({
+      changes: [change('M', 'docs-internal/gitignore-notes.md')],
+      packed: packs('package.json'),
+      manifestBefore: manifest('1.0.0'),
+      manifestAfter: manifest('1.0.0')
+    });
+
+    expect(result.ships).toBe(false);
+  });
+
   // Opposite polarity to verify-publish-tree.mjs on purpose: a wrongly blocked release is
   // re-dispatched, a wrongly permitted publish cannot be undone.
   it('fails OPEN when the packlist could not be derived', () => {
