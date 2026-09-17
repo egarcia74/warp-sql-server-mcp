@@ -460,6 +460,32 @@ feat: add new database connection tool
 - Update tests and documentation
 ```
 
+### Keep doc-only changes in their own commit
+
+When a change touches **only** documentation — `docs/**`, `README.md`, `CONTRIBUTING.md`,
+`WARP.md` — give it its own `docs:` commit rather than folding it into a neighbouring code or
+infra commit.
+
+This is a convention, not a correctness gate, and it is worth being precise about what it does
+and does not buy. It does **not** change the release type: `docs:`, `ci:` and `fix:` all
+classify as patch, so a doc edit riding inside a `ci:` commit still releases the same version.
+As the section above says, the prefix is a label rather than a promise about which files a PR
+touched, and `ci:`-titled PRs here routinely edit documentation.
+
+What it buys is a legible changelog and a reviewable diff. A doc rewrite buried in a `feat:`
+commit is filed under Added, where nobody looking for it will find it, and it pads a diff whose
+reviewer is there for the code. Splitting costs one extra commit.
+
+Two things this deliberately does not ask for:
+
+- **Not a separate PR.** A PR that changes code and updates the docs describing that code is
+  the right shape — the docs should land with the behaviour they describe. Separate _commits_
+  inside that PR, not separate PRs.
+- **Not enforced by CI.** Nothing checks this, by design; a path-based gate would have to
+  understand intent, and the failure mode it prevents is cosmetic. See issue #1235, which
+  proposes classifying a release window by the paths it touches instead of by subject prefix —
+  if that ships, this convention carries less weight than it does today.
+
 ## Getting Help
 
 - Check existing issues: [GitHub Issues](https://github.com/egarcia74/warp-sql-server-mcp/issues)
