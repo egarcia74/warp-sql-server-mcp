@@ -110,6 +110,34 @@ describe('shipsToConsumers', () => {
     expect(result.ships).toBe(false);
   });
 
+  // Codex, round 3 on #1273 - a gap my OWN round-2 fix opened. `removesSomething` short-circuits
+  // ahead of packlist membership, so once deletions stopped being swallowed, deleting a lockfile
+  // npm never packs in any era started reading as a shipping change.
+  it('refuses a lockfile deletion, which npm never packed in any era', () => {
+    for (const file of ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb']) {
+      const result = shipsToConsumers({
+        changes: [change('D', file)],
+        packed: packs('package.json', 'lib/a.js'),
+        manifestBefore: manifest('1.0.0'),
+        manifestAfter: manifest('1.0.0')
+      });
+
+      expect(result.ships, `${file} is never packed`).toBe(false);
+    }
+  });
+
+  it('treats a lockfile inside a packed subdirectory as an ordinary file', () => {
+    const result = shipsToConsumers({
+      changes: [change('D', 'docs/vendor/yarn.lock')],
+      packed: packs('package.json'),
+      manifestBefore: manifest('1.0.0'),
+      manifestAfter: manifest('1.0.0')
+    });
+
+    // Root-anchored, matching npm's own strict rules.
+    expect(result.ships).toBe(true);
+  });
+
   // Codex, round 2 on #1273. The exemptions are for a file being EDITED; filtering before
   // shipsChange would drop a DELETION before its handling ever ran, so removing a packed file
   // would report `nothing-packed` while the tarball genuinely changed. Same shape as the

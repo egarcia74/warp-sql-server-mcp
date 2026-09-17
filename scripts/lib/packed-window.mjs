@@ -64,6 +64,19 @@ function controlsPacklist(file) {
 }
 
 /**
+ * Root paths npm-packlist's `strict` rules exclude unconditionally, whatever `files` says.
+ *
+ * These need their own case because `removesSomething` short-circuits ahead of packlist
+ * membership: a deleted path cannot be looked up in a packlist built from the worktree, so a
+ * removal is normally ASSUMED to have shipped. That assumption is right for an ordinary file and
+ * wrong for these, which were never in the tarball in any era - so deleting one would otherwise
+ * read as a shipping change. `npm-packlist/lib/index.js` (npm 11.12.1) lists exactly these four.
+ *
+ * Root-anchored, matching npm: a `yarn.lock` inside a packed subdirectory is an ordinary file.
+ */
+const NEVER_PACKED = new Set(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb']);
+
+/**
  * Content equality that ignores object key order, since re-ordering keys cannot alter
  * what npm installs and reporting it as divergence would only train maintainers to
  * bypass the gates that use this.
@@ -156,6 +169,10 @@ function isVersionOnlyManifestChange(before, after) {
 
 /** Whether one change reaches the tarball. Only reached once `packed` is known to be a Set. */
 function shipsChange(change, packed) {
+  // Checked before the deletion assumption below, not after: for these npm's answer is known for
+  // certain and does not depend on the packlist we can see.
+  if (NEVER_PACKED.has(change.file)) return false;
+
   return (
     removesSomething(change.status) || packed.has(change.file) || controlsPacklist(change.file)
   );
