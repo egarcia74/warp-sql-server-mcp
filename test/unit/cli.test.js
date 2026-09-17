@@ -180,12 +180,22 @@ describe('CLI Security Tests', () => {
       'PARENT_PROCESS'
     ];
 
-    /** Runs `cli.js start` briefly and returns whatever each stream received. */
-    async function captureStart() {
+    /** The environment every spawn below uses: config in the test directory, nothing declared. */
+    function cliEnv() {
       const env = { ...process.env, HOME: testConfigDir, USERPROFILE: testConfigDir };
       for (const name of FORMER_MCP_SIGNALS) delete env[name];
+      return env;
+    }
 
-      const proc = spawn('node', [CLI_PATH, 'start'], { env, stdio: 'pipe' });
+    /** Creates the config file the way a user would, with `warp-sql-server-mcp init`. */
+    async function initConfig() {
+      const proc = spawn('node', [CLI_PATH, 'init'], { env: cliEnv(), stdio: 'ignore' });
+      await new Promise(resolve => proc.on('close', resolve));
+    }
+
+    /** Runs `cli.js start` briefly and returns whatever each stream received. */
+    async function captureStart() {
+      const proc = spawn('node', [CLI_PATH, 'start'], { env: cliEnv(), stdio: 'pipe' });
 
       let stdout = '';
       let stderr = '';
@@ -201,9 +211,8 @@ describe('CLI Security Tests', () => {
     }
 
     test('routes the startup and config banners to stderr, leaving stdout clean', async () => {
-      fs.writeFileSync(testConfigFile, JSON.stringify({ SQL_SERVER_HOST: 'localhost' }), {
-        mode: 0o600
-      });
+      await initConfig();
+      expect(fs.existsSync(testConfigFile)).toBe(true);
 
       const { stdout, stderr } = await captureStart();
 
