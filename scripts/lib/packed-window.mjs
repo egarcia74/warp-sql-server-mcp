@@ -82,7 +82,8 @@ function controlsPacklist(file) {
  * wrong for a `yarn.lock` inside a packed directory.
  */
 function neverPacked(file) {
-  const base = file.split('/').pop();
+  const parts = file.split('/');
+  const base = parts.at(-1);
 
   // Anchored to the package root by a leading `/` in npm's list.
   const ROOT_ONLY = new Set([
@@ -96,10 +97,15 @@ function neverPacked(file) {
   if (file.startsWith('.wafpickle-')) return true;
   if (file === 'build/config.gypi' || file.startsWith('archived-packages/')) return true;
 
-  // No leading `/` in npm's list, so these match at ANY depth - `npm-debug.log` included, which
-  // an earlier version of this function got wrong by grouping it with the root-anchored entries.
-  if (base === 'npm-debug.log' || base === '.npmrc' || base === '.DS_Store') return true;
-  if (base.startsWith('._') || base.endsWith('.orig')) return true;
+  // Directory exclusions: npm pairs each with a `/**` form, so everything BENEATH them is
+  // excluded too. A basename-only test would miss `lib/.svn/entries` - the path never ships, but
+  // only the directory component says so.
+  const EXCLUDED_DIRS = new Set(['.git', '.svn', '.hg', 'CVS', '.DS_Store']);
+  if (parts.some(part => EXCLUDED_DIRS.has(part) || part.startsWith('._'))) return true;
+
+  // No leading `/` in npm's list, so these match at ANY depth.
+  if (base === 'npm-debug.log' || base === '.npmrc') return true;
+  if (base.endsWith('.orig')) return true;
 
   return /^\..*\.swp$/.test(base);
 }

@@ -454,7 +454,17 @@ jobs:
           {
             echo "## 🧪 Dry Run Summary"
             echo ""
-            echo "**Would create release:** v${VERSION}"
+            if [ "${{ needs.check-changes.outputs.skip_reason }}" = "no-packed-changes" ]; then
+              # RELEASE_TYPE is `none` here, so the bump step echoed the CURRENT version - a
+              # version that would never be created and is very likely already tagged. Printing
+              # it as "would create" is worse than printing nothing.
+              echo "**Would create release:** nothing - this window changes nothing npm packs (#1235)."
+              echo ""
+              echo "The changelog below is what the commit subjects would have produced had the"
+              echo "window shipped anything. No version number is shown because none would be taken."
+            else
+              echo "**Would create release:** v${VERSION}"
+            fi
             echo ""
             echo "**Changelog preview:**"
             printf '%s\n' "$CHANGELOG"
@@ -612,7 +622,7 @@ jobs:
           # refused, and reporting that as "Completed successfully" would be exactly backwards.
           if [ "${{ needs.check-changes.outputs.skip_reason }}" = "no-packed-changes" ]; then
             if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-              echo "⏭️ **Release Status**: Would be REFUSED - this window changes nothing npm packs (#1235). The preview below is what a release would have contained." >> $GITHUB_STEP_SUMMARY
+              echo "⏭️ **Release Status**: Would be REFUSED - this window changes nothing npm packs (#1235). The dry-run summary shows the changelog the subjects would have produced, but no version: none would be taken." >> $GITHUB_STEP_SUMMARY
             else
               echo "⏭️ **Release Status**: Skipped - this window changes nothing npm packs (#1235)" >> $GITHUB_STEP_SUMMARY
             fi

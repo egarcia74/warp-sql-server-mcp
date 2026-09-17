@@ -177,6 +177,19 @@ describe('shipsToConsumers', () => {
     }
   });
 
+  // Round 7. npm pairs each directory exclusion with a `/**` form, so everything BENEATH `.svn`,
+  // `.git`, `CVS` and friends is excluded too - which a basename-only test cannot see.
+  it('refuses deletions beneath an npm-excluded directory', () => {
+    const packed = packs('package.json', 'lib/a.js');
+
+    for (const file of ['lib/.svn/entries', '.git/config', 'a/CVS/Root', 'lib/._tmp/x']) {
+      expect(verdict([change('D', file)], packed).ships, file).toBe(false);
+    }
+
+    // A directory merely NAMED like one of them is ordinary.
+    expect(verdict([change('D', 'lib/svn/x.js')], packed).ships).toBe(true);
+  });
+
   it('applies npm root-anchored exclusions only at the root', () => {
     const packed = packs('package.json', 'lib/a.js');
 
