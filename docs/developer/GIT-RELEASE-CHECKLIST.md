@@ -31,7 +31,9 @@
     `test:` / `ci:` / `style:` → patch
   - `deps:` / `deps-dev:` (Dependabot's own prefixes, not Conventional Commits types) → patch
   - anything else → **no release**, and the run warns, naming the unclassified subjects
-  - Every recognised type releases at least a patch: the prefix is a label the PR author
+  - Every recognised type releases at least a patch **provided the window changes something npm
+    packs** - the workflow refuses a window that reaches nothing in the tarball, however its
+    subjects are spelled (#1235). The prefix is a label the PR author
     chooses, not a guarantee about which paths changed, and `docs/**/*.md`, `README.md` and
     `CHANGELOG.md` are packed, so a `ci:` PR can and does change the tarball (#1158)
   - `deps-dev:` is patch too, not `none`: `package.json` is always in the tarball and carries

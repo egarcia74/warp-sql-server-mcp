@@ -43,6 +43,8 @@
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
+import { removesSomething, sameContent, withVersion } from '../lib/packed-window.mjs';
+
 /**
  * A version must look like a version before it is pasted into a git revision. Nothing
  * here is attacker-controlled today - it arrives from `package.json` on `main` or from
@@ -60,56 +62,6 @@ const BUMP_FILES = new Set(['package.json', 'package-lock.json']);
  * committed separately from the bump, so it legitimately moves inside the window.
  */
 const RELEASE_FILES = new Set(['CHANGELOG.md']);
-
-/**
- * Content equality that ignores object key order, since re-ordering keys cannot alter
- * what npm installs and reporting it as divergence would only train maintainers to
- * bypass this gate.
- *
- * Compared structurally rather than by sorting keys into a canonical string. Sorting
- * needs a comparator, and both available spellings are worse: the default one orders by
- * code unit but is flagged, and `localeCompare` can rank two distinct keys as equal -
- * `"\u00e4"` against `"a\u0308"`, say - leaving their relative order to fall out of
- * whichever order they happened to arrive in, so two files with identical content could
- * canonicalise differently and fail the gate. Comparing key sets sidesteps the question.
- *
- * JSON has no cycles, no NaN and no undefined values, so a plain recursive walk is total
- * over what JSON.parse can return.
- */
-function sameContent(left, right) {
-  if (left === right) return true;
-
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((item, index) => sameContent(item, right[index]))
-    );
-  }
-
-  if (left !== null && right !== null && typeof left === 'object' && typeof right === 'object') {
-    const keys = Object.keys(left);
-    if (keys.length !== Object.keys(right).length) return false;
-    return keys.every(key => Object.hasOwn(right, key) && sameContent(left[key], right[key]));
-  }
-
-  return false;
-}
-
-/**
- * The tagged file as it would look after the bump: `npm version` writes the root
- * `version` in both files, plus `packages[""].version` in a lockfileVersion 2/3 lock.
- * Those are the only two places in this repo's lockfile that carry the package's own
- * version, confirmed against `package-lock.json` (lockfileVersion 3).
- */
-function withVersion(parsed, file, version) {
-  const next = { ...parsed, version };
-  if (file === 'package-lock.json' && next.packages?.['']) {
-    next.packages = { ...next.packages, '': { ...next.packages[''], version } };
-  }
-  return next;
-}
 
 /**
  * process.env with every GIT_* variable removed, for spawning git and npm.
@@ -275,7 +227,33 @@ export function packedFilesReader(cwd = process.cwd()) {
       cwd,
       ...capture()
     });
-    return new Set(JSON.parse(out)[0].files.map(entry => entry.path));
+
+    // Assert the shape before trusting it. Both callers treat this Set as authoritative, and a
+    // silently wrong one is worse than a throw in each direction: the publish gate would
+    // reclassify every foreign packed file as a harmless notice and stop blocking, while the
+    // release classifier would refuse every release while blaming the packlist. Neither failure
+    // announces itself, and the publish half is irreversible.
+    const parsed = JSON.parse(out);
+    if (!Array.isArray(parsed) || parsed.length !== 1) {
+      // One entry per package. In a workspace npm emits several and [0] is the wrong package -
+      // whose packlist still contains a package.json, so the membership check below would pass
+      // while reading the wrong tree entirely.
+      throw new Error(
+        `npm pack --json returned ${Array.isArray(parsed) ? parsed.length : 'a non-array'}, expected exactly 1 tarball descriptor`
+      );
+    }
+
+    const files = new Set(parsed[0].files.map(entry => entry.path));
+
+    // npm forcibly packs package.json (npm-packlist `strict` contains '!/package.json'), so its
+    // absence means the output is not a packlist at all - a changed schema, a truncated read.
+    // Cheap and free of false positives; NOT total, since classifyOtherChanges returns early when
+    // nothing foreign changed and never calls this at all.
+    if (files.size === 0 || !files.has('package.json')) {
+      throw new Error('npm pack --json returned no recognisable packlist (package.json absent)');
+    }
+
+    return files;
   };
 }
 
@@ -345,7 +323,6 @@ function classifyOtherChanges(changes, worktree, readPackedFiles) {
   // covers a commit-level deletion or rename and equally a worktree deletion. An
   // untracked file needs no special case: npm packs the worktree, so if it matches the
   // `files` globs the packlist already contains it.
-  const removesSomething = status => status.includes('D') || status.startsWith('R');
   const affectsTarball = change =>
     packed === null || removesSomething(change.status) || packed.has(change.file);
 

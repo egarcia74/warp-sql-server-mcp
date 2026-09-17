@@ -62,6 +62,7 @@ jobs:
       # These outputs are dynamically set by the github-script action below
       should_release: ${{ steps.check.outputs.should_release }} # yamllint disable-line rule:line-length
       release_type: ${{ steps.check.outputs.release_type }} # yamllint disable-line rule:line-length
+      skip_reason: ${{ steps.check.outputs.skip_reason }} # yamllint disable-line rule:line-length
     steps:
       # On workflow_dispatch, github.sha (GITHUB_SHA) is the tip of the dispatched ref at the
       # moment of dispatch - the commit every later job checks out and tags. When the release
@@ -87,7 +88,8 @@ jobs:
       # This job spawns `node` to run the classifier. GitHub-hosted runners ship a Node,
       # but which one is theirs to change, so pin it the way every other job here does
       # rather than depend on the image. No `cache: npm` - the classifier has no
-      # dependencies and this job never runs `npm ci`.
+      # dependencies and this job never runs `npm ci`. It does spawn `npm pack --dry-run
+      # --ignore-scripts` via the #1235 path gate, which reads the worktree and needs no install.
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -119,8 +121,9 @@ jobs:
       # published bytes just as a runtime one does. Mapping `deps-dev` to `none` instead
       # would make it a RECOGNISED yet non-releasing type, which would silence the
       # unclassified-subjects warning below and put a dependency-only window back to
-      # shipping nothing silently - the #1158 defect again. Replayed over all 30 v* tag
-      # windows, adding both rules changes no window's release level.
+      # shipping nothing silently - the #1158 defect again. Replayed over the 26 windows git
+      # describe actually produces (29 v* tags, 27 reachable from main, less v1.2.0 which has no
+      # base), adding both rules changes no window's release level.
       #
       # No recognised type releases nothing. `test`, `ci` and `style` were briefly mapped to
       # `none` on the argument that test/ and .github/ are not in package.json "files", so
@@ -131,7 +134,10 @@ jobs:
       # chooses, not a guarantee about which paths the diff touched, so a release decision
       # cannot rest on it. The asymmetry settles the rest: over-releasing spends a patch
       # version, under-releasing ships work nowhere and silently - which is #1158 itself.
-      # So the only window that releases nothing is one whose subjects match NO type at all.
+      # So the only window that SUBJECTS alone refuse is one matching NO type at all. Paths are
+      # the other half: the same step also asks whether the window changes anything npm packs,
+      # and refuses when it does not, however the subjects are spelled (#1235). That check is in
+      # scripts/lib/packed-window.mjs - do not transcribe it here either.
       #
       # Which subjects reach this classifier depends on how the PR was merged, because the
       # window is read with `--no-merges`: a squash merge contributes one subject, the PR
@@ -152,7 +158,7 @@ jobs:
             // git is spawned by the script, with an argument array - no shell, so a tag or
             // a commit subject is never word-split, globbed or expanded.
             const plan = JSON.parse(
-              execFileSync('node', ['scripts/ci/classify-release-commits.mjs', '--from-git'], {
+              execFileSync('node', ['scripts/ci/classify-release-commits.mjs', '--from-git', '--ships'], {
                 encoding: 'utf8',
                 maxBuffer: 64 * 1024 * 1024
               })
@@ -185,7 +191,25 @@ jobs:
               return;
             }
 
-            const releaseType = forced ? manualType : plan.releaseType;
+            // #1235: the prefix says what the author called the change; the packlist says whether
+            // it reaches consumers. `=== false` and never `!plan.ships` - a missing field must
+            // fail OPEN (a wrongly blocked release is re-dispatched; a wrongly blocked publish is
+            // not what this gate is for), and `!undefined` is true.
+            if (plan.ships !== undefined && typeof plan.ships !== 'boolean') {
+              core.warning(
+                `classify-release-commits returned a non-boolean 'ships' (${JSON.stringify(plan.ships)}); ` +
+                'treating the window as shipping. The path gate did NOT run.'
+              );
+            }
+            if (plan.reason === 'unknown-packlist' || plan.reason === 'unknown-window') {
+              core.warning(
+                `The path gate could not run (${plan.reason}), so this release was decided by commit ` +
+                'subjects alone. See #1235.'
+              );
+            }
+
+            const blockedByPaths = !forced && plan.ships === false;
+            const releaseType = blockedByPaths ? 'none' : (forced ? manualType : plan.releaseType);
             const shouldRelease = releaseType !== 'none' || process.env.DRY_RUN === 'true';
 
             // `plan.summary` states the AUTO-DETECTED outcome, and for `none` it ends
@@ -193,7 +217,19 @@ jobs:
             // release_type to force a release". Printed unconditionally it contradicts the
             // run it is describing in exactly the case that advice was taken. When an
             // override is in force, report the detection as evidence and say what wins.
-            const decision = forced
+            const unshippedList = (plan.unshipped ?? [])
+              .slice(0, 20)
+              .map(path => JSON.stringify(path))
+              .join(', ');
+
+            const decision = blockedByPaths
+              ? `Nothing this window changed is in the npm tarball, so no release is warranted ` +
+                `regardless of prefixes (auto-detection said \`${plan.releaseType}\`). ` +
+                `Changed but not packed: ${unshippedList}. ` +
+                'CHANGELOG.md and a version-only package.json bump are excluded by design, and npm ' +
+                'never publishes package-lock.json. Dispatch with an explicit release_type to ' +
+                'override. See #1235.'
+              : forced
               ? (plan.releaseType === 'none'
                   ? `Auto-detection recognised no conventional-commit type among them; ` +
                     `release_type=\`${manualType}\` overrides that, so a \`${manualType}\` ` +
@@ -241,6 +277,9 @@ jobs:
 
             core.setOutput('should_release', shouldRelease.toString());
             core.setOutput('release_type', releaseType);
+            // A fixed literal, never plan.reason: cleanup interpolates this raw into a shell echo,
+            // and the enum member here would be `nothing-packed`, desynchronising that branch.
+            if (blockedByPaths) core.setOutput('skip_reason', 'no-packed-changes');
 
   release:
     name: Create Release
@@ -572,8 +611,13 @@ jobs:
           elif [ "${{ needs.check-changes.outputs.should_release }}" = "false" ]; then
             # The check-changes job's own summary says which of the two it was: no commits
             # at all, or commits whose subjects matched no conventional-commit type at all
-            # (every recognised type releases). See #1158.
-            echo "⏭️ **Release Status**: Skipped - see \"Release type\" above for why" >> $GITHUB_STEP_SUMMARY
+            # (every recognised type releases) - or, per skip_reason below, a window that
+            # classifies fine but changes nothing npm packs (#1235). See #1158.
+            if [ "${{ needs.check-changes.outputs.skip_reason }}" = "no-packed-changes" ]; then
+              echo "⏭️ **Release Status**: Skipped - this window changes nothing npm packs (#1235)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⏭️ **Release Status**: Skipped - see \"Release type\" above for why" >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "❌ **Release Status**: Failed" >> $GITHUB_STEP_SUMMARY
           fi

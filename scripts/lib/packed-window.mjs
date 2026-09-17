@@ -1,0 +1,181 @@
+/**
+ * Decides whether a release window changes anything npm actually ships.
+ *
+ * ## Why this exists
+ *
+ * `release.yml` picks a release type from conventional-commit **subject prefixes**. A prefix is a
+ * label the PR author chooses; it says nothing about which files the diff touched. So the decision
+ * is unsound in the dangerous direction - a window can change what `npm install` delivers while
+ * classifying as something that ships nothing, and a `feat:` touching only `test/` computes a minor
+ * and ships nothing at all. #1234 removed the exposure by mapping every recognised type to at least
+ * a patch, i.e. by abandoning the distinction rather than measuring it. This module measures it
+ * (#1235): intersect the window's changed paths with npm's own packlist, and refuse to release when
+ * nothing packed changed.
+ *
+ * ## Why the rules live here and not in the adapters
+ *
+ * `WARP.md` is explicit that the release rules exist in exactly one place, because three
+ * transcriptions is how #1158 happened. The path rule is that one place: both the CI classifier and
+ * `npm run release`'s local preview import `shipsToConsumers` and only supply I/O. It is a separate
+ * module from `release-plan.mjs` purely for layering - `release-plan.mjs` promises to be pure, and
+ * the pieces below are shared with `scripts/ci/verify-publish-tree.mjs`, which spawns.
+ *
+ * Everything here takes plain values and returns plain values. Nothing in this file spawns a
+ * process or touches the filesystem, so it is unit testable without a repository.
+ *
+ * ## Measured against history
+ *
+ * Replayed over the 26 release windows that `git describe --tags --abbrev=0` actually produces
+ * (29 `v*` tags, of which 27 are reachable from `main` - `v1.5.0` and `v1.7.7` tag commits that are
+ * not on the mainline, so `describe` can never return them - less `v1.2.0`, which has no base):
+ * **2 windows would have been refused**, `v1.7.8..v1.7.9` and `v1.7.9..v1.7.10`. Both shipped
+ * nothing to consumers. Using HEAD's packlist instead of each window's own gives 3; the extra one,
+ * `v1.6.1..v1.6.2`, genuinely shipped, because at `v1.6.2` there was no `files` array and no
+ * `.npmignore`, so `.github/` was published.
+ *
+ * **This measurement expires.** The `files` allowlist has changed three times already (absent, then
+ * `.npmignore`, then `files: ["docs/*.md", ...]` at v1.7.15, then `docs/**\/*.md` plus a negation at
+ * v2.0.0). Re-run the replay before relying on these numbers, and derive the packlist at each
+ * window's end commit rather than at HEAD.
+ */
+
+/** Written by the release process itself, so it never counts as a shipping change. */
+const RELEASE_FILES = new Set(['CHANGELOG.md']);
+
+/** npm forcibly includes this one, so a version-only bump would otherwise mask an empty window. */
+const MANIFEST = 'package.json';
+
+/**
+ * Content equality that ignores object key order, since re-ordering keys cannot alter
+ * what npm installs and reporting it as divergence would only train maintainers to
+ * bypass the gates that use this.
+ *
+ * Compared structurally rather than by sorting keys into a canonical string. Sorting
+ * needs a comparator, and both available spellings are worse: the default one orders by
+ * code unit but is flagged, and `localeCompare` can rank two distinct keys as equal -
+ * `"ä"` against `"ä"`, say - leaving their relative order to fall out of
+ * whichever order they happened to arrive in, so two files with identical content could
+ * canonicalise differently and fail the gate. Comparing key sets sidesteps the question.
+ *
+ * JSON has no cycles, no NaN and no undefined values, so a plain recursive walk is total
+ * over what JSON.parse can return.
+ */
+export function sameContent(left, right) {
+  if (left === right) return true;
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => sameContent(item, right[index]))
+    );
+  }
+
+  if (left !== null && right !== null && typeof left === 'object' && typeof right === 'object') {
+    const keys = Object.keys(left);
+    if (keys.length !== Object.keys(right).length) return false;
+    return keys.every(key => Object.hasOwn(right, key) && sameContent(left[key], right[key]));
+  }
+
+  return false;
+}
+
+/**
+ * The tagged file as it would look after the bump: `npm version` writes the root
+ * `version` in both files, plus `packages[""].version` in a lockfileVersion 2/3 lock.
+ * Those are the only two places in this repo's lockfile that carry the package's own
+ * version, confirmed against `package-lock.json` (lockfileVersion 3).
+ */
+export function withVersion(parsed, file, version) {
+  const next = { ...parsed, version };
+  if (file === 'package-lock.json' && next.packages?.['']) {
+    next.packages = { ...next.packages, '': { ...next.packages[''], version } };
+  }
+  return next;
+}
+
+/**
+ * Whether a change removes a path from the tree.
+ *
+ * A path that no longer exists cannot be looked up in a packlist, which npm builds from the
+ * worktree, so whether it used to be packed is unknowable and is assumed. That covers a deletion
+ * and equally a rename: a rename whose destination is unpacked still removes its source from the
+ * tarball, so consulting the destination alone would report a move of a shipped file out of the
+ * package as harmless.
+ *
+ * Handles both shapes git reports: a one-letter status from `diff --name-status`, and a
+ * two-character porcelain code from `status --porcelain=v1`.
+ */
+export function removesSomething(status) {
+  return status.includes('D') || status.startsWith('R');
+}
+
+/**
+ * Whether the window's `package.json` differs only by its `version` field.
+ *
+ * This is the non-obvious half of the rule and it is load-bearing. npm forcibly packs
+ * `package.json` (npm-packlist's `strict` rules contain `!/package.json`), and `release.yml` pushes
+ * the tag *before* the version-bump PR merges - so the previous release's bump lands inside the
+ * next window. Counting that as a shipping change would make the gate pass on every post-release
+ * window automatically, which is exactly the case it exists to catch. Measured: across the 26
+ * historical windows `package.json` changed in 24, version-only in 8.
+ *
+ * Reconstructed rather than matched line-by-line, because a lockfile-only dependency bump's changed
+ * lines are also spelled `"version": ...`.
+ *
+ * The version comes from `after` - the window's END manifest, which is `HEAD` for the CI classifier
+ * and `origin/main` for the local preview. It is never the version being published: the tagged
+ * manifest lags a full release, so at `v1.7.9..v1.7.10` the tagged file says `1.7.6` and the end
+ * file says `1.7.9`, never `1.7.10`. `verify-publish-tree.mjs` calls `withVersion` with the version
+ * being published because it is answering a different question; do not "fix" this to match it, or
+ * the comparison never holds and the rule silently stops firing.
+ */
+function isVersionOnlyManifestChange(before, after) {
+  if (!before || !after) return false;
+  return sameContent(withVersion(before, MANIFEST, after.version), after);
+}
+
+/** Whether one change reaches the tarball. Only reached once `packed` is known to be a Set. */
+function shipsChange(change, packed) {
+  return removesSomething(change.status) || packed.has(change.file);
+}
+
+/**
+ * Decides whether a release window ships anything to consumers.
+ *
+ * @param {object} input
+ * @param {Array<{status: string, file: string, from?: string}>} input.changes - as
+ *   `gitReader().changes(tag)` returns them. `--name-status -z`, never `--name-only`: the latter
+ *   loses deletions-versus-renames and C-quotes non-ASCII paths, which then match nothing.
+ * @param {Set<string>|null} input.packed - npm's packlist, or null when it could not be derived
+ * @param {object|null} input.manifestBefore - parsed `package.json` at the window's start
+ * @param {object|null} input.manifestAfter - parsed `package.json` at the window's end
+ * @returns {{ships: boolean, shipped: string[], unshipped: string[], reason: string}}
+ *
+ * Fail-open is deliberate and is the OPPOSITE polarity to `verify-publish-tree.mjs`. There, an
+ * underivable packlist means "assume everything is packed" and refuse, because an npm publish
+ * cannot be undone. Here it means "assume the window ships" and allow, because a wrongly blocked
+ * release is simply re-dispatched. Same conservatism, opposite direction.
+ */
+export function shipsToConsumers({ changes, packed, manifestBefore, manifestAfter }) {
+  if (!packed) {
+    return { ships: true, shipped: [], unshipped: [], reason: 'unknown-packlist' };
+  }
+
+  const dropManifest = isVersionOnlyManifestChange(manifestBefore, manifestAfter);
+  const candidates = changes.filter(
+    change => !RELEASE_FILES.has(change.file) && !(change.file === MANIFEST && dropManifest)
+  );
+
+  const name = change => (change.from ? `${change.from} -> ${change.file}` : change.file);
+  const shipped = candidates.filter(change => shipsChange(change, packed)).map(name);
+  const unshipped = candidates.filter(change => !shipsChange(change, packed)).map(name);
+
+  return {
+    ships: shipped.length > 0,
+    shipped,
+    unshipped,
+    reason: shipped.length > 0 ? 'ships' : 'nothing-packed'
+  };
+}

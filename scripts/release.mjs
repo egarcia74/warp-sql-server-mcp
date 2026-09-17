@@ -39,6 +39,8 @@ import { createInterface } from 'node:readline/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
+import { gitReader, packedFilesReader } from './ci/verify-publish-tree.mjs';
+import { shipsToConsumers } from './lib/packed-window.mjs';
 import {
   WORKFLOW,
   RELEASE_BRANCH,
@@ -250,6 +252,42 @@ function lastRemoteTag(tags) {
   return described?.trim() || null;
 }
 
+/**
+ * Whether the window ships anything npm packs, or why that could not be answered here.
+ *
+ * Returns a string for the preview and never throws: a preview that crashes is worse than one that
+ * says it does not know.
+ *
+ * gitReader() bypasses guard() and uses its own regime - a four-entry argument allowlist plus
+ * scrubbedEnv(), which guard() does not apply. A different discipline, not an absent one, and the
+ * stronger of the two on the GIT_* leakage that corrupted a checkout in #1214.
+ */
+function previewShips(lastTag, remoteHead, remoteManifest) {
+  if (!lastTag) return 'not evaluated (no release tag yet)';
+
+  const dirty = tryCapture('git', ['status', '--porcelain=v1'])?.trim();
+  const head = tryCapture('git', ['rev-parse', 'HEAD'])?.trim();
+  if (dirty || head !== remoteHead) {
+    return `not evaluated (only computed on a clean checkout at origin/${RELEASE_BRANCH})`;
+  }
+
+  try {
+    const reader = gitReader();
+    const verdict = shipsToConsumers({
+      changes: reader.changes(lastTag),
+      packed: packedFilesReader()(),
+      manifestBefore: JSON.parse(reader.show(lastTag, 'package.json')),
+      manifestAfter: remoteManifest
+    });
+    if (verdict.reason === 'unknown-packlist') return 'not evaluated (packlist unavailable)';
+    return verdict.ships
+      ? `yes (${verdict.shipped.length} packed path(s) changed)`
+      : 'NO - the workflow would refuse this release (#1235)';
+  } catch (error) {
+    return `not evaluated (${error.message})`;
+  }
+}
+
 function buildPreview(options, { remoteHead, tags }) {
   const lastTag = lastRemoteTag(tags);
   const range = lastTag ? data(`${lastTag}..${REMOTE_HEAD}`) : REMOTE_HEAD;
@@ -257,7 +295,10 @@ function buildPreview(options, { remoteHead, tags }) {
     .split('\n')
     .filter(line => line.trim());
 
-  const currentVersion = JSON.parse(git('show', `${REMOTE_HEAD}:package.json`)).version;
+  // Hoisted: the gate below needs the whole manifest, not just its version, and reading the blob
+  // twice would be two chances to disagree.
+  const remoteManifest = JSON.parse(git('show', `${REMOTE_HEAD}:package.json`));
+  const currentVersion = remoteManifest.version;
   if (!isPlainVersion(currentVersion)) {
     fail(
       `package.json on origin/${RELEASE_BRANCH} declares version "${currentVersion}", which is not a ` +
@@ -269,6 +310,12 @@ function buildPreview(options, { remoteHead, tags }) {
   const releaseType = options.type ?? detected.type;
 
   const mix = describeCommitMix(detected);
+
+  // #1235, previewed. Only computed on a clean checkout that is exactly origin/main: the commit
+  // window comes from origin/main while `npm pack` reads the WORKTREE, so on a branch that edits
+  // `files[]` (which this repo has done) the two halves describe different trees and the answer
+  // would be confidently wrong. An honest "not evaluated" beats that.
+  const ships = previewShips(lastTag, remoteHead, remoteManifest);
 
   if (subjects.length === 0) {
     fail(
@@ -287,7 +334,8 @@ function buildPreview(options, { remoteHead, tags }) {
         `${subjects.length} commit(s) since ${lastTag ?? 'the beginning'} on ` +
           `origin/${RELEASE_BRANCH}, none of them carrying a recognised conventional-commit ` +
           `type (${mix}), so the workflow would skip every job. Every recognised type ` +
-          'releases at least a patch, so an "unclassified" count is the whole story: those ' +
+          'releases at least a patch, so for SUBJECTS an "unclassified" count is the whole ' +
+          'story (the paths are reported separately as "Ships to npm"): those ' +
           'subjects matched no type at all. Pass --type <patch|minor|major> to release ' +
           'anyway, or --dry-run to see what the workflow reports.'
       );
@@ -311,6 +359,7 @@ function buildPreview(options, { remoteHead, tags }) {
     collisions,
     headSha: remoteHead.slice(0, 7),
     fullSha: remoteHead,
+    ships,
     dryRun: options.dryRun
   };
 }
