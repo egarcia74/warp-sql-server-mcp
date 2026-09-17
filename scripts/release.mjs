@@ -276,7 +276,7 @@ function lastRemoteTag(tags) {
  * scrubbedEnv(), which guard() does not apply. A different discipline, not an absent one, and the
  * stronger of the two on the GIT_* leakage that corrupted a checkout in #1214.
  */
-function previewShips(lastTag, remoteHead, remoteManifest) {
+function previewShips(lastTag, remoteHead, remoteManifest, forcedType) {
   if (!lastTag) return 'not evaluated (no release tag yet)';
 
   const dirty = tryCapture('git', ['status', '--porcelain=v1'])?.trim();
@@ -294,8 +294,12 @@ function previewShips(lastTag, remoteHead, remoteManifest) {
       manifestAfter: remoteManifest
     });
     if (verdict.reason === 'unknown-packlist') return 'not evaluated (packlist unavailable)';
-    return verdict.ships
-      ? `yes (${verdict.shipped.length} packed path(s) changed)`
+    if (verdict.ships) return `yes (${verdict.shipped.length} packed path(s) changed)`;
+    // `blockedByPaths` in release.yml is `!forced && ...`, so an explicit --type bypasses the gate
+    // there. Saying "the workflow would refuse this" for a run that will not be refused would send
+    // the operator looking for a problem that does not exist.
+    return forcedType
+      ? `no - but --type ${forcedType} overrides the path gate, so the release proceeds (#1235)`
       : 'NO - the workflow would refuse this release (#1235)';
   } catch (error) {
     return `not evaluated (${error.message})`;
@@ -329,7 +333,7 @@ function buildPreview(options, { remoteHead, tags }) {
   // window comes from origin/main while `npm pack` reads the WORKTREE, so on a branch that edits
   // `files[]` (which this repo has done) the two halves describe different trees and the answer
   // would be confidently wrong. An honest "not evaluated" beats that.
-  const ships = previewShips(lastTag, remoteHead, remoteManifest);
+  const ships = previewShips(lastTag, remoteHead, remoteManifest, options.type);
 
   if (subjects.length === 0) {
     fail(

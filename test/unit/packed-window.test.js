@@ -110,6 +110,44 @@ describe('shipsToConsumers', () => {
     expect(result.ships).toBe(false);
   });
 
+  // Codex, round 2 on #1273. The exemptions are for a file being EDITED; filtering before
+  // shipsChange would drop a DELETION before its handling ever ran, so removing a packed file
+  // would report `nothing-packed` while the tarball genuinely changed. Same shape as the
+  // packlist-control gap.
+  it('ships when CHANGELOG.md is deleted, though a modification to it is exempt', () => {
+    const packed = packs('CHANGELOG.md', 'package.json');
+    const m = manifest('1.0.0');
+
+    expect(
+      shipsToConsumers({
+        changes: [change('M', 'CHANGELOG.md')],
+        packed,
+        manifestBefore: m,
+        manifestAfter: m
+      }).ships
+    ).toBe(false);
+
+    expect(
+      shipsToConsumers({
+        changes: [change('D', 'CHANGELOG.md')],
+        packed,
+        manifestBefore: m,
+        manifestAfter: m
+      }).ships
+    ).toBe(true);
+  });
+
+  it('ships when package.json is deleted, though a version-only edit is exempt', () => {
+    const result = shipsToConsumers({
+      changes: [change('D', 'package.json')],
+      packed: packs('package.json'),
+      manifestBefore: manifest('1.7.6'),
+      manifestAfter: manifest('1.7.9')
+    });
+
+    expect(result.ships).toBe(true);
+  });
+
   // A deleted path cannot be looked up in a packlist built from the worktree, so whether it used
   // to be packed is unknowable and is assumed. Otherwise removing a shipped file would read as
   // "nothing changed".

@@ -20,8 +20,8 @@ three-tier graduated safety system** for production database security, **advance
 **streaming support for large datasets**, and **comprehensive performance monitoring**. Built with a
 modular architecture for enterprise-scale deployments.
 
-**✅ Production Status**: This MCP server has been **fully validated** through 1,748 tests, every
-one of which runs automatically on every pull request (1,681 unit + 27 integration + 40
+**✅ Production Status**: This MCP server has been **fully validated** through 1,750 tests, every
+one of which runs automatically on every pull request (1,683 unit + 27 integration + 40
 live-database). Covers all security phases with **100% success rates**.
 
 **🚀 Quick Start**: New users should begin with the [Quick Start Guide](docs/user/QUICKSTART.md) for a 5-minute setup walkthrough.
@@ -884,8 +884,8 @@ Generated files:
 
 - **Vitest Framework**: Modern testing with Vitest for fast execution and great DX
 - **Mocked Dependencies**: SQL Server connections are mocked for reliable, fast tests
-- **Comprehensive Coverage**: 1,748 tests total, **all of them automated** on every pull request:
-  1,681 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
+- **Comprehensive Coverage**: 1,750 tests total, **all of them automated** on every pull request:
+  1,683 unit and 27 integration under Vitest, plus the 40 live-database phase tests that `npm test`
   drives against a Docker SQL Server the CI `Tests` job starts itself. Together they cover all MCP
   tools, connection handling, and error scenarios
 - **Test Data**: Structured test data and realistic mock responses for consistent testing
@@ -923,14 +923,14 @@ npm run docker:clean                  # Remove all data and containers
 ### Test Structure
 
 Counts below are the vitest suite sizes measured with `npm run test:unit`
-(39 files, 1,681 tests); the live-database suites are counted from their own runners.
+(39 files, 1,683 tests); the live-database suites are counted from their own runners.
 
 ```text
 test/
 ├── README.md                                # Comprehensive test documentation
 ├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
 ├── setup.js                                 # Vitest global setup
-├── unit/                                    # Vitest unit suites - 39 files, 1,681 tests
+├── unit/                                    # Vitest unit suites - 39 files, 1,683 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
 │   ├── query-optimizer.test.js              # 136 - Query analysis and optimization engine
 │   ├── sql-injection-battery.test.js        # 103 - Authoritative behavioral injection guard
@@ -998,9 +998,9 @@ test/
 
 ### Test Categories
 
-#### **Unit Tests (1,681 across 39 files)**
+#### **Unit Tests (1,683 across 39 files)**
 
-Grouped by area; the group totals sum to 1,681:
+Grouped by area; the group totals sum to 1,683:
 
 - **Core MCP server** (144): `index.test.js` - entry point, tool dispatch, `validateQuery`
 - **SQL safety and injection guards** (317): `sql-injection-battery` (103), `where-clause-guard` (81),
@@ -1013,8 +1013,8 @@ Grouped by area; the group totals sum to 1,681:
 - **Tools and handlers** (152): `tool-registry` (59), `database-tools-handler` (64),
   `get-server-info` (29)
 - **Configuration** (24): `server-config` (24)
-- **Repository and CLI tooling** (612): `cleanup-test-processes` (48), `release-script` (145), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (43),
-  `packed-window` (19), `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6),
+- **Repository and CLI tooling** (614): `cleanup-test-processes` (48), `release-script` (145), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (43),
+  `packed-window` (21), `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6),
   `check-orphan-docs` (71), `markdown-blocks` (21), `check-env-var-docs` (103), `check-tool-docs` (11), `run-doc-checks` (3), `cli` (6), `docker-command-utils` (4), `dependabot-config` (2)
 
 #### **Integration Tests (27 Vitest + 40 live-database)**
@@ -1213,7 +1213,7 @@ This project maintains high code quality through automated tooling and architect
 > This document captures real-world metrics from the WARP project including:
 >
 > - **525 automated tests** with 100% pass rate enforcement (the figure captured by that case study; the
->   suite has since grown to 1,681 automated unit tests)
+>   suite has since grown to 1,683 automated unit tests)
 > - **74% code coverage** with strict quality gates
 > - **3x development time** vs. 90% reduction in debugging time
 > - **The five critical challenges** teams face with no-compromise quality
@@ -1280,7 +1280,7 @@ The project includes comprehensive system maintenance tools to manage developmen
 
 #### **Process Cleanup Infrastructure**
 
-During intensive testing sessions (like our 1,681-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
+During intensive testing sessions (like our 1,683-test unit suite), Node.js/Vitest processes can sometimes become orphaned and consume significant system resources.
 
 The project includes tools to inspect them:
 
@@ -1646,10 +1646,14 @@ gh run watch <run-id>
   not only runtime code — `docs/**/*.md`, `README.md` and `CHANGELOG.md` are all in
   `package.json`'s `files`, and `ci:`-titled PRs here routinely edit them. The asymmetry
   decides the rest: over-releasing spends a patch version, under-releasing ships the work
-  nowhere and says nothing, which is the #1158 defect itself. So the only window that
-  releases nothing is one whose subjects match **no type at all**, and that window **warns
-  and names them** rather than looking like an empty one (#1158). Force a release over it
-  with `release_type=patch` or `npm run release -- --type patch`.
+  nowhere and says nothing, which is the #1158 defect itself. So on the subject side alone,
+  the only window that releases nothing is one whose subjects match **no type at all**, and
+  that window **warns and names them** rather than looking like an empty one (#1158). There
+  are now **three** non-releasing outcomes in all, and the workflow distinguishes them:
+  an empty window, a window whose subjects match no type, and a window that changes nothing
+  npm packs (#1235, reported as `skip_reason=no-packed-changes`). Force a release over any of
+  them with `release_type=patch` or `npm run release -- --type patch`, which bypasses the
+  path gate as well as the subject rules.
 
   `deps:` and `deps-dev:` are **not** Conventional Commits types — they are what
   `.github/dependabot.yml` writes (`commit-message.prefix` / `prefix-development`), and they

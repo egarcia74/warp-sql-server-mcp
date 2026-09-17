@@ -184,9 +184,18 @@ export function shipsToConsumers({ changes, packed, manifestBefore, manifestAfte
   }
 
   const dropManifest = isVersionOnlyManifestChange(manifestBefore, manifestAfter);
-  const candidates = changes.filter(
-    change => !RELEASE_FILES.has(change.file) && !(change.file === MANIFEST && dropManifest)
-  );
+
+  // Both exemptions apply to a file being EDITED, never to one being removed. Deleting or renaming
+  // CHANGELOG.md away changes the tarball just as deleting any other packed file does, and the
+  // version-only reasoning cannot hold for a manifest that no longer exists. Filtering before
+  // `shipsChange` would drop the change before its deletion handling ever ran, so the window would
+  // report `nothing-packed` while shipping different bytes - the same shape as the
+  // packlist-control gap.
+  const exempt = change =>
+    !removesSomething(change.status) &&
+    (RELEASE_FILES.has(change.file) || (change.file === MANIFEST && dropManifest));
+
+  const candidates = changes.filter(change => !exempt(change));
 
   const name = change => (change.from ? `${change.from} -> ${change.file}` : change.file);
   const shipped = candidates.filter(change => shipsChange(change, packed)).map(name);
