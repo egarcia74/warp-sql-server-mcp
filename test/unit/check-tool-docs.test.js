@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { performance } from 'node:perf_hooks';
 import { join } from 'node:path';
 
 import {
@@ -8,10 +7,10 @@ import {
   GENERATED_DATA,
   TOOL_REFERENCE,
   checkToolDocs,
-  findCountClaims,
+  findCountMarkers,
   formatReport,
   mentionsTool,
-  prose,
+  stripLinkDestinations,
   visibleText,
   wordTokens
 } from '../../scripts/docs/check-tool-docs.mjs';
@@ -23,10 +22,12 @@ import { getAllTools } from '../../lib/tools/tool-registry.js';
 // unconditionally (#1265). The point of these tests is therefore not that the gate passes.
 // It is that the gate can FAIL, in every direction, on fixtures rather than on the
 // repository's own state.
+const marker = count => `<!-- tool-count -->${count}<!-- /tool-count -->`;
+
 const BASE = {
   tools: ['a_tool', 'b_tool'],
-  reference: 'The server exposes a_tool and b_tool.',
-  countDoc: 'We ship 2 tools.',
+  reference: `The server exposes a_tool and b_tool. ${marker(2)}`,
+  countDoc: `We ship ${marker(2)} tools.`,
   generated: { toolsCount: 2, tools: [{ name: 'a_tool' }, { name: 'b_tool' }] }
 };
 
@@ -49,23 +50,6 @@ describe('checkToolDocs', () => {
     expect(result.ok).toBe(false);
     expect(result.undocumented).toEqual(['b_tool']);
     expect(formatReport(result)).toContain(`Not documented in \`${TOOL_REFERENCE}\``);
-  });
-
-  // The front page claims a number rather than a list, so the number is what can rot - and it
-  // rots in the most visible place there is.
-  it('fails when a count claim no longer matches the registry', () => {
-    const result = check({ countDoc: 'We ship 3 tools.' });
-
-    expect(result.ok).toBe(false);
-    expect(result.staleClaims).toHaveLength(1);
-    expect(result.staleClaims[0]).toMatchObject({ count: 3, line: 1 });
-    expect(formatReport(result)).toContain('but the registry declares 2');
-  });
-
-  it('checks every count claim, not just the first', () => {
-    const result = check({ countDoc: 'We ship 2 tools.\n\nA reference to all 7 MCP tools.' });
-
-    expect(result.staleClaims.map(claim => claim.count)).toEqual([7]);
   });
 
   it('fails in both directions on the committed generated data', () => {
@@ -97,38 +81,6 @@ describe('checkToolDocs', () => {
   it('tolerates generated data that is missing or shaped wrongly', () => {
     expect(check({ generated: {} }).missingFromData).toEqual(['a_tool', 'b_tool']);
     expect(check({ generated: null }).ok).toBe(false);
-  });
-});
-
-describe('count claims are read from prose only', () => {
-  it('ignores a count inside a fenced block', () => {
-    const result = check({ countDoc: 'We ship 2 tools.\n\n```\nthere are 99 tools here\n```\n' });
-
-    expect(result.ok).toBe(true);
-  });
-
-  it('ignores a count inside an HTML comment', () => {
-    const result = check({ countDoc: 'We ship 2 tools.\n\n<!-- was 99 tools -->\n' });
-
-    expect(result.ok).toBe(true);
-  });
-
-  // The regex has to be narrow enough not to claim unrelated numbers. "1,686 Tests" sits two
-  // lines from a tool count in the real README.
-  it('does not mistake a neighbouring number for a tool count', () => {
-    expect(findCountClaims('1,686 Tests and 12 databases').map(c => c.count)).toEqual([]);
-    expect(findCountClaims('16 tools').map(c => c.count)).toEqual([16]);
-    expect(findCountClaims('16 Database Tools').map(c => c.count)).toEqual([16]);
-    expect(findCountClaims('16 MCP tools').map(c => c.count)).toEqual([16]);
-    expect(findCountClaims('1,686 tools').map(c => c.count)).toEqual([1686]);
-  });
-
-  it('reports the line so a failure can be acted on without hunting', () => {
-    expect(findCountClaims('intro\n\nthen 4 tools here')[0].line).toBe(3);
-  });
-
-  it('strips fences before anything else looks at the text', () => {
-    expect(prose('a\n```\nhidden\n```\nb')).not.toContain('hidden');
   });
 });
 
@@ -183,27 +135,6 @@ describe('drift the first implementation could not see', () => {
     expect(result.ok).toBe(false);
     expect(formatReport(result)).toContain('Listed more than once');
   });
-
-  it('counts a claim however it is capitalised', () => {
-    expect(findCountClaims('17 database tools').map(c => c.count)).toEqual([17]);
-    expect(findCountClaims('17 TOOLS').map(c => c.count)).toEqual([17]);
-    expect(findCountClaims('17 MCP Tools').map(c => c.count)).toEqual([17]);
-    expect(findCountClaims('17 Database Tools').map(c => c.count)).toEqual([17]);
-  });
-
-  // The false positive. A required gate that fails a correct document gets disabled.
-  it('does not read an inline code example as a claim about this server', () => {
-    const countDoc = 'We ship 2 tools. Run `npm reports 17 tools` to check.';
-
-    expect(findCountClaims(countDoc).map(c => c.count)).toEqual([2]);
-    expect(check({ countDoc }).ok).toBe(true);
-  });
-
-  it('still fails on a stale claim sitting beside an inline example', () => {
-    const countDoc = 'We ship 9 tools. Run `npm reports 17 tools` to check.';
-
-    expect(check({ countDoc }).staleClaims.map(c => c.count)).toEqual([9]);
-  });
 });
 
 // SonarCloud javascript:S8786 on the first implementation, and it was right. `\d[\d,]*`
@@ -222,37 +153,6 @@ describe('drift the second implementation could not see', () => {
     expect(check({ generated: { toolsCount: '2', tools } }).ok).toBe(false);
     expect(check({ generated: { toolsCount: 2, tools } }).ok).toBe(true);
   });
-
-  // WARP.md:36 carries its own count. Scanning only the README left the repository's
-  // designated reference free to contradict the registry.
-  it('checks count claims in the reference, not only the front page', () => {
-    const result = check({ reference: 'We have 9 tools: a_tool and b_tool' });
-
-    expect(result.ok).toBe(false);
-    expect(result.staleClaims.map(claim => claim.doc)).toEqual([TOOL_REFERENCE]);
-  });
-
-  // "16 different database operation tools" is how WARP.md phrases it. An earlier pattern
-  // allowed exactly one word between the number and "tools" and so read past it entirely.
-  it('matches a claim with words between the number and the noun', () => {
-    expect(findCountClaims('16 different database operation tools').map(c => c.count)).toEqual([
-      16
-    ]);
-    expect(findCountClaims('16 tests and 3 tools').map(c => c.count)).toEqual([3]);
-    expect(findCountClaims('upgraded 16 times before adding more tools').map(c => c.count)).toEqual(
-      []
-    );
-  });
-
-  // My own: `stripHtmlComments` ran before `stripRawTextHtml`, so a raw-text block holding a
-  // literal unterminated `<!--` truncated the document and every later claim vanished - the
-  // gate reporting success on text it had stopped reading. The composition now lives in
-  // `markdown-blocks.mjs` so there is one order rather than one per caller.
-  it('does not let an unterminated comment inside a raw-text block truncate the document', () => {
-    const doc = 'We ship 2 tools.\n<pre>\n<!-- example\n</pre>\nLater we claim 99 tools.';
-
-    expect(findCountClaims(doc).map(claim => claim.count)).toEqual([2, 99]);
-  });
 });
 
 // Third review round on #1268. Finding tool NAMES and finding count CLAIMS need different
@@ -260,7 +160,12 @@ describe('drift the second implementation could not see', () => {
 describe('what counts as a tool being documented', () => {
   const gen = name => ({ toolsCount: 1, tools: [{ name }] });
   const forTool = (name, reference) =>
-    checkToolDocs({ tools: [name], reference, countDoc: 'We ship 1 tools.', generated: gen(name) });
+    checkToolDocs({
+      tools: [name],
+      reference: `${reference} ${marker(1)}`,
+      countDoc: `We ship ${marker(1)} tools.`,
+      generated: gen(name)
+    });
 
   // WARP.md documents tool names in backticks throughout, so deleting code spans - correct for
   // count claims - reported the most visibly documented tools as missing. A required gate that
@@ -290,39 +195,76 @@ describe('what counts as a tool being documented', () => {
     expect(wordTokens(visibleText('`a_tool`')).has('a_tool')).toBe(true);
     expect(visibleText('[x](y/z_tool.md)')).not.toContain('z_tool');
   });
+});
 
-  // The two normalisations must stay distinct: prose() still deletes spans for count claims.
-  it('still treats an inline code example as an example when counting', () => {
-    expect(prose('run `npm reports 17 tools`')).not.toContain('17 tools');
-    expect(visibleText('run `npm reports 17 tools`')).toContain('17 tools');
+// The count check is an exact marker rather than a prose scan. Four review rounds produced
+// findings against the prose version in both directions and for one underlying reason: reading
+// English for a number is a heuristic, and a heuristic in a REQUIRED gate fails expensively. A
+// pattern narrow enough to avoid false positives missed WARP.md's "16 different database
+// operation tools"; widening it read "We added 3 new database tools" as a claim about the
+// registry, which would fail CI on an ordinary sentence.
+describe('the tool count is checked from an explicit marker', () => {
+  it('passes when every marker matches the registry', () => {
+    expect(check({}).ok).toBe(true);
+    expect(check({}).claims).toHaveLength(2);
+  });
+
+  it('fails on a stale marker and names the document and line', () => {
+    const result = check({ countDoc: `We ship ${marker(3)} tools.` });
+
+    expect(result.ok).toBe(false);
+    expect(result.staleClaims).toHaveLength(1);
+    expect(result.staleClaims[0]).toMatchObject({ count: 3, doc: COUNT_DOC, line: 1 });
+    expect(formatReport(result)).toContain('the registry declares 2');
+  });
+
+  it('checks the reference as well as the front page', () => {
+    const result = check({ reference: `a_tool and b_tool ${marker(9)}` });
+
+    expect(result.staleClaims.map(claim => claim.doc)).toEqual([TOOL_REFERENCE]);
+    expect(result.ok).toBe(false);
+  });
+
+  // Otherwise deleting the marker would be a silent way to stop the count being checked - the
+  // exact failure mode of the step this whole file replaces.
+  it('fails when a document carries no marker at all', () => {
+    const result = check({ countDoc: 'We ship some tools.' });
+
+    expect(result.unmarked).toEqual([COUNT_DOC]);
+    expect(result.ok).toBe(false);
+    expect(formatReport(result)).toContain('No `tool-count` marker');
+  });
+
+  // The whole point of moving off prose: ordinary sentences are no longer claims.
+  it('does not read prose as a count claim', () => {
+    expect(findCountMarkers('We added 3 new database tools')).toEqual([]);
+    expect(findCountMarkers('Version 2 supports the MCP tools')).toEqual([]);
+    expect(findCountMarkers('16 tools')).toEqual([]);
+    expect(findCountMarkers('run `npm reports 17 tools`')).toEqual([]);
+  });
+
+  it('reads the marker from raw Markdown, since it is itself an HTML comment', () => {
+    expect(findCountMarkers(`intro\n\n${marker(7)}`)).toEqual([{ count: 7, line: 3 }]);
+    expect(findCountMarkers('<!--tool-count-->7<!--/tool-count-->')).toEqual([
+      { count: 7, line: 1 }
+    ]);
   });
 });
 
-describe('the count matcher stays linear', () => {
-  const timeOf = input => {
-    const started = performance.now();
-    findCountClaims(input);
-    return performance.now() - started;
-  };
-
-  it('does not degrade on a long run of digits that is not a claim', () => {
-    // Generous by an order of magnitude against the 439ms the backtracking version took, so
-    // this fails on a real regression rather than on a busy machine.
-    expect(timeOf(`${'1'.repeat(16000)} x`)).toBeLessThan(50);
+// A Markdown destination may contain balanced parentheses, so a first-`)` pattern left part of
+// the URL behind and a tool named in that remainder counted as documented.
+describe('link destinations are consumed whole', () => {
+  it('handles balanced parentheses in a destination', () => {
+    expect(stripLinkDestinations('see [guide](docs/foo(and)/new_tool.md)')).toBe('see [guide]');
+    expect(visibleText('see [guide](docs/foo(and)/new_tool.md)')).not.toContain('new_tool');
   });
 
-  it('scales roughly linearly rather than quadratically', () => {
-    const small = timeOf(`${'1'.repeat(4000)} x`);
-    const large = timeOf(`${'1'.repeat(16000)} x`);
-
-    // Quadratic would be ~16x for 4x the input. Allow a wide band; the failing case was 16x.
-    expect(large).toBeLessThan(Math.max(small * 8, 25));
+  it('keeps an unbalanced destination verbatim rather than eating the rest', () => {
+    expect(stripLinkDestinations('see [guide](oops and more text')).toContain('oops and more text');
   });
 
-  it('will not start a claim part-way into a token', () => {
-    expect(findCountClaims('x16 tools').map(claim => claim.count)).toEqual([]);
-    expect(findCountClaims('(16 tools)').map(claim => claim.count)).toEqual([16]);
-    expect(findCountClaims('ships 16 tools').map(claim => claim.count)).toEqual([16]);
+  it('handles several links and text between them', () => {
+    expect(stripLinkDestinations('[a](x) then [b](y(z))!')).toBe('[a] then [b]!');
   });
 });
 
@@ -371,13 +313,6 @@ describe('the repository as it stands', () => {
 
     expect(result.tools).toEqual(getAllTools().map(tool => tool.name));
     expect(result.tools.length).toBeGreaterThan(0);
-  });
-
-  it('finds the count claims that are actually in the README', () => {
-    const claims = findCountClaims(readRepo(COUNT_DOC));
-
-    expect(claims.length).toBeGreaterThan(0);
-    for (const claim of claims) expect(claim.count).toBe(getAllTools().length);
   });
 });
 
