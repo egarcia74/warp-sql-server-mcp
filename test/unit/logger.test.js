@@ -172,7 +172,7 @@ describe('Logger', () => {
   describe('Logger Creation', () => {
     test('should create logger with development format', () => {
       // Ensure MCP environment heuristics don't disable color output in dev
-      const mcpSpy = vi.spyOn(Logger.prototype, '_isMcpEnvironment').mockReturnValue(false);
+      const mcpSpy = vi.spyOn(Logger.prototype, '_isMcpStdioTransport').mockReturnValue(false);
       process.env.NODE_ENV = 'development';
 
       logger = new Logger();
@@ -851,6 +851,99 @@ describe('Logger', () => {
         // In production, should use user state directory
         expect(defaults.logFile).toContain('warp-sql-server-mcp');
         expect(defaults.securityLogFile).toContain('warp-sql-server-mcp');
+      }
+    });
+  });
+  describe('Stdio transport stdout protection', () => {
+    // Every environment signal the shared MCP-environment helper reads. Each test states
+    // the whole environment rather than inheriting the developer's shell: running this
+    // suite from a VS Code terminal exports VSCODE_PID, which would otherwise decide the
+    // outcome of the negative control.
+    const MCP_SIGNALS = [
+      'MCP_TRANSPORT',
+      'VSCODE_MCP',
+      'VSCODE_PID',
+      'VSCODE_IPC_HOOK',
+      'PARENT_PROCESS'
+    ];
+    const STDERR_LEVELS = ['error', 'warn', 'info', 'debug'];
+
+    let savedSignals;
+    let savedTestLogging;
+    let savedStdoutIsTTY;
+    let savedStdinIsTTY;
+
+    /** Console transport options in construction order: main logger first, audit second. */
+    const consoleOptions = () => winston.transports.Console.mock.calls.map(([options]) => options);
+
+    beforeEach(() => {
+      savedSignals = new Map(MCP_SIGNALS.map(name => [name, process.env[name]]));
+      for (const name of MCP_SIGNALS) delete process.env[name];
+
+      // NODE_ENV is 'test' under vitest, and that suppresses both console transports
+      // outright - a transport that is never constructed cannot be asserted on.
+      savedTestLogging = process.env.ENABLE_TEST_LOGGING;
+      process.env.ENABLE_TEST_LOGGING = 'true';
+
+      savedStdoutIsTTY = process.stdout.isTTY;
+      savedStdinIsTTY = process.stdin.isTTY;
+    });
+
+    afterEach(() => {
+      for (const [name, value] of savedSignals) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+      if (savedTestLogging === undefined) delete process.env.ENABLE_TEST_LOGGING;
+      else process.env.ENABLE_TEST_LOGGING = savedTestLogging;
+
+      process.stdout.isTTY = savedStdoutIsTTY;
+      process.stdin.isTTY = savedStdinIsTTY;
+    });
+
+    test('routes main logger output to stderr when MCP_TRANSPORT=stdio', () => {
+      process.env.MCP_TRANSPORT = 'stdio';
+
+      logger = new Logger({ level: 'debug' });
+
+      const [main] = consoleOptions();
+      expect(main.level).toBe('debug'); // identifies this as the main logger's transport
+      expect(main.stderrLevels).toEqual(expect.arrayContaining(STDERR_LEVELS));
+    });
+
+    test('routes security audit output to stderr when MCP_TRANSPORT=stdio', () => {
+      process.env.MCP_TRANSPORT = 'stdio';
+
+      logger = new Logger({ level: 'debug', enableSecurityAudit: true });
+
+      const options = consoleOptions();
+      expect(options).toHaveLength(2); // main logger, then security audit
+      const audit = options[1];
+      expect(audit.level).toBe('info'); // identifies this as the audit transport
+      expect(audit.stderrLevels).toEqual(expect.arrayContaining(STDERR_LEVELS));
+    });
+
+    test('routes both transports to stderr when VSCODE_MCP=true', () => {
+      process.env.VSCODE_MCP = 'true';
+
+      logger = new Logger({ level: 'debug', enableSecurityAudit: true });
+
+      for (const options of consoleOptions()) {
+        expect(options.stderrLevels).toEqual(expect.arrayContaining(STDERR_LEVELS));
+      }
+    });
+
+    test('leaves both transports on stdout when nothing indicates a protocol stream', () => {
+      // An interactive terminal on both ends: no client is reading stdout for JSON-RPC.
+      process.stdout.isTTY = true;
+      process.stdin.isTTY = true;
+
+      logger = new Logger({ level: 'debug', enableSecurityAudit: true });
+
+      const options = consoleOptions();
+      expect(options).toHaveLength(2);
+      for (const transportOptions of options) {
+        expect(transportOptions.stderrLevels).toBeUndefined();
       }
     });
   });

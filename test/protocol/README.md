@@ -42,7 +42,7 @@ The only protocol test in this directory. It:
    the exit code
 
 It is a single pass/fail script, not a counted suite, so it does not contribute to the repository's
-1,348-test total.
+1,686-test total.
 
 > **A note for anyone adding a test here.** This test deliberately does **not** set `NODE_ENV=test`
 > when it spawns the server - see the comment at the top of the spawn options. `index.js` guards its
@@ -50,11 +50,11 @@ It is a single pass/fail script, not a counted suite, so it does not contribute 
 > no readiness output at all. A previous test in this directory (`mcp-client-smoke-test.js`) set
 > `NODE_ENV=test` and then waited on the child's stderr for that banner; it could never pass and was
 > removed. If you gate on server output, do not set `NODE_ENV=test`, and remember that
-> `lib/utils/logger.js` only routes log output to stderr when it detects VS Code
-> (`VSCODE_MCP` / `VSCODE_PID` / `VSCODE_IPC_HOOK`) - otherwise it goes to stdout. Gating on the
-> JSON-RPC response, as this test does, removes the dependency on the banner - but not the
-> requirement for clean stdout, since the logger writes there outside VS Code and stray non-JSON
-> lines still break response matching.
+> `lib/utils/logger.js` routes log output to stderr whenever `isMcpStdioTransport()`
+> (`lib/utils/mcp-environment.js`) is satisfied - which a spawn with pipes on both ends always
+> is, so a test that drives the server this way gets clean stdout. Gating on the JSON-RPC
+> response, as this test does, removes the dependency on the banner - and do not reintroduce a
+> dependency on stdout carrying anything but protocol frames.
 
 ## 🚀 **Running Protocol Tests**
 

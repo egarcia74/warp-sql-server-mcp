@@ -394,13 +394,15 @@ kind of environment it is running in. They are listed because setting them **doe
 
 - **Default**: _(unset)_
 - **Description**: Set to `stdio` by an MCP client to declare that stdout carries the protocol
-  handshake. The server uses it - with `VSCODE_MCP` and `PARENT_PROCESS` - to keep its **startup**
-  output (such as dotenv's banner) off stdout.
-- **⚠️ It does not redirect the server's ongoing log output.** `Logger` routes logs to stderr only
-  when `Logger._isMcpEnvironment()` is true, and that helper tests just `VSCODE_MCP`, `VSCODE_PID`
-  and `VSCODE_IPC_HOOK`. Under a stdio client that sets none of those, Winston still writes to
-  stdout - the same stream as JSON-RPC. Set [`VSCODE_MCP=true`](#vscode_mcp) for that, and see the
-  [Debug Logging Guide](../developer/DEBUG-LOGGING.md) for the full picture.
+  stream. Setting it is sufficient, on its own, to keep **everything** the server writes off
+  stdout: the startup banners (dotenv's included) and every Winston line, on both the main and
+  the security-audit channels, go to stderr instead.
+- **Note**: this was not always true. Until #1256 the variable gated only the startup banners,
+  while the logger keyed its stderr routing off the VS Code variables alone - so a client that
+  declared `MCP_TRANSPORT=stdio` and nothing else still had log lines interleaved with its
+  JSON-RPC. The decision now follows the transport and is made in one place
+  (`lib/utils/mcp-environment.js`), shared by `index.js`, `cli.js` and `Logger`. See the
+  [Debug Logging Guide](../developer/DEBUG-LOGGING.md) for what reaches which stream.
 - **Values**:
   - `stdio` (MCP stdio transport)
   - _(unset)_ (auto-detected from the TTY state and the other indicators below)
@@ -408,18 +410,15 @@ kind of environment it is running in. They are listed because setting them **doe
 ### `VSCODE_MCP`
 
 - **Default**: _(unset)_
-- **Description**: Set to `true` to force MCP-environment handling on, regardless of what
-  auto-detection concludes. That handling is what moves the main log transport to stderr, so this
-  is the variable to set under any stdio client - not just VS Code - to keep logs out of the
-  JSON-RPC stream. It is not the only thing that turns the handling on:
-  `Logger._isMcpEnvironment()` also returns true when VS Code sets `VSCODE_PID` or
-  `VSCODE_IPC_HOOK`. Those are the only three signals it reads - it inspects `process.ppid`
-  but tests nothing about it and then returns false, so there is no parent-process detection
-  for log routing. `VSCODE_MCP` is the only signal a user sets deliberately, which is why it
-  is the one documented here as configuration. The security-audit console transport is unaffected; leave
-  [`ENABLE_SECURITY_AUDIT`](#enable_security_audit) at `false` under a stdio client.
+- **Description**: Set to `true` to force stdio-transport handling on, regardless of what
+  auto-detection concludes - it moves every console transport to stderr. It is the manual
+  override, not the mechanism: [`MCP_TRANSPORT=stdio`](#mcp_transport) does the same thing and
+  is what a client should be setting. `VSCODE_MCP` is documented here as configuration because
+  it is the one signal a user sets deliberately; the others
+  (`VSCODE_PID`, `VSCODE_IPC_HOOK`, [`PARENT_PROCESS`](#parent_process), and a stdin/stdout pair
+  that are both pipes) are set by the environment. Any one of them is enough.
 - **Values**:
-  - `true` (force MCP environment; main log transport goes to stderr)
+  - `true` (force stdio-transport handling; all console output goes to stderr)
   - _(unset)_ (auto-detect)
 
 ### `PARENT_PROCESS`
