@@ -82,23 +82,26 @@ function controlsPacklist(file) {
  * wrong for a `yarn.lock` inside a packed directory.
  */
 function neverPacked(file) {
-  // Root-anchored in npm's `strict` rules: a lockfile in a subdirectory is an ordinary file.
+  const base = file.split('/').pop();
+
+  // Anchored to the package root by a leading `/` in npm's list.
   const ROOT_ONLY = new Set([
     'package-lock.json',
     'yarn.lock',
     'pnpm-lock.yaml',
     'bun.lockb',
-    'npm-debug.log',
     '.lock-wscript'
   ]);
   if (ROOT_ONLY.has(file)) return true;
+  if (file.startsWith('.wafpickle-')) return true;
+  if (file === 'build/config.gypi' || file.startsWith('archived-packages/')) return true;
 
-  // Excluded at any depth by npm's `defaults` (`**/.npmrc`, `**/.DS_Store/**`, `**/._*/**`).
-  const base = file.split('/').pop();
-  if (base === '.npmrc' || base === '.DS_Store' || base.startsWith('._')) return true;
+  // No leading `/` in npm's list, so these match at ANY depth - `npm-debug.log` included, which
+  // an earlier version of this function got wrong by grouping it with the root-anchored entries.
+  if (base === 'npm-debug.log' || base === '.npmrc' || base === '.DS_Store') return true;
+  if (base.startsWith('._') || base.endsWith('.orig')) return true;
 
-  // `.*.swp` and `*.orig`, likewise at any depth.
-  return /^\..*\.swp$/.test(base) || base.endsWith('.orig');
+  return /^\..*\.swp$/.test(base);
 }
 
 /**

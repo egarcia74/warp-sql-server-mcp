@@ -156,14 +156,37 @@ describe('shipsToConsumers', () => {
     }
   });
 
-  // Round 5. The exemption started as a lockfile list and was too narrow: npm's `defaults` exclude
-  // `**/.npmrc` and friends at any depth, so deleting one also read as a shipping change.
-  it('refuses deletions of files npm never packs at any depth', () => {
+  // Rounds 5 and 6. The exemption began as four lockfiles and was twice too narrow: npm's
+  // `defaults` exclude a further set, and its ANCHORING varies - entries with a leading `/` are
+  // root-only, the rest match at any depth. Getting that distinction wrong is what made the first
+  // version refuse a nested `yarn.lock` and the second miss `lib/npm-debug.log`.
+  it('refuses deletions of files npm never packs, at any depth where npm says any depth', () => {
     const packed = packs('package.json', 'lib/a.js');
 
-    for (const file of ['.npmrc', 'lib/.npmrc', '.DS_Store', 'notes.orig', 'npm-debug.log']) {
+    for (const file of [
+      '.npmrc',
+      'lib/.npmrc',
+      'npm-debug.log',
+      'lib/nested/npm-debug.log',
+      '.DS_Store',
+      'lib/.DS_Store',
+      'notes.orig',
+      '.a.swp'
+    ]) {
       expect(verdict([change('D', file)], packed).ships, file).toBe(false);
     }
+  });
+
+  it('applies npm root-anchored exclusions only at the root', () => {
+    const packed = packs('package.json', 'lib/a.js');
+
+    // Root-anchored in npm's list (`/.lock-wscript`, `/build/config.gypi`, the lockfiles).
+    expect(verdict([change('D', '.lock-wscript')], packed).ships).toBe(false);
+    expect(verdict([change('D', 'build/config.gypi')], packed).ships).toBe(false);
+
+    // The same basenames deeper in the tree are ordinary files npm would have packed.
+    expect(verdict([change('D', 'lib/.lock-wscript')], packed).ships).toBe(true);
+    expect(verdict([change('D', 'docs/vendor/yarn.lock')], packed).ships).toBe(true);
   });
 
   // Round 4 - that exemption checked the rename DESTINATION and short-circuited before the source
