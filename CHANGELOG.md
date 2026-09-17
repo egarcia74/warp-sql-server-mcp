@@ -58,6 +58,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Development-format log lines are also no longer colorized, since the colorized variant was only
   ever selected by the detection that is gone.
 
+- **The MCP tool-documentation check can now fail.** The "Validate MCP tool documentation" step
+  in `docs.yml` extracted tool names by running a regular expression over `index.js`, and the
+  definitions had moved to `lib/tools/tool-registry.js`: it found two matches, both the _server_
+  name, which `README.md` contains everywhere, and so reported "All tools are documented"
+  unconditionally. Deleting every tool from the docs would not have failed it. It is replaced by
+  `scripts/docs/check-tool-docs.mjs`, which imports the registry rather than parsing a file and
+  verifies that the committed `docs-data/tools.json` lists exactly the registered tools, once
+  each, with a `toolsCount` that agrees with its own array. That file is the input to the
+  published tool reference, so it going stale is what a reader actually sees. Closes #1265.
+
+  Checking that the prose documents each tool is deliberately **not** part of this: every
+  approach to it had to interpret Markdown, and every one produced a defect in review — a visible
+  name deleted with its code span, a name counted from a link destination it was hidden in, an
+  ordinary sentence read as a count claim. That work is tracked separately and wants a real
+  Markdown parser rather than another normalisation pass.
+
+- **`npm run docs:check` now reports every documentation check rather than stopping at the
+  first.** It chained them with `&&`, so a contributor fixing orphan drift would only discover
+  env-var or tool drift on the next CI run. `scripts/docs/run-doc-checks.mjs` runs all three,
+  prints all three, and then fails naming which ones — the same property `docs.yml` gets from
+  `if: always()` on its report steps.
+
 - **Documentation drift now blocks a merge instead of merely reporting one.** The orphan-doc and
   environment-variable doc-sync checks added in #1254 ran only in the `Validate Documentation`
   workflow, which is not a required status check — so a pull request that orphaned a doc or drifted

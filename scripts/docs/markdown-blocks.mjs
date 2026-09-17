@@ -166,6 +166,80 @@ export function stripHtmlComments(markdown) {
 }
 
 /**
+ * Removes inline code spans, longest fence first so ``a ` b`` is consumed as one span
+ * rather than as two single-backtick spans around it.
+ *
+ * Hand-rolled rather than `/(`+)(?:(?!\1)[\s\S])*\1/g`, which is quadratic: the greedy
+ * `(`+)` offers one alternative per backtick and each is retried against the rest of the
+ * document, so a long run of backticks - a table border, ASCII art, a pasted diff - made
+ * the pass super-linear (measured 4x per doubling: 10ms at 4k backticks, 158ms at 16k).
+ * These scanners run over every Markdown file in the repository on every CI job, where the
+ * symptom would be a mysteriously hung build rather than an error.
+ *
+ * The behaviour is deliberately identical to that regular expression, backtracking
+ * included: the longest opening run is tried first and the span ends at the next literal
+ * occurrence of that same run, then progressively shorter openers are tried, and a run
+ * with no closer stays in the text as ordinary characters. That equivalence is pinned by a
+ * differential test over the repository's own Markdown plus randomised backtick soup,
+ * because "passes the suite" is not the same claim as "matches the old pattern".
+ */
+export function stripCodeSpans(text) {
+  let out = '';
+  let i = 0;
+
+  while (i < text.length) {
+    if (text[i] !== '`') {
+      out += text[i];
+      i += 1;
+      continue;
+    }
+
+    const openStart = i;
+    while (i < text.length && text[i] === '`') i += 1;
+
+    // The closer is searched for from `openStart + length`, which for a shortened opener
+    // still lies *inside* the run - so a lone ``` does close against its own third
+    // backtick, and the search cannot be clamped to the text after the run. A differential
+    // test caught exactly that: clamping made `   ``` ` survive whole where the regular
+    // expression leaves `   ` `.
+    let end = -1;
+    for (let length = i - openStart; length >= 1; length -= 1) {
+      const closer = text.indexOf('`'.repeat(length), openStart + length);
+      if (closer !== -1) {
+        end = closer + length;
+        break;
+      }
+    }
+
+    if (end === -1) {
+      out += text.slice(openStart, i); // no closer: the run is literal text
+      continue;
+    }
+    i = end; // drop opener, content and closer together
+  }
+
+  return out;
+}
+
+/**
+ * Markdown reduced to prose: fenced blocks, raw-text HTML, HTML comments and inline code
+ * spans removed.
+ *
+ * The ORDER is load-bearing and is the reason this composition lives here rather than being
+ * spelled out by each caller. `stripRawTextHtml` must run before `stripHtmlComments`: a
+ * raw-text block may legitimately contain a literal `<!--` with no closer, and the comment
+ * stripper truncates from an unterminated opener to the end of the document. Run the other way
+ * round, one `<pre><!-- example</pre>` silently deletes everything after it, and a checker
+ * reading the result sees a document that ends early and reports success.
+ *
+ * That is not hypothetical - it was found in review on #1268, where a second caller wrote the
+ * four calls out by hand and transposed two of them. One exported composition, one order.
+ */
+export function stripNonProse(markdown) {
+  return stripCodeSpans(stripHtmlComments(stripRawTextHtml(stripFencedBlocks(markdown))));
+}
+
+/**
  * Code-unit ordering, as an explicit comparator.
  *
  * Deliberately NOT `localeCompare`, which SonarQube's default suggestion reaches for:

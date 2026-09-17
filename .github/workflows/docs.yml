@@ -87,53 +87,6 @@ jobs:
             echo "⚠️ README.md might be missing standard sections" >> link-report.md
           fi
 
-      - name: Validate MCP tool documentation
-        run: |
-          echo "" >> link-report.md
-          echo "### 🔧 MCP Tool Documentation Check" >> link-report.md
-          echo "" >> link-report.md
-
-          # Extract tools from index.js and check if documented
-          node -e "
-            const fs = require('fs');
-            const indexContent = fs.readFileSync('index.js', 'utf8');
-            const readmeContent = fs.readFileSync('README.md', 'utf8');
-            
-            // Extract tool definitions (simplified)
-            const toolRegex = /name:\s*['\"]([^'\"]+)['\"]/g;
-            const tools = [];
-            let match;
-            
-            while ((match = toolRegex.exec(indexContent)) !== null) {
-              tools.push(match[1]);
-            }
-            
-            console.log('Found tools:', tools.join(', '));
-            
-            let documentedTools = 0;
-            let undocumentedTools = [];
-            
-            tools.forEach(tool => {
-              if (readmeContent.includes(tool)) {
-                documentedTools++;
-              } else {
-                undocumentedTools.push(tool);
-              }
-            });
-            
-            const report = [
-              '**Tools found in code**: ' + tools.length,
-              '**Tools documented in README**: ' + documentedTools,
-              undocumentedTools.length > 0 ? 
-                '**Undocumented tools**: ' + undocumentedTools.join(', ') : 
-                '✅ **All tools are documented**'
-            ].join('\n');
-            
-            fs.writeFileSync('tool-docs-report.txt', report);
-          "
-
-          cat tool-docs-report.txt >> link-report.md
-
       # The two checks below REPORT drift; they do not enforce it. Enforcement lives in
       # ci.yml's `lint` job (`Code Quality & Linting`), which runs the same two scripts via
       # `npm run docs:check` and IS a required status check on main. This job is deliberately
