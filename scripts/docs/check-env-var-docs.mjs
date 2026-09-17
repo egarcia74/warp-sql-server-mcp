@@ -65,8 +65,6 @@ export const ENV_VARS_DOC = 'docs/reference/ENV-VARS.md';
 export const AMBIENT_VARS = new Map([
   ['HOME', 'set by the OS; used only to locate ~/.warp-sql-server-mcp.json'],
   ['USERPROFILE', 'the Windows spelling of HOME'],
-  ['VSCODE_PID', 'set by VS Code itself; read as an MCP-environment indicator'],
-  ['VSCODE_IPC_HOOK', 'set by VS Code itself; read as an MCP-environment indicator'],
   ['VITEST', 'set by the test runner; guards a test-only branch']
 ]);
 

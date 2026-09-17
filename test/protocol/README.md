@@ -50,9 +50,9 @@ It is a single pass/fail script, not a counted suite, so it does not contribute 
 > no readiness output at all. A previous test in this directory (`mcp-client-smoke-test.js`) set
 > `NODE_ENV=test` and then waited on the child's stderr for that banner; it could never pass and was
 > removed. If you gate on server output, do not set `NODE_ENV=test`, and remember that
-> `lib/utils/logger.js` routes log output to stderr whenever `isMcpStdioTransport()`
-> (`lib/utils/mcp-environment.js`) is satisfied - which a spawn with pipes on both ends always
-> is, so a test that drives the server this way gets clean stdout. Gating on the JSON-RPC
+> `lib/utils/logger.js` routes log output to stderr unconditionally (#1260) - stdout is the
+> JSON-RPC channel whenever the server runs at all, so a test that drives the server this way
+> gets clean stdout no matter what it puts in the environment. Gating on the JSON-RPC
 > response, as this test does, removes the dependency on the banner - and do not reintroduce a
 > dependency on stdout carrying anything but protocol frames.
 

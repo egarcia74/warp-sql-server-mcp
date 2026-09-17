@@ -90,11 +90,12 @@ class MCPServerStartupTest {
       }, 10000);
 
       // The startup banner is reported for diagnostics only - it must NOT resolve the
-      // test. It reaches stderr because this spawn puts pipes on both stdio ends, which
-      // isMcpStdioTransport() reads as the stdio transport; resolving on it let this test
-      // report "Responds to MCP initialize protocol" without ever receiving an initialize
-      // response - it passed against a stopped database. Success is now gated solely on
-      // parsing the JSON-RPC initialize result below.
+      // test. It reaches stderr because the server routes every console line there
+      // unconditionally (#1260): stdout is the JSON-RPC channel whenever index.js runs,
+      // so there is nothing about this spawn for the server to detect. Resolving on the
+      // banner let this test report "Responds to MCP initialize protocol" without ever
+      // receiving an initialize response - it passed against a stopped database. Success
+      // is now gated solely on parsing the JSON-RPC initialize result below.
       this.serverProcess.stderr.on('data', data => {
         const message = data.toString();
         console.log('STDERR:', message.trim()); // Debug output

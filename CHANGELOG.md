@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The logger no longer guesses whether it is talking to an MCP client — it never had to.** This
+  server constructs exactly one transport, `StdioServerTransport`, and constructs its `Logger` in
+  exactly one place, so stdout is the JSON-RPC protocol channel every time the code runs. The
+  runtime detection that decided where console output went was therefore answering a question with
+  only one possible answer, and every heuristic in it was a chance to be wrong: a client that
+  declared nothing had its own log lines interleaved with its protocol stream (#1256), and
+  `MCP_TRANSPORT=stdio` was honoured by the startup banners but ignored by the logger (#1259). The
+  detection is deleted rather than improved (#1260), so a client can no longer get this wrong by
+  omission.
+
+  Console output — every Winston level on both the main and security-audit transports, dotenv's
+  startup banner, and the `warp-sql-server-mcp start` banners — now goes to stderr
+  unconditionally. A terminal displays stderr, so running the server by hand looks the same.
+
+  **`MCP_TRANSPORT`, `VSCODE_MCP` and `PARENT_PROCESS` are read nowhere in the codebase any
+  more.** Setting them is now a harmless no-op; no client or user configuration needs changing.
+  Development-format log lines are also no longer colorized, since the colorized variant was only
+  ever selected by the detection that is gone.
+
+### Removed
+
+- `lib/utils/mcp-environment.js`, `Logger._isMcpStdioTransport()` and the already-dead
+  `Logger._getParentProcessName()`. The last of these ran `execSync('ps -p <ppid> -o comm=')` from
+  a logging module and had no callers at all, so its removal takes a shell-out out of the shipped
+  package.
+
 ## [2.0.1] - 2026-09-15
 
 ### Fixed

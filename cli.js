@@ -5,8 +5,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 
-import { isMcpStdioTransport } from './lib/utils/mcp-environment.js';
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CONFIG_FILE = path.join(
@@ -124,13 +122,18 @@ function showConfig() {
   }
 }
 
+// These banners are `console.error`, not `console.log`, and **not** because of any
+// detection (#1260). This function only runs on the `start` path, which then spawns
+// `index.js` with `stdio: 'inherit'` - so this process's stdout *is* the file descriptor
+// that becomes the JSON-RPC channel moments later. There is no variant of `start` where
+// writing to it is safe, so there is nothing to detect. A human running `start` in a
+// terminal still sees these lines, because a terminal shows stderr. (The human-facing
+// `init`, `config`, `version` and `help` commands never spawn the server and keep their
+// `console.log`.)
 function loadConfigToEnv() {
-  // Under a stdio transport stdout carries the handshake, so banners go to stderr
-  const out = isMcpStdioTransport() ? console.error : console.log;
-
   if (!fs.existsSync(CONFIG_FILE)) {
-    out(`⚠️  No configuration file found at: ${CONFIG_FILE}`);
-    out(
+    console.error(`⚠️  No configuration file found at: ${CONFIG_FILE}`);
+    console.error(
       'Using environment variables only. Run "warp-sql-server-mcp init" to create a config file.'
     );
     return;
@@ -144,7 +147,7 @@ function loadConfigToEnv() {
         process.env[key] = value;
       }
     }
-    out(`✅ Configuration loaded from: ${CONFIG_FILE}`);
+    console.error(`✅ Configuration loaded from: ${CONFIG_FILE}`);
   } catch (error) {
     console.error(`❌ Failed to load configuration file: ${error.message}`);
     process.exit(1);
@@ -152,10 +155,10 @@ function loadConfigToEnv() {
 }
 
 function startServer() {
-  // Under a stdio transport stdout carries the handshake, so banners go to stderr
-  const out = isMcpStdioTransport() ? console.error : console.log;
-
-  out('🚀 Starting Warp SQL Server MCP...');
+  // stderr unconditionally: the `spawn(..., { stdio: 'inherit' })` below hands this
+  // process's stdout straight to the MCP server as its protocol channel. See the note
+  // above `loadConfigToEnv()` for why there is nothing here to detect.
+  console.error('🚀 Starting Warp SQL Server MCP...');
   // Load configuration into environment
   loadConfigToEnv();
   // Start the actual MCP server
@@ -174,14 +177,15 @@ function startServer() {
     process.exit(code);
   });
 
-  // Handle graceful shutdown
+  // Handle graceful shutdown. stderr for the same reason as the startup banners: the
+  // child inherited this stdout as its protocol channel and may still be draining it.
   process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down server...');
+    console.error('\n🛑 Shutting down server...');
     serverProcess.kill('SIGINT');
   });
 
   process.on('SIGTERM', () => {
-    console.log('\n🛑 Shutting down server...');
+    console.error('\n🛑 Shutting down server...');
     serverProcess.kill('SIGTERM');
   });
 }

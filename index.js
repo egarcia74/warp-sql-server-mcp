@@ -20,7 +20,6 @@ import { PerformanceMonitor, extractRowCounts } from './lib/utils/performance-mo
 import { QueryOptimizer } from './lib/analysis/query-optimizer.js';
 import { BottleneckDetector } from './lib/analysis/bottleneck-detector.js';
 import { Logger } from './lib/utils/logger.js';
-import { isMcpStdioTransport } from './lib/utils/mcp-environment.js';
 import { findForbiddenWhereClauseSyntax } from './lib/security/where-clause-guard.js';
 import { validateQuery as evaluateQuerySafety } from './lib/security/query-policy.js';
 import {
@@ -38,12 +37,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
 const VERSION = packageJson.version;
 
-// Load environment variables
-// Suppress dotenv output under a stdio transport to avoid polluting the JSON-RPC stream
-const isMcpEnvironment = isMcpStdioTransport();
-
-if (isMcpEnvironment) {
-  // In MCP environments, capture and suppress dotenv output to prevent parsing errors
+// Load environment variables, with dotenv's own banner suppressed.
+//
+// **There is no transport detection here on purpose** (#1260). `StdioServerTransport` is
+// the only transport this file imports or constructs, so whenever this module runs, stdout
+// is the JSON-RPC channel - for every client, not just the ones that announce themselves.
+// Nothing that is not a protocol frame may be written to it, so dotenv's banner is
+// swallowed unconditionally rather than on a guess about who spawned us.
+{
   const originalConsoleLog = console.log;
   const originalConsoleWarn = console.warn;
 
@@ -58,8 +59,6 @@ if (isMcpEnvironment) {
     console.log = originalConsoleLog;
     console.warn = originalConsoleWarn;
   }
-} else {
-  dotenv.config();
 }
 
 class SqlServerMCP {

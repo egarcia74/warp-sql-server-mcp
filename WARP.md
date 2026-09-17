@@ -105,8 +105,7 @@ lib/
 │       ├── base-handler.js   # 🧩 Base class for tool handlers
 │       └── database-tools.js # 🔧 Database operation implementations
 └── utils/
-    ├── logger.js             # 📝 Structured logging
-    ├── mcp-environment.js    # 🔌 Stdio-transport detection (keeps output off stdout)
+    ├── logger.js             # 📝 Structured logging (always to stderr - stdout is JSON-RPC)
     ├── performance-monitor.js # ⚡ Performance tracking
     └── streaming-handler.js   # 📈 Large data streaming
 ```
