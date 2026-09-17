@@ -25,13 +25,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import {
-  byCodeUnit,
-  stripCodeSpans,
-  stripFencedBlocks,
-  stripHtmlComments,
-  stripRawTextHtml
-} from './markdown-blocks.mjs';
+import { byCodeUnit, stripNonProse } from './markdown-blocks.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -216,10 +210,6 @@ function readBareDestination(text, from) {
  * document inside an indented example. If that miss ever becomes real, the honest fix is a
  * block parser replacing this whole chain, not another pass bolted onto it.
  */
-function stripNonProse(markdown) {
-  return stripCodeSpans(stripHtmlComments(stripRawTextHtml(stripFencedBlocks(markdown))));
-}
-
 /**
  * Every inline link destination in `body`, found by one left-to-right scan.
  *

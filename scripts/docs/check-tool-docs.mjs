@@ -41,12 +41,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { getAllTools } from '../../lib/tools/tool-registry.js';
-import {
-  stripCodeSpans,
-  stripFencedBlocks,
-  stripHtmlComments,
-  stripRawTextHtml
-} from './markdown-blocks.mjs';
+import { stripNonProse } from './markdown-blocks.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -60,9 +55,12 @@ export const COUNT_DOC = 'README.md';
 export const GENERATED_DATA = 'docs-data/tools.json';
 
 /**
- * A prose claim about how many tools there are: "16 tools", "16 Database Tools",
- * "16 MCP tools". Deliberately narrow - it must be a number immediately followed by the word,
- * so "1,686 Tests" and a bare "16" elsewhere are not claims about the tool count.
+ * A prose claim about how many tools there are: "16 tools", "16 Database Tools", "16 MCP
+ * tools", and - the one that prompted the widening - "16 different database operation tools",
+ * which is how WARP.md:36 phrases it. Up to three words may sit between the number and "tools";
+ * an earlier version allowed exactly one, and so read straight past the repository's own
+ * reference claim. Only letters are allowed in between, so "16 tests and 3 tools" yields the 3
+ * rather than spanning from the 16, and "1,686 Tests" is not a claim at all.
  *
  * Case-insensitive, because a claim is no less visible for being written "17 database tools".
  * A case-sensitive pattern silently skips it, and skipping a claim is the failure that matters:
@@ -76,22 +74,21 @@ export const GENERATED_DATA = 'docs-data/tools.json';
  * it, which flattens that to nothing. The leading `\b` also stops a match starting part-way
  * into a token, so `x16 tools` is no longer read as a claim about sixteen tools.
  */
-export const TOOL_COUNT_CLAIM = /\b(?=(\d[\d,]*))\1\s+(?:Database\s+|MCP\s+)?tools\b/gi;
+export const TOOL_COUNT_CLAIM = /\b(?=(\d[\d,]*))\1\s+(?:[A-Za-z]+\s+){0,3}tools\b/gi;
 
 const readRepoFile = relative => readFileSync(path.join(repoRoot, relative), 'utf8');
 
 /**
- * Markdown with everything that is not prose removed, so examples cannot trip the gate.
+ * Markdown reduced to prose, so examples cannot trip the gate.
  *
- * Inline code spans are stripped as well as fenced blocks. A README sentence like
- * "run `npm reports 17 tools`" is an example, not a claim about this server, and counting it
- * would make the gate FAIL on a document whose prose is correct - a false positive in a
- * required check, which is the one failure mode that gets a gate disabled rather than fixed.
- * The stripper is the one `check-orphan-docs.mjs` already relies on, moved into
- * `markdown-blocks.mjs` rather than reimplemented, so its differential test covers both callers.
+ * Delegates to the shared `stripNonProse`, rather than composing the four strippers here.
+ * Writing the composition out by hand is how this file transposed `stripRawTextHtml` and
+ * `stripHtmlComments` in the first place: a raw-text block holding a literal unterminated
+ * `<!--` then truncated the rest of the document, and every claim after it vanished - the gate
+ * reporting success on a document it had stopped reading. One composition, one order.
  */
 export function prose(markdown) {
-  return stripCodeSpans(stripRawTextHtml(stripHtmlComments(stripFencedBlocks(markdown))));
+  return stripNonProse(markdown);
 }
 
 /**
@@ -162,7 +159,13 @@ export function checkToolDocs(sources = {}) {
   const referenceTokens = wordTokens(referenceProse);
   const undocumented = tools.filter(name => !referenceTokens.has(name));
 
-  const claims = findCountClaims(countDoc);
+  // Both documents make count claims, so both are scanned. WARP.md:36 says "16 different
+  // database operation tools" - a claim every bit as able to rot as the README's, and one that
+  // would survive a tool being added, named in WARP.md and regenerated everywhere else.
+  const claims = [
+    { doc: COUNT_DOC, text: countDoc },
+    { doc: TOOL_REFERENCE, text: reference }
+  ].flatMap(source => findCountClaims(source.text).map(claim => ({ ...claim, doc: source.doc })));
   const staleClaims = claims.filter(claim => claim.count !== tools.length);
 
   const generatedTools = (generated?.tools ?? []).map(tool => tool.name);
@@ -175,8 +178,11 @@ export function checkToolDocs(sources = {}) {
   const duplicatesInData = [
     ...new Set(generatedTools.filter((name, index) => generatedTools.indexOf(name) !== index))
   ];
-  const countFieldWrong =
-    typeof generated?.toolsCount === 'number' && generated.toolsCount !== generatedTools.length;
+  // Anything that is not a number equal to the array length is wrong, including absent, null
+  // and the string "16". A generated file that does not carry a valid count is not a file the
+  // gate can vouch for, and treating a missing field as "nothing to check" is how a check ends
+  // up reporting success over data it never looked at.
+  const countFieldWrong = generated?.toolsCount !== generatedTools.length;
 
   return {
     tools,
@@ -206,7 +212,7 @@ export function formatReport(result) {
     `**Tools declared by the registry**: ${result.tools.length}`,
     `**Tools named in \`${TOOL_REFERENCE}\`**: ${result.tools.length - result.undocumented.length}`,
     `**Tools in \`${GENERATED_DATA}\`**: ${result.generatedCount}`,
-    `**Count claims in \`${COUNT_DOC}\`**: ${result.claims.length}`
+    `**Count claims checked**: ${result.claims.length}`
   ];
 
   if (result.undocumented.length > 0) {
@@ -214,7 +220,7 @@ export function formatReport(result) {
   }
   for (const claim of result.staleClaims) {
     lines.push(
-      `❌ **Stale count** in \`${COUNT_DOC}\` line ${claim.line}: ` +
+      `❌ **Stale count** in \`${claim.doc}\` line ${claim.line}: ` +
         `"${claim.text}" but the registry declares ${result.tools.length}`
     );
   }

@@ -210,6 +210,50 @@ describe('drift the first implementation could not see', () => {
 // back one character and retry per position: 16,000 digits took 439ms, four times the cost of
 // 8,000. The regex now uses the JavaScript spelling of an atomic group, which looks strange
 // enough that someone will eventually want to "simplify" it - this is why they should not.
+// Second review round on #1268. Two more false negatives and one fault of my own: the four
+// strippers were composed here by hand and two were transposed.
+describe('drift the second implementation could not see', () => {
+  it('rejects a generated count that is absent, null or not a number', () => {
+    const tools = [{ name: 'a_tool' }, { name: 'b_tool' }];
+
+    expect(check({ generated: { tools } }).ok).toBe(false);
+    expect(check({ generated: { toolsCount: null, tools } }).ok).toBe(false);
+    expect(check({ generated: { toolsCount: '2', tools } }).ok).toBe(false);
+    expect(check({ generated: { toolsCount: 2, tools } }).ok).toBe(true);
+  });
+
+  // WARP.md:36 carries its own count. Scanning only the README left the repository's
+  // designated reference free to contradict the registry.
+  it('checks count claims in the reference, not only the front page', () => {
+    const result = check({ reference: 'We have 9 tools: a_tool and b_tool' });
+
+    expect(result.ok).toBe(false);
+    expect(result.staleClaims.map(claim => claim.doc)).toEqual([TOOL_REFERENCE]);
+  });
+
+  // "16 different database operation tools" is how WARP.md phrases it. An earlier pattern
+  // allowed exactly one word between the number and "tools" and so read past it entirely.
+  it('matches a claim with words between the number and the noun', () => {
+    expect(findCountClaims('16 different database operation tools').map(c => c.count)).toEqual([
+      16
+    ]);
+    expect(findCountClaims('16 tests and 3 tools').map(c => c.count)).toEqual([3]);
+    expect(findCountClaims('upgraded 16 times before adding more tools').map(c => c.count)).toEqual(
+      []
+    );
+  });
+
+  // My own: `stripHtmlComments` ran before `stripRawTextHtml`, so a raw-text block holding a
+  // literal unterminated `<!--` truncated the document and every later claim vanished - the
+  // gate reporting success on text it had stopped reading. The composition now lives in
+  // `markdown-blocks.mjs` so there is one order rather than one per caller.
+  it('does not let an unterminated comment inside a raw-text block truncate the document', () => {
+    const doc = 'We ship 2 tools.\n<pre>\n<!-- example\n</pre>\nLater we claim 99 tools.';
+
+    expect(findCountClaims(doc).map(claim => claim.count)).toEqual([2, 99]);
+  });
+});
+
 describe('the count matcher stays linear', () => {
   const timeOf = input => {
     const started = performance.now();

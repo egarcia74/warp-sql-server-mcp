@@ -222,6 +222,24 @@ export function stripCodeSpans(text) {
 }
 
 /**
+ * Markdown reduced to prose: fenced blocks, raw-text HTML, HTML comments and inline code
+ * spans removed.
+ *
+ * The ORDER is load-bearing and is the reason this composition lives here rather than being
+ * spelled out by each caller. `stripRawTextHtml` must run before `stripHtmlComments`: a
+ * raw-text block may legitimately contain a literal `<!--` with no closer, and the comment
+ * stripper truncates from an unterminated opener to the end of the document. Run the other way
+ * round, one `<pre><!-- example</pre>` silently deletes everything after it, and a checker
+ * reading the result sees a document that ends early and reports success.
+ *
+ * That is not hypothetical - it was found in review on #1268, where a second caller wrote the
+ * four calls out by hand and transposed two of them. One exported composition, one order.
+ */
+export function stripNonProse(markdown) {
+  return stripCodeSpans(stripHtmlComments(stripRawTextHtml(stripFencedBlocks(markdown))));
+}
+
+/**
  * Code-unit ordering, as an explicit comparator.
  *
  * Deliberately NOT `localeCompare`, which SonarQube's default suggestion reaches for:
