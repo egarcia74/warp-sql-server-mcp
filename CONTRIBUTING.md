@@ -483,12 +483,15 @@ Two things this deliberately does not ask for:
 - **Not a separate PR.** A PR that changes code and updates the docs describing that code is
   the right shape — the docs should land with the behaviour they describe. Separate _commits_
   inside that PR, not separate PRs.
-- **Still not enforced by CI, and now carrying less weight.** #1235 has shipped: the release
-  workflow classifies a window by the paths it touches as well as by subject prefixes, and refuses
-  to release one that changes nothing npm packs. That removes the consequence this convention
-  existed to avoid — a doc change buried in a `feat:` no longer decides whether anything ships.
-  What the gate cannot do is read intent, so keeping doc-only changes in their own commit is still
-  the convention; it is now a changelog-legibility preference rather than a correctness one.
+- **Still not enforced by CI, and it still affects the release type.** #1235 has shipped: the
+  release workflow now classifies a window by the paths it touches as well as by subject prefixes,
+  and refuses to release one that changes nothing npm packs. But the path gate aggregates paths
+  across the **whole window** and never associates a path with the subject of the commit that
+  changed it — so it decides _whether_ a release happens, not _which level_. Packed
+  documentation (`README.md`, `docs/**/*.md`, `CHANGELOG.md`) still ships, so a `feat:` commit
+  containing only a packed doc edit still computes a **minor**, and splitting that edit into its
+  own `docs:` commit still makes it a patch. The convention keeps its release-type rationale;
+  what #1235 removed is the separate risk of a window that classifies cleanly and ships nothing.
 
 ## Getting Help
 

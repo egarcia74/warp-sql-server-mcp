@@ -190,8 +190,8 @@ export function windowShips({ tag, git, readPacked }) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const argv = process.argv.slice(2);
-  const fromGit = argv.includes('--from-git');
+  const argv = new Set(process.argv.slice(2));
+  const fromGit = argv.has('--from-git');
   const tag = fromGit ? lastTag() : null;
   const log = fromGit ? readWindow(tag) : readFileSync(0, 'utf8');
   const plan = { lastTag: tag, ...planFromLog(log) };
@@ -203,7 +203,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   // The keys below are present IFF --ships was passed. A caller that passes the flag can rely on
   // all four being there; one that does not must not read them, and must never treat an absent
   // `ships` as false.
-  if (fromGit && argv.includes('--ships')) {
+  if (fromGit && argv.has('--ships')) {
     Object.assign(plan, windowShips({ tag, git: gitReader(), readPacked: packedFilesReader() }));
   }
 
