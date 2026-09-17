@@ -58,6 +58,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Development-format log lines are also no longer colorized, since the colorized variant was only
   ever selected by the detection that is gone.
 
+- **The MCP tool-documentation check can now fail.** The "Validate MCP tool documentation" step
+  in `docs.yml` extracted tool names by running a regular expression over `index.js`, and the
+  definitions had moved to `lib/tools/tool-registry.js`: it found two matches, both the _server_
+  name, which `README.md` contains everywhere, and so reported "All tools are documented"
+  unconditionally. Deleting every tool from the docs would not have failed it. It is replaced by
+  `scripts/docs/check-tool-docs.mjs`, which imports the registry rather than parsing a file and
+  checks each surface for the claim it actually makes: `WARP.md` names every tool, every
+  tool-count claim in `README.md` matches the registry, and `docs-data/tools.json` lists exactly
+  the registered tools once each. It runs as part of `npm run docs:check`, so it gates in the
+  required `Code Quality & Linting` job. Closes #1265.
+
 - **Documentation drift now blocks a merge instead of merely reporting one.** The orphan-doc and
   environment-variable doc-sync checks added in #1254 ran only in the `Validate Documentation`
   workflow, which is not a required status check — so a pull request that orphaned a doc or drifted
