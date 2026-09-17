@@ -41,7 +41,12 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { getAllTools } from '../../lib/tools/tool-registry.js';
-import { stripFencedBlocks, stripHtmlComments, stripRawTextHtml } from './markdown-blocks.mjs';
+import {
+  stripCodeSpans,
+  stripFencedBlocks,
+  stripHtmlComments,
+  stripRawTextHtml
+} from './markdown-blocks.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -58,14 +63,48 @@ export const GENERATED_DATA = 'docs-data/tools.json';
  * A prose claim about how many tools there are: "16 tools", "16 Database Tools",
  * "16 MCP tools". Deliberately narrow - it must be a number immediately followed by the word,
  * so "1,686 Tests" and a bare "16" elsewhere are not claims about the tool count.
+ *
+ * Case-insensitive, because a claim is no less visible for being written "17 database tools".
+ * A case-sensitive pattern silently skips it, and skipping a claim is the failure that matters:
+ * the stale number still sits on the front page while the gate reports success.
+ *
+ * `(?=(\d[\d,]*))\1` is the JavaScript spelling of an atomic group, and it is not decoration.
+ * Written plainly, `\d[\d,]*` overlaps with the `\s+` that follows, so a long run of digits that
+ * is NOT a claim makes the engine give one character back and retry for every position in the
+ * run - quadratic, and measurably so: a 16,000-digit run took 439ms, four times the cost of an
+ * 8,000-digit one. The lookahead consumes the run once and the backreference cannot re-enter
+ * it, which flattens that to nothing. The leading `\b` also stops a match starting part-way
+ * into a token, so `x16 tools` is no longer read as a claim about sixteen tools.
  */
-export const TOOL_COUNT_CLAIM = /(\d[\d,]*)\s+(?:Database\s+|MCP\s+)?[Tt]ools\b/g;
+export const TOOL_COUNT_CLAIM = /\b(?=(\d[\d,]*))\1\s+(?:Database\s+|MCP\s+)?tools\b/gi;
 
 const readRepoFile = relative => readFileSync(path.join(repoRoot, relative), 'utf8');
 
-/** Markdown with everything that is not prose removed, so examples cannot trip the gate. */
+/**
+ * Markdown with everything that is not prose removed, so examples cannot trip the gate.
+ *
+ * Inline code spans are stripped as well as fenced blocks. A README sentence like
+ * "run `npm reports 17 tools`" is an example, not a claim about this server, and counting it
+ * would make the gate FAIL on a document whose prose is correct - a false positive in a
+ * required check, which is the one failure mode that gets a gate disabled rather than fixed.
+ * The stripper is the one `check-orphan-docs.mjs` already relies on, moved into
+ * `markdown-blocks.mjs` rather than reimplemented, so its differential test covers both callers.
+ */
 export function prose(markdown) {
-  return stripRawTextHtml(stripHtmlComments(stripFencedBlocks(markdown)));
+  return stripCodeSpans(stripRawTextHtml(stripHtmlComments(stripFencedBlocks(markdown))));
+}
+
+/**
+ * Matches a tool name only as a whole token.
+ *
+ * `String.includes` is wrong here because tool names nest: `get_table` is a substring of
+ * `get_table_data`, so a registry gaining `get_table` would look documented on the strength of
+ * the older name alone. `\b` does not help either - `_` is a word character, so there is no
+ * word boundary between `get_table` and `_data`. The lookarounds spell the boundary out.
+ */
+export function mentionsTool(text, name) {
+  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+  return new RegExp(String.raw`(?<![A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`).test(text);
 }
 
 /**
@@ -106,14 +145,21 @@ export function checkToolDocs(sources = {}) {
   const generated = sources.generated ?? JSON.parse(readRepoFile(GENERATED_DATA));
 
   const referenceProse = prose(reference);
-  const undocumented = tools.filter(name => !referenceProse.includes(name));
+  const undocumented = tools.filter(name => !mentionsTool(referenceProse, name));
 
   const claims = findCountClaims(countDoc);
   const staleClaims = claims.filter(claim => claim.count !== tools.length);
 
   const generatedTools = (generated?.tools ?? []).map(tool => tool.name);
   const missingFromData = tools.filter(name => !generatedTools.includes(name));
-  const staleInData = generatedTools.filter(name => !tools.includes(name));
+  const staleInData = [...new Set(generatedTools.filter(name => !tools.includes(name)))];
+
+  // Set membership alone cannot see a repeated entry: every name is present, none is stale,
+  // and `toolsCount` agrees with the array it was generated from - so the file renders a tool
+  // twice and every check passes. Compare the counts and name the repeats.
+  const duplicatesInData = [
+    ...new Set(generatedTools.filter((name, index) => generatedTools.indexOf(name) !== index))
+  ];
   const countFieldWrong =
     typeof generated?.toolsCount === 'number' && generated.toolsCount !== generatedTools.length;
 
@@ -124,6 +170,7 @@ export function checkToolDocs(sources = {}) {
     staleClaims,
     missingFromData,
     staleInData,
+    duplicatesInData,
     countFieldWrong,
     generatedCount: generatedTools.length,
     declaredCount: generated?.toolsCount ?? null,
@@ -132,6 +179,8 @@ export function checkToolDocs(sources = {}) {
       staleClaims.length === 0 &&
       missingFromData.length === 0 &&
       staleInData.length === 0 &&
+      duplicatesInData.length === 0 &&
+      generatedTools.length === tools.length &&
       !countFieldWrong
   };
 }
@@ -159,6 +208,11 @@ export function formatReport(result) {
   }
   if (result.staleInData.length > 0) {
     lines.push(`❌ **Stale in \`${GENERATED_DATA}\`**: ${list(result.staleInData)}`);
+  }
+  if (result.duplicatesInData.length > 0) {
+    lines.push(
+      `❌ **Listed more than once in \`${GENERATED_DATA}\`**: ${list(result.duplicatesInData)}`
+    );
   }
   if (result.countFieldWrong) {
     lines.push(

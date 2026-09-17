@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import { join } from 'node:path';
 
 import {
@@ -9,6 +10,7 @@ import {
   checkToolDocs,
   findCountClaims,
   formatReport,
+  mentionsTool,
   prose
 } from '../../scripts/docs/check-tool-docs.mjs';
 import { getAllTools } from '../../lib/tools/tool-registry.js';
@@ -125,6 +127,104 @@ describe('count claims are read from prose only', () => {
 
   it('strips fences before anything else looks at the text', () => {
     expect(prose('a\n```\nhidden\n```\nb')).not.toContain('hidden');
+  });
+});
+
+// All four found in review on #1268, all reproduced before fixing. Three were false
+// NEGATIVES - the gate reporting success on documentation that had drifted, which is the
+// same class of fault as the vacuous step this file replaces. The fourth was a false
+// POSITIVE, which is worse in a required check: a gate that fails a correct document is the
+// one people switch off rather than fix.
+describe('drift the first implementation could not see', () => {
+  // `String.includes` is not enough because tool names nest, and `\b` does not help: `_` is a
+  // word character, so there is no boundary between `get_table` and `_data`.
+  it('does not accept a longer tool name as documentation of a shorter one', () => {
+    const result = checkToolDocs({
+      tools: ['get_table'],
+      reference: 'see get_table_data for details',
+      countDoc: 'We ship 1 tools.',
+      generated: { toolsCount: 1, tools: [{ name: 'get_table' }] }
+    });
+
+    expect(result.undocumented).toEqual(['get_table']);
+    expect(result.ok).toBe(false);
+  });
+
+  it('still matches a name that is genuinely present, in any surrounding punctuation', () => {
+    expect(mentionsTool('call `get_table_data` first', 'get_table_data')).toBe(true);
+    expect(mentionsTool('- **get_table_data** - rows', 'get_table_data')).toBe(true);
+    expect(mentionsTool('see get_table_data_extended', 'get_table_data')).toBe(false);
+    expect(mentionsTool('xget_table_data', 'get_table_data')).toBe(false);
+  });
+
+  // Set membership cannot see a repeat: every name present, none stale, and `toolsCount`
+  // agrees with the array it was generated from - so the reference page renders a tool twice
+  // and every check passes.
+  it('rejects a tool listed twice in the generated data', () => {
+    const result = check({
+      generated: {
+        toolsCount: 3,
+        tools: [{ name: 'a_tool' }, { name: 'b_tool' }, { name: 'b_tool' }]
+      }
+    });
+
+    expect(result.duplicatesInData).toEqual(['b_tool']);
+    expect(result.ok).toBe(false);
+    expect(formatReport(result)).toContain('Listed more than once');
+  });
+
+  it('counts a claim however it is capitalised', () => {
+    expect(findCountClaims('17 database tools').map(c => c.count)).toEqual([17]);
+    expect(findCountClaims('17 TOOLS').map(c => c.count)).toEqual([17]);
+    expect(findCountClaims('17 MCP Tools').map(c => c.count)).toEqual([17]);
+    expect(findCountClaims('17 Database Tools').map(c => c.count)).toEqual([17]);
+  });
+
+  // The false positive. A required gate that fails a correct document gets disabled.
+  it('does not read an inline code example as a claim about this server', () => {
+    const countDoc = 'We ship 2 tools. Run `npm reports 17 tools` to check.';
+
+    expect(findCountClaims(countDoc).map(c => c.count)).toEqual([2]);
+    expect(check({ countDoc }).ok).toBe(true);
+  });
+
+  it('still fails on a stale claim sitting beside an inline example', () => {
+    const countDoc = 'We ship 9 tools. Run `npm reports 17 tools` to check.';
+
+    expect(check({ countDoc }).staleClaims.map(c => c.count)).toEqual([9]);
+  });
+});
+
+// SonarCloud javascript:S8786 on the first implementation, and it was right. `\d[\d,]*`
+// overlapped the `\s+` after it, so a long digit run that is not a claim made the engine give
+// back one character and retry per position: 16,000 digits took 439ms, four times the cost of
+// 8,000. The regex now uses the JavaScript spelling of an atomic group, which looks strange
+// enough that someone will eventually want to "simplify" it - this is why they should not.
+describe('the count matcher stays linear', () => {
+  const timeOf = input => {
+    const started = performance.now();
+    findCountClaims(input);
+    return performance.now() - started;
+  };
+
+  it('does not degrade on a long run of digits that is not a claim', () => {
+    // Generous by an order of magnitude against the 439ms the backtracking version took, so
+    // this fails on a real regression rather than on a busy machine.
+    expect(timeOf(`${'1'.repeat(16000)} x`)).toBeLessThan(50);
+  });
+
+  it('scales roughly linearly rather than quadratically', () => {
+    const small = timeOf(`${'1'.repeat(4000)} x`);
+    const large = timeOf(`${'1'.repeat(16000)} x`);
+
+    // Quadratic would be ~16x for 4x the input. Allow a wide band; the failing case was 16x.
+    expect(large).toBeLessThan(Math.max(small * 8, 25));
+  });
+
+  it('will not start a claim part-way into a token', () => {
+    expect(findCountClaims('x16 tools').map(claim => claim.count)).toEqual([]);
+    expect(findCountClaims('(16 tools)').map(claim => claim.count)).toEqual([16]);
+    expect(findCountClaims('ships 16 tools').map(claim => claim.count)).toEqual([16]);
   });
 });
 
