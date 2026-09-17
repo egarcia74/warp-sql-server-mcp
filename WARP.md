@@ -33,7 +33,7 @@ live-database). Covers all security phases with **100% success rates**.
 - **SqlServerMCP Class** (`index.js`): Main MCP server implementation that orchestrates all components
 - **🔒 Three-Tier Safety System**: Revolutionary security architecture with graduated safety levels
 - **Query Validation Engine**: Intelligent SQL parsing and security policy enforcement
-- **MCP Tools**: <!-- tool-count -->16<!-- /tool-count --> different database operation tools exposed through the MCP interface
+- **MCP Tools**: 16 different database operation tools exposed through the MCP interface
 - **🏗️ Modular Architecture**: Extracted specialized components for better maintainability:
   - **ServerConfig** (`lib/config/server-config.js`): Centralized configuration management
   - **ConnectionManager** (`lib/database/connection-manager.js`): Database connection handling

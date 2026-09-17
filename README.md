@@ -52,7 +52,7 @@ Ideal for terminal-based workflows and command-line database interactions.
 - 🔒 **Enterprise security** - Three-tier safety system with secure defaults
 - 📊 **Performance insights** - Query optimization and bottleneck detection
 - 🚀 **Streaming support** - Memory-efficient handling of large datasets
-- 📈 **<!-- tool-count -->16<!-- /tool-count --> Database Tools** - Complete database operations through AI
+- 📈 **16 Database Tools** - Complete database operations through AI
 
 ---
 
@@ -172,7 +172,7 @@ npm install
 - **[Security Guide](docs/architecture/SECURITY.md)** - Comprehensive security configuration and threat model
 - **[Security Threat Analysis Process](WARP.md#security-threat-analysis--response-process)** - Workflows for reviewing and responding to security alerts
 - **[Architecture Guide](docs/architecture/ARCHITECTURE.md)** - Technical deep-dive and system design
-- **[All MCP Tools](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Complete API reference (<!-- tool-count -->16<!-- /tool-count --> tools)
+- **[All MCP Tools](https://egarcia74.github.io/warp-sql-server-mcp/tools.html)** - Complete API reference (16 tools)
 
 ### **Setup Guides**
 
