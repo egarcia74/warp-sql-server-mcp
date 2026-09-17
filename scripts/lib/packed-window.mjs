@@ -135,11 +135,15 @@ export function withVersion(parsed, file, version) {
  * tarball, so consulting the destination alone would report a move of a shipped file out of the
  * package as harmless.
  *
+ * `T` (typechange) counts too: npm omits symlinks from the tarball, so a packed regular file
+ * replaced by a symlink leaves the package even though the path still exists and the packlist
+ * built from the worktree no longer lists it.
+ *
  * Handles both shapes git reports: a one-letter status from `diff --name-status`, and a
  * two-character porcelain code from `status --porcelain=v1`.
  */
 export function removesSomething(status) {
-  return status.includes('D') || status.startsWith('R');
+  return status.includes('D') || status.includes('T') || status.startsWith('R');
 }
 
 /**
