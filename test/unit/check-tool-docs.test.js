@@ -12,6 +12,7 @@ import {
   formatReport,
   mentionsTool,
   prose,
+  visibleText,
   wordTokens
 } from '../../scripts/docs/check-tool-docs.mjs';
 import { getAllTools } from '../../lib/tools/tool-registry.js';
@@ -254,6 +255,49 @@ describe('drift the second implementation could not see', () => {
   });
 });
 
+// Third review round on #1268. Finding tool NAMES and finding count CLAIMS need different
+// normalisations, and reusing one for the other was wrong in both directions.
+describe('what counts as a tool being documented', () => {
+  const gen = name => ({ toolsCount: 1, tools: [{ name }] });
+  const forTool = (name, reference) =>
+    checkToolDocs({ tools: [name], reference, countDoc: 'We ship 1 tools.', generated: gen(name) });
+
+  // WARP.md documents tool names in backticks throughout, so deleting code spans - correct for
+  // count claims - reported the most visibly documented tools as missing. A required gate that
+  // fails a correct document is the one that gets switched off.
+  it('accepts a name documented only in a code span', () => {
+    expect(forTool('new_tool', '### `new_tool`\n\nDoes a thing.').ok).toBe(true);
+    expect(forTool('new_tool', 'Call `new_tool` to begin.').ok).toBe(true);
+  });
+
+  // The other direction: a name nobody sees in the rendered page is not documentation.
+  it('does not accept a name that appears only in a link destination', () => {
+    const result = forTool('new_tool', 'see the [tool guide](docs/new_tool.md)');
+
+    expect(result.undocumented).toEqual(['new_tool']);
+    expect(result.ok).toBe(false);
+  });
+
+  it('accepts a name used as link text, which a reader does see', () => {
+    expect(forTool('new_tool', 'see [new_tool](docs/guide.md) for details').ok).toBe(true);
+  });
+
+  it('ignores reference-style link definitions', () => {
+    expect(forTool('new_tool', 'see [the guide][g]\n\n[g]: docs/new_tool.md').ok).toBe(false);
+  });
+
+  it('keeps span contents but drops the ticks, so tokens split correctly', () => {
+    expect(wordTokens(visibleText('`a_tool`')).has('a_tool')).toBe(true);
+    expect(visibleText('[x](y/z_tool.md)')).not.toContain('z_tool');
+  });
+
+  // The two normalisations must stay distinct: prose() still deletes spans for count claims.
+  it('still treats an inline code example as an example when counting', () => {
+    expect(prose('run `npm reports 17 tools`')).not.toContain('17 tools');
+    expect(visibleText('run `npm reports 17 tools`')).toContain('17 tools');
+  });
+});
+
 describe('the count matcher stays linear', () => {
   const timeOf = input => {
     const started = performance.now();
@@ -286,11 +330,16 @@ describe('the gate actually runs', () => {
   // Enforcement rides on `npm run docs:check`, which #1262 put in the required
   // `Code Quality & Linting` job. If it is not chained there, this gate is exactly the
   // decoration it was written to replace.
-  it('is chained into the aggregate the required CI job runs', () => {
+  it('is reachable from the aggregate the required CI job runs', () => {
     const scripts = JSON.parse(readRepo('package.json')).scripts;
 
     expect(scripts['docs:check:tools']).toBe('node scripts/docs/check-tool-docs.mjs');
-    expect(scripts['docs:check']).toContain('docs:check:tools');
+
+    // `docs:check` runs every check and reports all of them rather than chaining with `&&`,
+    // which stopped at the first failure. The runner's own coverage is pinned in
+    // test/unit/run-doc-checks.test.js.
+    expect(scripts['docs:check']).toBe('node scripts/docs/run-doc-checks.mjs');
+    expect(readRepo('scripts/docs/run-doc-checks.mjs')).toContain('check-tool-docs.mjs');
   });
 
   // The vacuous predecessor must be gone, not merely superseded - two checks of the same

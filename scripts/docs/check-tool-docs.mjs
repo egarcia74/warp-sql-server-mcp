@@ -41,7 +41,12 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { getAllTools } from '../../lib/tools/tool-registry.js';
-import { stripNonProse } from './markdown-blocks.mjs';
+import {
+  stripFencedBlocks,
+  stripHtmlComments,
+  stripNonProse,
+  stripRawTextHtml
+} from './markdown-blocks.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -89,6 +94,34 @@ const readRepoFile = relative => readFileSync(path.join(repoRoot, relative), 'ut
  */
 export function prose(markdown) {
   return stripNonProse(markdown);
+}
+
+/**
+ * A document reduced to what a reader actually SEES, for the purpose of finding tool names.
+ *
+ * Deliberately a different normalisation from `prose()`, because it answers a different
+ * question, and reusing one for the other was a bug in both directions:
+ *
+ * - `prose()` deletes code spans, which is right for counting claims (an inline
+ *   `` `npm reports 17 tools` `` is an example) and wrong here, because `WARP.md` documents
+ *   tool names in backticks throughout - a `### \`new_tool\`` heading is the most visible
+ *   documentation a tool can have, and stripping it made the gate report that tool
+ *   undocumented. A required check that fails a correct document is the one that gets
+ *   switched off.
+ * - Conversely, a name hidden in a link DESTINATION - `[tool guide](docs/new_tool.md)` - is
+ *   not documentation; nobody reading the rendered page sees it. Tokenising the raw Markdown
+ *   counted it, so a tool could be "documented" by a URL.
+ *
+ * So: drop the blocks a reader never sees, drop link destinations while keeping link text,
+ * and unwrap code spans rather than deleting them.
+ */
+export function visibleText(markdown) {
+  const withoutBlocks = stripHtmlComments(stripRawTextHtml(stripFencedBlocks(markdown)));
+
+  return withoutBlocks
+    .replaceAll(/\]\([^)]*\)/g, ']') // inline link destinations, keeping the link text
+    .replaceAll(/^\s*\[[^\]]+\]:\s*\S+.*$/gm, '') // reference-style link definitions
+    .replaceAll('`', ' '); // unwrap code spans: the name inside is visible, the ticks are not
 }
 
 /**
@@ -155,8 +188,7 @@ export function checkToolDocs(sources = {}) {
   const countDoc = sources.countDoc ?? readRepoFile(COUNT_DOC);
   const generated = sources.generated ?? JSON.parse(readRepoFile(GENERATED_DATA));
 
-  const referenceProse = prose(reference);
-  const referenceTokens = wordTokens(referenceProse);
+  const referenceTokens = wordTokens(visibleText(reference));
   const undocumented = tools.filter(name => !referenceTokens.has(name));
 
   // Both documents make count claims, so both are scanned. WARP.md:36 says "16 different

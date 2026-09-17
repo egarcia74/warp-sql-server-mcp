@@ -67,7 +67,7 @@
     "docs:check:orphans": "node scripts/docs/check-orphan-docs.mjs",
     "docs:check:env-vars": "node scripts/docs/check-env-var-docs.mjs",
     "docs:check:tools": "node scripts/docs/check-tool-docs.mjs",
-    "docs:check": "npm run docs:check:orphans && npm run docs:check:env-vars && npm run docs:check:tools",
+    "docs:check": "node scripts/docs/run-doc-checks.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,mjs,cjs,json,md}\"",
