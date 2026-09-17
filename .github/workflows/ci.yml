@@ -41,6 +41,17 @@ jobs:
       - name: Check for swallowed code fences
         run: npm run fences:check
 
+      # Enforcement for the two documentation drift gates lives HERE, not in docs.yml.
+      # `Code Quality & Linting` is a required status check on main and `ci.yml` carries no
+      # `paths:` filter, so this runs on every PR and blocks the merge. The same two scripts
+      # also run in docs.yml, but only to write the human-readable drift report - that job
+      # ("Validate Documentation") is deliberately NOT required, because its link checker
+      # 404s on still-private GHSA advisories and goes red during a security release.
+      # Both scripts are dependency-free `node:fs` readers, so `npm ci --ignore-scripts` above
+      # is enough to run them.
+      - name: Check documentation is in sync
+        run: npm run docs:check
+
   test:
     name: Tests
     runs-on: ubuntu-latest

@@ -134,17 +134,27 @@ jobs:
 
           cat tool-docs-report.txt >> link-report.md
 
-      # The two checks below fail the job on drift, unlike the reporting steps above.
-      # They run before the artifact upload, which is `if: always()` so the report is
-      # still published when one of them fails - that report is how you see what drifted.
+      # The two checks below REPORT drift; they do not enforce it. Enforcement lives in
+      # ci.yml's `lint` job (`Code Quality & Linting`), which runs the same two scripts via
+      # `npm run docs:check` and IS a required status check on main. This job is deliberately
+      # not required - its link checker 404s on still-private GHSA advisories and goes red
+      # during a security release - so a gate that only ran here would go red and still merge,
+      # which is exactly what #1252 was opened to prevent.
+      #
+      # They stay here because `link-report.md` is how a reviewer sees WHAT drifted; the
+      # required check in ci.yml only says THAT it did. `continue-on-error: true` keeps a
+      # drift from failing this job, so the red X a reviewer chases is the actionable one in
+      # ci.yml rather than a duplicate here. They run before the artifact upload, which is
+      # `if: always()` so the report is published either way.
       - name: Check every doc is reachable from the nav
         # `if: always()` for the same reason as the step below, and for the step above it
         # too: without it this inherits the implicit `success()` condition and is SKIPPED
         # whenever an earlier step in the job fails - the link validation, for instance. A
         # run that reports only the first drift, then publishes a report with the
         # reachability section missing entirely, hides orphan drift behind a broken link.
-        # Both gates are independent and both should be visible from one run.
+        # Both checks are independent and both should be visible from one run.
         if: always()
+        continue-on-error: true
         run: |
           set -o pipefail
           echo "" >> link-report.md
@@ -155,11 +165,12 @@ jobs:
       - name: Check environment variable documentation matches the code
         # `if: always()` for the same reason as the step above: without it this inherits
         # the implicit `success()` condition and is SKIPPED whenever ANY earlier step in
-        # the job fails - the orphan check, or the link validation before it. The gates are
+        # the job fails - the orphan check, or the link validation before it. The checks are
         # independent, and a run that reports only the first drift - then publishes a
         # report with the env-var section missing entirely - hides the second behind the
         # first. Both should be visible from one run.
         if: always()
+        continue-on-error: true
         run: |
           set -o pipefail
           echo "" >> link-report.md
