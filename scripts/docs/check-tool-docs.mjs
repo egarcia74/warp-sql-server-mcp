@@ -95,16 +95,30 @@ export function prose(markdown) {
 }
 
 /**
- * Matches a tool name only as a whole token.
+ * Every whole word-token in a document, as a set.
+ *
+ * Tokenising once per document and testing membership avoids building a regular expression
+ * per tool name, which Opengrep flags (`javascript_dos_rule-non-literal-regexp`) because a
+ * dynamically constructed pattern is a denial-of-service surface wherever its input is not
+ * trusted. Tool names come from the registry rather than from a user, so it was not
+ * exploitable - but the check does not need a dynamic pattern at all, and a set lookup is
+ * both simpler and O(document) instead of O(document x tools).
+ */
+export function wordTokens(text) {
+  return new Set(text.split(/[^A-Za-z0-9_]+/));
+}
+
+/**
+ * Whether a tool name appears in `text` as a whole token.
  *
  * `String.includes` is wrong here because tool names nest: `get_table` is a substring of
  * `get_table_data`, so a registry gaining `get_table` would look documented on the strength of
  * the older name alone. `\b` does not help either - `_` is a word character, so there is no
- * word boundary between `get_table` and `_data`. The lookarounds spell the boundary out.
+ * word boundary between `get_table` and `_data`. Splitting on runs of non-word characters puts
+ * the whole identifier in one token, which is exactly the comparison wanted.
  */
 export function mentionsTool(text, name) {
-  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-  return new RegExp(String.raw`(?<![A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`).test(text);
+  return wordTokens(text).has(name);
 }
 
 /**
@@ -145,7 +159,8 @@ export function checkToolDocs(sources = {}) {
   const generated = sources.generated ?? JSON.parse(readRepoFile(GENERATED_DATA));
 
   const referenceProse = prose(reference);
-  const undocumented = tools.filter(name => !mentionsTool(referenceProse, name));
+  const referenceTokens = wordTokens(referenceProse);
+  const undocumented = tools.filter(name => !referenceTokens.has(name));
 
   const claims = findCountClaims(countDoc);
   const staleClaims = claims.filter(claim => claim.count !== tools.length);

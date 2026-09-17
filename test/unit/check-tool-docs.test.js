@@ -11,7 +11,8 @@ import {
   findCountClaims,
   formatReport,
   mentionsTool,
-  prose
+  prose,
+  wordTokens
 } from '../../scripts/docs/check-tool-docs.mjs';
 import { getAllTools } from '../../lib/tools/tool-registry.js';
 
@@ -148,6 +149,15 @@ describe('drift the first implementation could not see', () => {
 
     expect(result.undocumented).toEqual(['get_table']);
     expect(result.ok).toBe(false);
+  });
+
+  // Implemented as a token set rather than a per-name regular expression: Opengrep flags a
+  // dynamically built RegExp as a DoS surface, and the check never needed one. Names come from
+  // the registry, not a user, so it was not exploitable - but a set lookup is simpler and
+  // O(document) rather than O(document x tools).
+  it('tokenises on runs of non-word characters', () => {
+    expect(wordTokens('a `b_c` **d**, e').has('b_c')).toBe(true);
+    expect(wordTokens('get_table_data_extended').has('get_table_data')).toBe(false);
   });
 
   it('still matches a name that is genuinely present, in any surrounding punctuation', () => {
