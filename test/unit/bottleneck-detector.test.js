@@ -1,6 +1,247 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { BottleneckDetector } from '../../lib/analysis/bottleneck-detector.js';
 
+describe('BottleneckDetector.identifyBottleneckType', () => {
+  const metrics = {
+    avg_duration_ms: 100,
+    avg_cpu_time_ms: 0,
+    avg_logical_reads: 0,
+    avg_physical_reads: 0,
+    avg_wait_time_ms: 0
+  };
+  let detector;
+
+  beforeEach(() => {
+    detector = new BottleneckDetector(null);
+  });
+
+  test.each([
+    ['PAGEIOLATCH_SH', 1001, 'IO_INTENSIVE'],
+    ['PAGEIOLATCH_SH', 1000, 'IO_MODERATE'],
+    ['PAGEIOLATCH_SH', 999, 'IO_MODERATE'],
+    ['SOS_SCHEDULER_YIELD', 0, 'CPU_INTENSIVE'],
+    ['RESOURCE_SEMAPHORE', 0, 'CPU_INTENSIVE'],
+    ['MEMORY_ALLOCATION_EXT', 0, 'MEMORY_PRESSURE'],
+    ['LCK_M_X', 0, 'BLOCKING_LOCKS'],
+    ['ASYNC_NETWORK_IO', 0, 'NETWORK_BOTTLENECK']
+  ])('classifies wait %s at %i physical reads as %s', (waitType, reads, expected) => {
+    expect(
+      detector.identifyBottleneckType({
+        ...metrics,
+        avg_cpu_time_ms: 100,
+        avg_logical_reads: 20000,
+        avg_physical_reads: reads,
+        wait_stats: [{ wait_type: waitType, wait_time_ms: 10 }]
+      })
+    ).toBe(expected);
+  });
+
+  test.each([
+    ['io', 'IO_MODERATE'],
+    ['cpu', 'CPU_INTENSIVE'],
+    ['memory', 'MEMORY_PRESSURE'],
+    ['locking', 'BLOCKING_LOCKS'],
+    ['network', 'NETWORK_BOTTLENECK']
+  ])('preserves %s precedence over later overlapping wait categories', (category, expected) => {
+    const categories = ['io', 'cpu', 'memory', 'locking', 'network'];
+    const first = categories.indexOf(category);
+    detector = new BottleneckDetector(null, {
+      waitTypes: Object.fromEntries(
+        categories.map((name, index) => [name, index >= first ? ['SHARED'] : []])
+      )
+    });
+    const checked = [];
+    const originalIsWaitType = detector.isWaitType;
+    detector.isWaitType = function (waitType, name) {
+      expect(this).toBe(detector);
+      checked.push(name);
+      return originalIsWaitType.call(this, waitType, name);
+    };
+
+    expect(
+      detector.identifyBottleneckType({
+        ...metrics,
+        wait_stats: [{ wait_type: 'SHARED', wait_time_ms: 10 }]
+      })
+    ).toBe(expected);
+    expect(checked).toEqual(categories.slice(0, first + 1));
+  });
+
+  test('uses the longest wait and preserves in-place sorting and stable ties', () => {
+    const waits = [
+      { wait_type: 'PAGEIOLATCH_SH', wait_time_ms: 1 },
+      { wait_type: 'LCK_M_X', wait_time_ms: 20 },
+      { wait_type: 'SOS_SCHEDULER_YIELD', wait_time_ms: 20 }
+    ];
+    const [short, firstLong, secondLong] = waits;
+
+    expect(detector.identifyBottleneckType({ ...metrics, wait_stats: waits })).toBe(
+      'BLOCKING_LOCKS'
+    );
+    expect(waits).toEqual([firstLong, secondLong, short]);
+    expect(waits[0]).toBe(firstLong);
+  });
+
+  test.each([
+    ['absent', undefined],
+    ['empty', []],
+    ['unrecognized', [{ wait_type: 'UNKNOWN_WAIT', wait_time_ms: 20 }]],
+    ['missing type', [{ wait_time_ms: 20 }]]
+  ])('falls back to metrics for %s waits', (_label, waits) => {
+    expect(
+      detector.identifyBottleneckType({
+        ...metrics,
+        avg_cpu_time_ms: 71,
+        wait_stats: waits
+      })
+    ).toBe('CPU_INTENSIVE');
+  });
+
+  test('does not substitute a recognized shorter wait for an unknown primary wait', () => {
+    expect(
+      detector.identifyBottleneckType({
+        ...metrics,
+        avg_cpu_time_ms: 71,
+        wait_stats: [
+          { wait_type: 'PAGEIOLATCH_SH', wait_time_ms: 1 },
+          { wait_type: 'UNKNOWN_WAIT', wait_time_ms: 20 }
+        ]
+      })
+    ).toBe('CPU_INTENSIVE');
+  });
+
+  test.each([
+    [
+      'physical reads win',
+      {
+        avg_physical_reads: 1001,
+        avg_cpu_time_ms: 71,
+        avg_wait_time_ms: 51,
+        avg_logical_reads: 10001
+      },
+      'IO_INTENSIVE'
+    ],
+    [
+      'CPU wins over waits and logical reads',
+      {
+        avg_physical_reads: 1000,
+        avg_cpu_time_ms: 71,
+        avg_wait_time_ms: 51,
+        avg_logical_reads: 10001
+      },
+      'CPU_INTENSIVE'
+    ],
+    [
+      'waits win over logical reads',
+      { avg_cpu_time_ms: 70, avg_wait_time_ms: 51, avg_logical_reads: 10001 },
+      'WAIT_INTENSIVE'
+    ],
+    [
+      'logical reads above threshold',
+      { avg_wait_time_ms: 50, avg_logical_reads: 10001 },
+      'MEMORY_INTENSIVE'
+    ],
+    [
+      'exact thresholds do not match',
+      {
+        avg_physical_reads: 1000,
+        avg_cpu_time_ms: 70,
+        avg_wait_time_ms: 50,
+        avg_logical_reads: 10000
+      },
+      'GENERAL_SLOW'
+    ],
+    [
+      'below thresholds',
+      {
+        avg_physical_reads: 999,
+        avg_cpu_time_ms: 69,
+        avg_wait_time_ms: 49,
+        avg_logical_reads: 9999
+      },
+      'GENERAL_SLOW'
+    ],
+    [
+      'positive CPU over zero duration',
+      { avg_duration_ms: 0, avg_cpu_time_ms: 1 },
+      'CPU_INTENSIVE'
+    ],
+    [
+      'positive wait over zero duration',
+      { avg_duration_ms: 0, avg_wait_time_ms: 1 },
+      'WAIT_INTENSIVE'
+    ],
+    ['zero over zero', { avg_duration_ms: 0 }, 'GENERAL_SLOW'],
+    [
+      'missing duration',
+      { avg_duration_ms: undefined, avg_cpu_time_ms: 100, avg_wait_time_ms: 100 },
+      'GENERAL_SLOW'
+    ]
+  ])('preserves metric fallback: %s', (_label, overrides, expected) => {
+    expect(detector.identifyBottleneckType({ ...metrics, ...overrides })).toBe(expected);
+  });
+
+  test('missing metrics retain the general fallback', () => {
+    expect(detector.identifyBottleneckType({})).toBe('GENERAL_SLOW');
+  });
+
+  test('uses configured read thresholds for both wait and metric classification', () => {
+    detector = new BottleneckDetector(null, {
+      thresholds: { highPhysicalReads: 4, highLogicalReads: 8 }
+    });
+    expect(detector.identifyBottleneckType({ ...metrics, avg_physical_reads: 5 })).toBe(
+      'IO_INTENSIVE'
+    );
+    expect(detector.identifyBottleneckType({ ...metrics, avg_logical_reads: 9 })).toBe(
+      'MEMORY_INTENSIVE'
+    );
+    expect(
+      detector.identifyBottleneckType({
+        ...metrics,
+        avg_physical_reads: 4,
+        wait_stats: [{ wait_type: 'PAGEIOLATCH_SH', wait_time_ms: 1 }]
+      })
+    ).toBe('IO_MODERATE');
+  });
+
+  test('reads each input once before selecting the primary wait', () => {
+    const reads = [];
+    const values = {
+      ...metrics,
+      wait_stats: [{ wait_type: 'LCK_M_X', wait_time_ms: 1 }]
+    };
+    const input = Object.defineProperties(
+      {},
+      Object.fromEntries(
+        Object.entries(values).map(([name, value]) => [
+          name,
+          {
+            get() {
+              reads.push(name);
+              return value;
+            }
+          }
+        ])
+      )
+    );
+    const originalGetPrimaryWaitType = detector.getPrimaryWaitType;
+    detector.getPrimaryWaitType = function (waits) {
+      expect(this).toBe(detector);
+      reads.push('select wait');
+      return originalGetPrimaryWaitType.call(this, waits);
+    };
+
+    expect(detector.identifyBottleneckType(input)).toBe('BLOCKING_LOCKS');
+    expect(reads).toEqual([...Object.keys(values), 'select wait']);
+  });
+
+  test('does not turn an explicit null wait list into an empty list', () => {
+    expect(() => detector.identifyBottleneckType({ ...metrics, wait_stats: null })).toThrow(
+      TypeError
+    );
+  });
+});
+
 describe('BottleneckDetector.detectBottlenecks (query-stats DMVs)', () => {
   let detector;
   let mockRequest;
