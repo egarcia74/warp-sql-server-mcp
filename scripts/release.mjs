@@ -496,9 +496,16 @@ function report(runId, preview, tagsBefore) {
   if (preview.dryRun) {
     console.log('');
     console.log('Dry run only: no tag, GitHub Release or version-bump PR was created.');
-    console.log(
-      'The computed version and changelog preview are in the run summary at the URL above.'
-    );
+    // Deliberately does not promise a version. A dry run of a window that ships nothing keeps
+    // should_release=true (release.yml:213), so `Create Release` runs and the skipped-job branch
+    // above never fires - but the dry-run summary prints a refusal and NO version for it
+    // (release.yml:457-465), because the version it would otherwise echo is the current one,
+    // which will never be created. Naming a version here would send the operator looking for a
+    // line the summary intentionally omits.
+    console.log('The changelog preview is in the run summary at the URL above, under "Dry Run');
+    console.log('Summary". That section also carries the verdict: the version that would be');
+    console.log('taken, or - when the window changes nothing npm packs (#1235) - a refusal and');
+    console.log('no version at all.');
     return;
   }
 
