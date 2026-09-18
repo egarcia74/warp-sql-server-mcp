@@ -943,6 +943,10 @@ describe('guard', () => {
     ]);
   });
 
+  it('allows the git status flag used by the local shipping preview', () => {
+    expect(guard('git', ['status', '--porcelain=v1'])).toEqual(['status', '--porcelain=v1']);
+  });
+
   it('rejects a dash-prefixed argument that is not on the allowlist', () => {
     expect(() => guard('git', ['fetch', '--prune'])).toThrow(/refusing to pass "--prune"/);
     expect(() => guard('gh', ['run', 'list', '-L', '5'])).toThrow(/refusing to pass "-L"/);
