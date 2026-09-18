@@ -117,6 +117,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what it does not ask for: separate commits within a pull request, not separate pull requests, and
   no check enforces it.
 
+### Fixed
+
+- **The Markdown link-check commands now fail when any file has a broken link.** The previous
+  `find -exec … {} \;` commands ran the checker once per file but returned `find`'s successful exit
+  status even when a checker invocation failed, so `links:check` and the local CI gate could report
+  success after printing a broken link. The batched `{} +` form preserves safe filename handling
+  while propagating a failed checker. The remaining documentation-accuracy backlog now also
+  distinguishes the manual performance runner's enforced request-success checks from its
+  informational metrics, and labels `docker:test:clean` accurately as Phase 1 on a clean container.
+  Closes #1154.
+
 ### Removed
 
 - `lib/utils/mcp-environment.js`, `Logger._isMcpStdioTransport()` and the already-dead

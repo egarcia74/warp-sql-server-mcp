@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import fs from 'fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'path';
 
 /**
@@ -65,6 +67,46 @@ describe('Link Checking Functionality', () => {
       expect(packageJson.scripts).toHaveProperty('links:check:ci');
       expect(packageJson.scripts['links:check:ci']).toContain('--config .markdown-link-check.json');
     });
+
+    test.each(['links:check', 'links:check:ci'])(
+      '%s exits non-zero when any Markdown file fails',
+      async scriptName => {
+        const packageContent = await fs.readFile(path.join(process.cwd(), 'package.json'), 'utf-8');
+        const command = JSON.parse(packageContent).scripts[scriptName];
+        const fixture = await fs.mkdtemp(path.join(tmpdir(), 'link-check-exit-'));
+        const bin = path.join(fixture, 'bin');
+
+        try {
+          await fs.mkdir(bin);
+          await fs.writeFile(path.join(fixture, 'passing.md'), '# Passing\n');
+          await fs.writeFile(path.join(fixture, 'broken.md'), '[broken](missing.md)\n');
+
+          const checker = path.join(bin, 'markdown-link-check');
+          await fs.writeFile(
+            checker,
+            [
+              '#!/bin/sh',
+              'for argument do',
+              '  [ "$argument" = "./broken.md" ] && exit 1',
+              'done',
+              'exit 0',
+              ''
+            ].join('\n')
+          );
+          await fs.chmod(checker, 0o755);
+
+          const result = spawnSync('/bin/sh', ['-c', command], {
+            cwd: fixture,
+            env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+            encoding: 'utf8'
+          });
+
+          expect(result.status).toBe(1);
+        } finally {
+          await fs.rm(fixture, { recursive: true, force: true });
+        }
+      }
+    );
 
     test('should have markdown-link-check as dev dependency', async () => {
       const packageJsonPath = path.join(process.cwd(), 'package.json');
