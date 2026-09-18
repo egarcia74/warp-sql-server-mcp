@@ -9,8 +9,8 @@
 // MCP client imports for future Warp integration
 // import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 // import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { spawn } from 'child_process';
-import { performance } from 'perf_hooks';
+import { spawn } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 
 class WarpMCPPerformanceTest {
   constructor() {
