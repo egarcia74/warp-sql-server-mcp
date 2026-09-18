@@ -8,6 +8,7 @@ import {
   verifyPublishTree,
   describeProblem,
   gitReader,
+  packedFilesReader,
   scrubbedEnv
 } from '../../scripts/ci/verify-publish-tree.mjs';
 
@@ -607,6 +608,54 @@ describe('against a real repository, following the actual release sequence', () 
     } finally {
       for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
       Object.assign(process.env, saved);
+    }
+  });
+});
+
+/**
+ * The packlist canary (#1235). Every other test in this file STUBS the packlist, so before these
+ * the real reader had no coverage at all - which is how a gate ships that cannot fail.
+ *
+ * Both callers treat this Set as authoritative, and a silently wrong one is worse than a throw in
+ * each direction: this gate would reclassify every foreign packed file as a harmless notice and
+ * stop blocking, while the release classifier (#1235) would refuse every release and blame the
+ * packlist. Neither announces itself, and this half is irreversible.
+ */
+describe('packedFilesReader against the real repository', () => {
+  it('returns a packlist containing package.json, which npm forcibly includes', () => {
+    const packed = packedFilesReader()();
+
+    expect(packed.size).toBeGreaterThan(0);
+    // npm-packlist's `strict` rules contain '!/package.json', so its absence means the output is
+    // not a packlist at all.
+    expect(packed.has('package.json')).toBe(true);
+    // Flat, exact, repo-relative paths - never a tarball-internal `package/` prefix, which is the
+    // shape change the canary exists to catch.
+    for (const entry of packed) {
+      expect(entry.startsWith('package/')).toBe(false);
+      expect(entry.startsWith('/')).toBe(false);
+    }
+  });
+
+  it('packs the lib tree and README, and never the lockfile or test tree', () => {
+    const packed = packedFilesReader()();
+
+    expect(packed.has('README.md')).toBe(true);
+    expect([...packed].some(file => file.startsWith('lib/'))).toBe(true);
+    // Forcibly excluded by npm-packlist regardless of `files`, which is why a lock-only
+    // dependency bump ships nothing to consumers.
+    expect(packed.has('package-lock.json')).toBe(false);
+    expect([...packed].some(file => file.startsWith('test/'))).toBe(false);
+  });
+
+  it('throws rather than handing back a packlist it cannot vouch for', () => {
+    // A directory with no package.json: npm pack fails, and the reader must surface that instead
+    // of returning something a caller would trust.
+    const scratch = mkdtempSync(join(tmpdir(), 'packlist-canary-'));
+    try {
+      expect(() => packedFilesReader(scratch)()).toThrow();
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
     }
   });
 });

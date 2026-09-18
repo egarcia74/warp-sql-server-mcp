@@ -177,6 +177,9 @@ export const ALLOWED_FLAGS = {
     '--format=%s',
     '--no-merges',
     '--abbrev=0',
+    // Value arrives as a SEPARATE token, so unlike the `=`-suffix entries below the guard does
+    // not validate it; the only caller passes a module constant.
+    '--match',
     '--exclude=',
     '--'
   ]),
@@ -292,7 +295,8 @@ export function parseArgs(argv) {
  *          docs / chore, perf, refactor, revert, build,
  *          test, ci, style, deps, deps-dev
  *
- * No recognised type maps to `none`. The only window that releases nothing is one in which
+ * No recognised type maps to `none`. As far as SUBJECTS are concerned, the only window that
+ * releases nothing is one in which
  * NO subject matches any rule at all, and that is a defect in the subjects rather than a
  * decision this table makes.
  *
@@ -482,7 +486,8 @@ const LEVELS = ['major', 'minor', 'patch'];
  *   counts        commits per rule id, plus `unclassified`, for the "why not" message
  *   unclassified  subjects no rule recognised (a malformed or unprefixed subject)
  *
- * Since every recognised type releases, `type: 'none'` on a non-empty window means every
+ * Since every recognised type releases, `type: 'none'` from THIS function on a non-empty window
+ * means every
  * subject in it was unclassified. That is still NOT the same outcome as an empty window,
  * and every caller must say which one it is - that ambiguity is the whole of #1158.
  */
@@ -677,6 +682,7 @@ export function renderPreview(preview) {
     drivers,
     collisions,
     headSha,
+    ships,
     dryRun,
     breakdown
   } = preview;
@@ -688,7 +694,10 @@ export function renderPreview(preview) {
     `  Version:        ${currentVersion} -> ${nextVersion}`,
     `  Release type:   ${releaseType}${releaseTypeReason(requestedType, rule)}`,
     `  Last tag:       ${lastTag ?? '(none - every commit counts)'}`,
-    `  Commits:        ${commitCount} since ${lastTag ?? 'the beginning'} on origin/${RELEASE_BRANCH} (no merges)`
+    `  Commits:        ${commitCount} since ${lastTag ?? 'the beginning'} on origin/${RELEASE_BRANCH} (no merges)`,
+    // Added to the literal rather than as another lines.push(): three S7778 "do not call
+    // Array#push() multiple times" findings already sit in this function.
+    `  Ships to npm:   ${ships ?? 'not evaluated'}`
   ];
   // The mix is printed whatever the outcome: when the type is `none` it is the only thing
   // that distinguishes "commits, none of them release-triggering" from an empty window.

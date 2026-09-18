@@ -431,7 +431,9 @@ merged, something you wrote has to carry the type:
 - `BREAKING CHANGE` or `!:` anywhere in a classified subject (e.g. `feat!:`) → major release
 - anything else → release nothing, and the release run warns that the subject matched no type
 
-Every recognised type releases at least a patch, `test:`, `ci:` and `style:` included. The
+Every recognised type releases at least a patch, `test:`, `ci:` and `style:` included - but a
+recognised type is no longer sufficient on its own: the workflow also refuses a window that changes
+nothing npm packs, whatever its subjects say (#1235). The
 prefix you pick is a label, not a promise about which files your PR touched, and plenty of
 the published tarball is documentation — `docs/**/*.md`, `README.md` and `CHANGELOG.md` are
 all packed, and `ci:`-titled PRs here routinely edit them. Over-releasing costs a patch
@@ -481,10 +483,15 @@ Two things this deliberately does not ask for:
 - **Not a separate PR.** A PR that changes code and updates the docs describing that code is
   the right shape — the docs should land with the behaviour they describe. Separate _commits_
   inside that PR, not separate PRs.
-- **Not enforced by CI.** Nothing checks this, by design; a path-based gate would have to
-  understand intent, and the failure mode it prevents is cosmetic. See issue #1235, which
-  proposes classifying a release window by the paths it touches instead of by subject prefix —
-  if that ships, this convention carries less weight than it does today.
+- **Still not enforced by CI, and it still affects the release type.** #1235 has shipped: the
+  release workflow now classifies a window by the paths it touches as well as by subject prefixes,
+  and refuses to release one that changes nothing npm packs. But the path gate aggregates paths
+  across the **whole window** and never associates a path with the subject of the commit that
+  changed it — so it decides _whether_ a release happens, not _which level_. Packed
+  documentation (`README.md`, `docs/**/*.md`, `CHANGELOG.md`) still ships, so a `feat:` commit
+  containing only a packed doc edit still computes a **minor**, and splitting that edit into its
+  own `docs:` commit still makes it a patch. The convention keeps its release-type rationale;
+  what #1235 removed is the separate risk of a window that classifies cleanly and ships nothing.
 
 ## Getting Help
 

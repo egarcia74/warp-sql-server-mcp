@@ -39,6 +39,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A release is now refused when the window changes nothing npm packs.** `release.yml` decided the
+  release type from conventional-commit **subject prefixes** alone. A prefix is a label the author
+  chooses and says nothing about which files the diff touched, so a window could ship code while
+  classifying as nothing, or compute a minor while shipping nothing at all. The workflow now also
+  intersects the window's changed paths with npm's own packlist (`npm pack --dry-run --json`, never a
+  reimplementation of the `files` globs) and refuses to release when nothing packed changed, saying so
+  in those words. Dispatching with an explicit `release_type` still overrides it, and `npm run release`
+  previews the verdict as `Ships to npm:` before you dispatch.
+
+  Two details decide whether this works. `package.json` is always packed, and the previous release's
+  version bump lands inside the _next_ window because the tag is pushed before the bump PR merges — so
+  a **version-only** manifest change is excluded, or the gate would pass on every post-release window
+  automatically. And npm never publishes `package-lock.json`, so a lock-only dependency bump ships
+  nothing to consumers and is refused; that is exact rather than intuitive, and the refusal message
+  says why. Replayed over the 26 windows `git describe` actually produces, 2 would have been refused —
+  both released nothing but a version number. Closes #1235.
+
 - **The logger no longer guesses whether it is talking to an MCP client — it never had to.** This
   server constructs exactly one transport, `StdioServerTransport`, and constructs its `Logger` in
   exactly one place, so stdout is the JSON-RPC protocol channel every time the code runs. The

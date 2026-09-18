@@ -39,6 +39,8 @@ import { createInterface } from 'node:readline/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
+import { gitReader, packedFilesReader } from './ci/verify-publish-tree.mjs';
+import { shipsToConsumers } from './lib/packed-window.mjs';
 import {
   WORKFLOW,
   RELEASE_BRANCH,
@@ -68,6 +70,17 @@ const POLL_INTERVAL_MS = 3_000;
 const POLL_WINDOW_MS = 60_000;
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * Which tags count as release tags, for `git describe --match`.
+ *
+ * Kept identical to `classify-release-commits.mjs`'s `lastTag()`. `guard()` passes a non-dash
+ * argument through unvalidated, so this is a module constant rather than anything caller-supplied.
+ */
+const TAG_PATTERN = 'v[0-9]*';
+
+/** `name:` of the workflow job that tags and publishes; skipped when a window is refused. */
+const RELEASE_JOB_NAME = 'Create Release';
 
 // ---------------------------------------------------------------------------------------
 // Subprocesses
@@ -240,14 +253,60 @@ function lastRemoteTag(tags) {
     );
   }
   const excludes = localOnly.map(tag => `--exclude=${tag}`);
+  // `--match` must mirror classify-release-commits.mjs's lastTag(): the workflow filters to
+  // release tags, so a preview that did not would compute `Ships to npm` from a different window
+  // boundary than the runner uses the moment a non-`v` tag reaches origin. Two spellings of the
+  // window is the #1158 defect relocated into the tag boundary.
   const described = tryCapture('git', [
     'describe',
     '--tags',
     '--abbrev=0',
+    '--match',
+    TAG_PATTERN,
     ...excludes,
     REMOTE_HEAD
   ]);
   return described?.trim() || null;
+}
+
+/**
+ * Whether the window ships anything npm packs, or why that could not be answered here.
+ *
+ * Returns a string for the preview and never throws: a preview that crashes is worse than one that
+ * says it does not know.
+ *
+ * gitReader() bypasses guard() and uses its own regime - a four-entry argument allowlist plus
+ * scrubbedEnv(), which guard() does not apply. A different discipline, not an absent one, and the
+ * stronger of the two on the GIT_* leakage that corrupted a checkout in #1214.
+ */
+function previewShips(lastTag, remoteHead, remoteManifest, forcedType) {
+  if (!lastTag) return 'not evaluated (no release tag yet)';
+
+  const dirty = tryCapture('git', ['status', '--porcelain=v1'])?.trim();
+  const head = tryCapture('git', ['rev-parse', 'HEAD'])?.trim();
+  if (dirty || head !== remoteHead) {
+    return `not evaluated (only computed on a clean checkout at origin/${RELEASE_BRANCH})`;
+  }
+
+  try {
+    const reader = gitReader();
+    const verdict = shipsToConsumers({
+      changes: reader.changes(lastTag),
+      packed: packedFilesReader()(),
+      manifestBefore: JSON.parse(reader.show(lastTag, 'package.json')),
+      manifestAfter: remoteManifest
+    });
+    if (verdict.reason === 'unknown-packlist') return 'not evaluated (packlist unavailable)';
+    if (verdict.ships) return `yes (${verdict.shipped.length} packed path(s) changed)`;
+    // `blockedByPaths` in release.yml is `!forced && ...`, so an explicit --type bypasses the gate
+    // there. Saying "the workflow would refuse this" for a run that will not be refused would send
+    // the operator looking for a problem that does not exist.
+    return forcedType
+      ? `no - but --type ${forcedType} overrides the path gate, so the release proceeds (#1235)`
+      : 'NO - the workflow would refuse this release (#1235)';
+  } catch (error) {
+    return `not evaluated (${error.message})`;
+  }
 }
 
 function buildPreview(options, { remoteHead, tags }) {
@@ -257,7 +316,10 @@ function buildPreview(options, { remoteHead, tags }) {
     .split('\n')
     .filter(line => line.trim());
 
-  const currentVersion = JSON.parse(git('show', `${REMOTE_HEAD}:package.json`)).version;
+  // Hoisted: the gate below needs the whole manifest, not just its version, and reading the blob
+  // twice would be two chances to disagree.
+  const remoteManifest = JSON.parse(git('show', `${REMOTE_HEAD}:package.json`));
+  const currentVersion = remoteManifest.version;
   if (!isPlainVersion(currentVersion)) {
     fail(
       `package.json on origin/${RELEASE_BRANCH} declares version "${currentVersion}", which is not a ` +
@@ -269,6 +331,12 @@ function buildPreview(options, { remoteHead, tags }) {
   const releaseType = options.type ?? detected.type;
 
   const mix = describeCommitMix(detected);
+
+  // #1235, previewed. Only computed on a clean checkout that is exactly origin/main: the commit
+  // window comes from origin/main while `npm pack` reads the WORKTREE, so on a branch that edits
+  // `files[]` (which this repo has done) the two halves describe different trees and the answer
+  // would be confidently wrong. An honest "not evaluated" beats that.
+  const ships = previewShips(lastTag, remoteHead, remoteManifest, options.type);
 
   if (subjects.length === 0) {
     fail(
@@ -287,7 +355,8 @@ function buildPreview(options, { remoteHead, tags }) {
         `${subjects.length} commit(s) since ${lastTag ?? 'the beginning'} on ` +
           `origin/${RELEASE_BRANCH}, none of them carrying a recognised conventional-commit ` +
           `type (${mix}), so the workflow would skip every job. Every recognised type ` +
-          'releases at least a patch, so an "unclassified" count is the whole story: those ' +
+          'releases at least a patch, so for SUBJECTS an "unclassified" count is the whole ' +
+          'story (the paths are reported separately as "Ships to npm"): those ' +
           'subjects matched no type at all. Pass --type <patch|minor|major> to release ' +
           'anyway, or --dry-run to see what the workflow reports.'
       );
@@ -311,6 +380,7 @@ function buildPreview(options, { remoteHead, tags }) {
     collisions,
     headSha: remoteHead.slice(0, 7),
     fullSha: remoteHead,
+    ships,
     dryRun: options.dryRun
   };
 }
@@ -397,12 +467,45 @@ function report(runId, preview, tagsBefore) {
     fail(`the release run did not succeed (${conclusion}). Inspect it at the URL above.`);
   }
 
+  // A SKIPPED release is a successful run. The workflow refuses a window three ways - no commits,
+  // no recognised subject type, or nothing npm packs (#1235) - and in every one of them
+  // `check-changes` sets should_release=false and the `Create Release` job never runs, while the
+  // run itself still concludes `success`. Reading the run conclusion alone would then print a
+  // version and release follow-up steps for a release that did not happen. Ask the job.
+  const jobs = ghJson('run', 'view', data(runId), '--json', 'jobs')?.jobs ?? [];
+  const releaseJob = jobs.find(job => job.name === RELEASE_JOB_NAME);
+  if (releaseJob?.conclusion === 'skipped') {
+    console.log('');
+    console.log('No release was created: the workflow decided this window does not warrant one.');
+    console.log('  The "Release type" section of the run summary at the URL above says which of');
+    console.log('  the three reasons applied - no commits, no recognised commit type, or the');
+    console.log('  window changes nothing npm packs (#1235).');
+    console.log('');
+    // Deliberately conditional advice. An explicit type overrides the subject rules and the path
+    // gate, but NOT an empty window: that branch returns before the forced type is applied,
+    // because there is nothing new to tag. Recommending `--type patch` unconditionally would send
+    // the operator into a command that cannot work - and an empty window can reach here even when
+    // the preview saw commits, if a release tag lands at the previewed SHA in between.
+    console.log('  If it was one of the last two, release anyway with:');
+    console.log('    npm run release -- --type patch');
+    console.log('  If there were no commits at all, an explicit type cannot help: the workflow');
+    console.log('  returns before applying it, because there is nothing new to tag.');
+    return;
+  }
+
   if (preview.dryRun) {
     console.log('');
     console.log('Dry run only: no tag, GitHub Release or version-bump PR was created.');
-    console.log(
-      'The computed version and changelog preview are in the run summary at the URL above.'
-    );
+    // Deliberately does not promise a version. A dry run of a window that ships nothing keeps
+    // should_release=true (release.yml:213), so `Create Release` runs and the skipped-job branch
+    // above never fires - but the dry-run summary prints a refusal and NO version for it
+    // (release.yml:457-465), because the version it would otherwise echo is the current one,
+    // which will never be created. Naming a version here would send the operator looking for a
+    // line the summary intentionally omits.
+    console.log('The changelog preview is in the run summary at the URL above, under "Dry Run');
+    console.log('Summary". That section also carries the verdict: the version that would be');
+    console.log('taken, or - when the window changes nothing npm packs (#1235) - a refusal and');
+    console.log('no version at all.');
     return;
   }
 
