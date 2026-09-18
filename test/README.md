@@ -10,7 +10,7 @@ test/
 ├── TEST_IMPROVEMENTS.md                     # Test-suite improvement notes
 ├── setup.js                                 # Vitest global setup and mocks
 │
-├── unit/                                    # Vitest unit suites - 39 files, 1,691 tests
+├── unit/                                    # Vitest unit suites - 39 files, 1,694 tests
 │   ├── index.test.js                        # 144 - MCP server entry point, dispatch, validateQuery
 │   ├── query-optimizer.test.js              # 136 - Query analysis and optimization engine
 │   ├── sql-injection-battery.test.js        # 103 - Behavioral SQL injection guard
@@ -29,7 +29,7 @@ test/
 │   ├── git-spawn-scrub-guard.test.js         #  50 - Lint guard: git spawns must scrub the environment
 │   ├── run-one-test.test.js                  #  29 - Single-suite runner the Claude action is allowed to call
 │   ├── verify-publish-tree.test.js          #  40 - Published-tree verification before npm publish
-│   ├── release-script.test.js               # 145 - Release dispatch: type detection, semver bump, flags, run selection
+│   ├── release-script.test.js               # 146 - Release dispatch: type detection, semver bump, flags, run selection
 │   ├── classify-dependabot-pr.test.js       #  32 - Dependabot PR title classification rules
 │   ├── docs-html-writer.test.js              #  10 - Docs writer: timestamp churn guard
 │   ├── server-config.test.js                #  24 - Configuration parsing and defaults
@@ -40,7 +40,7 @@ test/
 │   ├── check-fenced-blocks.test.js          #   9 - Markdown fence-balance scanner
 │   ├── csv.test.js                              #   13 - CSV serialisation shared by both export paths
 │   ├── result-formatter.test.js                 #   7 - Text-table rendering shared by every tool
-│   ├── link-checker.test.js                 #   6 - Documentation link validation
+│   ├── link-checker.test.js                 #   8 - Documentation link validation
 │   ├── cli.test.js                          #   4 - cli.js behavior
 │   ├── docker-command-utils.test.js         #   4 - Docker helper argument handling
 │   ├── dependabot-config.test.js            #   2 - Dependabot config validation
@@ -93,8 +93,8 @@ Get the MCP server running first, then return here to understand the testing arc
 ## 🧪 Test Overview
 
 - **Test Framework**: [Vitest](https://vitest.dev/) - Fast, modern testing framework
-- **Total Tests**: 1,758 - **every one of them runs automatically on every pull request**
-  - 1,691 unit tests (`npm run test:unit`, 39 files, mocked)
+- **Total Tests**: 1,761 - **every one of them runs automatically on every pull request**
+  - 1,694 unit tests (`npm run test:unit`, 39 files, mocked)
   - 27 Vitest integration tests (`test/integration/*.test.js`, mocked, run by a bare `vitest run`)
   - 40 live-database tests (`test/integration/manual/`, 20 + 10 + 10, run against a Docker SQL
     Server that CI starts itself)
@@ -115,7 +115,7 @@ and the CI jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 
 | Suite                                      | Tests           | Command                                | Runs in CI?                                |
 | ------------------------------------------ | --------------- | -------------------------------------- | ------------------------------------------ |
-| `test/unit/**`                             | 1,691           | `npm run test:unit`                    | Yes - required `Tests (22)` / `(24)`       |
+| `test/unit/**`                             | 1,694           | `npm run test:unit`                    | Yes - required `Tests (22)` / `(24)`       |
 | `test/integration/*.test.js`               | 27              | `npm run test:coverage` / `npm run ci` | Yes - `coverage` job                       |
 | `test/integration/manual/phase*.js`        | 40              | `npm run test:integration:manual`      | Yes - required `Tests` job, via `npm test` |
 | `test/protocol/mcp-server-startup-test.js` | handshake check | `npm run test:integration:protocol`    | Yes - required `Tests` job                 |
@@ -172,7 +172,7 @@ The test suite has been organized into focused, modular files for better maintai
 
 #### 🎯 **Unit Suites by Area**
 
-The 1,691 unit tests are spread across 39 files. Grouped by area, the totals sum to 1,691:
+The 1,694 unit tests are spread across 39 files. Grouped by area, the totals sum to 1,694:
 
 | Area                            | Tests | Suites                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -182,7 +182,7 @@ The 1,691 unit tests are spread across 39 files. Grouped by area, the totals sum
 | Query analysis                  | 158   | `query-optimizer` (136), `query-optimizer-security` (13), `bottleneck-detector` (9)                                                                                                                                                                                                                                                                                                                                                                           |
 | Tools and handlers              | 152   | `tool-registry` (59), `database-tools-handler` (64), `get-server-info` (29)                                                                                                                                                                                                                                                                                                                                                                                   |
 | Configuration                   | 24    | `server-config` (24)                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Repository and CLI tooling      | 622   | `cleanup-test-processes` (48), `release-script` (145), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (43), `packed-window` (29), `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (6), `check-orphan-docs` (71), `markdown-blocks` (21), `check-env-var-docs` (103), `check-tool-docs` (11), `run-doc-checks` (3), `cli` (6), `docker-command-utils` (4), `dependabot-config` (2) |
+| Repository and CLI tooling      | 625   | `cleanup-test-processes` (48), `release-script` (146), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (43), `packed-window` (29), `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (8), `check-orphan-docs` (71), `markdown-blocks` (21), `check-env-var-docs` (103), `check-tool-docs` (11), `run-doc-checks` (3), `cli` (6), `docker-command-utils` (4), `dependabot-config` (2) |
 
 The earlier per-area suites (`mcp-connection`, `mcp-core-tools`, `mcp-data-tools`,
 `mcp-performance-tools`, `mcp-server-lifecycle`) and the original monolithic `sqlserver-mcp.test.js`

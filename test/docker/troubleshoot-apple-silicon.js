@@ -123,6 +123,6 @@ console.log('   npm run docker:status       # Check container status');
 console.log('   npm run docker:logs         # View container logs');
 console.log('   npm run docker:clean        # Clean reset (removes all data)');
 console.log('   npm run docker:restart      # Restart container (keeps data)');
-console.log('   npm run docker:test:clean      # Full clean test run');
+console.log('   npm run docker:test:clean      # Phase 1 on a clean container');
 
 console.log('\n✅ Troubleshooting complete!');

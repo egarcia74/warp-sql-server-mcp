@@ -1,6 +1,15 @@
 import { describe, test, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import fs from 'fs/promises';
+import { createRequire } from 'node:module';
 import path from 'path';
+import { fileURLToPath, URL } from 'node:url';
+
+const packageJson = createRequire(import.meta.url)('../../package.json');
+const fixture = fileURLToPath(new URL('../', import.meta.url));
+const fixtureBin = fileURLToPath(new URL('./fixtures/link-check-exit/bin/', import.meta.url));
+// The npm scripts intentionally exercise POSIX `find`; native Windows has no `/bin/sh`.
+const testWithPosixShell = process.platform === 'win32' ? test.skip : test;
 
 /**
  * Link Checking Tests
@@ -65,6 +74,22 @@ describe('Link Checking Functionality', () => {
       expect(packageJson.scripts).toHaveProperty('links:check:ci');
       expect(packageJson.scripts['links:check:ci']).toContain('--config .markdown-link-check.json');
     });
+
+    testWithPosixShell.each(['links:check', 'links:check:ci'])(
+      '%s exits non-zero when any Markdown file fails',
+      scriptName => {
+        const result = spawnSync('/bin/sh', ['-c', packageJson.scripts[scriptName]], {
+          cwd: fixture,
+          env: {
+            ...process.env,
+            PATH: `${fixtureBin}${path.delimiter}${process.env.PATH ?? ''}`
+          },
+          encoding: 'utf8'
+        });
+
+        expect(result.status).toBe(1);
+      }
+    );
 
     test('should have markdown-link-check as dev dependency', async () => {
       const packageJsonPath = path.join(process.cwd(), 'package.json');
