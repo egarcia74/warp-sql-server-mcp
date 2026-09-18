@@ -176,6 +176,7 @@ export const ALLOWED_FLAGS = {
     '--verify',
     '--format=%s',
     '--no-merges',
+    '--porcelain=v1',
     '--abbrev=0',
     // Value arrives as a SEPARATE token, so unlike the `=`-suffix entries below the guard does
     // not validate it; the only caller passes a module constant.
