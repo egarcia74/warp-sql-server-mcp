@@ -1,0 +1,7 @@
+#!/bin/sh
+
+for argument do
+  [ "$argument" = "./README.md" ] && exit 1
+done
+
+exit 0
