@@ -12,13 +12,16 @@ The performance test (`npm run test:integration:performance`) exercises:
 - **Performance Monitoring Tools**: Calls the statistics and connection-health tools
 - **Database Operations**: Checks that representative SQL Server operations succeed
 - **Concurrent Handling**: Requires 10 simultaneous requests to complete successfully
-- **Measurements**: Records response times and request success or failure
+- **Measurements**: Records outcomes for executed top-level scenarios and timings for successful
+  ones; the sequential and concurrent scenarios also print each successful query's timing
 - **Persistent MCP Process**: Uses single long-running process for faster, more reliable testing
 
 > **What the command enforces:** the server must start, every MCP tool call must succeed, and all
 > sequential and concurrent queries must succeed. A failed request makes the command exit non-zero.
-> The console report shows request timings and success or failure counts. Monitoring and health
-> payloads are requested but are neither displayed nor validated by this runner.
+> A fully successful run counts eight top-level scenarios, not every underlying MCP call. A failed
+> run counts the scenarios executed before completion or a critical abort. Response-time statistics
+> include successful scenarios only, with one average for each successful query batch. Monitoring
+> and health payloads are requested but are neither displayed nor validated.
 
 ## Running the Test
 
@@ -69,14 +72,17 @@ npm run test:integration:performance
 - **Purpose**: Tests query consistency and connection reuse
 - **Test**: 5 sequential queries with timing analysis
 - **Pass condition**: All five queries succeed
-- **Observed**: Individual and aggregate response times
+- **Observed**: Individual successful-query times; failed queries are logged without a timing. The
+  successful-query average contributes one value when the scenario succeeds
 
 ### 7. Concurrent Query Execution
 
 - **Purpose**: Stress tests simultaneous request handling
 - **Test**: 10 concurrent queries executed simultaneously
 - **Pass condition**: All 10 queries succeed
-- **Observed**: Individual and aggregate response times; memory use is not measured
+- **Observed**: Individual successful-query times; failed queries are logged without a timing. The
+  successful-query average contributes one value when the scenario succeeds; memory use is not
+  measured
 
 ### 8. Performance Monitoring After Load
 
@@ -95,26 +101,34 @@ npm run test:integration:performance
 - No request times out or returns an MCP error.
 
 The runner does not assign performance grades or fail on latency, utilization, or health-score
-thresholds. Compare its request timings with a baseline from the same environment when investigating
-a regression; workstation and CI timings are not interchangeable. Inspect monitoring or health
-values by calling the corresponding MCP tool directly.
+thresholds. Compare its scenario aggregates and per-query timings with a baseline from the same
+environment when investigating a regression; workstation and CI timings are not interchangeable.
+Inspect monitoring or health values by calling the corresponding MCP tool directly.
 
 ### Key Metrics
 
-- **Response Time**: Minimum, average, median, 95th percentile, 99th percentile, and maximum
-- **Request Outcome**: Total, successful, and failed counts plus the failure percentage
+When at least one scenario succeeds, the summary includes:
+
+- **Scenario Time**: Minimum, average, median, 95th percentile, 99th percentile, and maximum across
+  successful top-level scenarios; a fully successful run has eight values, including one average
+  from each query batch
+- **Scenario Outcome**: Total, successful, and failed executed scenarios plus the failure percentage
 - **Error Analysis**: Counts identical exception messages that reach `runTest`; errors caught inside
-  the sequential and concurrent helpers and MCP error responses affect the failure count but are not
-  included in this list
+  the sequential and concurrent helpers and MCP error responses affect a scenario's outcome but are
+  not included in this list
 - **Concurrency Performance**: Simultaneous request handling
 
 ### Measurements That Are Informational
 
-The summary reports these values without asserting numeric limits:
+When at least one scenario succeeds, the summary reports these values without asserting numeric
+limits:
 
-- Response-time minimum, average, median, 95th percentile, 99th percentile, and maximum
-- Total, successful, and failed request counts and the derived error rate
+- Scenario-time minimum, average, median, 95th percentile, 99th percentile, and maximum
+- Total, successful, and failed executed-scenario counts and the derived error rate
 - Repeated exception-message counts when an exception reaches `runTest`
+
+If no scenario succeeds, the summary stops after reporting that there are no successful requests to
+analyze.
 
 The 95% pool-capacity rule and health-score calculation are asserted separately in
 `test/unit/performance-monitor.test.js`. This manual runner exercises the monitoring and health tool
@@ -197,9 +211,9 @@ Use the test results to:
 The test's console summary provides measurements that can be saved as an environment-specific
 baseline:
 
-- Response time trends
+- Top-level scenario timing trends
 - Error rate patterns
-- Sequential and concurrent request success
+- Sequential and concurrent query timing and success
 
 Use the monitoring and health tools directly when a baseline also needs connection-pool or query
 metrics; this runner does not print those payloads.
@@ -213,9 +227,9 @@ While this is a "manual" test, it can be integrated into automated workflows:
 npm run test:integration:performance > performance-test-results.txt
 ```
 
-The command's exit status can gate request success. Its console report is human-readable output, not
-a stable machine-readable metrics contract; automation that needs threshold enforcement should add
-explicit assertions rather than parse the prose report.
+The command's exit status can gate scenario success. Its console report is human-readable output,
+not a stable machine-readable metrics contract; automation that needs threshold enforcement should
+add explicit assertions rather than parse the prose report.
 
 ## Troubleshooting
 
