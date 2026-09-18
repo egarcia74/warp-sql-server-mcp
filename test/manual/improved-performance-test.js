@@ -6,8 +6,8 @@
  * This solves the connection delay issues in the original performance-test.js
  */
 
-import { spawn } from 'child_process';
-import { performance } from 'perf_hooks';
+import { spawn } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import dotenv from 'dotenv';
 
 // Load the Docker test environment (host, port 14330, credentials) so the

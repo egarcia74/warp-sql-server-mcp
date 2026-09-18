@@ -11,7 +11,7 @@ console.log('🏆 TEST SUITE SUMMARY');
 console.log('='.repeat(80));
 
 // Get package info for context
-import fs from 'fs';
+import fs from 'node:fs';
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 
 console.log(`📦 Project: ${packageJson.name} v${packageJson.version}`);

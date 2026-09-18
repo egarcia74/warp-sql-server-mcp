@@ -3,7 +3,7 @@
  * Provides utilities for creating and managing test databases
  */
 
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { serverConfig } from '../../../lib/config/server-config.js';
 
