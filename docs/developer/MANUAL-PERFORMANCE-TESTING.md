@@ -50,6 +50,8 @@ npm run test:integration:performance
 ### 3. Connection Pool Health Check
 
 - **Purpose**: Exercises the `get_connection_health` tool
+- **Critical**: A thrown exception stops execution immediately; an MCP error response is counted
+  and execution continues so the command can report the remaining scenario outcomes
 - **Pass condition**: The MCP request succeeds
 - **Not inspected here**: Pool status, utilization, issues, health score, and warning boundaries
 

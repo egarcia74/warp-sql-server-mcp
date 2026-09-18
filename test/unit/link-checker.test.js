@@ -8,6 +8,8 @@ import { fileURLToPath, URL } from 'node:url';
 const packageJson = createRequire(import.meta.url)('../../package.json');
 const fixture = fileURLToPath(new URL('../', import.meta.url));
 const fixtureBin = fileURLToPath(new URL('./fixtures/link-check-exit/bin/', import.meta.url));
+// The npm scripts intentionally exercise POSIX `find`; native Windows has no `/bin/sh`.
+const testWithPosixShell = process.platform === 'win32' ? test.skip : test;
 
 /**
  * Link Checking Tests
@@ -73,12 +75,15 @@ describe('Link Checking Functionality', () => {
       expect(packageJson.scripts['links:check:ci']).toContain('--config .markdown-link-check.json');
     });
 
-    test.each(['links:check', 'links:check:ci'])(
+    testWithPosixShell.each(['links:check', 'links:check:ci'])(
       '%s exits non-zero when any Markdown file fails',
       scriptName => {
         const result = spawnSync('/bin/sh', ['-c', packageJson.scripts[scriptName]], {
           cwd: fixture,
-          env: { ...process.env, PATH: `${fixtureBin}:${process.env.PATH}` },
+          env: {
+            ...process.env,
+            PATH: `${fixtureBin}${path.delimiter}${process.env.PATH ?? ''}`
+          },
           encoding: 'utf8'
         });
 
