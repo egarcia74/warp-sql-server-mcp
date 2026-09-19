@@ -1,0 +1,107 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`logConfiguration characterization > preserves the complete ordered report and one structured logger payload 1`] = `
+[
+  [
+    "SQL Server MCP Configuration",
+    {
+      "configuration": "=== SQL Server MCP Configuration ===
+🖥️  MCP Server Information:
+    Name: example-mcp
+    Version: 1.2.3
+    Description: Example server
+
+⚙️  Runtime Environment:
+    Node.js: v22.0.0
+    Platform: linux
+    Architecture: x64
+    Process ID: 123
+    Parent Process ID: 100
+    Working Directory: /example
+    Environment: production
+    Memory Usage: 10MB RSS, 2MB Heap
+    Uptime: 13s
+    Command Args: --example
+    Key Env Vars: SQL_SERVER_TRUST_CERT=false, NODE_ENV=production
+
+🌐 Connection Settings:
+    Server: db.example:1433
+    Database: example
+    Auth Type: SQL Server Authentication
+    User: example-user
+    Password: ***********
+    Encrypt: true
+    Trust Cert: false (✅ explicitly disabled for security)
+    Security Decision: example decision
+    Security Level: 🔒 High
+    Environment: 🏭 Production (explicit)
+    Pool: 0-10 connections
+
+🔧 Network & Timing Diagnostics:
+    Connection String Length: 3 chars
+    Hostname Resolution: example-host
+    Network Interfaces: eth0, wlan0
+
+🔐 SSL Connection Information:
+    Status: connected
+    Protocol: TLS
+    Server: db.example
+    Encryption: Enabled
+    Trust Server Certificate: No
+    Note: example note
+
+🔒 Security & Operation Settings:
+    Debug Mode: false
+    Read-Only Mode: 🔒 true
+    Allow Destructive Operations: ✅ false
+    Allow Schema Changes: ✅ false
+    Connection Timeout: 10000ms
+    Request Timeout: 30000ms
+    Max Retries: 3
+
+⚡ Performance Monitoring:
+    Enabled: true
+    Max History: 1000 records
+    Slow Query Threshold: 5000ms
+    Track Pool Metrics: true
+    Sampling Rate: 100%
+
+📊 Streaming Configuration:
+    Enabled: true
+    Batch Size: 1000 rows
+
+📝 Logging & Output:
+    Log Level: info
+    Security Audit: false
+
+📦 Dependencies & Modules:
+    Key Dependencies: mssql@^1.0.0, winston@^2.0.0, dotenv@^3.0.0
+    Total Modules Loaded: 2
+    MCP Protocol: Model Context Protocol
+    Transport: stdio (stdin/stdout)
+
+📁 Log File Locations:
+    Main Log: /custom/main.log
+    Security Audit: /custom/security.log
+    Error Log: /default/error.log
+====================================
+⚠️  Configuration Warnings:
+  ⚠️  first warning
+  ⚠️  second warning
+❌ Configuration Errors:
+  ❌ first error",
+      "summary": {
+        "allowDestructiveOperations": false,
+        "allowSchemaChanges": false,
+        "authType": "SQL Server Authentication",
+        "database": "example",
+        "encrypt": true,
+        "logLevel": "info",
+        "readOnlyMode": true,
+        "securityAudit": false,
+        "server": "db.example:1433",
+      },
+    },
+  ],
+]
+`;
