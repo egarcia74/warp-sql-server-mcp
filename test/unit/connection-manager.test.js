@@ -238,6 +238,242 @@ describe('ConnectionManager', () => {
     });
   });
 
+  describe('connect characterization', () => {
+    let stderr;
+    let stdout;
+    let timer;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mockSql.connect.mockReset().mockResolvedValue(mockPool);
+      stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+      stdout = vi.spyOn(console, 'log').mockImplementation(() => {});
+      timer = vi.spyOn(globalThis, 'setTimeout');
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    });
+
+    test('reuses a connected pool without configuration, logging, or state normalization', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.SQL_SERVER_DEBUG = 'true';
+      connectionManager.pool = mockPool;
+      connectionManager.isConnected = false;
+      const build = vi.spyOn(connectionManager, '_buildConnectionConfig');
+
+      await expect(connectionManager.connect()).resolves.toBe(mockPool);
+
+      expect(build).not.toHaveBeenCalled();
+      expect(mockSql.connect).not.toHaveBeenCalled();
+      expect(stderr).not.toHaveBeenCalled();
+      expect(timer).not.toHaveBeenCalled();
+      expect(connectionManager.isConnected).toBe(false);
+    });
+
+    test('replaces a disconnected pool only after immediate success without a delay', async () => {
+      const previous = { connected: false };
+      connectionManager.pool = previous;
+      const pending = connectionManager.connect();
+      expect(connectionManager.pool).toBe(previous);
+      expect(connectionManager.isConnected).toBe(false);
+      await expect(pending).resolves.toBe(mockPool);
+      expect(connectionManager.pool).toBe(mockPool);
+      expect(connectionManager.isConnected).toBe(true);
+      expect(mockSql.connect).toHaveBeenCalledTimes(1);
+      expect(timer).not.toHaveBeenCalled();
+    });
+
+    test('waits exactly 1000 then 2000 milliseconds and builds one configuration with fresh shallow copies', async () => {
+      const build = vi.spyOn(connectionManager, '_buildConnectionConfig');
+      mockSql.connect
+        .mockRejectedValueOnce(new Error('first'))
+        .mockRejectedValueOnce(new Error('second'));
+      const pending = connectionManager.connect();
+      await vi.advanceTimersByTimeAsync(999);
+      expect(mockSql.connect).toHaveBeenCalledTimes(1);
+      expect(connectionManager.pool).toBeNull();
+      expect(connectionManager.isConnected).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(mockSql.connect).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(mockSql.connect).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toBe(mockPool);
+      expect(timer.mock.calls.map(([, delay]) => delay)).toEqual([1000, 2000]);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(build).toHaveBeenCalledTimes(1);
+      expect(build.mock.contexts[0]).toBe(connectionManager);
+      const configs = mockSql.connect.mock.calls.map(([config]) => config);
+      expect(configs).toHaveLength(3);
+      expect(configs[0]).not.toBe(configs[1]);
+      expect(configs[1]).not.toBe(configs[2]);
+      expect(configs[0]).toEqual(configs[2]);
+      expect(configs[0].options).toBe(configs[2].options);
+      expect(connectionManager.isConnected).toBe(true);
+    });
+
+    test('exhausts four attempts with no final delay and preserves existing state', async () => {
+      connectionManager.maxRetries = 4;
+      connectionManager.retryDelay = 7;
+      const previous = { connected: false };
+      connectionManager.pool = previous;
+      connectionManager.isConnected = true;
+      mockSql.connect.mockRejectedValue(new Error('last failure'));
+      const outcome = connectionManager.connect().catch(error => error);
+      await vi.runAllTimersAsync();
+      expect(await outcome).toMatchObject({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to connect to SQL Server after 4 attempts: last failure'
+      });
+      expect(mockSql.connect).toHaveBeenCalledTimes(4);
+      expect(timer.mock.calls.map(([, delay]) => delay)).toEqual([7, 14, 28]);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(connectionManager.pool).toBe(previous);
+      expect(connectionManager.isConnected).toBe(true);
+    });
+
+    test('does not delay a single exhausted attempt', async () => {
+      connectionManager.maxRetries = 1;
+      mockSql.connect.mockRejectedValue(new Error('only failure'));
+      await expect(connectionManager.connect()).rejects.toMatchObject({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to connect to SQL Server after 1 attempts: only failure'
+      });
+      expect(timer).not.toHaveBeenCalled();
+      expect(connectionManager.pool).toBeNull();
+      expect(connectionManager.isConnected).toBe(false);
+    });
+
+    test('retains Unknown error when the retry loop does not run', async () => {
+      connectionManager.maxRetries = 0;
+      await expect(connectionManager.connect()).rejects.toMatchObject({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to connect to SQL Server after 0 attempts: Unknown error'
+      });
+      expect(mockSql.connect).not.toHaveBeenCalled();
+      expect(timer).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['test', 'true', []],
+      ['production', 'false', []],
+      ['production', 'TRUE', []],
+      ['production', undefined, []],
+      [
+        'production',
+        'true',
+        [
+          ['Establishing new database connection...'],
+          ['Connection attempt 1 failed: first'],
+          ['Connected to SQL Server successfully (attempt 2)']
+        ]
+      ]
+    ])('preserves debug output for NODE_ENV=%s and DEBUG=%s', async (nodeEnv, debug, logs) => {
+      process.env.NODE_ENV = nodeEnv;
+      if (debug === undefined) delete process.env.SQL_SERVER_DEBUG;
+      else process.env.SQL_SERVER_DEBUG = debug;
+      mockSql.connect.mockRejectedValueOnce(new Error('first'));
+      const pending = connectionManager.connect();
+      await vi.runAllTimersAsync();
+      await expect(pending).resolves.toBe(mockPool);
+      expect(stderr.mock.calls).toEqual(logs);
+      expect(stdout).not.toHaveBeenCalled();
+    });
+
+    test('does not read a failure message for disabled debug before a successful retry', async () => {
+      const message = vi.fn(() => 'unused');
+      mockSql.connect.mockRejectedValueOnce({
+        get message() {
+          return message();
+        }
+      });
+      const pending = connectionManager.connect();
+      await vi.runAllTimersAsync();
+      await expect(pending).resolves.toBe(mockPool);
+      expect(message).not.toHaveBeenCalled();
+    });
+
+    test('rechecks debug conditions after the connection attempt', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.SQL_SERVER_DEBUG = 'false';
+      mockSql.connect.mockImplementationOnce(async () => {
+        process.env.SQL_SERVER_DEBUG = 'true';
+        return mockPool;
+      });
+      await connectionManager.connect();
+      expect(stderr.mock.calls).toEqual([['Connected to SQL Server successfully (attempt 1)']]);
+    });
+
+    test('propagates configuration failures without retry or wrapping', async () => {
+      const failure = new Error('bad configuration');
+      vi.spyOn(connectionManager, '_buildConnectionConfig').mockImplementation(() => {
+        throw failure;
+      });
+      await expect(connectionManager.connect()).rejects.toBe(failure);
+      expect(mockSql.connect).not.toHaveBeenCalled();
+      expect(timer).not.toHaveBeenCalled();
+    });
+
+    test('propagates initial debug logging failures outside the retry boundary', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.SQL_SERVER_DEBUG = 'true';
+      const failure = new Error('stderr unavailable');
+      stderr.mockImplementationOnce(() => {
+        throw failure;
+      });
+      await expect(connectionManager.connect()).rejects.toBe(failure);
+      expect(mockSql.connect).not.toHaveBeenCalled();
+      expect(timer).not.toHaveBeenCalled();
+    });
+
+    test('catches success logging failures after the pool state transition', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.SQL_SERVER_DEBUG = 'true';
+      connectionManager.maxRetries = 1;
+      stderr
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {
+          throw new Error('success log failed');
+        });
+      await expect(connectionManager.connect()).rejects.toMatchObject({
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to connect to SQL Server after 1 attempts: success log failed'
+      });
+      expect(connectionManager.pool).toBe(mockPool);
+      expect(connectionManager.isConnected).toBe(true);
+      expect(stderr).toHaveBeenLastCalledWith('Connection attempt 1 failed: success log failed');
+      expect(timer).not.toHaveBeenCalled();
+    });
+
+    test('propagates failure logging errors without scheduling another attempt', async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.SQL_SERVER_DEBUG = 'true';
+      const failure = new Error('failure log failed');
+      mockSql.connect.mockRejectedValue(new Error('connection failed'));
+      stderr
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {
+          throw failure;
+        });
+      await expect(connectionManager.connect()).rejects.toBe(failure);
+      expect(mockSql.connect).toHaveBeenCalledTimes(1);
+      expect(timer).not.toHaveBeenCalled();
+    });
+
+    test('propagates retry scheduling errors without wrapping or another attempt', async () => {
+      const failure = new Error('timer failed');
+      timer.mockImplementationOnce(() => {
+        throw failure;
+      });
+      mockSql.connect.mockRejectedValue(new Error('connection failed'));
+      await expect(connectionManager.connect()).rejects.toBe(failure);
+      expect(mockSql.connect).toHaveBeenCalledTimes(1);
+      expect(connectionManager.isConnected).toBe(false);
+    });
+  });
+
   describe('getPool', () => {
     test('should return null when not connected', () => {
       expect(connectionManager.getPool()).toBeNull();
