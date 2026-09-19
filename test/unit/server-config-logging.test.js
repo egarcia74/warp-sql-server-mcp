@@ -51,7 +51,8 @@ describe('logConfiguration characterization', () => {
       moduleLoadList: ['one', 'two']
     })) {
       processDescriptors[key] = Object.getOwnPropertyDescriptor(process, key);
-      Object.defineProperty(process, key, { configurable: true, value });
+      // Node 22's native ppid property ignores a value-only override.
+      Object.defineProperty(process, key, { configurable: true, get: () => value });
     }
     vi.spyOn(process, 'cwd').mockReturnValue('/example');
     vi.spyOn(process, 'memoryUsage').mockReturnValue({ rss: 10485760, heapUsed: 2097152 });
@@ -298,7 +299,7 @@ describe('logConfiguration characterization', () => {
   test('omits unset runtime details, network interfaces and empty paths', () => {
     process.env = {};
     Object.defineProperty(process, 'argv', { value: ['node', 'server.js'] });
-    Object.defineProperty(process, 'ppid', { value: 0 });
+    Object.defineProperty(process, 'ppid', { get: () => 0 });
     Object.defineProperty(process, 'moduleLoadList', { value: undefined });
     os.networkInterfaces.mockReturnValue({ lo0: [] });
     config.getConnectionConfig.mockReturnValue({});
