@@ -5,9 +5,9 @@
  * Helps diagnose and fix common SQL Server Docker issues on Apple Silicon
  */
 
-import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 console.log('🍎 Apple Silicon SQL Server Docker Troubleshooting\n');
 
