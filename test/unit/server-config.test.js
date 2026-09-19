@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ServerConfig } from '../../lib/config/server-config.js';
 
 describe('ServerConfig', () => {
@@ -243,6 +243,262 @@ describe('ServerConfig', () => {
       expect(summary.environmentAnalysis.devIndicators).toContain(
         'private IP (192.168.1.100) with explicit dev environment'
       );
+    });
+  });
+
+  describe('validate characterization', () => {
+    const destructiveWarning = 'Destructive operations are enabled - use caution in production';
+    const schemaWarning = 'Schema changes are enabled - use caution in production';
+    const explicitTrustWarning =
+      '🚨 SSL certificate trust is explicitly enabled but environment appears to be production - this is a security risk';
+    const confidenceWarning =
+      '⚠️ SSL certificate trust enabled with low confidence in environment detection - consider setting SQL_SERVER_TRUST_CERT explicitly';
+    const productionRecommendation =
+      '💡 Production environment detected - consider setting SQL_SERVER_TRUST_CERT=false explicitly for security';
+    const connectionError = 'Connection timeout must be greater than 0';
+    const requestError = 'Request timeout must be greater than 0';
+    const retriesError = 'Max retries must be at least 1';
+    const samplingError = 'Performance sampling rate must be between 0 and 1';
+    let config;
+    let summary;
+
+    beforeEach(() => {
+      process.env.SQL_SERVER_TRUST_CERT = 'false';
+      config = new ServerConfig();
+      Object.assign(config, {
+        readOnlyMode: true,
+        allowDestructiveOperations: false,
+        allowSchemaChanges: false,
+        connectionTimeout: 1,
+        requestTimeout: 1,
+        maxRetries: 1,
+        performanceMonitoring: { samplingRate: 0.5 }
+      });
+      summary = {
+        securityDecision: { type: 'explicit', securityLevel: 'high', confidence: 'high' },
+        trustCert: false,
+        trustCertSource: 'explicit-false',
+        isDevEnvironment: false
+      };
+      config.getConnectionSummary = vi.fn(function () {
+        expect(this).toBe(config);
+        return summary;
+      });
+    });
+
+    test.each([
+      [true, false, false, []],
+      [true, true, false, []],
+      [true, false, true, []],
+      [true, true, true, []],
+      [false, false, false, []],
+      [false, true, false, [destructiveWarning]],
+      [false, false, true, [schemaWarning]],
+      [false, true, true, [destructiveWarning, schemaWarning]]
+    ])(
+      'operation warnings for readOnly=%s destructive=%s schema=%s',
+      (readOnly, destructive, schema, expected) => {
+        config.readOnlyMode = readOnly;
+        config.allowDestructiveOperations = destructive;
+        config.allowSchemaChanges = schema;
+
+        const result = config.validate();
+
+        expect(result.warnings).toEqual(expected);
+        expect(result.errors).toEqual([]);
+        expect(result.valid).toBe(true);
+      }
+    );
+
+    test.each([
+      ['explicit', 'low', false, [explicitTrustWarning]],
+      ['explicit', 'low', true, []],
+      ['explicit', 'high', false, []],
+      ['auto-detected', 'low', false, []]
+    ])('explicit trust warning for %s/%s, dev=%s', (type, level, dev, expected) => {
+      Object.assign(summary.securityDecision, { type, securityLevel: level });
+      summary.isDevEnvironment = dev;
+      expect(config.validate().warnings).toEqual(expected);
+    });
+
+    test.each([
+      ['auto-detected', undefined, []],
+      ['auto-detected', [], []],
+      [
+        'auto-detected',
+        ['first', 'second'],
+        ['🔍 SSL auto-detection: first', '🔍 SSL auto-detection: second']
+      ],
+      ['explicit', ['ignored'], []]
+    ])('auto-detection warnings for %s with %j', (type, warnings, expected) => {
+      Object.assign(summary.securityDecision, { type, warnings });
+      expect(config.validate().warnings).toEqual(expected);
+    });
+
+    test.each([
+      ['low', true, [confidenceWarning]],
+      ['low', false, []],
+      ['high', true, []],
+      ['high', false, []]
+    ])('confidence warning for confidence=%s trust=%s', (confidence, trust, expected) => {
+      summary.securityDecision.confidence = confidence;
+      summary.trustCert = trust;
+      expect(config.validate().warnings).toEqual(expected);
+    });
+
+    test.each([
+      [undefined, false, [productionRecommendation]],
+      ['', false, [productionRecommendation]],
+      ['false', false, []],
+      ['true', false, []],
+      [undefined, true, []],
+      ['', true, []]
+    ])('production recommendation for env=%s dev=%s', (envValue, dev, expected) => {
+      if (envValue === undefined) delete process.env.SQL_SERVER_TRUST_CERT;
+      else process.env.SQL_SERVER_TRUST_CERT = envValue;
+      summary.isDevEnvironment = dev;
+      expect(config.validate().warnings).toEqual(expected);
+    });
+
+    test.each([
+      ['connectionTimeout', -1, connectionError],
+      ['connectionTimeout', 0, connectionError],
+      ['connectionTimeout', 1, null],
+      ['requestTimeout', -1, requestError],
+      ['requestTimeout', 0, requestError],
+      ['requestTimeout', 1, null],
+      ['maxRetries', -1, retriesError],
+      ['maxRetries', 0, retriesError],
+      ['maxRetries', 1, null],
+      ['samplingRate', -Number.EPSILON, samplingError],
+      ['samplingRate', 0, null],
+      ['samplingRate', 0.5, null],
+      ['samplingRate', 1, null],
+      ['samplingRate', 1 + Number.EPSILON, samplingError],
+      ['samplingRate', Number.NaN, null],
+      ['connectionTimeout', Number.NaN, null]
+    ])('numeric boundary %s=%s', (field, value, expectedError) => {
+      if (field === 'samplingRate') config.performanceMonitoring.samplingRate = value;
+      else config[field] = value;
+
+      const result = config.validate();
+
+      expect(result.errors).toEqual(expectedError === null ? [] : [expectedError]);
+      expect(result.valid).toBe(expectedError === null);
+      expect(result.warnings).toEqual([]);
+    });
+
+    test('preserves complete result, warning/error order, and decision identity', () => {
+      delete process.env.SQL_SERVER_TRUST_CERT;
+      Object.assign(config, {
+        readOnlyMode: false,
+        allowDestructiveOperations: true,
+        allowSchemaChanges: true,
+        connectionTimeout: 0,
+        requestTimeout: 0,
+        maxRetries: 0
+      });
+      config.performanceMonitoring.samplingRate = 2;
+      Object.assign(summary, { trustCert: true, trustCertSource: 'auto-prod' });
+      Object.assign(summary.securityDecision, {
+        type: 'auto-detected',
+        confidence: 'low',
+        warnings: ['first', 'second']
+      });
+
+      const result = config.validate();
+
+      expect(config.getConnectionSummary).toHaveBeenCalledExactlyOnceWith();
+      expect(result).toEqual({
+        valid: false,
+        warnings: [
+          destructiveWarning,
+          schemaWarning,
+          '🔍 SSL auto-detection: first',
+          '🔍 SSL auto-detection: second',
+          confidenceWarning,
+          productionRecommendation
+        ],
+        errors: [connectionError, requestError, retriesError, samplingError],
+        sslSecurity: {
+          decision: summary.securityDecision,
+          trustCert: true,
+          source: 'auto-prod',
+          environment: 'production'
+        }
+      });
+      expect(result.sslSecurity.decision).toBe(summary.securityDecision);
+    });
+
+    test.each([true, false])('preserves SSL metadata for dev=%s and returns fresh arrays', dev => {
+      summary.isDevEnvironment = dev;
+      const first = config.validate();
+      first.warnings.push('caller warning');
+      first.errors.push('caller error');
+      const second = config.validate();
+
+      expect(second).toEqual({
+        valid: true,
+        warnings: [],
+        errors: [],
+        sslSecurity: {
+          decision: summary.securityDecision,
+          trustCert: false,
+          source: 'explicit-false',
+          environment: dev ? 'development' : 'production'
+        }
+      });
+      expect(second.sslSecurity.decision).toBe(summary.securityDecision);
+      expect(config.getConnectionSummary).toHaveBeenCalledTimes(2);
+    });
+
+    test('keeps summary lookup, operation reads, decision lookup, and limit reads in order', () => {
+      const reads = [];
+      config.getConnectionSummary.mockImplementation(function () {
+        expect(this).toBe(config);
+        reads.push('summary');
+        return summary;
+      });
+      const values = {
+        readOnlyMode: false,
+        allowDestructiveOperations: true,
+        allowSchemaChanges: true,
+        connectionTimeout: 1,
+        requestTimeout: 1,
+        maxRetries: 1,
+        performanceMonitoring: { samplingRate: 0.5 }
+      };
+      for (const [name, value] of Object.entries(values)) {
+        Object.defineProperty(config, name, {
+          get() {
+            reads.push(name);
+            return value;
+          }
+        });
+      }
+      const decision = summary.securityDecision;
+      Object.defineProperty(summary, 'securityDecision', {
+        get() {
+          reads.push('decision');
+          return decision;
+        }
+      });
+
+      config.validate();
+
+      expect(reads).toEqual([
+        'summary',
+        'readOnlyMode',
+        'allowDestructiveOperations',
+        'readOnlyMode',
+        'allowSchemaChanges',
+        'decision',
+        'connectionTimeout',
+        'requestTimeout',
+        'maxRetries',
+        'performanceMonitoring',
+        'performanceMonitoring'
+      ]);
     });
   });
 
