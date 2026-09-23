@@ -269,6 +269,44 @@ function collectInlineLinks(body) {
   return targets;
 }
 
+/** Collect definitions and remove their lines with one forward scan. */
+function collectReferenceDefinitions(prose) {
+  // Only spaces/tabs indent definitions; only LF introduces a continued destination.
+  const header = /^[ \t]{0,3}\[([^[\]]+)\]:[ \t]*(?:\n[ \t]+)?/gm;
+  const bare = /\S+/y;
+  const lineTail = /[^\r\n\u2028\u2029]*/y;
+  const definitions = new Map();
+  const pieces = [];
+  let copiedThrough = 0;
+  let nextAngleClose = 0;
+  let match;
+
+  while ((match = header.exec(prose)) !== null) {
+    const start = header.lastIndex;
+    // Cache even a missing closer: malformed '<' destinations must not each search
+    // the whole remaining document. A valid angle destination may span lines.
+    if (prose[start] === '<' && nextAngleClose !== -1 && nextAngleClose < start) {
+      nextAngleClose = prose.indexOf('>', start + 1);
+    }
+    bare.lastIndex = start;
+    const target =
+      prose[start] === '<' && nextAngleClose > start
+        ? prose.slice(start, nextAngleClose + 1)
+        : bare.exec(prose)?.[0];
+    if (target === undefined) continue;
+
+    definitions.set(normaliseLabel(match[1]), bareTarget(target));
+    // Keep line terminators, but remove the destination's remaining title/prose.
+    lineTail.lastIndex = start + target.length;
+    lineTail.exec(prose);
+    pieces.push(prose.slice(copiedThrough, match.index));
+    copiedThrough = lineTail.lastIndex;
+    header.lastIndex = copiedThrough;
+  }
+  pieces.push(prose.slice(copiedThrough));
+  return { definitions, body: pieces.join('') };
+}
+
 /**
  * Markdown link targets a reader can actually follow, in the spellings this repo uses.
  *
@@ -284,17 +322,7 @@ export function collectLinkTargets(markdown) {
 
   // Reference definitions: [label]: target. Collected first, then removed, so that the
   // definition line cannot later look like a shortcut reference to itself.
-  // `[ \t]{0,3}` rather than `\s{0,3}`: a definition's indent is spaces or tabs, and `\s`
-  // also matches the newline that `^` has just anchored to, which let one `^` position
-  // reach into the following lines and gave the engine overlapping ways to reach the same
-  // match. Restricting it is both closer to CommonMark and one less backtracking source.
-  const definitions = new Map();
-  for (const match of prose.matchAll(
-    /^[ \t]{0,3}\[([^[\]]+)\]:[ \t]*(?:\n[ \t]+)?(<[^>]*>|\S+)/gm
-  )) {
-    definitions.set(normaliseLabel(match[1]), bareTarget(match[2]));
-  }
-  const body = prose.replace(/^[ \t]{0,3}\[[^[\]]+\]:[ \t]*(?:\n[ \t]+)?(?:<[^>]*>|\S+).*$/gm, '');
+  const { definitions, body } = collectReferenceDefinitions(prose);
 
   // Inline links: [text](target), [text](<target>), [text](target "title").
   //
