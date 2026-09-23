@@ -37,6 +37,47 @@ const write = (root, relative, content) => {
   writeFileSync(target, content);
 };
 
+describe('reference definition compatibility', () => {
+  it.each([
+    ['last definition wins', '[r]: first.md\n[r]: second.md\n\n[r]', ['second.md']],
+    ['empty angle destination', '[r]: <>\n\n[r]', ['']],
+    ['multiline angle destination', '[r]: <first\nsecond.md> title\n\n[r]', ['first\nsecond.md']],
+    ['malformed angle fallback', '[r]: <first.md\n\n[r]', ['first.md']],
+    ['multiline label', '[some\nlabel]: target.md\n\n[some label]', ['target.md']],
+    ['indented continuation', '[r]:\n \ttarget.md\n\n[r]', ['target.md']],
+    ['CRLF without continuation', '[r]:\r\n target.md\n\n[r]', []],
+    ['definition tail removal', '[r]: target.md [hidden](hidden.md)\n\n[r]', ['target.md']],
+    ['failed definition keeps its prose', '[r]:\n\n[visible](visible.md)', ['visible.md']],
+    [
+      'angle destination swallows later definition',
+      '[r]: <a\n[s]: b.md>\n\n[r] [s]',
+      ['a\n[s]: b.md']
+    ]
+  ])('preserves %s', (_name, markdown, expected) => {
+    expect(collectLinkTargets(markdown)).toEqual(expected);
+  });
+
+  it.each(['\n', '\r', '\r\n', '\u2028', '\u2029'])(
+    'keeps prose after a definition ending with %j',
+    terminator => {
+      expect(collectLinkTargets(`[r]: target.md${terminator}[visible](visible.md)`)).toEqual([
+        'visible.md'
+      ]);
+    }
+  );
+
+  it('bounds CPU work for repeated unterminated angle destinations', () => {
+    const markdown = '[r]: <unterminated\n'.repeat(8_000) + '\n[r]';
+    collectLinkTargets('[r]: target.md\n\n[r]');
+    const start = process.cpuUsage();
+    const targets = collectLinkTargets(markdown);
+    const elapsed = process.cpuUsage(start);
+    expect(targets).toEqual(['unterminated']);
+    // Covers both definition collection and deletion; neither may rescan each suffix.
+    expect(elapsed.user + elapsed.system).toBeLessThan(250_000);
+  });
+});
+
 describe('collectLinkTargets', () => {
   it('finds inline, angle-bracketed, titled, reference and HTML links', () => {
     const targets = collectLinkTargets(

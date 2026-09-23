@@ -149,14 +149,18 @@ function parseInputSchemaProperties(schemaContent) {
   const properties = {};
 
   // First, extract the entire properties block
-  const propertiesRegex = /properties:\s*\{([\s\S]*?)\}(?:\s*,?\s*required|\s*$)/;
-  const propertiesMatch = schemaContent.match(propertiesRegex);
+  const propertiesStart = /properties:\s*\{/.exec(schemaContent);
 
-  if (!propertiesMatch) {
+  if (!propertiesStart) {
     return properties;
   }
 
-  const propertiesContent = propertiesMatch[1];
+  // The first opener can reach any suffix a later opener could reach. Search once,
+  // and keep the whitespace before an optional comma in one unambiguous run.
+  const remainder = schemaContent.slice(propertiesStart.index + propertiesStart[0].length);
+  const propertiesEnd = /\}\s*(?:required|,\s*required|$)/.exec(remainder);
+  if (!propertiesEnd) return properties;
+  const propertiesContent = remainder.slice(0, propertiesEnd.index);
 
   // Now parse individual property objects by splitting them properly
   const propObjects = splitPropertyObjects(propertiesContent);
@@ -224,7 +228,8 @@ function splitPropertyObjects(content) {
 
 function parseIndividualProperty(propContent) {
   // Extract property name (the key before the colon)
-  const nameRegex = /(\w+):\s*\{/;
+  // Only the start of a word can produce the first match; do not retry every suffix.
+  const nameRegex = /\b(\w+):\s*\{/;
   const nameMatch = propContent.match(nameRegex);
 
   // Extract type
