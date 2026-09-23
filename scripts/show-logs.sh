@@ -505,6 +505,10 @@ if [[ ! -f "$LOG_FILE" ]]; then
                     echo "   Windows:     %LOCALAPPDATA%/warp-sql-server-mcp/security-audit.log"
                 fi
                 ;;
+            *)
+                echo "❌ Unexpected log type: $LOG_TYPE"
+                exit 1
+                ;;
         esac
         echo ""
         echo "💡 Make sure the MCP server is running and has been active to generate logs"
