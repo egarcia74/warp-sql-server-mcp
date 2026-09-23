@@ -126,6 +126,10 @@ case $PHASE in
         print_info "📡 MCP Server Startup Test"
         node test/protocol/mcp-server-startup-test.js
         ;;
+    *)
+        print_error "Unexpected phase: $PHASE"
+        exit 1
+        ;;
 esac
 
 # Optionally stop container if we started it with clean flag
