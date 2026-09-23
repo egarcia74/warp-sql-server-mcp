@@ -55,7 +55,10 @@ describe('logConfiguration characterization', () => {
       Object.defineProperty(process, key, { configurable: true, get: () => value });
     }
     vi.spyOn(process, 'cwd').mockReturnValue('/example');
-    vi.spyOn(process, 'memoryUsage').mockReturnValue({ rss: 10485760, heapUsed: 2097152 });
+    vi.spyOn(process, 'memoryUsage').mockReturnValue({
+      rss: 10 * 1024 * 1024,
+      heapUsed: 2 * 1024 * 1024
+    });
     vi.spyOn(process, 'uptime').mockReturnValue(12.6);
     vi.spyOn(os, 'hostname').mockReturnValue('example-host');
     vi.spyOn(os, 'networkInterfaces').mockReturnValue({ lo0: [], eth0: [], wlan0: [], extra: [] });
