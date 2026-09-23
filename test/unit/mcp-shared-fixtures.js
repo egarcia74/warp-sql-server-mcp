@@ -62,7 +62,7 @@ const hoistedMocks = vi.hoisted(() => {
           /^\s*DESCRIBE\s+/i,
           /^\s*DESC\s+/i,
           /^\s*EXPLAIN\s+/i,
-          /^\s*WITH\s+[\s\S]*?\bSELECT\s+/i // CTE queries - improved to handle multi-line
+          /^\s*WITH\s[\s\S]*?\bSELECT\s+/i // CTE queries - improved to handle multi-line
         ]
       }
     })),
