@@ -5,6 +5,7 @@ import {
   getSingleQueryType,
   allowUnlessBatchViolation
 } from '../../lib/security/query-policy.js';
+import { ServerConfig } from '../../lib/config/server-config.js';
 
 /**
  * Focused unit tests for the query-safety policy extracted from index.js.
@@ -32,7 +33,7 @@ const PATTERNS = {
     /^\s*DESCRIBE\s+/i,
     /^\s*DESC\s+/i,
     /^\s*EXPLAIN\s+/i,
-    /^\s*WITH\s+[\s\S]*?\bSELECT\s+/i
+    /^\s*WITH\s[\s\S]*?\bSELECT\s+/i
   ]
 };
 const securityConfig = { patterns: PATTERNS };
@@ -54,6 +55,31 @@ const DDL_ALLOWED = {
 };
 
 describe('getSingleQueryType', () => {
+  it.each([
+    ['a space', 'WITH c AS (SELECT 1) SELECT * FROM c', 'select'],
+    ['a tab', 'WITH\tc AS (SELECT 1) SELECT * FROM c', 'select'],
+    ['a newline', 'WITH\nc AS (SELECT 1)\nSELECT * FROM c', 'select'],
+    ['a false SELECT prefix', 'WITH selected AS (SELECT 1) SELECT * FROM selected', 'select'],
+    ['no separator', 'WITHc AS (SELECT 1) SELECT * FROM c', 'unknown'],
+    ['no SELECT', 'WITH c AS (VALUES (1)) UPDATE c SET x = 2', 'unknown']
+  ])('classifies a CTE with %s', (_case, query, expected) => {
+    const liveConfig = new ServerConfig().getSecurityConfig();
+    expect(getSingleQueryType(query, liveConfig)).toBe(expected);
+  });
+
+  it('classifies a malformed CTE with long whitespace in bounded CPU time', () => {
+    const liveConfig = new ServerConfig().getSecurityConfig();
+    const query = `WITH ${' '.repeat(80_000)}NOPE`;
+    getSingleQueryType('WITH c AS (SELECT 1) SELECT * FROM c', liveConfig);
+
+    const start = process.cpuUsage();
+    const queryType = getSingleQueryType(query, liveConfig);
+    const elapsed = process.cpuUsage(start);
+
+    expect(queryType).toBe('unknown');
+    expect(elapsed.user + elapsed.system).toBeLessThan(50_000);
+  });
+
   it('classifies SELECT as select', () => {
     expect(getSingleQueryType('SELECT 1', securityConfig)).toBe('select');
   });
