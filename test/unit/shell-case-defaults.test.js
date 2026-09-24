@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const scriptsDir = fileURLToPath(new URL('../../scripts/', import.meta.url));
 const shellDescribe = process.platform === 'win32' ? describe.skip : describe;
+const hasJq = spawnSync('jq', ['--version']).status === 0;
 let fixtureDir;
 let traceFile;
 
@@ -95,6 +96,46 @@ shellDescribe('docker test runner phase dispatch', () => {
 });
 
 shellDescribe('log viewer type dispatch', () => {
+  it('uses the same server log for the default and explicit server type', () => {
+    mkdirSync(path.join(fixtureDir, 'logs'));
+    writeFileSync(
+      path.join(fixtureDir, 'logs', 'server.log'),
+      `${JSON.stringify({ timestamp: '2026-09-24T00:00:00.000Z', level: 'info', message: 'ready' })}\n`
+    );
+
+    const defaultResult = runScript('show-logs.sh');
+    const explicitResult = runScript('show-logs.sh', ['server']);
+
+    expect(defaultResult.status).toBe(0);
+    expect(explicitResult.status).toBe(0);
+    expect(defaultResult.stdout).toBe(explicitResult.stdout);
+    expect(defaultResult.stdout).toContain('Type: server logs');
+    expect(defaultResult.stdout).toContain('ready');
+    expect(defaultResult.stderr).toBe('');
+  });
+
+  it.each([
+    ['single-line', 'first line', '    first line'],
+    ...(hasJq ? [['multi-line', 'first line\nsecond line', '    first line\n    second line']] : [])
+  ])('indents %s configuration supplied to the log formatter', (_, configuration, expected) => {
+    mkdirSync(path.join(fixtureDir, 'logs'));
+    writeFileSync(
+      path.join(fixtureDir, 'logs', 'server.log'),
+      `${JSON.stringify({
+        timestamp: '2026-09-24T00:00:00.000Z',
+        level: 'info',
+        message: 'configured',
+        configuration
+      })}\n`
+    );
+
+    const result = runScript('show-logs.sh');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(expected);
+    expect(result.stderr).toBe('');
+  });
+
   it.each([
     ['server', './logs/server.log'],
     ['audit', './logs/security-audit.log']
