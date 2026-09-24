@@ -8,6 +8,24 @@ vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
 
 const originalTestingMode = process.env.TESTING_MODE;
 
+function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
+  const arch = Object.getOwnPropertyDescriptor(process, 'arch');
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'arch', { configurable: true, value: hostArch });
+  Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform });
+  vi.mocked(execSync).mockImplementation(command => {
+    if (command.includes('--format')) return `${dockerArch}\n`;
+    return '';
+  });
+
+  try {
+    main();
+  } finally {
+    Object.defineProperty(process, 'arch', arch);
+    Object.defineProperty(process, 'platform', platform);
+  }
+}
+
 describe('Docker platform configuration selection', () => {
   beforeEach(() => {
     process.env.TESTING_MODE = 'true';
@@ -126,21 +144,7 @@ describe('Docker platform configuration selection', () => {
   it('writes YAML with unchanged quoting, indentation, array syntax, and file destinations', () => {
     const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const arch = Object.getOwnPropertyDescriptor(process, 'arch');
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-    Object.defineProperty(process, 'arch', { configurable: true, value: 'x64' });
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' });
-    vi.mocked(execSync).mockImplementation(command => {
-      if (command.includes('--format')) return 'x86_64\n';
-      return '';
-    });
-
-    try {
-      main();
-    } finally {
-      Object.defineProperty(process, 'arch', arch);
-      Object.defineProperty(process, 'platform', platform);
-    }
+    runDetectionForHost('x64', 'linux', 'x86_64');
 
     expect(execSync).toHaveBeenCalledTimes(3);
     expect(log).not.toHaveBeenCalled();
@@ -195,21 +199,7 @@ describe('Docker platform configuration selection', () => {
 
   it('writes Apple Silicon overrides and string arrays to YAML', () => {
     const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-    const arch = Object.getOwnPropertyDescriptor(process, 'arch');
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-    Object.defineProperty(process, 'arch', { configurable: true, value: 'arm64' });
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' });
-    vi.mocked(execSync).mockImplementation(command => {
-      if (command.includes('--format')) return 'aarch64\n';
-      return '';
-    });
-
-    try {
-      main();
-    } finally {
-      Object.defineProperty(process, 'arch', arch);
-      Object.defineProperty(process, 'platform', platform);
-    }
+    runDetectionForHost('arm64', 'darwin', 'aarch64');
 
     expect(execSync).toHaveBeenCalledTimes(3);
     expect(write).toHaveBeenCalledTimes(2);
