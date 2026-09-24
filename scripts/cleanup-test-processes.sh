@@ -299,7 +299,10 @@ pid_exists() {
 }
 
 ps_answers() {
-  pid_exists $$
+  if pid_exists $$; then
+    return 0
+  fi
+  return 1
 }
 
 # A zombie has already terminated. It keeps its PID, its start time and its
@@ -320,7 +323,10 @@ is_zombie() {
 still_same_process() {
   local pid="${1:-}" want="${2:-}" now
   now=$(identity_of "$pid")
-  [[ -n "$now" && -n "$want" && "$now" == "$want" ]]
+  if [[ -n "$now" && -n "$want" && "$now" == "$want" ]]; then
+    return 0
+  fi
+  return 1
 }
 
 scan() {

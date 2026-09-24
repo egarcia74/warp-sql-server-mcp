@@ -357,6 +357,30 @@ describe('cleanup-test-processes.sh - when the start time comes back blank', () 
 });
 
 describe('cleanup-test-processes.sh - when a target cannot be classified', () => {
+  it('treats an absent PID as gone when ps still answers for the caller', () => {
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_COMMAND_FAIL_FOR: ABSENT_PID, PS_PID_ABSENT: ABSENT_PID }
+    );
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: not a running Vitest process, skipped`));
+    expect(stdout).not.toMatch(/could not be classified/);
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(status).toBe(0);
+  });
+
+  it('keeps classification unknown when ps cannot answer for the caller', () => {
+    const { status, stdout } = invoke(
+      ['--kill', ABSENT_PID],
+      writeTable([`${ABSENT_PID} 1 node /repo/.bin/vitest run`]),
+      { ...KILL_MOCK, PS_COMMAND_FAIL_FOR: ABSENT_PID, PS_NOT_ANSWERING: '1' }
+    );
+    expect(stdout).toMatch(new RegExp(`${ABSENT_PID}: could not be classified`));
+    expect(stdout).not.toMatch(/not a running Vitest process/);
+    expect(stdout).not.toMatch(/MOCK-KILL/);
+    expect(status).toBe(1);
+  });
+
   // Regression: `is_vitest` returned the same status for "ps says this is not
   // Vitest" and "the ps lookup failed", so a live named PID whose `command=`
   // lookup was denied or failed transiently was reported "not a running Vitest
