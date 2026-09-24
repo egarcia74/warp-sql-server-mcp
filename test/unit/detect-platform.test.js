@@ -218,4 +218,25 @@ describe('Docker platform configuration selection', () => {
       selected: { reason: 'Apple Silicon with Rosetta 2 emulation - full SQL Server compatibility' }
     });
   });
+
+  it('escapes backslashes and double quotes in a special-character scalar', () => {
+    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+    const selected = chooseBestConfiguration(
+      { arch: 'x64', isAppleSilicon: false },
+      { hasDocker: true, supportsAMD64: true }
+    );
+    const environment = selected.config.environment;
+    const originalPid = environment.MSSQL_PID;
+    environment.MSSQL_PID = 'Dev\\Tools "quoted" # tag';
+
+    try {
+      runDetectionForHost('x64', 'linux', 'x86_64');
+    } finally {
+      environment.MSSQL_PID = originalPid;
+    }
+
+    expect(write.mock.calls[0][1]).toContain(
+      '      MSSQL_PID: "Dev\\\\Tools \\"quoted\\" # tag"\n'
+    );
+  });
 });

@@ -317,36 +317,31 @@ function objectToYaml(obj, indent = 0) {
       yaml += '\n';
       yaml += objectToYaml(value, indent + 2);
     } else {
-      // Improved value quoting logic
-      let outputValue = value;
-      if (typeof value === 'string') {
-        // Always quote version numbers
-        if (key === 'version') {
-          outputValue = `"${value}"`;
-        }
-        // Quote strings with special characters
-        else if (hasYamlSpecialCharacters(value)) {
-          // Properly escape backslashes first, then double quotes
-          outputValue = `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-        }
-        // Quote boolean strings to prevent YAML interpretation
-        else if (isYamlBooleanString(value)) {
-          outputValue = `"${value}"`;
-        }
-      }
-      yaml += ` ${outputValue}\n`;
+      yaml += ` ${formatYamlScalar(key, value)}\n`;
     }
   }
 
   return yaml;
 }
 
-function hasYamlSpecialCharacters(value) {
-  return value.includes(':') || value.includes('#') || value.includes('"') || value.includes("'");
-}
+function formatYamlScalar(key, value) {
+  if (typeof value !== 'string') return value;
 
-function isYamlBooleanString(value) {
-  return value === 'true' || value === 'false' || value === 'yes' || value === 'no';
+  // Always quote version numbers
+  if (key === 'version') return `"${value}"`;
+
+  // Quote strings with special characters
+  if (value.includes(':') || value.includes('#') || value.includes('"') || value.includes("'")) {
+    // Properly escape backslashes first, then double quotes
+    return `"${value.replaceAll('\\', String.raw`\\`).replaceAll('"', String.raw`\"`)}"`;
+  }
+
+  // Quote boolean strings to prevent YAML interpretation
+  if (value === 'true' || value === 'false' || value === 'yes' || value === 'no') {
+    return `"${value}"`;
+  }
+
+  return value;
 }
 
 /**
