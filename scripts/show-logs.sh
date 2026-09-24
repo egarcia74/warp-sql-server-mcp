@@ -27,7 +27,8 @@
 set -euo pipefail
 
 # Default options
-LOG_TYPE="server"
+readonly SERVER_LOG_TYPE="server"
+LOG_TYPE="$SERVER_LOG_TYPE"
 FOLLOW_MODE=false
 ALL_MODE=false
 COMPACT_MODE=false
@@ -167,7 +168,7 @@ get_log_path() {
     if is_development_environment; then
         # Development: Use project directory logs (matches Logger class)
         case "$log_type" in
-            "server")
+            "$SERVER_LOG_TYPE")
                 echo "./logs/server.log"
                 ;;
             "audit")
@@ -184,7 +185,7 @@ get_log_path() {
             # Windows
             local app_data="${LOCALAPPDATA:-$HOME/AppData/Local}"
             case "$log_type" in
-                "server")
+                "$SERVER_LOG_TYPE")
                     echo "$app_data/warp-sql-server-mcp/server.log"
                     ;;
                 "audit")
@@ -199,7 +200,7 @@ get_log_path() {
             # Unix/Linux/macOS
             local state_dir="$HOME/.local/state/warp-sql-server-mcp"
             case "$log_type" in
-                "server")
+                "$SERVER_LOG_TYPE")
                     echo "$state_dir/server.log"
                     ;;
                 "audit")
@@ -249,10 +250,11 @@ format_timestamp() {
 
 # Function to indent text
 indent_text() {
+    local input_text="${1:-}"
     local indent="    "
     # Handle multi-line content by indenting each line from stdin or parameter
     if [[ $# -gt 0 ]]; then
-        echo "$1" | sed "s/^/$indent/"
+        echo "$input_text" | sed "s/^/$indent/"
     else
         sed "s/^/$indent/"
     fi
@@ -408,8 +410,8 @@ process_log_stream() {
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        server)
-            LOG_TYPE="server"
+        "$SERVER_LOG_TYPE")
+            LOG_TYPE="$SERVER_LOG_TYPE"
             shift
             ;;
         audit)
@@ -491,7 +493,7 @@ if [[ ! -f "$LOG_FILE" ]]; then
         echo ""
         echo "📁 All possible paths for $LOG_TYPE logs:"
         case "$LOG_TYPE" in
-            "server")
+            "$SERVER_LOG_TYPE")
                 echo "   Development: ./logs/server.log"
                 echo "   Production:  ~/.local/state/warp-sql-server-mcp/server.log"
                 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
