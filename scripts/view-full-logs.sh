@@ -50,18 +50,13 @@ cat "$LOG_FILE" | while IFS= read -r line; do
             unescaped_json=$(echo "$json_part" | sed 's/\\"/"/g')
             
             if command -v jq &> /dev/null; then
-                if ! echo "$unescaped_json" | jq . 2>/dev/null; then
-                    # If unescaping didn't work, try original
-                    if ! echo "$json_part" | jq . 2>/dev/null; then
-                        echo "   ⚠️ JSON formatting skipped (escaped): notifications message"
-                    fi
+                if ! echo "$unescaped_json" | jq . 2>/dev/null && ! echo "$json_part" | jq . 2>/dev/null; then
+                    echo "   ⚠️ JSON formatting skipped (escaped): notifications message"
                 fi
             else
                 # Fallback: basic formatting without jq
-                if ! echo "$unescaped_json" | python3 -m json.tool 2>/dev/null; then
-                    if ! echo "$json_part" | python3 -m json.tool 2>/dev/null; then
-                        echo "   ⚠️ JSON formatting skipped (escaped): notifications message"
-                    fi
+                if ! echo "$unescaped_json" | python3 -m json.tool 2>/dev/null && ! echo "$json_part" | python3 -m json.tool 2>/dev/null; then
+                    echo "   ⚠️ JSON formatting skipped (escaped): notifications message"
                 fi
             fi
         fi
