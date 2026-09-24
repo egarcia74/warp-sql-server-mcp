@@ -186,33 +186,7 @@ function chooseBestConfiguration(hostInfo, dockerInfo) {
 
   // ARM64 systems
   if (hostInfo.arch === 'arm64') {
-    if (!dockerInfo.hasDocker) {
-      throw new Error('Docker is not available or not running');
-    }
-
-    // Check if we can run AMD64 with good performance (Rosetta 2)
-    if (dockerInfo.supportsAMD64 && hostInfo.isAppleSilicon) {
-      if (!isQuiet) {
-        console.log('✅ Apple Silicon with Rosetta 2 - using SQL Server 2022 (emulated)');
-      }
-      return {
-        config: CONFIG_TEMPLATES.sqlserver_arm64_rosetta,
-        reason: 'Apple Silicon with Rosetta 2 emulation - full SQL Server compatibility',
-        performance: 'Very Good (emulated via Rosetta 2)',
-        compatibility: 'Full SQL Server feature set'
-      };
-    }
-
-    // Fallback to Azure SQL Edge for native ARM64
-    if (!isQuiet) {
-      console.log('✅ ARM64 detected - using Azure SQL Edge (native)');
-    }
-    return {
-      config: CONFIG_TEMPLATES.azure_sql_edge_arm64,
-      reason: 'Native ARM64 architecture - best performance for ARM64',
-      performance: 'Excellent (native ARM64)',
-      compatibility: 'SQL Server core features (no SQL Agent)'
-    };
+    return chooseArm64Configuration(hostInfo, dockerInfo, isQuiet);
   }
 
   // Fallback
@@ -224,6 +198,36 @@ function chooseBestConfiguration(hostInfo, dockerInfo) {
     reason: 'Unknown architecture - using emulation as fallback',
     performance: 'Unknown (emulated)',
     compatibility: 'Full SQL Server feature set'
+  };
+}
+
+function chooseArm64Configuration(hostInfo, dockerInfo, isQuiet) {
+  if (!dockerInfo.hasDocker) {
+    throw new Error('Docker is not available or not running');
+  }
+
+  // Check if we can run AMD64 with good performance (Rosetta 2)
+  if (dockerInfo.supportsAMD64 && hostInfo.isAppleSilicon) {
+    if (!isQuiet) {
+      console.log('✅ Apple Silicon with Rosetta 2 - using SQL Server 2022 (emulated)');
+    }
+    return {
+      config: CONFIG_TEMPLATES.sqlserver_arm64_rosetta,
+      reason: 'Apple Silicon with Rosetta 2 emulation - full SQL Server compatibility',
+      performance: 'Very Good (emulated via Rosetta 2)',
+      compatibility: 'Full SQL Server feature set'
+    };
+  }
+
+  // Fallback to Azure SQL Edge for native ARM64
+  if (!isQuiet) {
+    console.log('✅ ARM64 detected - using Azure SQL Edge (native)');
+  }
+  return {
+    config: CONFIG_TEMPLATES.azure_sql_edge_arm64,
+    reason: 'Native ARM64 architecture - best performance for ARM64',
+    performance: 'Excellent (native ARM64)',
+    compatibility: 'SQL Server core features (no SQL Agent)'
   };
 }
 
@@ -313,33 +317,32 @@ function objectToYaml(obj, indent = 0) {
       yaml += '\n';
       yaml += objectToYaml(value, indent + 2);
     } else {
-      // Improved value quoting logic
-      let outputValue = value;
-      if (typeof value === 'string') {
-        // Always quote version numbers
-        if (key === 'version') {
-          outputValue = `"${value}"`;
-        }
-        // Quote strings with special characters
-        else if (
-          value.includes(':') ||
-          value.includes('#') ||
-          value.includes('"') ||
-          value.includes("'")
-        ) {
-          // Properly escape backslashes first, then double quotes
-          outputValue = `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-        }
-        // Quote boolean strings to prevent YAML interpretation
-        else if (value === 'true' || value === 'false' || value === 'yes' || value === 'no') {
-          outputValue = `"${value}"`;
-        }
-      }
-      yaml += ` ${outputValue}\n`;
+      yaml += ` ${formatYamlScalar(key, value)}\n`;
     }
   }
 
   return yaml;
+}
+
+function formatYamlScalar(key, value) {
+  if (typeof value !== 'string') return value;
+
+  // Always quote version numbers
+  if (key === 'version') return `"${value}"`;
+
+  // Quote strings with special characters
+  if (value.includes(':') || value.includes('#') || value.includes('"') || value.includes("'")) {
+    // Properly escape backslashes first, then double quotes
+    const escapedValue = value.replaceAll('\\', String.raw`\\`).replaceAll('"', String.raw`\"`);
+    return `"${escapedValue}"`;
+  }
+
+  // Quote boolean strings to prevent YAML interpretation
+  if (value === 'true' || value === 'false' || value === 'yes' || value === 'no') {
+    return `"${value}"`;
+  }
+
+  return value;
 }
 
 /**
