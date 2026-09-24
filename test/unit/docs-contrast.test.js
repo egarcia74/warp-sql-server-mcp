@@ -4,6 +4,11 @@ import { generateLandingPageHTML } from '../../scripts/docs/generate-landing-pag
 import { generateToolsHTML } from '../../scripts/docs/generate-tools-html.js';
 
 const MIN_NORMAL_TEXT_CONTRAST = 4.5;
+const cssRules = {
+  '.header': /\.header\s*\{([^}]+)\}/,
+  '.badge': /\.badge\s*\{([^}]+)\}/,
+  '.optional': /\.optional\s*\{([^}]+)\}/
+};
 const pages = [
   {
     name: 'landing page',
@@ -21,7 +26,7 @@ const pages = [
 
 function declarations(markup, selector) {
   const styles = markup.match(/<style>([\s\S]*?)<\/style>/)?.[1];
-  const rule = new RegExp(`\\${selector}\\s*\\{([^}]+)\\}`).exec(styles)?.[1];
+  const rule = cssRules[selector].exec(styles)?.[1];
   expect(rule, `Missing ${selector} rule`).toBeDefined();
   return Object.fromEntries(
     [...rule.matchAll(/([\w-]+):\s*([^;]+);/g)].map(([, key, value]) => [key, value.trim()])
