@@ -56,7 +56,7 @@ for arg in "$@"; do
 done
 
 # Default to phase1 if no phase specified
-if [ -z "$PHASE" ]; then
+if [[ -z "$PHASE" ]]; then
     PHASE="phase1"
     print_info "No phase specified, defaulting to phase1"
 fi
@@ -69,14 +69,14 @@ echo "  Clean slate: $CLEAN_FLAG"
 echo ""
 
 # Handle clean flag
-if [ "$CLEAN_FLAG" = true ]; then
+if [[ "$CLEAN_FLAG" = true ]]; then
     print_warning "Clean slate requested - this will remove all existing Docker data"
     npm run docker:clean
     print_success "Docker environment cleaned"
 fi
 
 # Start Docker if not already running or if we just cleaned
-if [ "$CLEAN_FLAG" = true ] || ! docker ps --filter "name=warp-mcp-sqlserver" --filter "status=running" | grep -q warp-mcp-sqlserver; then
+if [[ "$CLEAN_FLAG" = true ]] || ! docker ps --filter "name=warp-mcp-sqlserver" --filter "status=running" | grep -q warp-mcp-sqlserver; then
     print_info "Starting Docker SQL Server container..."
     npm run docker:start:init
     print_success "Docker container started, schema initialised, and ready"
@@ -133,7 +133,7 @@ case $PHASE in
 esac
 
 # Optionally stop container if we started it with clean flag
-if [ "$CLEAN_FLAG" = true ]; then
+if [[ "$CLEAN_FLAG" = true ]]; then
     echo ""
     print_warning "Clean run completed. Container will remain running for future tests."
     print_info "Use 'npm run docker:stop' to stop the container when finished."

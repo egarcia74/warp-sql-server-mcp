@@ -15,7 +15,7 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 # Check if hooks directory exists
-if [ ! -d "$HOOKS_DIR" ]; then
+if [[ ! -d "$HOOKS_DIR" ]]; then
   echo "Error: Hooks directory not found at $HOOKS_DIR"
   exit 1
 fi
@@ -26,12 +26,12 @@ mkdir -p "$GIT_HOOKS_DIR"
 # Install each hook
 installed_count=0
 for hook in "$HOOKS_DIR"/*; do
-  if [ -f "$hook" ]; then
+  if [[ -f "$hook" ]]; then
     name="$(basename "$hook")"
     target="$GIT_HOOKS_DIR/$name"
     
     # Remove existing hook if present
-    if [ -e "$target" ] || [ -L "$target" ]; then
+    if [[ -e "$target" ]] || [[ -L "$target" ]]; then
       echo "Removing existing $name hook"
       rm -f "$target"
     fi
@@ -49,7 +49,7 @@ for hook in "$HOOKS_DIR"/*; do
   fi
 done
 
-if [ $installed_count -eq 0 ]; then
+if [[ $installed_count -eq 0 ]]; then
   echo "No hooks found in $HOOKS_DIR"
   exit 1
 fi
@@ -58,7 +58,7 @@ echo "Successfully installed $installed_count git hook(s)"
 echo ""
 echo "Available hooks:"
 for hook in "$HOOKS_DIR"/*; do
-  if [ -f "$hook" ]; then
+  if [[ -f "$hook" ]]; then
     name="$(basename "$hook")"
     echo "  - $name: $(head -2 "$hook" | tail -1 | sed 's/^# *//')"
   fi
