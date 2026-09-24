@@ -333,7 +333,8 @@ function formatYamlScalar(key, value) {
   // Quote strings with special characters
   if (value.includes(':') || value.includes('#') || value.includes('"') || value.includes("'")) {
     // Properly escape backslashes first, then double quotes
-    return `"${value.replaceAll('\\', String.raw`\\`).replaceAll('"', String.raw`\"`)}"`;
+    const escapedValue = value.replaceAll('\\', String.raw`\\`).replaceAll('"', String.raw`\"`);
+    return `"${escapedValue}"`;
   }
 
   // Quote boolean strings to prevent YAML interpretation
