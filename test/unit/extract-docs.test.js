@@ -21,14 +21,17 @@ import { generateToolsDocumentation } from '../../scripts/docs/extract-docs.js';
 const property = "actual: { type: 'string', description: 'A value' }";
 const parameter = { type: 'string', description: 'A value' };
 
-function generate(schema) {
-  fixture.files.set(
-    path.resolve('lib/tools/tool-registry.js'),
-    `const TEST_TOOLS = [{ name: 'test_tool', description: 'Test tool', inputSchema: { ${schema} } }];`
-  );
+function generateRegistry(content) {
+  fixture.files.set(path.resolve('lib/tools/tool-registry.js'), content);
   const result = generateToolsDocumentation();
   expect(JSON.parse(fixture.files.get('docs-data/tools.json'))).toEqual(result);
   return result;
+}
+
+function generate(schema) {
+  return generateRegistry(
+    `const TEST_TOOLS = [{ name: 'test_tool', description: 'Test tool', inputSchema: { ${schema} } }];`
+  );
 }
 
 beforeEach(() => {
@@ -39,6 +42,40 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('documentation extraction compatibility', () => {
+  it('separates adjacent tools without treating quoted or nested braces as object boundaries', () => {
+    const result = generateRegistry(String.raw`const TEST_TOOLS = [
+      { name: 'first', description: 'First', note: "escaped \" } quote", inputSchema: {
+        properties: { query: { type: 'string', description: 'Query } text' } }, required: ['query']
+      } },
+      { name: 'second', description: 'Second', inputSchema: {
+        properties: { limit: { type: 'number', description: 'Count' } }, required: []
+      } }
+    ];`);
+
+    expect(result.toolsCount).toBe(2);
+    expect(result.tools.map(tool => tool.name)).toEqual(['first', 'second']);
+    expect(result.tools[0].parameters).toEqual({
+      query: { type: 'string', description: 'Query } text' }
+    });
+    expect(result.tools[0].required).toEqual(['query']);
+    expect(result.tools[1].parameters).toEqual({
+      limit: { type: 'number', description: 'Count' }
+    });
+  });
+
+  it('keeps nested property braces and escaped quotes within one property', () => {
+    const result = generate(String.raw`properties: {
+      first: { type: 'string', description: 'brace } text', hint: "escaped \" } quote", nested: { flag: true } },
+      second: { type: 'boolean', description: 'Enabled' }
+    }, required: ['first']`);
+
+    expect(result.tools[0].parameters).toEqual({
+      first: { type: 'string', description: 'brace } text' },
+      second: { type: 'boolean', description: 'Enabled' }
+    });
+    expect(result.tools[0].required).toEqual(['first']);
+  });
+
   it.each([
     ['comma before required', `properties: { ${property} }, required: ['actual']`],
     ['no comma before required', `properties: { ${property} } required: ['actual']`],
