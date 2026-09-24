@@ -39,7 +39,7 @@ function generateToolsHTML() {
             text-align: center;
             margin-bottom: 3rem;
             padding: 2rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #5366d4 0%, #764ba2 100%);
             color: white;
             border-radius: 8px;
         }
@@ -129,7 +129,7 @@ function generateToolsHTML() {
             font-weight: 600;
         }
         .optional {
-            background: #28a745;
+            background: #1e7e34;
             color: white;
             padding: 0.1rem 0.3rem;
             border-radius: 3px;

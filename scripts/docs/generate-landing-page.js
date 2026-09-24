@@ -47,7 +47,7 @@ function generateLandingPageHTML() {
             text-align: center;
             margin-bottom: 3rem;
             padding: 2rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #5366d4 0%, #764ba2 100%);
             color: white;
             border-radius: 8px;
         }
@@ -86,7 +86,7 @@ function generateLandingPageHTML() {
         .badge {
             display: inline-block;
             padding: 0.25rem 0.5rem;
-            background: #28a745;
+            background: #1e7e34;
             color: white;
             border-radius: 3px;
             font-size: 0.75rem;
