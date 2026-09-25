@@ -66,11 +66,25 @@ function parseToolArray(arrayContent) {
 }
 
 function splitToolObjects(content) {
-  // Split by tool object boundaries, but be careful with nested braces
+  return splitBraceDelimitedObjects(content).filter(
+    part => part.includes('name:') && part.includes('description:')
+  );
+}
+
+function nextStringChar(char, prevChar, stringChar) {
+  if (!stringChar && (char === '"' || char === "'" || char === '`')) {
+    return char;
+  }
+  if (stringChar && char === stringChar && prevChar !== '\\') {
+    return '';
+  }
+  return stringChar;
+}
+
+function splitBraceDelimitedObjects(content) {
   const parts = [];
   let current = '';
   let braceDepth = 0;
-  let inString = false;
   let stringChar = '';
 
   for (let i = 0; i < content.length; i++) {
@@ -79,23 +93,22 @@ function splitToolObjects(content) {
 
     current += char;
 
-    if (!inString && (char === '"' || char === "'" || char === '`')) {
-      inString = true;
-      stringChar = char;
-    } else if (inString && char === stringChar && prevChar !== '\\') {
-      inString = false;
-      stringChar = '';
-    } else if (!inString) {
-      if (char === '{') {
-        braceDepth++;
-      } else if (char === '}') {
-        braceDepth--;
+    const nextChar = nextStringChar(char, prevChar, stringChar);
+    if (nextChar !== stringChar) {
+      stringChar = nextChar;
+      continue;
+    }
+    if (stringChar) continue;
 
-        // If we're back to depth 0, we've completed a tool object
-        if (braceDepth === 0) {
-          parts.push(current.trim());
-          current = '';
-        }
+    if (char === '{') {
+      braceDepth++;
+    } else if (char === '}') {
+      braceDepth--;
+
+      // A completed outermost object becomes one part.
+      if (braceDepth === 0) {
+        parts.push(current.trim());
+        current = '';
       }
     }
   }
@@ -105,7 +118,7 @@ function splitToolObjects(content) {
     parts.push(current.trim());
   }
 
-  return parts.filter(part => part.includes('name:') && part.includes('description:'));
+  return parts;
 }
 
 function parseIndividualTool(toolContent) {
@@ -179,51 +192,9 @@ function parseInputSchemaProperties(schemaContent) {
 }
 
 function splitPropertyObjects(content) {
-  const parts = [];
-  let current = '';
-  let braceDepth = 0;
-  let inString = false;
-  let stringChar = '';
-
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i];
-    const prevChar = i > 0 ? content[i - 1] : '';
-
-    if (!inString && (char === '"' || char === "'" || char === '`')) {
-      inString = true;
-      stringChar = char;
-    } else if (inString && char === stringChar && prevChar !== '\\') {
-      inString = false;
-      stringChar = '';
-    }
-
-    if (!inString) {
-      if (char === '{') {
-        braceDepth++;
-        current += char;
-      } else if (char === '}') {
-        braceDepth--;
-        current += char;
-
-        // If we're back to depth 0, we've completed a property object
-        if (braceDepth === 0) {
-          parts.push(current.trim());
-          current = '';
-        }
-      } else {
-        current += char;
-      }
-    } else {
-      current += char;
-    }
-  }
-
-  // Add any remaining content
-  if (current.trim()) {
-    parts.push(current.trim());
-  }
-
-  return parts.filter(part => part.includes(':') && part.includes('{'));
+  return splitBraceDelimitedObjects(content).filter(
+    part => part.includes(':') && part.includes('{')
+  );
 }
 
 function parseIndividualProperty(propContent) {
