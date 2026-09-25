@@ -12,6 +12,25 @@
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 
+function findJsonRpcResponse(output) {
+  // Find the JSON response in the output
+  const lines = output.split('\\n');
+  let jsonResponse = null;
+
+  for (const line of lines) {
+    if (line.trim().startsWith('{') && line.includes('jsonrpc')) {
+      try {
+        jsonResponse = JSON.parse(line);
+        break;
+      } catch {
+        // Continue looking
+      }
+    }
+  }
+
+  return jsonResponse;
+}
+
 class WarpMCPPerformanceTest {
   constructor() {
     this.stats = {
@@ -88,25 +107,10 @@ class WarpMCPPerformanceTest {
           const responseTime = performance.now() - startTime;
 
           if (code === 0) {
-            // Find the JSON response in the output
-            const lines = output.split('\\n');
-            let jsonResponse = null;
-
-            for (const line of lines) {
-              if (line.trim().startsWith('{') && line.includes('jsonrpc')) {
-                try {
-                  jsonResponse = JSON.parse(line);
-                  break;
-                } catch {
-                  // Continue looking
-                }
-              }
-            }
-
             resolve({
               success: true,
               responseTime,
-              response: jsonResponse
+              response: findJsonRpcResponse(output)
             });
           } else {
             reject(new Error(`Process failed with code ${code}: ${errorOutput}`));
@@ -143,6 +147,16 @@ class WarpMCPPerformanceTest {
       return;
     }
 
+    await this.testSqlConnectivity();
+    await this.testPerformanceMonitoring();
+    await this.testConnectionHealth();
+    await this.testDatabaseOperations();
+
+    this.stats.endTime = performance.now();
+    this.generateReport();
+  }
+
+  async testSqlConnectivity() {
     // Test 1: Basic SQL connectivity
     console.log('\n🔍 Testing SQL Server Connectivity');
     console.log('   ' + '-'.repeat(50));
@@ -181,7 +195,9 @@ class WarpMCPPerformanceTest {
       this.stats.errors.push(error.message);
       console.log(`   ❌ Error: ${error.message}`);
     }
+  }
 
+  async testPerformanceMonitoring() {
     // Test 2: Performance monitoring
     console.log('\n📊 Testing Performance Monitoring');
     console.log('   ' + '-'.repeat(50));
@@ -197,19 +213,7 @@ class WarpMCPPerformanceTest {
         this.stats.responseTimes.push(result.responseTime);
         console.log(`   ✅ Performance stats retrieved (${Math.round(result.responseTime)}ms)`);
 
-        if (result.response?.result?.content?.[0]?.text) {
-          try {
-            const perfData = JSON.parse(result.response.result.content[0].text);
-            if (perfData.success) {
-              console.log(`   📈 Monitoring enabled: ${perfData.data.enabled ? 'Yes' : 'No'}`);
-              console.log(
-                `   📈 Total queries tracked: ${perfData.data.overall?.totalQueries || 0}`
-              );
-            }
-          } catch {
-            console.log('   ⚠️  Could not parse performance data');
-          }
-        }
+        this.logPerformanceData(result.response);
       } else {
         this.stats.failedRequests++;
         console.log('   ❌ Performance monitoring failed');
@@ -220,7 +224,23 @@ class WarpMCPPerformanceTest {
       this.stats.errors.push(error.message);
       console.log(`   ❌ Error: ${error.message}`);
     }
+  }
 
+  logPerformanceData(response) {
+    if (response?.result?.content?.[0]?.text) {
+      try {
+        const perfData = JSON.parse(response.result.content[0].text);
+        if (perfData.success) {
+          console.log(`   📈 Monitoring enabled: ${perfData.data.enabled ? 'Yes' : 'No'}`);
+          console.log(`   📈 Total queries tracked: ${perfData.data.overall?.totalQueries || 0}`);
+        }
+      } catch {
+        console.log('   ⚠️  Could not parse performance data');
+      }
+    }
+  }
+
+  async testConnectionHealth() {
     // Test 3: Connection health
     console.log('\n🔌 Testing Connection Pool Health');
     console.log('   ' + '-'.repeat(50));
@@ -236,34 +256,7 @@ class WarpMCPPerformanceTest {
         this.stats.responseTimes.push(result.responseTime);
         console.log(`   ✅ Connection health retrieved (${Math.round(result.responseTime)}ms)`);
 
-        if (result.response?.result?.content?.[0]?.text) {
-          try {
-            const healthData = JSON.parse(result.response.result.content[0].text);
-            if (healthData.success) {
-              const pool = healthData.data.pool;
-              console.log(`   🔌 Pool status: ${pool.health?.status || 'unknown'}`);
-              console.log(`   🔌 Health score: ${pool.health?.score || 'N/A'}/100`);
-
-              // Validate our 95% threshold fix
-              const utilization = pool.current?.totalConnections
-                ? (pool.current.activeConnections / pool.current.totalConnections) * 100
-                : 0;
-
-              if (
-                utilization < 95 &&
-                pool.health?.issues?.includes('Connection pool near capacity')
-              ) {
-                console.log(
-                  `   ❌ THRESHOLD ISSUE: False positive warning at ${utilization.toFixed(1)}%`
-                );
-              } else {
-                console.log('   ✅ 95% threshold working correctly');
-              }
-            }
-          } catch {
-            console.log('   ⚠️  Could not parse health data');
-          }
-        }
+        this.logConnectionHealth(result.response);
       } else {
         this.stats.failedRequests++;
         console.log('   ❌ Connection health check failed');
@@ -274,7 +267,38 @@ class WarpMCPPerformanceTest {
       this.stats.errors.push(error.message);
       console.log(`   ❌ Error: ${error.message}`);
     }
+  }
 
+  logConnectionHealth(response) {
+    if (response?.result?.content?.[0]?.text) {
+      try {
+        const healthData = JSON.parse(response.result.content[0].text);
+        if (healthData.success) {
+          const pool = healthData.data.pool;
+          console.log(`   🔌 Pool status: ${pool.health?.status || 'unknown'}`);
+          console.log(`   🔌 Health score: ${pool.health?.score || 'N/A'}/100`);
+          this.logPoolThreshold(pool);
+        }
+      } catch {
+        console.log('   ⚠️  Could not parse health data');
+      }
+    }
+  }
+
+  logPoolThreshold(pool) {
+    // Validate our 95% threshold fix
+    const utilization = pool.current?.totalConnections
+      ? (pool.current.activeConnections / pool.current.totalConnections) * 100
+      : 0;
+
+    if (utilization < 95 && pool.health?.issues?.includes('Connection pool near capacity')) {
+      console.log(`   ❌ THRESHOLD ISSUE: False positive warning at ${utilization.toFixed(1)}%`);
+    } else {
+      console.log('   ✅ 95% threshold working correctly');
+    }
+  }
+
+  async testDatabaseOperations() {
     // Test 4: Database operations
     const dbTests = [
       { name: 'List Databases', tool: 'list_databases', args: {} },
@@ -315,9 +339,6 @@ class WarpMCPPerformanceTest {
         console.log(`   ❌ Error: ${error.message}`);
       }
     }
-
-    this.stats.endTime = performance.now();
-    this.generateReport();
   }
 
   generateReport() {
