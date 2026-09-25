@@ -116,7 +116,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.5",
-    "dotenv": "^17.2.1",
+    "dotenv": "^18.0.2",
     "mssql": "^11.0.1",
     "winston": "^3.11.0"
   },
