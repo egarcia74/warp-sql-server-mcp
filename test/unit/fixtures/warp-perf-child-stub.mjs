@@ -16,7 +16,7 @@ function rpcResult(text) {
 }
 
 function healthText() {
-  const activeConnections = scenario === 'health-94' ? 94 : scenario === 'health-95' ? 95 : 2;
+  const activeConnections = { 'health-94': 94, 'health-95': 95 }[scenario] ?? 2;
   return JSON.stringify({
     success: true,
     data: {
@@ -39,7 +39,7 @@ function responseFor(id) {
   if (id === 1) {
     const response = rpcResult('Microsoft SQL Server 2022');
     return scenario === 'noisy-json'
-      ? '{not-json}' + String.fromCharCode(92) + 'n' + response
+      ? '{not-json}' + String.fromCodePoint(92) + 'n' + response
       : response;
   }
   if (id === 2) {

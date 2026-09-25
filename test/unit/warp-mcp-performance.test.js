@@ -15,15 +15,16 @@ function runPerformanceCli(scenario) {
   });
   expect(result.error).toBeUndefined();
 
-  const trace = result.stderr
-    .split('\n')
-    .filter(line => line.startsWith('WARP_PERF_TRACE:'))
-    .map(line => JSON.parse(line.slice('WARP_PERF_TRACE:'.length)));
-  const stderr = result.stderr
-    .split('\n')
-    .filter(line => !line.startsWith('WARP_PERF_TRACE:'))
-    .join('\n');
-  return { status: result.status, stdout: result.stdout, stderr, trace };
+  const trace = [];
+  const otherStderr = [];
+  for (const line of result.stderr.split('\n')) {
+    if (line.startsWith('WARP_PERF_TRACE:')) {
+      trace.push(JSON.parse(line.slice('WARP_PERF_TRACE:'.length)));
+    } else {
+      otherStderr.push(line);
+    }
+  }
+  return { status: result.status, stdout: result.stdout, stderr: otherStderr.join('\n'), trace };
 }
 
 function events(trace, event) {
