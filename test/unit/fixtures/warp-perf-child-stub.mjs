@@ -36,30 +36,34 @@ function healthText() {
   });
 }
 
+function firstResponseFor(requestId) {
+  if (scenario === 'missing-result-first') {
+    return JSON.stringify({ jsonrpc: '2.0', id: requestId });
+  }
+  if (scenario === 'null-result-first') {
+    return JSON.stringify({ jsonrpc: '2.0', id: requestId, result: null });
+  }
+  if (scenario === 'jsonrpc-error-first') {
+    return JSON.stringify({
+      jsonrpc: '2.0',
+      id: requestId,
+      error: { code: -32603, message: 'database unavailable' }
+    });
+  }
+  if (scenario === 'tool-error-first') {
+    return JSON.stringify({
+      jsonrpc: '2.0',
+      id: requestId,
+      result: { isError: true, content: [{ type: 'text', text: 'query blocked' }] }
+    });
+  }
+  const response = rpcResult('Microsoft SQL Server 2022', requestId);
+  return scenario === 'noisy-json' ? '{not-json}\n' + response : response;
+}
+
 function responseFor(id, requestId) {
   if (id === 1) {
-    if (scenario === 'missing-result-first') {
-      return JSON.stringify({ jsonrpc: '2.0', id: requestId });
-    }
-    if (scenario === 'null-result-first') {
-      return JSON.stringify({ jsonrpc: '2.0', id: requestId, result: null });
-    }
-    if (scenario === 'jsonrpc-error-first') {
-      return JSON.stringify({
-        jsonrpc: '2.0',
-        id: requestId,
-        error: { code: -32603, message: 'database unavailable' }
-      });
-    }
-    if (scenario === 'tool-error-first') {
-      return JSON.stringify({
-        jsonrpc: '2.0',
-        id: requestId,
-        result: { isError: true, content: [{ type: 'text', text: 'query blocked' }] }
-      });
-    }
-    const response = rpcResult('Microsoft SQL Server 2022', requestId);
-    return scenario === 'noisy-json' ? '{not-json}\n' + response : response;
+    return firstResponseFor(requestId);
   }
   if (id === 2) {
     return rpcResult(
