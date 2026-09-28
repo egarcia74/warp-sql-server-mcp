@@ -56,6 +56,29 @@ export class TestDatabaseHelper {
     return dbName;
   }
 
+  #verifiedPredefinedDockerDatabase(dbName, verification) {
+    if (verification && verification.content && verification.content[0]) {
+      const content = verification.content[0].text;
+      const tableCount = content.match(/\d+/)?.[0] || '0';
+      console.log(`✅ Connected to ${dbName} - found ${tableCount} tables`);
+      return true;
+    }
+
+    return false;
+  }
+
+  #databaseAlreadyExists(dbName, existsResult) {
+    if (existsResult && existsResult.content && existsResult.content[0]) {
+      const content = existsResult.content[0].text;
+      if (content && content.includes('1')) {
+        console.log(`✅ Database ${dbName} already exists`);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /**
    * Connect to a test database (assumes Docker has already initialized schema)
    */
@@ -87,15 +110,12 @@ export class TestDatabaseHelper {
           // Verify the database exists and has tables
           const verification = await this.server.executeQuery(`
             USE [${dbName}];
-            SELECT COUNT(*) as TableCount 
-            FROM INFORMATION_SCHEMA.TABLES 
+            SELECT COUNT(*) as TableCount
+            FROM INFORMATION_SCHEMA.TABLES
             WHERE TABLE_TYPE = 'BASE TABLE'
           `);
 
-          if (verification && verification.content && verification.content[0]) {
-            const content = verification.content[0].text;
-            const tableCount = content.match(/\d+/)?.[0] || '0';
-            console.log(`✅ Connected to ${dbName} - found ${tableCount} tables`);
+          if (this.#verifiedPredefinedDockerDatabase(dbName, verification)) {
             return dbName;
           }
         }
@@ -125,17 +145,13 @@ export class TestDatabaseHelper {
       // Check if database already exists
       try {
         const existsResult = await this.server.executeQuery(`
-          SELECT COUNT(*) as DbCount 
-          FROM sys.databases 
+          SELECT COUNT(*) as DbCount
+          FROM sys.databases
           WHERE name = '${dbName}'
         `);
 
-        if (existsResult && existsResult.content && existsResult.content[0]) {
-          const content = existsResult.content[0].text;
-          if (content && content.includes('1')) {
-            console.log(`✅ Database ${dbName} already exists`);
-            return dbName;
-          }
+        if (this.#databaseAlreadyExists(dbName, existsResult)) {
+          return dbName;
         }
       } catch (error) {
         console.log(`ℹ️  Could not check database existence: ${error.message}`);
