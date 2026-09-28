@@ -11,24 +11,26 @@
 // import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
+import { JSONRPCResponseSchema } from '@modelcontextprotocol/sdk/types.js';
 
-function findJsonRpcResponse(output) {
+function findJsonRpcResponse(output, requestId) {
   // Find the JSON response in the output
-  const lines = output.split('\\n');
-  let jsonResponse = null;
+  const lines = output.split('\n');
 
-  for (const line of lines) {
+  for (const line of lines.slice(0, -1)) {
     if (line.trim().startsWith('{') && line.includes('jsonrpc')) {
       try {
-        jsonResponse = JSON.parse(line);
-        break;
+        const response = JSONRPCResponseSchema.safeParse(JSON.parse(line));
+        if (response.success && response.data.id === requestId) {
+          return response.data;
+        }
       } catch {
         // Continue looking
       }
     }
   }
 
-  return jsonResponse;
+  return null;
 }
 
 class WarpMCPPerformanceTest {
@@ -93,6 +95,22 @@ class WarpMCPPerformanceTest {
 
       child.stdout.on('data', data => {
         output += data.toString();
+        if (!resolved) {
+          const response = findJsonRpcResponse(output, request.id);
+          if (response) {
+            resolved = true;
+            clearTimeout(timeoutHandler);
+            const responseTime = performance.now() - startTime;
+            child.kill();
+            if (response.error) {
+              reject(new Error(`MCP request failed: ${response.error.message}`));
+            } else if (response.result?.isError === true) {
+              reject(new Error('MCP tool reported an error'));
+            } else {
+              resolve({ success: true, responseTime, response });
+            }
+          }
+        }
       });
 
       child.stderr.on('data', data => {
@@ -104,27 +122,22 @@ class WarpMCPPerformanceTest {
           resolved = true;
           clearTimeout(timeoutHandler);
 
-          const responseTime = performance.now() - startTime;
-
-          if (code === 0) {
-            resolve({
-              success: true,
-              responseTime,
-              response: findJsonRpcResponse(output)
-            });
-          } else {
+          if (code !== 0) {
             reject(new Error(`Process failed with code ${code}: ${errorOutput}`));
+          } else {
+            reject(new Error('No JSON-RPC response received'));
           }
         }
       });
 
       try {
-        child.stdin.write(JSON.stringify(request) + '\\n');
+        child.stdin.write(JSON.stringify(request) + '\n');
         child.stdin.end();
       } catch (err) {
         if (!resolved) {
           resolved = true;
           clearTimeout(timeoutHandler);
+          child.kill();
           reject(new Error(`Send failed: ${err.message}`));
         }
       }
