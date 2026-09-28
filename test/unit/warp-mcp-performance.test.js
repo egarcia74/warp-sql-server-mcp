@@ -76,7 +76,7 @@ describe('Warp MCP performance CLI', () => {
     expect(result.stdout).toContain('• Successful: 5 (100%)');
     expect(result.stdout).toContain('🌟 EXCELLENT - MCP server performing well with Warp');
     expect(result.stdout).toContain('🎉 Warp MCP performance test completed!');
-    expect(events(result.trace, 'kill')).toHaveLength(0);
+    expect(events(result.trace, 'kill').map(item => item.id)).toEqual([1, 2, 3, 4, 5]);
   });
 
   test('skips a malformed JSON-RPC line and parses the later response', () => {
@@ -85,6 +85,59 @@ describe('Warp MCP performance CLI', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('📊 Connected to SQL Server successfully');
     expect(result.stdout).toContain('• Successful: 5 (100%)');
+  });
+
+  test('frames requests so the SDK stdio reader can dispatch them', () => {
+    const result = runPerformanceCli('stdio-framing');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('📊 Connected to SQL Server successfully');
+    expect(events(result.trace, 'write')).toHaveLength(5);
+    expect(events(result.trace, 'write').every(item => item.data.endsWith('\n'))).toBe(true);
+  });
+
+  test('accepts a complete response before a database-backed child closes', () => {
+    const result = runPerformanceCli('response-before-close');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('📊 Connected to SQL Server successfully');
+    expect(result.stdout).toContain('• Successful: 5 (100%)');
+    expect(events(result.trace, 'kill')).toContainEqual({ event: 'kill', id: 1 });
+  });
+
+  test('fails when a child exits successfully without a JSON-RPC response', () => {
+    const result = runPerformanceCli('no-response-first');
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('• Successful: 4 (80%)');
+    expect(result.stdout).toContain('• Failed: 1');
+    expect(result.stdout).toContain('❌ Error: No JSON-RPC response received');
+  });
+
+  test('ignores a response for another request ID', () => {
+    const result = runPerformanceCli('wrong-id-first');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('📊 Connected to SQL Server successfully');
+    expect(result.stdout).toContain('• Successful: 5 (100%)');
+  });
+
+  test('counts a JSON-RPC error response as a failed request', () => {
+    const result = runPerformanceCli('jsonrpc-error-first');
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('❌ Error: MCP request failed: database unavailable');
+    expect(result.stdout).toContain('• Successful: 4 (80%)');
+    expect(result.stdout).toContain('• Failed: 1');
+  });
+
+  test('counts an MCP tool error result as a failed request', () => {
+    const result = runPerformanceCli('tool-error-first');
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('❌ Error: MCP tool reported an error');
+    expect(result.stdout).toContain('• Successful: 4 (80%)');
+    expect(result.stdout).toContain('• Failed: 1');
   });
 
   test('warns on malformed monitoring and health payloads without failing requests', () => {
@@ -129,7 +182,7 @@ describe('Warp MCP performance CLI', () => {
     const result = runPerformanceCli('timeout-first');
 
     expect(result.status).toBe(1);
-    expect(events(result.trace, 'kill')).toEqual([{ event: 'kill', id: 1 }]);
+    expect(events(result.trace, 'kill').map(item => item.id)).toEqual([1, 2, 3, 4, 5]);
     expect(result.stdout).toContain('❌ Error: Request timed out after 20000ms');
     expect(result.stdout).toContain('• Total Requests: 5');
     expect(result.stderr).toContain(
@@ -137,12 +190,12 @@ describe('Warp MCP performance CLI', () => {
     );
   });
 
-  test('records a synchronous write failure without ending or killing that child', () => {
+  test('kills a child after a synchronous write failure', () => {
     const result = runPerformanceCli('send-fails-first');
 
     expect(result.status).toBe(1);
     expect(events(result.trace, 'end').map(item => item.id)).toEqual([2, 3, 4, 5]);
-    expect(events(result.trace, 'kill')).toHaveLength(0);
+    expect(events(result.trace, 'kill').map(item => item.id)).toEqual([1, 2, 3, 4, 5]);
     expect(result.stdout).toContain('❌ Error: Send failed: stub write failure');
     expect(result.stdout).toContain('• Failed: 1');
   });
