@@ -38,6 +38,12 @@ function healthText() {
 
 function responseFor(id, requestId) {
   if (id === 1) {
+    if (scenario === 'missing-result-first') {
+      return JSON.stringify({ jsonrpc: '2.0', id: requestId });
+    }
+    if (scenario === 'null-result-first') {
+      return JSON.stringify({ jsonrpc: '2.0', id: requestId, result: null });
+    }
     if (scenario === 'jsonrpc-error-first') {
       return JSON.stringify({
         jsonrpc: '2.0',

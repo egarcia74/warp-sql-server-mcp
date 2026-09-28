@@ -11,6 +11,7 @@
 // import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
+import { JSONRPCResponseSchema } from '@modelcontextprotocol/sdk/types.js';
 
 function findJsonRpcResponse(output, requestId) {
   // Find the JSON response in the output
@@ -19,9 +20,9 @@ function findJsonRpcResponse(output, requestId) {
   for (const line of lines.slice(0, -1)) {
     if (line.trim().startsWith('{') && line.includes('jsonrpc')) {
       try {
-        const jsonResponse = JSON.parse(line);
-        if (jsonResponse.jsonrpc === '2.0' && jsonResponse.id === requestId) {
-          return jsonResponse;
+        const response = JSONRPCResponseSchema.safeParse(JSON.parse(line));
+        if (response.success && response.data.id === requestId) {
+          return response.data;
         }
       } catch {
         // Continue looking

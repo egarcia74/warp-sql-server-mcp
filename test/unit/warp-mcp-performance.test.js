@@ -140,6 +140,18 @@ describe('Warp MCP performance CLI', () => {
     expect(result.stdout).toContain('• Failed: 1');
   });
 
+  test.each(['missing-result-first', 'null-result-first'])(
+    'does not count a malformed matching response as success (%s)',
+    scenario => {
+      const result = runPerformanceCli(scenario);
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('❌ Error: No JSON-RPC response received');
+      expect(result.stdout).toContain('• Successful: 4 (80%)');
+      expect(result.stdout).toContain('• Failed: 1');
+    }
+  );
+
   test('warns on malformed monitoring and health payloads without failing requests', () => {
     const result = runPerformanceCli('malformed-details');
 
