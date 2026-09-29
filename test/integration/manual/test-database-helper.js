@@ -7,6 +7,17 @@ import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { serverConfig } from '../../../lib/config/server-config.js';
 
+function restorePermissionEnvironment(originalConfig) {
+  for (const [name, value] of Object.entries(originalConfig)) {
+    if (value === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = value;
+    }
+  }
+  serverConfig.reload();
+}
+
 export class TestDatabaseHelper {
   constructor(server) {
     this.server = server;
@@ -129,46 +140,42 @@ export class TestDatabaseHelper {
 
       // Temporarily enable schema changes for database creation only
       const originalConfig = {
-        readOnly: process.env.SQL_SERVER_READ_ONLY,
-        allowDestructive: process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS,
-        allowSchema: process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES
+        SQL_SERVER_READ_ONLY: process.env.SQL_SERVER_READ_ONLY,
+        SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS:
+          process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS,
+        SQL_SERVER_ALLOW_SCHEMA_CHANGES: process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES
       };
 
-      // Enable minimal access for database creation only
-      process.env.SQL_SERVER_READ_ONLY = 'false';
-      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
-      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
-
-      // Force the server to reload its configuration
-      serverConfig.reload();
-
-      // Check if database already exists
       try {
-        const existsResult = await this.server.executeQuery(`
-          SELECT COUNT(*) as DbCount
-          FROM sys.databases
-          WHERE name = '${dbName}'
-        `);
+        // Enable minimal access for database creation only
+        process.env.SQL_SERVER_READ_ONLY = 'false';
+        process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+        process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
 
-        if (this.#databaseAlreadyExists(dbName, existsResult)) {
-          return dbName;
+        // Force the server to reload its configuration
+        serverConfig.reload();
+
+        // Check if database already exists
+        try {
+          const existsResult = await this.server.executeQuery(`
+            SELECT COUNT(*) as DbCount
+            FROM sys.databases
+            WHERE name = '${dbName}'
+          `);
+
+          if (this.#databaseAlreadyExists(dbName, existsResult)) {
+            return dbName;
+          }
+        } catch (error) {
+          console.log(`ℹ️  Could not check database existence: ${error.message}`);
         }
-      } catch (error) {
-        console.log(`ℹ️  Could not check database existence: ${error.message}`);
+
+        // Create empty database only
+        await this.server.executeQuery(`CREATE DATABASE [${dbName}]`);
+        this.testDatabases.push(dbName);
+      } finally {
+        restorePermissionEnvironment(originalConfig);
       }
-
-      // Create empty database only
-      await this.server.executeQuery(`CREATE DATABASE [${dbName}]`);
-      this.testDatabases.push(dbName);
-
-      // Restore original configuration
-      process.env.SQL_SERVER_READ_ONLY = originalConfig.readOnly || 'true';
-      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS =
-        originalConfig.allowDestructive || 'false';
-      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = originalConfig.allowSchema || 'false';
-
-      // Force the server to reload its configuration back to test settings
-      serverConfig.reload();
 
       console.log(
         `✅ Empty database created: ${dbName} (tables should be created by external initialization)`
@@ -189,39 +196,35 @@ export class TestDatabaseHelper {
 
       // Temporarily enable all operations for cleanup
       const originalConfig = {
-        readOnly: process.env.SQL_SERVER_READ_ONLY,
-        allowDestructive: process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS,
-        allowSchema: process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES
+        SQL_SERVER_READ_ONLY: process.env.SQL_SERVER_READ_ONLY,
+        SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS:
+          process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS,
+        SQL_SERVER_ALLOW_SCHEMA_CHANGES: process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES
       };
 
-      // Enable full cleanup permissions temporarily
-      process.env.SQL_SERVER_READ_ONLY = 'false';
-      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
-      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
+      try {
+        // Enable full cleanup permissions temporarily
+        process.env.SQL_SERVER_READ_ONLY = 'false';
+        process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'true';
+        process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'true';
 
-      // Force server to reload configuration for cleanup
-      serverConfig.reload();
+        // Force server to reload configuration for cleanup
+        serverConfig.reload();
 
-      // Switch back to master before dropping
-      await this.server.executeQuery('USE master');
+        // Switch back to master before dropping
+        await this.server.executeQuery('USE master');
 
-      // Force close connections and drop database
-      await this.server.executeQuery(`
-        IF EXISTS (SELECT name FROM sys.databases WHERE name = '${dbName}')
-        BEGIN
-          ALTER DATABASE [${dbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-          DROP DATABASE [${dbName}];
-        END
-      `);
-
-      // Restore original configuration
-      process.env.SQL_SERVER_READ_ONLY = originalConfig.readOnly || 'true';
-      process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS =
-        originalConfig.allowDestructive || 'false';
-      process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = originalConfig.allowSchema || 'false';
-
-      // Restore server configuration
-      serverConfig.reload();
+        // Force close connections and drop database
+        await this.server.executeQuery(`
+          IF EXISTS (SELECT name FROM sys.databases WHERE name = '${dbName}')
+          BEGIN
+            ALTER DATABASE [${dbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+            DROP DATABASE [${dbName}];
+          END
+        `);
+      } finally {
+        restorePermissionEnvironment(originalConfig);
+      }
 
       // Remove from our tracking list
       this.testDatabases = this.testDatabases.filter(db => db !== dbName);
