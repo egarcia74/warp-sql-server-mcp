@@ -69,10 +69,10 @@ const GROUPED = /the [^ ]+ group/i;
 // (last value wins). `\S` excludes all whitespace. Layer 1 of 3; the CLI also
 // refuses to emit a control character, and the workflow reads only the first
 // occurrence of each key.
-const HAS_VERSION_PAIR = /bump .+ from [0-9]/i;
+const HAS_VERSION_PAIR = /bump .+ from \d/i;
 const DEPENDENCY = /^.*bump (\S+) from .*$/i;
-const FROM_VERSION = /^.* from ([0-9]\S*) to .*$/i;
-const TO_VERSION = /^.* from [0-9]\S* to ([0-9]\S*).*$/i;
+const FROM_VERSION = /^.* from (\d\S*) to .*$/i;
+const TO_VERSION = /^.* from \d\S* to (\d\S*).*$/i;
 
 /** Drop prerelease and build metadata: 1.2.3-rc.1+build -> 1.2.3 */
 const core = v => v.split('-')[0].split('+')[0];
@@ -121,9 +121,9 @@ function parseVersionPair(title) {
     return { dependency: '', fromVersion: '', toVersion: '' };
   }
   return {
-    dependency: title.match(DEPENDENCY)?.[1] ?? '',
-    fromVersion: title.match(FROM_VERSION)?.[1] ?? '',
-    toVersion: title.match(TO_VERSION)?.[1] ?? ''
+    dependency: DEPENDENCY.exec(title)?.[1] ?? '',
+    fromVersion: FROM_VERSION.exec(title)?.[1] ?? '',
+    toVersion: TO_VERSION.exec(title)?.[1] ?? ''
   };
 }
 

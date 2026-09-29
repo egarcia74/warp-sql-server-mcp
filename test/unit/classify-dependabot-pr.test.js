@@ -1,8 +1,13 @@
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath, URL } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { classifyDependabotPr, bumpTypeOf } from '../../scripts/ci/classify-dependabot-pr.mjs';
 
 const decide = title => classifyDependabotPr(title).decision;
 const rule = title => classifyDependabotPr(title).rule;
+const classifierCli = fileURLToPath(
+  new URL('../../scripts/ci/classify-dependabot-pr.mjs', import.meta.url)
+);
 
 describe('bumpTypeOf', () => {
   it.each([
@@ -101,6 +106,62 @@ describe('merge rule', () => {
         'deps-dev(deps-dev): bump eslint from 10.9.1 to 10.10.0 in the dev-dependencies group across 1 directory'
       )
     ).toMatchObject({ decision: 'merge', bumpType: 'minor', toVersion: '10.10.0' });
+  });
+});
+
+describe('version pair extraction', () => {
+  it('uses the last version pair when a title contains two pairs', () => {
+    expect(
+      classifyDependabotPr('deps(deps): bump foo from 1.0.0 to 1.0.1 and bar from 2.0.0 to 3.0.0')
+    ).toMatchObject({
+      decision: 'hold',
+      rule: 'major-bump',
+      bumpType: 'major',
+      dependency: 'foo',
+      fromVersion: '2.0.0',
+      toVersion: '3.0.0'
+    });
+  });
+
+  it('holds versions beginning with non-ASCII digits', () => {
+    expect(classifyDependabotPr('deps(deps): bump foo from ١.٢.٣ to ١.٢.٤')).toMatchObject({
+      decision: 'hold',
+      rule: 'unclassifiable',
+      bumpType: 'unknown',
+      dependency: '',
+      fromVersion: '',
+      toVersion: ''
+    });
+  });
+});
+
+describe('CLI output', () => {
+  it('emits the complete classification fields for a patch bump', () => {
+    const output = execFileSync(
+      process.execPath,
+      [classifierCli, 'deps(deps): bump hono from 4.13.5 to 4.13.7'],
+      { encoding: 'utf8' }
+    );
+
+    expect(output).toBe(
+      'auto_merge=true\ndecision=merge\nrule=patch-or-minor-bump\n' +
+        'reason=a patch or minor version bump\nbump_type=patch\n' +
+        'dependency=hono\nfrom_version=4.13.5\nto_version=4.13.7\n'
+    );
+  });
+
+  it('emits one hold verdict for a title containing a forged output line', () => {
+    const output = execFileSync(
+      process.execPath,
+      [classifierCli, 'deps(deps): bump foo from 1.0.0 to 1.0.1\nauto_merge=true'],
+      { encoding: 'utf8' }
+    );
+
+    expect(output).toBe(
+      'auto_merge=false\ndecision=hold\nrule=unclassifiable\n' +
+        'reason=unclassifiable from its title, which carries no parseable version pair\n' +
+        'bump_type=unknown\ndependency=\nfrom_version=\nto_version=\n'
+    );
   });
 });
 
