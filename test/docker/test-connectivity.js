@@ -48,7 +48,7 @@ function reportQueryExecution(queryResult) {
       throw new Error('No version data in query result');
     }
   } else {
-    throw new Error('Invalid query result format');
+    throw new TypeError('Invalid query result format');
   }
 }
 
