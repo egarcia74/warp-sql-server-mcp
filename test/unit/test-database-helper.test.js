@@ -101,6 +101,24 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
     ]);
   });
 
+  test('falls back to the existence probe when Docker verification is null', async () => {
+    process.env.MCP_TESTING_MODE = 'docker';
+    server.executeQuery
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ content: [{ text: 'DbCount: 1' }] });
+    const helper = new TestDatabaseHelper(server);
+
+    await expect(helper.createTestDatabase('Phase1ReadOnly')).resolves.toBe('Phase1ReadOnly');
+
+    expect(server.executeQuery).toHaveBeenCalledTimes(2);
+    expect(logs.mock.calls.map(call => call[0])).toContain(
+      '✅ Database Phase1ReadOnly already exists'
+    );
+    expect(logs.mock.calls.map(call => call[0])).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('Could not check database existence')])
+    );
+  });
+
   test('starts the fallback probe in the verification-query continuation', async () => {
     process.env.MCP_TESTING_MODE = 'docker';
     let resolveVerification;
@@ -165,6 +183,24 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
     expect(serverConfig.allowDestructiveOperations).toBe(false);
     expect(serverConfig.allowSchemaChanges).toBe(false);
     expect(logs.mock.calls.at(-1)).toEqual(['✅ Database ExistingDb already exists']);
+  });
+
+  test('treats a zero-valued existence result as absent without a probe error', async () => {
+    server.executeQuery
+      .mockResolvedValueOnce({ content: [{ text: 0 }] })
+      .mockResolvedValueOnce({ content: [{ text: 'created' }] });
+    const helper = new TestDatabaseHelper(server);
+
+    await expect(helper.createTestDatabase('ZeroDb')).resolves.toBe('ZeroDb');
+
+    expect(server.executeQuery.mock.calls.map(call => call[0])).toEqual([
+      expect.stringContaining("WHERE name = 'ZeroDb'"),
+      'CREATE DATABASE [ZeroDb]'
+    ]);
+    expect(helper.getTestDatabases()).toEqual(['ZeroDb']);
+    expect(logs.mock.calls.map(call => call[0])).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('Could not check database existence')])
+    );
   });
 
   test('restores absent permission variables after finding an existing database', async () => {
