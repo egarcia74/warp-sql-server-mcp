@@ -305,7 +305,7 @@ function objectToYaml(obj, indent = 0) {
           const needsQuotes =
             item.includes('"') || item.includes("'") || item.includes('|') || item.includes('>');
           if (needsQuotes) {
-            yaml += `${spaces}  - '${item.replace(/'/g, "''")}'\n`;
+            yaml += `${spaces}  - '${item.replaceAll("'", "''")}'\n`;
           } else {
             yaml += `${spaces}  - ${item}\n`;
           }
