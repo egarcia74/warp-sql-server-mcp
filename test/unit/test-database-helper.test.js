@@ -23,7 +23,11 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
     process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
     server = { executeQuery: vi.fn() };
     reloadStates = [];
-    vi.spyOn(serverConfig, 'reload').mockImplementation(() => reloadStates.push(permissions()));
+    const reload = serverConfig.reload.bind(serverConfig);
+    vi.spyOn(serverConfig, 'reload').mockImplementation(() => {
+      reloadStates.push(permissions());
+      reload();
+    });
     vi.spyOn(TestDatabaseHelper.prototype, 'loadDockerEnvironment').mockImplementation(() => {});
     logs = vi.spyOn(console, 'log').mockImplementation(() => {});
     errors = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -127,7 +131,7 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
     ]);
   });
 
-  test('returns an existing database before restoring temporary permissions', async () => {
+  test('restores permissions after finding an existing database', async () => {
     server.executeQuery.mockResolvedValue({ content: [{ text: 'DbCount: 1' }] });
     const helper = new TestDatabaseHelper(server);
 
@@ -136,9 +140,38 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
     expect(server.executeQuery).toHaveBeenCalledTimes(1);
     expect(server.executeQuery.mock.calls[0][0]).toContain("WHERE name = 'ExistingDb'");
     expect(helper.getTestDatabases()).toEqual([]);
-    expect(reloadStates).toEqual([{ readOnly: 'false', destructive: 'true', schema: 'true' }]);
-    expect(permissions()).toEqual({ readOnly: 'false', destructive: 'true', schema: 'true' });
+    expect(reloadStates).toEqual([
+      { readOnly: 'false', destructive: 'true', schema: 'true' },
+      { readOnly: 'true', destructive: 'false', schema: 'false' }
+    ]);
+    expect(permissions()).toEqual({ readOnly: 'true', destructive: 'false', schema: 'false' });
+    expect(serverConfig.readOnlyMode).toBe(true);
+    expect(serverConfig.allowDestructiveOperations).toBe(false);
+    expect(serverConfig.allowSchemaChanges).toBe(false);
     expect(logs.mock.calls.at(-1)).toEqual(['✅ Database ExistingDb already exists']);
+  });
+
+  test('restores absent permission variables after finding an existing database', async () => {
+    delete process.env.SQL_SERVER_READ_ONLY;
+    delete process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS;
+    delete process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES;
+    server.executeQuery.mockResolvedValue({ content: [{ text: 'DbCount: 1' }] });
+    const helper = new TestDatabaseHelper(server);
+
+    await expect(helper.createTestDatabase('ExistingDb')).resolves.toBe('ExistingDb');
+
+    expect(reloadStates).toEqual([
+      { readOnly: 'false', destructive: 'true', schema: 'true' },
+      { readOnly: undefined, destructive: undefined, schema: undefined }
+    ]);
+    expect(permissions()).toEqual({
+      readOnly: undefined,
+      destructive: undefined,
+      schema: undefined
+    });
+    expect(serverConfig.readOnlyMode).toBe(true);
+    expect(serverConfig.allowDestructiveOperations).toBe(false);
+    expect(serverConfig.allowSchemaChanges).toBe(false);
   });
 
   test('reloads temporary permissions synchronously before its first database probe', async () => {
@@ -218,7 +251,7 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
     expect(callsBeforeAnotherContinuation[1]).toBe('CREATE DATABASE [NewDb]');
   });
 
-  test('logs and rethrows a creation failure without restoring temporary permissions', async () => {
+  test('logs and rethrows a creation failure after restoring permissions', async () => {
     const failure = new Error('creation denied');
     server.executeQuery
       .mockResolvedValueOnce({ content: [{ text: 'DbCount: 0' }] })
@@ -229,10 +262,89 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
 
     expect(server.executeQuery).toHaveBeenCalledTimes(2);
     expect(helper.getTestDatabases()).toEqual([]);
-    expect(reloadStates).toEqual([{ readOnly: 'false', destructive: 'true', schema: 'true' }]);
-    expect(permissions()).toEqual({ readOnly: 'false', destructive: 'true', schema: 'true' });
+    expect(reloadStates).toEqual([
+      { readOnly: 'false', destructive: 'true', schema: 'true' },
+      { readOnly: 'true', destructive: 'false', schema: 'false' }
+    ]);
+    expect(permissions()).toEqual({ readOnly: 'true', destructive: 'false', schema: 'false' });
+    expect(serverConfig.readOnlyMode).toBe(true);
+    expect(serverConfig.allowDestructiveOperations).toBe(false);
+    expect(serverConfig.allowSchemaChanges).toBe(false);
     expect(errors.mock.calls).toEqual([
       ['❌ Failed to connect to database DeniedDb:', 'creation denied']
     ]);
+  });
+});
+
+describe('TestDatabaseHelper.cleanupDatabase', () => {
+  let originalEnv;
+  let server;
+  let reloadStates;
+
+  beforeEach(() => {
+    originalEnv = { ...process.env };
+    delete process.env.MCP_TESTING_MODE;
+    process.env.SQL_SERVER_READ_ONLY = 'true';
+    process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'false';
+    process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
+    server = { executeQuery: vi.fn() };
+    reloadStates = [];
+    const reload = serverConfig.reload.bind(serverConfig);
+    vi.spyOn(serverConfig, 'reload').mockImplementation(() => {
+      reloadStates.push(permissions());
+      reload();
+    });
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.restoreAllMocks();
+    serverConfig.reload();
+  });
+
+  test('restores permissions after a cleanup query is blocked', async () => {
+    server.executeQuery.mockRejectedValueOnce(new Error('Query blocked by safety policy'));
+    const helper = new TestDatabaseHelper(server);
+    helper.testDatabases.push('ProtectedDb');
+
+    await expect(helper.cleanupDatabase('ProtectedDb')).resolves.toBeUndefined();
+
+    expect(server.executeQuery.mock.calls).toEqual([['USE master']]);
+    expect(helper.getTestDatabases()).toEqual(['ProtectedDb']);
+    expect(reloadStates).toEqual([
+      { readOnly: 'false', destructive: 'true', schema: 'true' },
+      { readOnly: 'true', destructive: 'false', schema: 'false' }
+    ]);
+    expect(permissions()).toEqual({ readOnly: 'true', destructive: 'false', schema: 'false' });
+    expect(serverConfig.readOnlyMode).toBe(true);
+    expect(serverConfig.allowDestructiveOperations).toBe(false);
+    expect(serverConfig.allowSchemaChanges).toBe(false);
+  });
+
+  test('restores absent permission variables after successful cleanup', async () => {
+    delete process.env.SQL_SERVER_READ_ONLY;
+    delete process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS;
+    delete process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES;
+    server.executeQuery.mockResolvedValue({ content: [] });
+    const helper = new TestDatabaseHelper(server);
+    helper.testDatabases.push('OldDb');
+
+    await expect(helper.cleanupDatabase('OldDb')).resolves.toBeUndefined();
+
+    expect(server.executeQuery).toHaveBeenCalledTimes(2);
+    expect(helper.getTestDatabases()).toEqual([]);
+    expect(reloadStates).toEqual([
+      { readOnly: 'false', destructive: 'true', schema: 'true' },
+      { readOnly: undefined, destructive: undefined, schema: undefined }
+    ]);
+    expect(permissions()).toEqual({
+      readOnly: undefined,
+      destructive: undefined,
+      schema: undefined
+    });
+    expect(serverConfig.readOnlyMode).toBe(true);
+    expect(serverConfig.allowDestructiveOperations).toBe(false);
+    expect(serverConfig.allowSchemaChanges).toBe(false);
   });
 });
