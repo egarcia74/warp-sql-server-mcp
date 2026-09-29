@@ -44,6 +44,10 @@ describe('csv helpers', () => {
       expect(csvEscapeCell('a\r\nb')).toBe('"a\r\nb"');
     });
 
+    it('doubles every quote when a cell has separated and adjacent quotes', () => {
+      expect(csvEscapeCell('a"b""c')).toBe('"a""b""""c"');
+    });
+
     it('does not mistake a literal backslash-n for a line break', () => {
       // The old predicate tested for this two-character sequence, so a field holding a REAL
       // newline went unquoted and split the record, while this one was quoted for nothing.

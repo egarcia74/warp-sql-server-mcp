@@ -239,4 +239,23 @@ describe('Docker platform configuration selection', () => {
       '      MSSQL_PID: "Dev\\\\Tools \\"quoted\\" # tag"\n'
     );
   });
+
+  it('doubles every apostrophe in a quoted YAML array item', () => {
+    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+    const selected = chooseBestConfiguration(
+      { arch: 'x64', isAppleSilicon: false },
+      { hasDocker: true, supportsAMD64: true }
+    );
+    const healthcheck = selected.config.healthcheck;
+    const originalTest = healthcheck.test;
+    healthcheck.test = ['CMD-SHELL', "O'Brien's 'quoted' setting"];
+
+    try {
+      runDetectionForHost('x64', 'linux', 'x86_64');
+    } finally {
+      healthcheck.test = originalTest;
+    }
+
+    expect(write.mock.calls[0][1]).toContain("        - 'O''Brien''s ''quoted'' setting'\n");
+  });
 });
