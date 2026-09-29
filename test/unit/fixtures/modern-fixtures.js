@@ -235,7 +235,7 @@ export const expectValidToolResponse = result => {
     throw new Error('Invalid tool response structure');
   }
 
-  if (!result[0] || result[0].type !== 'text' || !result[0].text) {
+  if (result[0]?.type !== 'text' || !result[0].text) {
     throw new Error('Invalid tool response content');
   }
 

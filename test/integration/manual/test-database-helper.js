@@ -68,7 +68,7 @@ export class TestDatabaseHelper {
   }
 
   #verifiedPredefinedDockerDatabase(dbName, verification) {
-    if (verification && verification.content && verification.content[0]) {
+    if (verification?.content?.[0]) {
       const content = verification.content[0].text;
       const tableCount = content.match(/\d+/)?.[0] || '0';
       console.log(`✅ Connected to ${dbName} - found ${tableCount} tables`);
@@ -79,9 +79,9 @@ export class TestDatabaseHelper {
   }
 
   #databaseAlreadyExists(dbName, existsResult) {
-    if (existsResult && existsResult.content && existsResult.content[0]) {
+    if (existsResult?.content?.[0]) {
       const content = existsResult.content[0].text;
-      if (content && content.includes('1')) {
+      if (content ? content.includes('1') : false) {
         console.log(`✅ Database ${dbName} already exists`);
         return true;
       }

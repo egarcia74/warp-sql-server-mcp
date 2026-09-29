@@ -490,6 +490,17 @@ describe('ConnectionManager', () => {
       expect(connectionManager.isConnectionActive()).toBe(false);
     });
 
+    test('preserves null when the connected flag is set without a pool', () => {
+      connectionManager.isConnected = true;
+      expect(connectionManager.isConnectionActive()).toBeNull();
+    });
+
+    test('preserves an undefined pool status', () => {
+      connectionManager.isConnected = true;
+      connectionManager.pool = {};
+      expect(connectionManager.isConnectionActive()).toBeUndefined();
+    });
+
     test('should return true when pool is connected', async () => {
       await connectionManager.connect();
       expect(connectionManager.isConnectionActive()).toBe(true);

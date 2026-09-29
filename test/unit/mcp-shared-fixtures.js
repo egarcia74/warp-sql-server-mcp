@@ -174,7 +174,7 @@ vi.mock('../../lib/tools/handlers/database-tools.js', () => ({
       WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')
       ORDER BY name
     `;
-        if (globalThis.mockRequest && globalThis.mockRequest.query) {
+        if (globalThis.mockRequest?.query) {
           globalThis.mockRequest.query(query);
         }
         return [{ type: 'text', text: JSON.stringify(testData.sampleDatabases) }];
@@ -202,14 +202,14 @@ vi.mock('../../lib/tools/handlers/database-tools.js', () => ({
         ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME
       `;
         }
-        if (globalThis.mockRequest && globalThis.mockRequest.query) {
+        if (globalThis.mockRequest?.query) {
           globalThis.mockRequest.query(query);
         }
         return [{ type: 'text', text: JSON.stringify(testData.sampleTables) }];
       }),
       describeTable: vi.fn().mockImplementation(async (tableName, _database, _schema) => {
         const query = `SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tableName}' AND CONSTRAINT_TYPE = 'PRIMARY KEY'`;
-        if (globalThis.mockRequest && globalThis.mockRequest.query) {
+        if (globalThis.mockRequest?.query) {
           globalThis.mockRequest.query(query);
         }
         return [{ type: 'text', text: JSON.stringify(testData.sampleTableSchema) }];
@@ -217,7 +217,7 @@ vi.mock('../../lib/tools/handlers/database-tools.js', () => ({
       listForeignKeys: vi.fn().mockImplementation(async (database, _schema) => {
         if (database) {
           const query = `USE [${database}]`;
-          if (globalThis.mockRequest && globalThis.mockRequest.query) {
+          if (globalThis.mockRequest?.query) {
             globalThis.mockRequest.query(query);
           }
         }
@@ -579,7 +579,7 @@ export const createTestMcpServer = async (envOverrides = {}) => {
     },
     set: function (value) {
       testPool = value;
-      if (this.connectionManager && this.connectionManager.getPool) {
+      if (this.connectionManager?.getPool) {
         this.connectionManager.getPool = vi.fn().mockReturnValue(value);
       }
     }
@@ -740,7 +740,7 @@ export const mockDatabaseToolMethods = server => {
       WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')
       ORDER BY name
     `;
-      if (globalThis.mockRequest && globalThis.mockRequest.query) {
+      if (globalThis.mockRequest?.query) {
         globalThis.mockRequest.query(query);
       }
       return [{ type: 'text', text: JSON.stringify(testData.sampleDatabases) }];
@@ -769,7 +769,7 @@ export const mockDatabaseToolMethods = server => {
         ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME
       `;
       }
-      if (globalThis.mockRequest && globalThis.mockRequest.query) {
+      if (globalThis.mockRequest?.query) {
         globalThis.mockRequest.query(query);
       }
       return [{ type: 'text', text: JSON.stringify(testData.sampleTables) }];
@@ -779,7 +779,7 @@ export const mockDatabaseToolMethods = server => {
       .fn()
       .mockImplementation(async (tableName, _database, _schema) => {
         const query = `SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tableName}' AND CONSTRAINT_TYPE = 'PRIMARY KEY'`;
-        if (globalThis.mockRequest && globalThis.mockRequest.query) {
+        if (globalThis.mockRequest?.query) {
           globalThis.mockRequest.query(query);
         }
         return [{ type: 'text', text: JSON.stringify(testData.sampleTableSchema) }];
@@ -788,7 +788,7 @@ export const mockDatabaseToolMethods = server => {
     server.databaseTools.listForeignKeys = vi.fn().mockImplementation(async (database, _schema) => {
       if (database) {
         const query = `USE [${database}]`;
-        if (globalThis.mockRequest && globalThis.mockRequest.query) {
+        if (globalThis.mockRequest?.query) {
           globalThis.mockRequest.query(query);
         }
       }

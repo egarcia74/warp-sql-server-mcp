@@ -65,11 +65,14 @@ describe('Docker connectivity CLI', () => {
     ['initialization-error', 'Failed to initialize MCP server: stub initialization error', '1️⃣'],
     ['database-error', 'Connection failed: stub database error', '2️⃣'],
     ['database-invalid', 'Connection failed: Invalid response format', '2️⃣'],
+    ['database-empty', 'Connection failed: Invalid response format', '2️⃣'],
     ['query-error', 'Query execution failed: stub query error', '3️⃣'],
     ['query-invalid', 'Query execution failed: Invalid query result format', '3️⃣'],
     ['query-no-version', 'Query execution failed: No version data in query result', '3️⃣'],
+    ['query-zero-text', 'Query execution failed: No version data in query result', '3️⃣'],
     ['table-error', 'Table operations failed: stub table error', '🎉'],
-    ['table-invalid', 'Table operations failed: Invalid response format', '🎉']
+    ['table-invalid', 'Table operations failed: Invalid response format', '🎉'],
+    ['table-empty', 'Table operations failed: Invalid response format', '🎉']
   ])('exits after %s without proceeding to the next phase', (scenario, message, nextPhase) => {
     const result = runConnectivity(scenario);
     expect(result.status).toBe(1);

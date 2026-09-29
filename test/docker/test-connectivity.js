@@ -17,7 +17,7 @@ import { SqlServerMCP } from '../../index.js';
 dotenv.config({ path: 'test/docker/.env.docker' });
 
 function reportDatabaseConnection(response) {
-  if (response && Array.isArray(response) && response[0] && response[0].type === 'text') {
+  if (Array.isArray(response) && response[0]?.type === 'text') {
     const textContent = response[0].text;
 
     if (textContent === 'No data returned') {
@@ -36,11 +36,11 @@ function reportDatabaseConnection(response) {
 }
 
 function reportQueryExecution(queryResult) {
-  if (queryResult && queryResult.content && Array.isArray(queryResult.content)) {
+  if (Array.isArray(queryResult?.content)) {
     const textContent = queryResult.content[0].text;
 
     // Check if it's a successful query result (text table format)
-    if (textContent && textContent.includes('Version')) {
+    if (textContent ? textContent.includes('Version') : false) {
       const versionMatch = textContent.match(/SQL Server (\d{4})/);
       const version = versionMatch ? versionMatch[0] : 'SQL Server';
       console.log(`   ✅ Query successful - ${version} detected`);
@@ -53,7 +53,7 @@ function reportQueryExecution(queryResult) {
 }
 
 function reportTableOperations(response) {
-  if (response && Array.isArray(response) && response[0] && response[0].type === 'text') {
+  if (Array.isArray(response) && response[0]?.type === 'text') {
     const textContent = response[0].text;
 
     if (textContent === 'No data returned') {

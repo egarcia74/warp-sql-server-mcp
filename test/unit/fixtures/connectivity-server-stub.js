@@ -13,6 +13,7 @@ export class SqlServerMCP {
       listDatabases: async () => {
         if (scenario === 'database-error') throw new Error('stub database error');
         if (scenario === 'database-invalid') return [{ type: 'image', text: 'invalid' }];
+        if (scenario === 'database-empty') return [];
         if (scenario === 'empty-lists') return listResponse('No data returned');
         return listResponse('Database\n--------\nmaster\n\nWarpMcpTest\n');
       },
@@ -20,6 +21,7 @@ export class SqlServerMCP {
         if (database !== 'WarpMcpTest') throw new Error('unexpected database name');
         if (scenario === 'table-error') throw new Error('stub table error');
         if (scenario === 'table-invalid') return null;
+        if (scenario === 'table-empty') return [];
         if (scenario === 'empty-lists') return listResponse('No data returned');
         return listResponse('Table\n-----\nCustomers\n\nOrders\n');
       }
@@ -30,6 +32,7 @@ export class SqlServerMCP {
     if (query !== 'SELECT @@VERSION as Version') throw new Error('unexpected query');
     if (scenario === 'query-error') throw new Error('stub query error');
     if (scenario === 'query-invalid') return { content: null };
+    if (scenario === 'query-zero-text') return { content: [{ text: 0 }] };
     if (scenario === 'query-no-version') return { content: [{ text: 'No result' }] };
     if (scenario === 'query-no-year') return { content: [{ text: 'Version: SQL Server' }] };
     return { content: [{ text: 'Version: SQL Server 2022' }] };
