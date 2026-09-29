@@ -1124,13 +1124,17 @@ describe('PerformanceMonitor', () => {
     });
 
     test('should generate unique query IDs', () => {
-      Math.random.mockReturnValueOnce(0.123).mockReturnValueOnce(0.456).mockReturnValueOnce(0.789);
+      Math.random.mockReturnValueOnce(0.123).mockReturnValueOnce(0.456);
 
       const id1 = monitor.generateQueryId();
       const id2 = monitor.generateQueryId();
 
       expect(id1).not.toBe(id2);
       expect(id1).toMatch(/^q_\d+_[a-z0-9]+$/);
+    });
+
+    test('keeps the exact timestamp and nine-character suffix in query IDs', () => {
+      expect(monitor.generateQueryId()).toBe('q_2000_4fzzzxjyl');
     });
 
     test('should generate unique event IDs', () => {
@@ -1141,6 +1145,17 @@ describe('PerformanceMonitor', () => {
 
       expect(id1).not.toBe(id2);
       expect(id1).toMatch(/^e_\d+_[a-z0-9]+$/);
+    });
+
+    test('keeps the exact timestamp and nine-character suffix in event IDs', () => {
+      expect(monitor.generateEventId()).toBe('e_2000_4fzzzxjyl');
+    });
+
+    test('keeps an empty suffix when the random draw is zero', () => {
+      Math.random.mockReturnValue(0);
+
+      expect(monitor.generateQueryId()).toBe('q_2000_');
+      expect(monitor.generateEventId()).toBe('e_2000_');
     });
   });
 
