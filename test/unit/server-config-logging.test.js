@@ -124,6 +124,29 @@ describe('logConfiguration characterization', () => {
     return stderr.mock.calls[0][0];
   }
 
+  test.each([['--token=secret-from-argv'], ['--password', 'secret-from-argv']])(
+    'omits trailing argument form %j from the structured report',
+    (...args) => {
+      Object.defineProperty(process, 'argv', { value: ['node', 'server.js', ...args] });
+      config.logConfiguration(null, logger);
+      const output = logger.info.mock.calls[0][1].configuration;
+      expect(output).toContain('⚙️  Runtime Environment:');
+      expect(output).not.toContain('secret-from-argv');
+      expect(output).not.toContain('Command Args:');
+    }
+  );
+
+  test('omits trailing arguments from the single stderr fallback message', () => {
+    Object.defineProperty(process, 'argv', {
+      value: ['node', 'server.js', '--token=secret-from-argv']
+    });
+    config.logConfiguration();
+    const output = report();
+    expect(output).toContain('⚙️  Runtime Environment:');
+    expect(output).not.toContain('secret-from-argv');
+    expect(output).not.toContain('Command Args:');
+  });
+
   test('preserves the complete ordered report and one structured logger payload', () => {
     config.logConfiguration(manager, logger);
     expect(logger.info.mock.calls).toMatchSnapshot();

@@ -21,7 +21,6 @@ exports[`logConfiguration characterization > preserves the complete ordered repo
     Environment: production
     Memory Usage: 10MB RSS, 2MB Heap
     Uptime: 13s
-    Command Args: --example
     Key Env Vars: SQL_SERVER_TRUST_CERT=false, NODE_ENV=production
 
 🌐 Connection Settings:
