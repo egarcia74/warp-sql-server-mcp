@@ -79,6 +79,17 @@ describe('QueryOptimizer', () => {
       expect(columns).toEqual(['age', 'price', 'status', 'name']);
     });
 
+    test('keeps source order within operator ranks before removing repeated columns', () => {
+      const query =
+        'SELECT * FROM Users WHERE beta = ? AND alpha >= ? AND gamma = ? AND beta >= ? AND delta <= ?';
+      expect(optimizer.extractWhereColumns(query)).toEqual(['alpha', 'beta', 'delta', 'gamma']);
+    });
+
+    test('recognizes Unicode and bracketed WHERE columns without changing operator rank', () => {
+      const query = 'SELECT * FROM [sales].[orders] WHERE [order total] = ? AND café >= ?';
+      expect(optimizer.extractWhereColumns(query)).toEqual(['café', '[order total]']);
+    });
+
     test('should handle complex WHERE clauses', () => {
       const query =
         'SELECT * FROM Orders WHERE customer_id = ? AND total_amount >= ? AND status <> ? AND created_date <= ?';
@@ -1091,6 +1102,11 @@ describe('QueryOptimizer', () => {
         expect(s.suggestion).not.toContain('[dbo].[Base]');
         expect(s.suggestion).not.toContain('ON [c]');
       }
+    });
+
+    test('does not mistake a Unicode CTE name for a physical table', () => {
+      const query = 'WITH café AS (SELECT id FROM dbo.Base) SELECT * FROM café WHERE id = ?';
+      expect(optimizer.extractTargetTable(query)).toBeNull();
     });
 
     test('recognises every CTE in a list, including column-list and bracketed forms', () => {
