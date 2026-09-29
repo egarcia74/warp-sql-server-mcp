@@ -697,8 +697,6 @@ export function renderPreview(preview) {
     `  Release type:   ${releaseType}${releaseTypeReason(requestedType, rule)}`,
     `  Last tag:       ${lastTag ?? '(none - every commit counts)'}`,
     `  Commits:        ${commitCount} since ${lastTag ?? 'the beginning'} on origin/${RELEASE_BRANCH} (no merges)`,
-    // Added to the literal rather than as another lines.push(): three S7778 "do not call
-    // Array#push() multiple times" findings already sit in this function.
     `  Ships to npm:   ${ships ?? 'not evaluated'}`
   ];
   // The mix is printed whatever the outcome: when the type is `none` it is the only thing
@@ -708,13 +706,11 @@ export function renderPreview(preview) {
   if (dryRun) lines.push('  Mode:           DRY RUN - the workflow creates no tag, Release or PR');
 
   if (collisions.length > 0) {
-    lines.push('');
-    lines.push(`  Skipped ${collisions.length} existing tag(s): ${collisions.join(', ')}`);
+    lines.push('', `  Skipped ${collisions.length} existing tag(s): ${collisions.join(', ')}`);
   }
 
   if (drivers.length > 0) {
-    lines.push('');
-    lines.push(`  Decided by (${rule}):`);
+    lines.push('', `  Decided by (${rule}):`);
     for (const subject of drivers.slice(0, MAX_DRIVERS)) {
       lines.push(`    - ${sanitizeForTerminal(subject)}`);
     }
@@ -723,8 +719,8 @@ export function renderPreview(preview) {
     }
   }
 
-  lines.push('');
   lines.push(
+    '',
     'The workflow makes the final decision: it re-runs this detection on the runner and tags\n' +
       `origin/${RELEASE_BRANCH} at ${headSha}. It is told this SHA (expected_sha) and refuses to run\n` +
       `if ${RELEASE_BRANCH} has moved since this preview.`

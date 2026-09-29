@@ -430,9 +430,14 @@ const listRuns = () =>
 async function dispatch(releaseType, dryRun, expectedSha) {
   const dispatchId = randomUUID();
   const args = ['workflow', 'run', WORKFLOW, '--ref', RELEASE_BRANCH];
-  args.push('-f', data(`release_type=${releaseType}`));
-  args.push('-f', data(`expected_sha=${expectedSha}`));
-  args.push('-f', data(`dispatch_id=${dispatchId}`));
+  args.push(
+    '-f',
+    data(`release_type=${releaseType}`),
+    '-f',
+    data(`expected_sha=${expectedSha}`),
+    '-f',
+    data(`dispatch_id=${dispatchId}`)
+  );
   if (dryRun) args.push('-f', 'dry_run=true');
   const { stdout, stderr } = ghAll(...args);
   console.log(
