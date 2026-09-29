@@ -8,6 +8,33 @@ const permissions = () => ({
   schema: process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES
 });
 
+function setupPermissionEnvironment() {
+  const originalEnv = { ...process.env };
+  delete process.env.MCP_TESTING_MODE;
+  process.env.SQL_SERVER_READ_ONLY = 'true';
+  process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'false';
+  process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
+  const server = { executeQuery: vi.fn() };
+  const reloadStates = [];
+  const reload = serverConfig.reload.bind(serverConfig);
+  vi.spyOn(serverConfig, 'reload').mockImplementation(() => {
+    reloadStates.push(permissions());
+    reload();
+  });
+  return { originalEnv, server, reloadStates };
+}
+
+function expectRestoredPermissions(reloadStates, expected) {
+  expect(reloadStates).toEqual([
+    { readOnly: 'false', destructive: 'true', schema: 'true' },
+    expected
+  ]);
+  expect(permissions()).toEqual(expected);
+  expect(serverConfig.readOnlyMode).toBe(true);
+  expect(serverConfig.allowDestructiveOperations).toBe(false);
+  expect(serverConfig.allowSchemaChanges).toBe(false);
+}
+
 describe('TestDatabaseHelper.createTestDatabase', () => {
   let originalEnv;
   let server;
@@ -16,18 +43,7 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
   let errors;
 
   beforeEach(() => {
-    originalEnv = { ...process.env };
-    delete process.env.MCP_TESTING_MODE;
-    process.env.SQL_SERVER_READ_ONLY = 'true';
-    process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'false';
-    process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
-    server = { executeQuery: vi.fn() };
-    reloadStates = [];
-    const reload = serverConfig.reload.bind(serverConfig);
-    vi.spyOn(serverConfig, 'reload').mockImplementation(() => {
-      reloadStates.push(permissions());
-      reload();
-    });
+    ({ originalEnv, server, reloadStates } = setupPermissionEnvironment());
     vi.spyOn(TestDatabaseHelper.prototype, 'loadDockerEnvironment').mockImplementation(() => {});
     logs = vi.spyOn(console, 'log').mockImplementation(() => {});
     errors = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -160,18 +176,11 @@ describe('TestDatabaseHelper.createTestDatabase', () => {
 
     await expect(helper.createTestDatabase('ExistingDb')).resolves.toBe('ExistingDb');
 
-    expect(reloadStates).toEqual([
-      { readOnly: 'false', destructive: 'true', schema: 'true' },
-      { readOnly: undefined, destructive: undefined, schema: undefined }
-    ]);
-    expect(permissions()).toEqual({
+    expectRestoredPermissions(reloadStates, {
       readOnly: undefined,
       destructive: undefined,
       schema: undefined
     });
-    expect(serverConfig.readOnlyMode).toBe(true);
-    expect(serverConfig.allowDestructiveOperations).toBe(false);
-    expect(serverConfig.allowSchemaChanges).toBe(false);
   });
 
   test('reloads temporary permissions synchronously before its first database probe', async () => {
@@ -282,18 +291,7 @@ describe('TestDatabaseHelper.cleanupDatabase', () => {
   let reloadStates;
 
   beforeEach(() => {
-    originalEnv = { ...process.env };
-    delete process.env.MCP_TESTING_MODE;
-    process.env.SQL_SERVER_READ_ONLY = 'true';
-    process.env.SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS = 'false';
-    process.env.SQL_SERVER_ALLOW_SCHEMA_CHANGES = 'false';
-    server = { executeQuery: vi.fn() };
-    reloadStates = [];
-    const reload = serverConfig.reload.bind(serverConfig);
-    vi.spyOn(serverConfig, 'reload').mockImplementation(() => {
-      reloadStates.push(permissions());
-      reload();
-    });
+    ({ originalEnv, server, reloadStates } = setupPermissionEnvironment());
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
@@ -334,17 +332,10 @@ describe('TestDatabaseHelper.cleanupDatabase', () => {
 
     expect(server.executeQuery).toHaveBeenCalledTimes(2);
     expect(helper.getTestDatabases()).toEqual([]);
-    expect(reloadStates).toEqual([
-      { readOnly: 'false', destructive: 'true', schema: 'true' },
-      { readOnly: undefined, destructive: undefined, schema: undefined }
-    ]);
-    expect(permissions()).toEqual({
+    expectRestoredPermissions(reloadStates, {
       readOnly: undefined,
       destructive: undefined,
       schema: undefined
     });
-    expect(serverConfig.readOnlyMode).toBe(true);
-    expect(serverConfig.allowDestructiveOperations).toBe(false);
-    expect(serverConfig.allowSchemaChanges).toBe(false);
   });
 });
