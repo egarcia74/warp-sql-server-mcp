@@ -88,10 +88,12 @@ const RELEASE_JOB_NAME = 'Create Release';
 
 class CommandError extends Error {
   constructor(command, args, result) {
+    const stderr = result.error ? '' : result.stderr?.trim();
+    const details = stderr ? `\n${stderr}` : '';
     super(
       result.error
         ? `${command} could not be started: ${result.error.message}`
-        : `${command} ${args.join(' ')} exited ${result.status}${result.stderr?.trim() ? `\n${result.stderr.trim()}` : ''}`
+        : `${command} ${args.join(' ')} exited ${result.status}${details}`
     );
     this.notFound = result.error?.code === 'ENOENT';
   }
