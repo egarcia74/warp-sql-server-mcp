@@ -376,7 +376,7 @@ class ImprovedPerformanceTest {
     const sortedTimes = [...responseTimes].sort((a, b) => a - b);
 
     const min = sortedTimes[0];
-    const max = sortedTimes[sortedTimes.length - 1];
+    const max = sortedTimes.at(-1);
     const avg = sortedTimes.reduce((a, b) => a + b, 0) / sortedTimes.length;
 
     const median = sortedTimes[Math.floor(sortedTimes.length / 2)];

@@ -42,7 +42,7 @@ function splitAtFooterDate(text) {
   if (matches.length === 0) {
     return null;
   }
-  const footer = matches[matches.length - 1];
+  const footer = matches.at(-1);
   const start = footer.index + footer[1].length;
   return {
     before: text.slice(0, start),
