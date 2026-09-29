@@ -124,7 +124,6 @@ class ImprovedPerformanceTest {
         params: params
       };
 
-      const _errorData = '';
       let responseData = '';
       const timeoutHandle = setTimeout(() => {
         reject(new Error(`Request #${requestId} timed out after ${timeout}ms`));
@@ -445,7 +444,7 @@ class ImprovedPerformanceTest {
       );
 
       // Test 2: Performance monitoring baseline
-      const baselineResult = await this.runTest(
+      await this.runTest(
         'Performance Monitoring Baseline',
         async () => {
           return await this.sendMCPRequest('tools/call', {
@@ -455,9 +454,6 @@ class ImprovedPerformanceTest {
         },
         { description: 'Captures initial performance monitoring state' }
       );
-
-      // Extract baseline data for comparison
-      const _baselineMetrics = baselineResult.result?.response?.result?.content;
 
       // Test 3: Connection pool health
       await this.runTest(
