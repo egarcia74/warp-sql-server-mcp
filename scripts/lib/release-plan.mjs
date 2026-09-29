@@ -234,6 +234,19 @@ export function guard(command, args) {
   });
 }
 
+/** Read and validate either spelling of the manual release-type override. */
+function parseTypeOption(argv, index) {
+  const arg = argv[index];
+  const value = arg === '--type' ? argv[index + 1] : arg.slice('--type='.length);
+  if (value === undefined || value === '') {
+    throw new Error('--type needs a value: patch, minor or major');
+  }
+  if (!RELEASE_TYPES.has(value)) {
+    throw new Error(`--type must be patch, minor or major, not "${value}"`);
+  }
+  return value;
+}
+
 /**
  * Parses the command line. Throws on anything it does not recognise, so a typo like
  * `--dry_run` cannot silently dispatch a real release.
@@ -251,20 +264,8 @@ export function parseArgs(argv) {
     } else if (arg === '--help' || arg === '-h') {
       options.help = true;
     } else if (arg === '--type' || arg.startsWith('--type=')) {
-      let value;
-      if (arg === '--type') {
-        index += 1;
-        value = argv[index];
-      } else {
-        value = arg.slice('--type='.length);
-      }
-      if (value === undefined || value === '') {
-        throw new Error('--type needs a value: patch, minor or major');
-      }
-      if (!RELEASE_TYPES.has(value)) {
-        throw new Error(`--type must be patch, minor or major, not "${value}"`);
-      }
-      options.type = value;
+      options.type = parseTypeOption(argv, index);
+      if (arg === '--type') index += 1;
     } else {
       throw new Error(`unknown flag "${arg}" (see --help)`);
     }

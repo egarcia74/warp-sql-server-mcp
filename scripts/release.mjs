@@ -154,7 +154,7 @@ function fail(message) {
   process.exit(1);
 }
 
-function checkPreconditions() {
+function checkGithubCli() {
   try {
     capture('gh', ['auth', 'status']);
   } catch (error) {
@@ -163,6 +163,10 @@ function checkPreconditions() {
     }
     fail(`gh is not authenticated - run \`gh auth login\`.\n${error.message}`);
   }
+}
+
+function checkPreconditions() {
+  checkGithubCli();
 
   if (tryCapture('git', ['rev-parse', '--is-inside-work-tree'])?.trim() !== 'true') {
     fail('not inside a git repository - run this from a checkout of the repo.');
