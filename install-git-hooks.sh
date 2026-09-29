@@ -6,17 +6,17 @@ echo "Installing git hooks..."
 
 # Get the absolute path to the hooks directory
 HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)/hooks"
-GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
 
 # Check if we're in a git repository
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
-  echo "Error: Not in a git repository"
+  echo "Error: Not in a git repository" >&2
   exit 1
 fi
+GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
 
 # Check if hooks directory exists
 if [[ ! -d "$HOOKS_DIR" ]]; then
-  echo "Error: Hooks directory not found at $HOOKS_DIR"
+  echo "Error: Hooks directory not found at $HOOKS_DIR" >&2
   exit 1
 fi
 

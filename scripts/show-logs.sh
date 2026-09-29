@@ -435,7 +435,7 @@ while [[ $# -gt 0 ]]; do
                 CUSTOM_FILE_PATH="$2"
                 shift 2
             else
-                echo "❌ Error: --file/--path requires a file path argument"
+                echo "❌ Error: --file/--path requires a file path argument" >&2
                 exit 1
             fi
             ;;

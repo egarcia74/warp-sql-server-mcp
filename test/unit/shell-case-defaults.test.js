@@ -96,6 +96,14 @@ shellDescribe('docker test runner phase dispatch', () => {
 });
 
 shellDescribe('log viewer type dispatch', () => {
+  it.each(['--file', '--path'])('reports a missing %s value on stderr', option => {
+    const result = runScript('show-logs.sh', [option]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('--file/--path requires a file path argument');
+    expect(result.stdout).not.toContain('--file/--path requires a file path argument');
+  });
+
   it('uses the same server log for the default and explicit server type', () => {
     mkdirSync(path.join(fixtureDir, 'logs'));
     writeFileSync(

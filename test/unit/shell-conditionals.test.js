@@ -125,12 +125,25 @@ shellDescribe('Docker test runner decisions', () => {
 });
 
 shellDescribe('Git hook installation decisions', () => {
+  it('reports a non-repository error on stderr', () => {
+    copyFileSync(
+      path.join(repoRoot, 'install-git-hooks.sh'),
+      path.join(fixtureDir, 'install-git-hooks.sh')
+    );
+    const result = runInstaller(fixtureDir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Error: Not in a git repository');
+    expect(result.stdout).not.toContain('Error: Not in a git repository');
+  });
+
   it('rejects a missing source hook directory', () => {
     const repo = prepareInstaller();
     const result = runInstaller(repo);
 
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain('Hooks directory not found');
+    expect(result.stderr).toContain('Hooks directory not found');
+    expect(result.stdout).not.toContain('Hooks directory not found');
   });
 
   it('rejects an empty source hook directory', () => {
