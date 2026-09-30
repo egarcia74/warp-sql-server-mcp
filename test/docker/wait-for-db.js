@@ -38,7 +38,7 @@ const timing = getTimingConfig();
 
 const config = {
   server: process.env.SQL_SERVER_HOST || 'localhost',
-  port: parseInt(process.env.SQL_SERVER_PORT) || 1433,
+  port: Number.parseInt(process.env.SQL_SERVER_PORT) || 1433,
   user: process.env.SQL_SERVER_USER || 'sa',
   password: process.env.SQL_SERVER_PASSWORD || 'WarpMCP123!',
   database: 'master',
@@ -106,6 +106,37 @@ async function waitBeforeRetry(attempt, currentRetryDelay) {
   return Math.min(currentRetryDelay * timing.backoffMultiplier, timing.maxRetryDelay);
 }
 
+// Keep each attempt sequential: its pool must be closed before the next one begins.
+async function connectWithRetries(attempt, currentRetryDelay) {
+  let pool = null;
+  try {
+    logConnectionAttempt(attempt);
+
+    // Create a new pool for each attempt to avoid connection state issues
+    pool = new sql.ConnectionPool(config);
+    await pool.connect();
+
+    // Test basic connectivity
+    await pool.request().query('SELECT @@VERSION');
+
+    logConnectionSuccess(attempt);
+
+    await pool.close();
+    return { ready: true };
+  } catch (error) {
+    logConnectionFailure(attempt, error);
+
+    // Clean up the failed pool
+    await closeFailedPool(pool);
+
+    if (attempt >= timing.maxAttempts) {
+      return { ready: false, lastError: error };
+    }
+    const nextRetryDelay = await waitBeforeRetry(attempt, currentRetryDelay);
+    return connectWithRetries(attempt + 1, nextRetryDelay);
+  }
+}
+
 // Main execution
 async function main() {
   console.log('🚀 Starting SQL Server readiness check...');
@@ -115,10 +146,6 @@ async function main() {
   console.log(`⏳ Brief startup delay (${timing.initialDelay / 1000}s)...`);
   await sleep(timing.initialDelay);
 
-  let attempt = 1;
-  let lastError = null;
-  let currentRetryDelay = timing.baseRetryDelay;
-
   console.log('🔄 Waiting for SQL Server container to be ready...');
 
   const isAppleSilicon = process.arch === 'arm64' && process.platform === 'darwin';
@@ -126,40 +153,12 @@ async function main() {
     console.log('🍎 Apple Silicon detected - using intelligent retry with exponential backoff');
   }
 
-  while (attempt <= timing.maxAttempts) {
-    let pool = null;
-    try {
-      logConnectionAttempt(attempt);
-
-      // Create a new pool for each attempt to avoid connection state issues
-      pool = new sql.ConnectionPool(config);
-      await pool.connect();
-
-      // Test basic connectivity
-      await pool.request().query('SELECT @@VERSION');
-
-      logConnectionSuccess(attempt);
-
-      await pool.close();
-      return;
-    } catch (error) {
-      lastError = error;
-
-      logConnectionFailure(attempt, error);
-
-      // Clean up the failed pool
-      await closeFailedPool(pool);
-
-      if (attempt < timing.maxAttempts) {
-        currentRetryDelay = await waitBeforeRetry(attempt, currentRetryDelay);
-      }
-      attempt++;
-    }
+  const result = await connectWithRetries(1, timing.baseRetryDelay);
+  if (!result.ready) {
+    console.error(`❌ Failed to connect after ${timing.maxAttempts} attempts`);
+    console.error(`💥 Last error: ${result.lastError?.message || 'Unknown error'}`);
+    process.exit(1);
   }
-
-  console.error(`❌ Failed to connect after ${timing.maxAttempts} attempts`);
-  console.error(`💥 Last error: ${lastError?.message || 'Unknown error'}`);
-  process.exit(1);
 }
 
 // Handle graceful shutdown
