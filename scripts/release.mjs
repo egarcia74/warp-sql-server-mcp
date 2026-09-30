@@ -608,8 +608,10 @@ async function main() {
 // percent-encoded, so a hand-built `file://` + path string fails to match whenever the
 // checkout contains a space (and on Windows), and main() would be skipped silently.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(error => {
+  try {
+    await main();
+  } catch (error) {
     console.error(`ERROR: ${error.message}`);
     process.exit(1);
-  });
+  }
 }
