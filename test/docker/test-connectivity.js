@@ -121,8 +121,10 @@ async function runConnectivityTests() {
 
 // Run tests if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  runConnectivityTests().catch(error => {
+  try {
+    await runConnectivityTests();
+  } catch (error) {
     console.error('💥 Connectivity test failed:', error.message);
     process.exit(1);
-  });
+  }
 }
