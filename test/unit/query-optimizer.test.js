@@ -1,6 +1,4 @@
 import { performance } from 'node:perf_hooks';
-import { readFileSync } from 'node:fs';
-import { URL } from 'node:url';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { QueryOptimizer } from '../../lib/analysis/query-optimizer.js';
 
@@ -1288,12 +1286,23 @@ describe('QueryOptimizer', () => {
     ])('never treats %s after a table as its alias', keyword => {
       // Even malformed trailing SQL must not make a clause keyword an accepted
       // column qualifier for an executable CREATE INDEX suggestion.
-      const suggestion = whereSuggestion(
-        `SELECT * FROM dbo.T ${keyword} x WHERE [${keyword}].a = 1`
-      );
-      expect(suggestion.conceptual).toBe(true);
-      expect(suggestion).not.toHaveProperty('table');
+      for (const spelling of [keyword, keyword.toLowerCase()]) {
+        const suggestion = whereSuggestion(
+          `SELECT * FROM dbo.T ${spelling} x WHERE [${spelling}].a = 1`
+        );
+        expect(suggestion.conceptual).toBe(true);
+        expect(suggestion).not.toHaveProperty('table');
+      }
     });
+
+    test.each(['ordering', 'wherever', 'unionized', 'FORCE', 'GroupLabel'])(
+      'accepts near-keyword %s as a real alias',
+      alias => {
+        expect(
+          whereSuggestion(`SELECT * FROM dbo.T ${alias} WHERE ${alias}.a = 1`).suggestion
+        ).toBe('CREATE INDEX IX_a ON [dbo].[T] (a)');
+      }
+    );
 
     test('repeated key columns are listed once (a key list may not repeat a column)', () => {
       expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY a, t.a DESC, [A]').suggestion).toBe(
@@ -1309,16 +1318,5 @@ describe('QueryOptimizer', () => {
         'CREATE INDEX IX_Account_Id ON [dbo].[T] ([Account Id])'
       );
     });
-  });
-});
-
-describe('query optimizer alias keyword maintenance', () => {
-  test('reuses FROM-clause terminators when rejecting table aliases', () => {
-    const source = readFileSync(
-      new URL('../../lib/analysis/query-optimizer.js', import.meta.url),
-      'utf8'
-    );
-
-    expect(source).toContain('keywordAt(mask, pos, FROM_CLAUSE_TERMINATOR)');
   });
 });
