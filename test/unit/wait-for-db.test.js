@@ -59,6 +59,30 @@ function expectedPreamble() {
 }
 
 describe('Docker database readiness CLI', () => {
+  test('surfaces a scheduled callback failure without an unhandled promise', () => {
+    const probe = `
+      process.on('uncaughtException', error => {
+        process.stdout.write('uncaught:' + error.message + '\\n');
+      });
+      process.on('unhandledRejection', error => {
+        process.stdout.write('unhandled:' + error.message + '\\n');
+      });
+      setTimeout(() => {
+        throw new Error('timer callback failed');
+      }, 123);
+    `;
+    const result = spawnSync(
+      process.execPath,
+      ['--import', preloadPath, '--input-type=module', '-e', probe],
+      { cwd: repoRoot, encoding: 'utf8', timeout: 10000 }
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('uncaught:timer callback failed\n');
+    expect(result.stderr).toContain('WAIT_DB_TRACE:{"event":"sleep","delay":123}');
+  });
+
   test('uses one pool and closes it after an immediate successful query', () => {
     const result = runReadiness('immediate-success');
 

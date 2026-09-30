@@ -13,6 +13,6 @@ if (module.registerHooks) {
 // records each requested timeout; only the external clock is substituted.
 globalThis.setTimeout = (callback, delay, ...args) => {
   process.stderr.write(`WAIT_DB_TRACE:${JSON.stringify({ event: 'sleep', delay })}\n`);
-  Promise.resolve().then(() => callback(...args));
+  globalThis.queueMicrotask(() => callback(...args));
   return 0;
 };
