@@ -148,6 +148,15 @@ describe('Docker database readiness CLI', () => {
     ]);
   });
 
+  test('does not reclose an earlier pool if the next pool constructor throws', () => {
+    const result = runReadiness('constructor-fails-second');
+
+    expect(result.status).toBe(0);
+    expect(events(result.trace, 'construct').map(item => item.id)).toEqual([1, 2, 3]);
+    expect(events(result.trace, 'connect').map(item => item.id)).toEqual([1, 3]);
+    expect(events(result.trace, 'close').map(item => item.id)).toEqual([1, 3]);
+  });
+
   test('retries a success-path close failure within the existing catch boundary', () => {
     const result = runReadiness('close-fails-once');
 

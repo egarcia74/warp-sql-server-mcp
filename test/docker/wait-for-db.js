@@ -115,7 +115,6 @@ async function main() {
   console.log(`⏳ Brief startup delay (${timing.initialDelay / 1000}s)...`);
   await sleep(timing.initialDelay);
 
-  let pool = null;
   let attempt = 1;
   let lastError = null;
   let currentRetryDelay = timing.baseRetryDelay;
@@ -128,6 +127,7 @@ async function main() {
   }
 
   while (attempt <= timing.maxAttempts) {
+    let pool = null;
     try {
       logConnectionAttempt(attempt);
 
@@ -149,7 +149,6 @@ async function main() {
 
       // Clean up the failed pool
       await closeFailedPool(pool);
-      pool = null;
 
       if (attempt < timing.maxAttempts) {
         currentRetryDelay = await waitBeforeRetry(attempt, currentRetryDelay);
