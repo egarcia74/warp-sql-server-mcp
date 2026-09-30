@@ -174,8 +174,10 @@ process.on('SIGTERM', () => {
 });
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(error => {
+  try {
+    await main();
+  } catch (error) {
     console.error('💥 Unexpected error:', error);
     process.exit(1);
-  });
+  }
 }

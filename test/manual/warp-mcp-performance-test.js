@@ -425,7 +425,9 @@ class WarpMCPPerformanceTest {
 console.log('Starting Warp MCP Performance Test...\n');
 
 const test = new WarpMCPPerformanceTest();
-test.runWarpMCPTest().catch(error => {
+try {
+  await test.runWarpMCPTest();
+} catch (error) {
   console.error('\n❌ Warp MCP performance test failed:', error.message);
   process.exit(1);
-});
+}
