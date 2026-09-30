@@ -1230,6 +1230,21 @@ describe('QueryOptimizer', () => {
     const orderBySuggestion = q =>
       optimizer.generateIndexRecommendations(q, {}, {}).find(s => s.reason.includes('ORDER BY'));
 
+    test('keeps source offsets after an astral character inside parentheses', () => {
+      expect(
+        optimizer.extractWhereColumns('SELECT * FROM dbo.T WHERE COALESCE(𐐀, 0) = 1 AND age = ?')
+      ).toEqual(['age']);
+      expect(
+        optimizer.extractOrderByColumns('SELECT * FROM dbo.T ORDER BY COALESCE(𐐀, 0), age')
+      ).toEqual(['COALESCE(𐐀, 0)', 'age']);
+    });
+
+    test('tokenizes qualified bracketed names containing astral characters', () => {
+      expect(optimizer.extractTargetTable('SELECT * FROM [dbo].[😀] WHERE id = 1')).toBe(
+        '[dbo].[😀]'
+      );
+    });
+
     test('ignores a column comparison inside a trailing line comment', () => {
       const s = whereSuggestion(
         "SELECT * FROM dbo.Orders WHERE status = 'open' -- TODO also filter customers.ssn = '123'"
