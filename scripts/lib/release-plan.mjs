@@ -225,7 +225,7 @@ export function guard(command, args) {
       return value;
     }
     if (typeof arg !== 'string') {
-      throw new Error(`refusing to pass ${JSON.stringify(arg)} to ${command} as an argument`);
+      throw new TypeError(`refusing to pass ${JSON.stringify(arg)} to ${command} as an argument`);
     }
     if (!arg.startsWith('-') || (allowed.has(arg) && !arg.endsWith('='))) return arg;
 

@@ -989,6 +989,10 @@ describe('guard', () => {
     expect(() => guard('npm', ['publish'])).toThrow(/no argument allowlist/);
   });
 
+  it('uses TypeError for a non-string command argument', () => {
+    expect(() => guard('git', ['log', 5])).toThrow(TypeError);
+  });
+
   it('has no --short entry, which nothing used, and pins gh with --repo', () => {
     expect(ALLOWED_FLAGS.git.has('--short')).toBe(false);
     expect(ALLOWED_FLAGS.gh.has('--repo')).toBe(true);
