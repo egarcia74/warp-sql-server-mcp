@@ -1,4 +1,6 @@
 import { performance } from 'node:perf_hooks';
+import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { QueryOptimizer } from '../../lib/analysis/query-optimizer.js';
 
@@ -1273,5 +1275,16 @@ describe('QueryOptimizer', () => {
         'CREATE INDEX IX_Account_Id ON [dbo].[T] ([Account Id])'
       );
     });
+  });
+});
+
+describe('query optimizer alias keyword maintenance', () => {
+  test('reuses FROM-clause terminators when rejecting table aliases', () => {
+    const source = readFileSync(
+      new URL('../../lib/analysis/query-optimizer.js', import.meta.url),
+      'utf8'
+    );
+
+    expect(source).toContain('keywordAt(mask, pos, FROM_CLAUSE_TERMINATOR)');
   });
 });
