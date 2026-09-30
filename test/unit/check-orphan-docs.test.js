@@ -371,6 +371,13 @@ describe('collectLinkTargets', () => {
     expect(collectLinkTargets('[outer](some.md "[a](ORPHAN.md)")')).toEqual(['some.md']);
   });
 
+  it('skips links inside a title and resumes at the next inline link', () => {
+    expect(collectLinkTargets('[first](one.md "[fake](ORPHAN.md)") [next](two.md)')).toEqual([
+      'one.md',
+      'two.md'
+    ]);
+  });
+
   // Regression: reference destinations kept their backslashes, so `Guide\(advanced\).md`
   // produced a path no file matches and the document it named was reported orphaned. The
   // inline form already decoded them; this is the same rule on the other spelling.

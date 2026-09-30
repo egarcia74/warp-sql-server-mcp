@@ -263,7 +263,8 @@ function collectInlineLinks(body) {
     // Jump past the closing `)`. Everything between is the destination and the title, and a
     // title may legitimately contain brackets - `[outer](some.md "[inner]")` - which would
     // otherwise be pushed onto the stack and misread as another link.
-    i = link.end;
+    const skippedCharacters = link.end - i;
+    i += skippedCharacters;
   }
 
   return targets;
