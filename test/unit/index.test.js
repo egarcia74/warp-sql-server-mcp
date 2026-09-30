@@ -1,4 +1,6 @@
 import { SqlServerMCP } from '../../index.js';
+import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
@@ -677,5 +679,18 @@ describe('SqlServerMCP Index', () => {
       // The normalized rowsAffected must surface too, not just be stored (#1101).
       expect(parsed.data.queries[0].rowsAffected).to.equal(2);
     });
+  });
+});
+
+describe('server entrypoint', () => {
+  it('awaits startup within the direct-run guard while retaining fatal error handling', () => {
+    const source = readFileSync(new URL('../../index.js', import.meta.url), 'utf8');
+    const entrypoint = source.slice(source.indexOf('// Main execution'));
+
+    expect(entrypoint).to.match(/try\s*\{\s*await server\.run\(\);/);
+    expect(entrypoint).to.match(/catch\s*\(error\)\s*\{/);
+    expect(entrypoint).to.include("console.error('Server startup error:', error)");
+    expect(entrypoint).to.include('process.exit(1)');
+    expect(entrypoint).not.to.include('server.run().catch');
   });
 });
