@@ -756,6 +756,20 @@ describe('QueryOptimizer', () => {
       expect(optimizer.extractTargetTable('SELECT * FROM Users')).toBe('[Users]');
     });
 
+    test.each([
+      'WHERE id = 1',
+      'GROUP BY dept',
+      'HAVING COUNT(*) > 1',
+      'ORDER BY id',
+      'OPTION (RECOMPILE)',
+      'FOR JSON PATH',
+      'UNION SELECT * FROM Archive',
+      'EXCEPT SELECT * FROM Archive',
+      'INTERSECT SELECT * FROM Archive'
+    ])('resolves an unaliased table before %s', clause => {
+      expect(optimizer.extractTargetTable(`SELECT * FROM Users ${clause}`)).toBe('[Users]');
+    });
+
     test('resolves a three-part name', () => {
       expect(optimizer.extractTargetTable('SELECT * FROM Sales.dbo.Orders')).toBe(
         '[Sales].[dbo].[Orders]'
@@ -1258,6 +1272,37 @@ describe('QueryOptimizer', () => {
       expect(s).not.toHaveProperty('table');
       expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY x.name').conceptual).toBe(true);
     });
+
+    test.each([
+      'WHERE',
+      'GROUP',
+      'HAVING',
+      'ORDER',
+      'OPTION',
+      'FOR',
+      'UNION',
+      'EXCEPT',
+      'INTERSECT'
+    ])('never treats %s after a table as its alias', keyword => {
+      // Even malformed trailing SQL must not make a clause keyword an accepted
+      // column qualifier for an executable CREATE INDEX suggestion.
+      for (const spelling of [keyword, keyword.toLowerCase()]) {
+        const suggestion = whereSuggestion(
+          `SELECT * FROM dbo.T ${spelling} x WHERE [${spelling}].a = 1`
+        );
+        expect(suggestion.conceptual).toBe(true);
+        expect(suggestion).not.toHaveProperty('table');
+      }
+    });
+
+    test.each(['ordering', 'wherever', 'unionized', 'FORCE', 'GroupLabel'])(
+      'accepts near-keyword %s as a real alias',
+      alias => {
+        expect(
+          whereSuggestion(`SELECT * FROM dbo.T ${alias} WHERE ${alias}.a = 1`).suggestion
+        ).toBe('CREATE INDEX IX_a ON [dbo].[T] (a)');
+      }
+    );
 
     test('repeated key columns are listed once (a key list may not repeat a column)', () => {
       expect(orderBySuggestion('SELECT * FROM dbo.T t ORDER BY a, t.a DESC, [A]').suggestion).toBe(
