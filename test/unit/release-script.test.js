@@ -1,3 +1,6 @@
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath, URL } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import {
   parseArgs,
@@ -27,8 +30,8 @@ import {
 } from '../../scripts/lib/release-plan.mjs';
 import { planFromLog } from '../../scripts/ci/classify-release-commits.mjs';
 
-// The pure parts only. main() spawns gh and git and is deliberately left untested here;
-// nothing in this file starts a process.
+// The release decisions are tested as pure functions. The CLI smoke checks below use
+// only --help and invalid arguments, so they never reach dispatch or watch.
 
 describe('detectReleaseType', () => {
   it('is none for an empty window, with nothing counted', () => {
@@ -105,6 +108,30 @@ describe('detectReleaseType', () => {
   it('keeps drivers in commit order and does not deduplicate', () => {
     const result = detectReleaseType(['fix: same', 'fix: same', 'fix: other']);
     expect(result.drivers).toEqual(['fix: same', 'fix: same', 'fix: other']);
+  });
+});
+
+describe('release CLI entrypoint', () => {
+  const scriptPath = fileURLToPath(new URL('../../scripts/release.mjs', import.meta.url));
+
+  it('awaits the guarded entrypoint without a promise chain', () => {
+    const source = readFileSync(scriptPath, 'utf8');
+    expect(source).toContain('await main();');
+    expect(source).not.toMatch(/main\(\)\.catch\(/);
+  });
+
+  it('keeps help safe and reports argument errors without dispatching', () => {
+    const help = spawnSync(process.execPath, [scriptPath, '--help'], { encoding: 'utf8' });
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain('Usage:');
+    expect(help.stderr).toBe('');
+
+    const invalid = spawnSync(process.execPath, [scriptPath, '--not-a-release-option'], {
+      encoding: 'utf8'
+    });
+    expect(invalid.status).toBe(2);
+    expect(invalid.stderr).toContain('ERROR:');
+    expect(invalid.stdout).toBe('');
   });
 });
 
