@@ -111,30 +111,6 @@ describe('detectReleaseType', () => {
   });
 });
 
-describe('release CLI entrypoint', () => {
-  const scriptPath = fileURLToPath(new URL('../../scripts/release.mjs', import.meta.url));
-
-  it('awaits the guarded entrypoint without a promise chain', () => {
-    const source = readFileSync(scriptPath, 'utf8');
-    expect(source).toContain('await main();');
-    expect(source).not.toMatch(/main\(\)\.catch\(/);
-  });
-
-  it('keeps help safe and reports argument errors without dispatching', () => {
-    const help = spawnSync(process.execPath, [scriptPath, '--help'], { encoding: 'utf8' });
-    expect(help.status).toBe(0);
-    expect(help.stdout).toContain('Usage:');
-    expect(help.stderr).toBe('');
-
-    const invalid = spawnSync(process.execPath, [scriptPath, '--not-a-release-option'], {
-      encoding: 'utf8'
-    });
-    expect(invalid.status).toBe(2);
-    expect(invalid.stderr).toContain('ERROR:');
-    expect(invalid.stdout).toBe('');
-  });
-});
-
 // #1158: six standard conventional-commit types matched nothing, so a window of only those
 // computed `none` and released nothing, indistinguishable from a window with no commits.
 describe('detectReleaseType: the types added by #1158', () => {
@@ -1064,4 +1040,28 @@ describe('decideConfirmation', () => {
       expect(result.reason).toMatch(/is not 2\.0\.0/);
     }
   );
+});
+
+describe('release CLI entrypoint', () => {
+  const scriptPath = fileURLToPath(new URL('../../scripts/release.mjs', import.meta.url));
+
+  it('awaits the guarded entrypoint without a promise chain', () => {
+    const source = readFileSync(scriptPath, 'utf8');
+    expect(source).toContain('await main();');
+    expect(source).not.toMatch(/main\(\)\.catch\(/);
+  });
+
+  it('keeps help safe and reports argument errors without dispatching', () => {
+    const help = spawnSync(process.execPath, [scriptPath, '--help'], { encoding: 'utf8' });
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain('Usage:');
+    expect(help.stderr).toBe('');
+
+    const invalid = spawnSync(process.execPath, [scriptPath, '--not-a-release-option'], {
+      encoding: 'utf8'
+    });
+    expect(invalid.status).toBe(2);
+    expect(invalid.stderr).toContain('ERROR:');
+    expect(invalid.stdout).toBe('');
+  });
 });
