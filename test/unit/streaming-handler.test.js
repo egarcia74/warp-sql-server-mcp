@@ -157,6 +157,26 @@ describe('StreamingHandler', () => {
       expect(req.query).toHaveBeenCalledWith(expect.stringContaining('sys.tables'));
     });
 
+    it.each([
+      { estimatedRows: 10000, estimatedSizeMb: 10, expected: false },
+      { estimatedRows: 10001, estimatedSizeMb: 10, expected: true },
+      { estimatedRows: 10000, estimatedSizeMb: 10.1, expected: true }
+    ])(
+      'uses strict row and size thresholds for $estimatedRows rows and $estimatedSizeMb MB',
+      async ({ estimatedRows, estimatedSizeMb, expected }) => {
+        req.query.mockResolvedValue({
+          recordset: [{ estimated_rows: estimatedRows, estimated_size_mb: estimatedSizeMb }]
+        });
+
+        const result = await handler.shouldStreamQuery(req, 'SELECT id FROM data', {
+          tableName: 'data',
+          schema: 'dbo'
+        });
+
+        expect(result).toBe(expected);
+      }
+    );
+
     it('escapes tableName/schema in the size probe (defense-in-depth, GHSA-p8gx-89fp-x73j)', async () => {
       const context = { tableName: "t'--", schema: "s' OR '1'='1" };
       req.query.mockResolvedValue({
