@@ -45,7 +45,7 @@ try {
 console.log('\n3. SQL Server Container Status:');
 try {
   const containerStatus = execSync(
-    'docker ps --filter name=warp-mcp-sqlserver --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"',
+    String.raw`docker ps --filter name=warp-mcp-sqlserver --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"`,
     { encoding: 'utf8' }
   );
   if (containerStatus.includes('warp-mcp-sqlserver')) {
