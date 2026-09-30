@@ -1,8 +1,9 @@
 import { SqlServerMCP } from '../../index.js';
 import { readFileSync } from 'node:fs';
-import { URL } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { ConnectionManager } from '../../lib/database/connection-manager.js';
 import { QueryOptimizer } from '../../lib/analysis/query-optimizer.js';
@@ -683,6 +684,8 @@ describe('SqlServerMCP Index', () => {
 });
 
 describe('server entrypoint', () => {
+  const entrypointUrl = new URL('../../index.js', import.meta.url);
+
   it('awaits startup within the direct-run guard while retaining fatal error handling', () => {
     const source = readFileSync(new URL('../../index.js', import.meta.url), 'utf8');
     const entrypoint = source.slice(source.indexOf('// Main execution'));
@@ -692,5 +695,47 @@ describe('server entrypoint', () => {
     expect(entrypoint).to.include("console.error('Server startup error:', error)");
     expect(entrypoint).to.include('process.exit(1)');
     expect(entrypoint).not.to.include('server.run().catch');
+  });
+
+  it('runs the direct entrypoint when stdio connection succeeds', async () => {
+    const originalArgv1 = process.argv[1];
+    const connect = sinon.stub(Server.prototype, 'connect').resolves();
+
+    try {
+      process.argv[1] = fileURLToPath(entrypointUrl);
+      await import(`${entrypointUrl.href}?entrypoint-success`);
+      expect(connect.calledOnce).to.equal(true);
+    } finally {
+      process.argv[1] = originalArgv1;
+      connect.restore();
+    }
+  });
+
+  it('reports a rejected stdio connection and exits with status 1', async () => {
+    const originalArgv1 = process.argv[1];
+    const failure = new Error('stdio startup failed');
+    const exitError = new Error('process exit intercepted');
+    const connect = sinon.stub(Server.prototype, 'connect').rejects(failure);
+    const stderr = sinon.stub(console, 'error');
+    const exit = sinon.stub(process, 'exit').throws(exitError);
+
+    try {
+      process.argv[1] = fileURLToPath(entrypointUrl);
+      let caught;
+      try {
+        await import(`${entrypointUrl.href}?entrypoint-failure`);
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).to.equal(exitError);
+      expect(stderr.calledWith('Server startup error:', failure)).to.equal(true);
+      expect(exit.calledOnceWithExactly(1)).to.equal(true);
+    } finally {
+      process.argv[1] = originalArgv1;
+      connect.restore();
+      stderr.restore();
+      exit.restore();
+    }
   });
 });
