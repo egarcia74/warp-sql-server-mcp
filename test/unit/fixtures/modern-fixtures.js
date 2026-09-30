@@ -241,7 +241,7 @@ export const expectValidToolResponse = result => {
 
   // Validate JSON structure
   const data = JSON.parse(result[0].text);
-  if (!Object.prototype.hasOwnProperty.call(data, 'success')) {
+  if (!Object.hasOwn(data, 'success')) {
     throw new Error('Response missing success property');
   }
 
