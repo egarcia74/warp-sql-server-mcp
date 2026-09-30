@@ -375,3 +375,72 @@ describe('TestDatabaseHelper.cleanupDatabase', () => {
     });
   });
 });
+
+describe('TestDatabaseHelper.cleanupAllDatabases', () => {
+  let originalEnv;
+  let server;
+
+  beforeEach(() => {
+    ({ originalEnv, server } = setupPermissionEnvironment());
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.restoreAllMocks();
+    serverConfig.reload();
+  });
+
+  test('finishes each database cleanup before starting the next', async () => {
+    let finishFirstQuery;
+    server.executeQuery.mockImplementation(query => {
+      if (query === 'USE master' && !finishFirstQuery) {
+        return new Promise(resolve => {
+          finishFirstQuery = resolve;
+        });
+      }
+      return Promise.resolve({ content: [] });
+    });
+    const helper = new TestDatabaseHelper(server);
+    helper.testDatabases.push('FirstDb', 'SecondDb');
+
+    const cleanup = helper.cleanupAllDatabases();
+    expect(server.executeQuery.mock.calls).toEqual([['USE master']]);
+
+    finishFirstQuery({ content: [] });
+    await cleanup;
+
+    expect(server.executeQuery.mock.calls.map(([query]) => query)).toEqual([
+      'USE master',
+      expect.stringContaining('DROP DATABASE [FirstDb]'),
+      'USE master',
+      expect.stringContaining('DROP DATABASE [SecondDb]')
+    ]);
+    expect(helper.getTestDatabases()).toEqual([]);
+  });
+
+  test('leaves databases added during cleanup for a later pass', async () => {
+    let finishFirstQuery;
+    server.executeQuery.mockImplementation(query => {
+      if (query === 'USE master' && !finishFirstQuery) {
+        return new Promise(resolve => {
+          finishFirstQuery = resolve;
+        });
+      }
+      return Promise.resolve({ content: [] });
+    });
+    const helper = new TestDatabaseHelper(server);
+    helper.testDatabases.push('FirstDb');
+
+    const cleanup = helper.cleanupAllDatabases();
+    helper.testDatabases.push('LaterDb');
+    finishFirstQuery({ content: [] });
+    await cleanup;
+
+    expect(server.executeQuery.mock.calls.map(([query]) => query)).toEqual([
+      'USE master',
+      expect.stringContaining('DROP DATABASE [FirstDb]')
+    ]);
+    expect(helper.getTestDatabases()).toEqual(['LaterDb']);
+  });
+});

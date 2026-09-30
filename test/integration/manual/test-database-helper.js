@@ -250,9 +250,13 @@ export class TestDatabaseHelper {
   async cleanupAllDatabases() {
     console.log(`🧹 Cleaning up ${this.testDatabases.length} test databases...`);
 
-    for (const dbName of [...this.testDatabases]) {
-      await this.cleanupDatabase(dbName);
-    }
+    const databases = this.getTestDatabases();
+    const cleanupNext = async index => {
+      if (index >= databases.length) return;
+      await this.cleanupDatabase(databases[index]);
+      await cleanupNext(index + 1);
+    };
+    await cleanupNext(0);
 
     console.log('✅ All test databases cleaned up');
   }
