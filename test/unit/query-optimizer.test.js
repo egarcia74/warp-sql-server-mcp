@@ -1189,6 +1189,39 @@ describe('QueryOptimizer', () => {
       );
       expect(optimizer.extractTargetTable('SELECT * FROM dbo.T (1)')).toBeNull();
     });
+
+    test.each([
+      'NOLOCK',
+      'READUNCOMMITTED',
+      'READCOMMITTED',
+      'REPEATABLEREAD',
+      'SERIALIZABLE',
+      'HOLDLOCK',
+      'UPDLOCK',
+      'XLOCK',
+      'ROWLOCK',
+      'PAGLOCK',
+      'TABLOCK',
+      'TABLOCKX',
+      'READPAST',
+      'NOWAIT',
+      'INDEX(1)',
+      'INDEX (idx_name)',
+      'NOLOCK, INDEX(1)',
+      'TABLOCKXNOLOCK',
+      'TABLOCKXLOCK',
+      'INDEX(1)TABLOCK',
+      'NOLOCK,'
+    ])('preserves legacy table-hint recognition for %s', hint => {
+      expect(optimizer.extractTargetTable(`SELECT * FROM dbo.T (${hint})`)).toBe('[dbo].[T]');
+    });
+
+    test.each(['NOLOCK BAD', 'INDEX((1))', 'BAD'])(
+      'still rejects an invalid legacy table-hint group: %s',
+      hint => {
+        expect(optimizer.extractTargetTable(`SELECT * FROM dbo.T (${hint})`)).toBeNull();
+      }
+    );
   });
 
   describe('WHERE / ORDER BY extraction is lexical and attributed (#1102 review 2)', () => {
