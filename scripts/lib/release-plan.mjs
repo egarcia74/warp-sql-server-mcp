@@ -114,7 +114,8 @@ export function resolveReleasedVersion(tagsBefore, tagsAfter, expected) {
 
   if (created.includes(expected)) return { version: expected, source: 'tag' };
   if (created.length === 0) return { version: expected, source: 'expected' };
-  return { version: created.sort(compareVersions).at(-1), source: 'tag' };
+  created.sort(compareVersions);
+  return { version: created.at(-1), source: 'tag' };
 }
 
 function compareVersions(left, right) {
