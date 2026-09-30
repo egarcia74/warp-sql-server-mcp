@@ -12,11 +12,18 @@ export class ConnectionPool {
       throw new Error('unexpected readiness pool configuration');
     }
     trace('construct', this.id);
+    if (scenario === 'constructor-fails-second' && this.id === 2) {
+      throw new Error('constructor failure 2');
+    }
   }
 
   async connect() {
     trace('connect', this.id);
-    if (scenario === 'always-fail' || (scenario === 'success-fifth' && this.id < 5)) {
+    if (
+      scenario === 'always-fail' ||
+      (scenario === 'success-fifth' && this.id < 5) ||
+      (scenario === 'constructor-fails-second' && this.id === 1)
+    ) {
       throw new Error(`connect failure ${this.id}`);
     }
     return this;
