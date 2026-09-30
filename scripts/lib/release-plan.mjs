@@ -141,14 +141,20 @@ function compareVersions(left, right) {
  * github.com. Throws on anything else.
  */
 export function parseOriginRepo(url) {
-  const match =
-    /^(?:(?:https?|ssh):\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/|(?:[^@/]+@)?([^/:]+):)([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(
-      String(url).trim()
-    );
-  if (!match) throw new Error(`cannot read a GitHub owner/name from origin URL "${url}"`);
+  const remote = String(url).trim();
+  const urlPrefix = /^(?:https?|ssh):\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/([\s\S]*)$/.exec(remote);
+  const urlRepository = urlPrefix && /^([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(urlPrefix[2]);
+  // Keep the SCP-style match whole so its host separator can backtrack when needed.
+  const scpRepository = urlRepository
+    ? null
+    : /^(?:[^@/]+@)?([^/:]+):([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(remote);
+  if (!urlRepository && !scpRepository) {
+    throw new Error(`cannot read a GitHub owner/name from origin URL "${url}"`);
+  }
 
-  const [, urlHost, scpHost, owner, name] = match;
-  const host = urlHost ?? scpHost;
+  const host = urlRepository ? urlPrefix[1] : scpRepository[1];
+  const owner = urlRepository ? urlRepository[1] : scpRepository[2];
+  const name = urlRepository ? urlRepository[2] : scpRepository[3];
   const ownerOk = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(owner);
   const nameOk = /^[A-Za-z0-9_.-]{1,100}$/.test(name) && name !== '.' && name !== '..';
   if (!ownerOk || !nameOk) {
