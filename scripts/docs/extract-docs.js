@@ -338,7 +338,7 @@ function generateToolsDocumentation() {
       if (fs.existsSync(outPath)) {
         const prev = JSON.parse(fs.readFileSync(outPath, 'utf8'));
         const normalize = obj => {
-          const copy = JSON.parse(JSON.stringify(obj));
+          const copy = globalThis.structuredClone(obj);
           delete copy.generatedAt;
           return copy;
         };
