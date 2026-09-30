@@ -1232,11 +1232,11 @@ describe('QueryOptimizer', () => {
 
     test('keeps source offsets after an astral character inside parentheses', () => {
       expect(
-        optimizer.extractWhereColumns('SELECT * FROM dbo.T WHERE COALESCE([😀], 0) = 1 AND age = ?')
+        optimizer.extractWhereColumns('SELECT * FROM dbo.T WHERE COALESCE(𐐀, 0) = 1 AND age = ?')
       ).toEqual(['age']);
       expect(
-        optimizer.extractOrderByColumns('SELECT * FROM dbo.T ORDER BY COALESCE([😀], 0), age')
-      ).toEqual(['COALESCE([😀], 0)', 'age']);
+        optimizer.extractOrderByColumns('SELECT * FROM dbo.T ORDER BY COALESCE(𐐀, 0), age')
+      ).toEqual(['COALESCE(𐐀, 0)', 'age']);
     });
 
     test('tokenizes qualified bracketed names containing astral characters', () => {
