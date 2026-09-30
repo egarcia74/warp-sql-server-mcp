@@ -577,10 +577,12 @@ class ImprovedPerformanceTest {
 // Run the tests
 if (import.meta.url === `file://${process.argv[1]}`) {
   const testRunner = new ImprovedPerformanceTest();
-  testRunner.runManualPerformanceTests().catch(error => {
+  try {
+    await testRunner.runManualPerformanceTests();
+  } catch (error) {
     console.error('💥 Test suite failed:', error);
     process.exit(1);
-  });
+  }
 }
 
 // Export for testing

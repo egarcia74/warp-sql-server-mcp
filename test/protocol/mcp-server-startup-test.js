@@ -256,7 +256,9 @@ class MCPServerStartupTest {
 
 // Run the test
 const startupTest = new MCPServerStartupTest();
-startupTest.runStartupTest().catch(error => {
+try {
+  await startupTest.runStartupTest();
+} catch (error) {
   console.error('💥 Test execution failed:', error.message);
   process.exit(1);
-});
+}
