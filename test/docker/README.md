@@ -140,14 +140,17 @@ The Docker container automatically creates:
 
 ### Environment Variables
 
-Docker testing uses `test/docker/.env.docker`:
+`npm run docker:detect` creates a private, ignored `test/docker/.env.docker` from
+`docker-env.template`. It generates a strong local SA password on first use and reuses it on
+subsequent starts so the credential stays in sync with the persistent SQL Server data volume.
+Docker testing then uses that file:
 
 ```bash
 # Database connection (container defaults)
 SQL_SERVER_HOST=localhost
 SQL_SERVER_PORT=14330
 SQL_SERVER_USER=sa
-SQL_SERVER_PASSWORD=WarpMCP123!
+SQL_SERVER_PASSWORD=<generated locally; do not commit>
 
 # SSL disabled for container testing
 SQL_SERVER_ENCRYPT=false
@@ -164,7 +167,7 @@ SQL_SERVER_TRUST_CERT=true
 
 - **Image**: `mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f`
   - Note: Using a pinned digest ensures reproducible builds and satisfies supply‑chain checks.
-- **Port**: `14330` on the host, mapped to `1433` inside the container (avoids colliding with a local SQL Server)
+- **Port**: `127.0.0.1:14330` on the host, mapped to `1433` inside the container (not exposed on other host interfaces)
 - **Memory**: 2GB allocated
 - **Storage**: Persistent volume for data
 - **Network**: Isolated Docker network
@@ -175,16 +178,18 @@ Design notes:
 - Legacy test entrypoint scripts and a custom Dockerfile have been removed to reduce drift and maintenance.
 - Initialization runs the mounted SQL script after the container passes health checks.
 
-### Password Standardization
+### Local Docker Password
 
-**All environments now use the same password: `WarpMCP123!`**
-
-- **Docker Container**: Hardcoded in `docker-compose.yml`
-- **Docker Tests**: Configured in `test/docker/.env.docker`
-- **Local Development**: Configured in `.env` and `.env.demo`
-- **Template**: Example shown in `.env.example`
-
-This ensures consistency across all testing and development environments.
+The generated password is stored only in ignored local Docker files, and the generator restricts
+`.env.docker` to the current user. The Compose healthcheck reads the container environment rather
+than embedding another copy of the password. Keep `.env.docker` while retaining the Docker data
+volume; deleting it alone would generate a new password that does not match the existing SQL Server
+login. This also applies when upgrading from a checkout that used the previously tracked test
+password: the old data volume cannot authenticate with the new generated password. For a disposable
+test database, explicitly run `docker compose -f test/docker/docker-compose.yml down -v`, remove
+`.env.docker`, then run `npm run docker:start`. The Compose command removes this project's test data
+volume; back up any test data you need first. Do not remove `.env.docker` without also resetting the
+corresponding volume.
 
 ## 🧪 **Testing Phases**
 
@@ -408,7 +413,8 @@ the protocol phase (see
 
 - **`docker-compose.yml`**: Container orchestration configuration
 - **`init-db.sql`**: Database initialization script with sample data
-- **`.env.docker`**: Docker-specific environment variables
+- **`docker-env.template`**: Tracked Docker environment template without a password
+- **`.env.docker`**: Generated, ignored local Docker environment and password
 - **`wait-for-db.js`**: Database readiness verification script
 - **`README.md`**: This documentation file
 

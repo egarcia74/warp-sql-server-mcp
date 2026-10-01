@@ -987,7 +987,8 @@ test/
 └── docker/                                  # Docker testing infrastructure
     ├── README.md, PLATFORM-DETECTION.md, QUICK-REFERENCE.md,
     │   STRESS-TESTING.md, TESTING-SUMMARY.md, MCP-BENEFIT-SUMMARY.md
-    ├── .env.docker                          # Docker environment variables
+    ├── docker-env.template                  # Tracked Docker environment template
+    ├── .env.docker                          # Generated, ignored local Docker credentials
     ├── detect-platform.js                   # Generates docker-compose.yml (untracked)
     ├── command-utils.js, verify-platform-detection.js, troubleshoot-apple-silicon.js
     ├── init-db.sql, init-db-node.js, wait-for-db.js, test-connectivity.js

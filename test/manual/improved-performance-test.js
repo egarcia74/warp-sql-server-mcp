@@ -12,9 +12,12 @@ import dotenv from 'dotenv';
 
 // Load the Docker test environment (host, port 14330, credentials) so the
 // spawned MCP server targets the test container instead of the production
-// default localhost:1433. Existing environment variables take precedence,
-// so a manual run against another server can still override these values.
-dotenv.config({ path: './test/docker/.env.docker' });
+// default localhost:1433. The managed Docker suite uses the generated local
+// credential; direct manual runs can still override it from the environment.
+dotenv.config({
+  path: './test/docker/.env.docker',
+  override: process.env.MCP_TESTING_MODE === 'docker'
+});
 
 class ImprovedPerformanceTest {
   constructor() {

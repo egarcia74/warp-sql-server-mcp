@@ -1,14 +1,32 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { execSync } from 'node:child_process';
+import { fileURLToPath, URL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { chooseBestConfiguration, generateDockerCompose, main } from '../docker/detect-platform.js';
+import {
+  chooseBestConfiguration,
+  ensureDockerPassword,
+  generateDockerCompose,
+  main
+} from '../docker/detect-platform.js';
 
 vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
 
 const originalTestingMode = process.env.TESTING_MODE;
+const dockerEnvPath = fileURLToPath(new URL('../docker/.env.docker', import.meta.url));
 
 function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
+  const realLstatSync = fs.lstatSync;
+  vi.spyOn(fs, 'lstatSync').mockImplementation(file => {
+    if (file === dockerEnvPath) {
+      const error = new Error('Docker test environment not yet generated');
+      error.code = 'ENOENT';
+      throw error;
+    }
+    return realLstatSync(file);
+  });
   const arch = Object.getOwnPropertyDescriptor(process, 'arch');
   const platform = Object.getOwnPropertyDescriptor(process, 'platform');
   Object.defineProperty(process, 'arch', { configurable: true, value: hostArch });
@@ -52,10 +70,68 @@ describe('Docker platform configuration selection', () => {
       compatibility: 'Full SQL Server feature set',
       config: { platform: null, environment: { MSSQL_AGENT_ENABLED: 'true' } }
     });
-    expect(generateDockerCompose(selected).services.sqlserver).toMatchObject({
-      ports: ['14330:1433'],
+    expect(generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver).toMatchObject({
+      ports: ['127.0.0.1:14330:1433'],
       healthcheck: { interval: '10s', timeout: '5s', retries: 5, start_period: '30s' }
     });
+  });
+
+  it('uses the supplied local credential without copying it into the healthcheck command', () => {
+    const selected = chooseBestConfiguration(
+      { arch: 'x64', isAppleSilicon: false },
+      { hasDocker: false, supportsAMD64: false }
+    );
+    const service = generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver;
+
+    expect(service.environment.SA_PASSWORD).toBe('GeneratedAa1!');
+    expect(service.healthcheck.test[1]).toContain('$$SA_PASSWORD');
+    expect(service.healthcheck.test[1]).not.toContain('GeneratedAa1!');
+  });
+
+  it('publishes the local test database only on the host loopback interface', () => {
+    const selected = chooseBestConfiguration(
+      { arch: 'x64', isAppleSilicon: false },
+      { hasDocker: false, supportsAMD64: false }
+    );
+
+    expect(generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver.ports).toEqual([
+      '127.0.0.1:14330:1433'
+    ]);
+  });
+
+  it('reuses the generated password across starts and keeps its file private', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-'));
+    const envPath = path.join(dir, '.env.docker');
+    const templatePath = path.join(dir, 'docker-env.template');
+    try {
+      fs.writeFileSync(templatePath, 'SQL_SERVER_HOST=localhost\nSQL_SERVER_PASSWORD=\n');
+      const first = ensureDockerPassword(envPath, templatePath);
+      const second = ensureDockerPassword(envPath, templatePath);
+
+      expect(first).toMatch(/^[0-9a-f]{48}Aa1!$/);
+      expect(second).toBe(first);
+      expect(fs.readFileSync(envPath, 'utf8')).toBe(
+        `SQL_SERVER_HOST=localhost\nSQL_SERVER_PASSWORD=${first}\n`
+      );
+      if (process.platform !== 'win32') {
+        expect(fs.statSync(envPath).mode & 0o777).toBe(0o600);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a weak existing Docker credential rather than reusing it', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-'));
+    const envPath = path.join(dir, '.env.docker');
+    try {
+      fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=ShortAa1!\n');
+      expect(() => ensureDockerPassword(envPath)).toThrow(
+        'Docker test password is not strong enough'
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('uses emulated SQL Server for Apple Silicon with AMD64 support', () => {
@@ -70,7 +146,7 @@ describe('Docker platform configuration selection', () => {
       compatibility: 'Full SQL Server feature set',
       config: { platform: 'linux/amd64', environment: { MSSQL_AGENT_ENABLED: 'true' } }
     });
-    expect(generateDockerCompose(selected).services.sqlserver).toMatchObject({
+    expect(generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver).toMatchObject({
       platform: 'linux/amd64',
       init: true,
       healthcheck: { interval: '15s', timeout: '10s', retries: 8, start_period: '45s' }
@@ -95,7 +171,9 @@ describe('Docker platform configuration selection', () => {
       compatibility: 'SQL Server core features (no SQL Agent)',
       config: { platform: null, environment: { MSSQL_AGENT_ENABLED: 'false' } }
     });
-    expect(generateDockerCompose(selected).services.sqlserver.healthcheck).toMatchObject({
+    expect(
+      generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver.healthcheck
+    ).toMatchObject({
       interval: '12s',
       timeout: '8s',
       retries: 6,
@@ -143,15 +221,23 @@ describe('Docker platform configuration selection', () => {
 
   it('writes YAML with unchanged quoting, indentation, array syntax, and file destinations', () => {
     const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+    const chmod = vi.spyOn(fs, 'chmodSync').mockImplementation(() => {});
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     runDetectionForHost('x64', 'linux', 'x86_64');
 
     expect(execSync).toHaveBeenCalledTimes(3);
     expect(log).not.toHaveBeenCalled();
-    expect(write).toHaveBeenCalledTimes(2);
-    expect(write.mock.calls[0][0]).toMatch(/test\/docker\/docker-compose\.yml$/);
-    expect(write.mock.calls[1][0]).toMatch(/test\/docker\/\.platform-config\.json$/);
-    expect(write.mock.calls[0][1]).toBe(
+    expect(write).toHaveBeenCalledTimes(3);
+    expect(write.mock.calls[0][0]).toMatch(/test\/docker\/\.env\.docker$/);
+    expect(write.mock.calls[0][2]).toEqual({ flag: 'wx', mode: 0o600 });
+    const password = write.mock.calls[0][1].match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m)[1];
+    expect(password).toMatch(/^[0-9a-f]{48}Aa1!$/);
+    expect(write.mock.calls[1][0]).toMatch(/test\/docker\/docker-compose\.yml$/);
+    expect(write.mock.calls[1][2]).toEqual({ mode: 0o600 });
+    expect(chmod).toHaveBeenCalledWith(write.mock.calls[1][0], 0o600);
+    expect(chmod.mock.invocationCallOrder[0]).toBeLessThan(write.mock.invocationCallOrder[1]);
+    expect(write.mock.calls[2][0]).toMatch(/test\/docker\/\.platform-config\.json$/);
+    expect(write.mock.calls[1][1]).toBe(
       [
         'services:',
         '  sqlserver:',
@@ -160,19 +246,19 @@ describe('Docker platform configuration selection', () => {
         '    hostname: warp-mcp-sqlserver',
         '    environment:',
         '      ACCEPT_EULA: Y',
-        '      SA_PASSWORD: WarpMCP123!',
+        `      SA_PASSWORD: ${password}`,
         '      MSSQL_PID: Developer',
         '      MSSQL_AGENT_ENABLED: "true"',
         '      MSSQL_COLLATION: SQL_Latin1_General_CP1_CI_AS',
         '    ports:',
-        '      - 14330:1433',
+        '      - 127.0.0.1:14330:1433',
         '    volumes:',
         '      - ./init-db.sql:/tmp/init-db.sql:ro',
         '      - sqlserver_data:/var/opt/mssql',
         '    healthcheck:',
         '      test:',
         '        - CMD-SHELL',
-        '        - \'/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P WarpMCP123! -C -Q "SELECT 1" || exit 1\'',
+        '        - \'/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1\'',
         '      interval: 10s',
         '      timeout: 5s',
         '      retries: 5',
@@ -189,7 +275,7 @@ describe('Docker platform configuration selection', () => {
         ''
       ].join('\n')
     );
-    expect(JSON.parse(write.mock.calls[1][1])).toMatchObject({
+    expect(JSON.parse(write.mock.calls[2][1])).toMatchObject({
       architecture: 'x64',
       platform: 'linux',
       selected: { reason: 'Native AMD64 architecture - optimal performance' },
@@ -199,11 +285,12 @@ describe('Docker platform configuration selection', () => {
 
   it('writes Apple Silicon overrides and string arrays to YAML', () => {
     const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+    vi.spyOn(fs, 'chmodSync').mockImplementation(() => {});
     runDetectionForHost('arm64', 'darwin', 'aarch64');
 
     expect(execSync).toHaveBeenCalledTimes(3);
-    expect(write).toHaveBeenCalledTimes(2);
-    const yaml = write.mock.calls[0][1];
+    expect(write).toHaveBeenCalledTimes(3);
+    const yaml = write.mock.calls[1][1];
     expect(yaml).toContain('    platform: linux/amd64\n');
     expect(yaml).toContain('      MSSQL_MEMORY_LIMIT_MB: 2048\n');
     expect(yaml).toContain('      start_period: 45s\n');
@@ -212,7 +299,7 @@ describe('Docker platform configuration selection', () => {
     expect(yaml).toContain('    cap_add:\n      - SYS_PTRACE\n');
     expect(yaml).toContain('    security_opt:\n      - seccomp:unconfined\n');
     expect(yaml).toContain('    tmpfs:\n      - /tmp:noexec,nosuid,size=100m\n');
-    expect(JSON.parse(write.mock.calls[1][1])).toMatchObject({
+    expect(JSON.parse(write.mock.calls[2][1])).toMatchObject({
       architecture: 'arm64',
       platform: 'darwin',
       selected: { reason: 'Apple Silicon with Rosetta 2 emulation - full SQL Server compatibility' }
@@ -221,6 +308,7 @@ describe('Docker platform configuration selection', () => {
 
   it('escapes backslashes and double quotes in a special-character scalar', () => {
     const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+    vi.spyOn(fs, 'chmodSync').mockImplementation(() => {});
     const selected = chooseBestConfiguration(
       { arch: 'x64', isAppleSilicon: false },
       { hasDocker: true, supportsAMD64: true }
@@ -235,13 +323,14 @@ describe('Docker platform configuration selection', () => {
       environment.MSSQL_PID = originalPid;
     }
 
-    expect(write.mock.calls[0][1]).toContain(
+    expect(write.mock.calls[1][1]).toContain(
       '      MSSQL_PID: "Dev\\\\Tools \\"quoted\\" # tag"\n'
     );
   });
 
   it('doubles every apostrophe in a quoted YAML array item', () => {
     const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+    vi.spyOn(fs, 'chmodSync').mockImplementation(() => {});
     const selected = chooseBestConfiguration(
       { arch: 'x64', isAppleSilicon: false },
       { hasDocker: true, supportsAMD64: true }
@@ -256,6 +345,6 @@ describe('Docker platform configuration selection', () => {
       healthcheck.test = originalTest;
     }
 
-    expect(write.mock.calls[0][1]).toContain("        - 'O''Brien''s ''quoted'' setting'\n");
+    expect(write.mock.calls[1][1]).toContain("        - 'O''Brien''s ''quoted'' setting'\n");
   });
 });

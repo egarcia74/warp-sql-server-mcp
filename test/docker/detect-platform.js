@@ -14,11 +14,52 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const dockerEnvPath = path.join(__dirname, '.env.docker');
+const dockerEnvTemplatePath = path.join(__dirname, 'docker-env.template');
+
+function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvTemplatePath) {
+  try {
+    const stat = fs.lstatSync(envPath);
+    if (!stat.isFile()) {
+      throw new Error(`Docker test environment must be a regular file: ${envPath}`);
+    }
+    const match = fs.readFileSync(envPath, 'utf8').match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m);
+    if (!match) {
+      throw new Error(`Docker test password is missing from ${envPath}`);
+    }
+    const password = match[1];
+    if (
+      !/^[A-Za-z0-9][A-Za-z0-9!_-]{23,127}$/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[A-Z]/.test(password) ||
+      !/[0-9]/.test(password) ||
+      !/[!_-]/.test(password)
+    ) {
+      throw new Error(`Docker test password is not strong enough in ${envPath}`);
+    }
+    fs.chmodSync(envPath, 0o600);
+    return password;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
+  const template = fs.readFileSync(templatePath, 'utf8');
+  if (!/^SQL_SERVER_PASSWORD=$/m.test(template)) {
+    throw new Error(
+      `Docker test environment template has no password placeholder: ${templatePath}`
+    );
+  }
+  const password = `${randomBytes(24).toString('hex')}Aa1!`;
+  const content = template.replace(/^SQL_SERVER_PASSWORD=$/m, `SQL_SERVER_PASSWORD=${password}`);
+  fs.writeFileSync(envPath, content, { flag: 'wx', mode: 0o600 });
+  return password;
+}
 
 // Configuration templates
 const CONFIG_TEMPLATES = {
@@ -34,7 +75,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P WarpMCP123! -C -Q "SELECT 1" || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1'
       ]
     }
   },
@@ -54,7 +95,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "WarpMCP123!" -C -Q "SELECT 1" -t 10 || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1'
       ],
       interval: '15s',
       timeout: '10s',
@@ -91,7 +132,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "WarpMCP123!" -C -Q "SELECT 1" -t 10 || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1'
       ],
       interval: '12s',
       timeout: '8s',
@@ -234,7 +275,10 @@ function chooseArm64Configuration(hostInfo, dockerInfo, isQuiet) {
 /**
  * Generate Docker Compose YAML
  */
-function generateDockerCompose(selectedConfig) {
+function generateDockerCompose(selectedConfig, password) {
+  if (!password) {
+    throw new Error('A local Docker test password is required');
+  }
   const baseCompose = {
     services: {
       sqlserver: {
@@ -244,12 +288,12 @@ function generateDockerCompose(selectedConfig) {
         hostname: 'warp-mcp-sqlserver',
         environment: {
           ACCEPT_EULA: 'Y',
-          SA_PASSWORD: 'WarpMCP123!',
+          SA_PASSWORD: password,
           ...selectedConfig.config.environment
         },
         // Host port 14330 avoids colliding with a local SQL Server on 1433;
         // the container-internal port stays 1433.
-        ports: ['14330:1433'],
+        ports: ['127.0.0.1:14330:1433'],
         volumes: ['./init-db.sql:/tmp/init-db.sql:ro', 'sqlserver_data:/var/opt/mssql'],
         healthcheck: {
           test: selectedConfig.config.healthcheck.test,
@@ -354,7 +398,14 @@ function writeConfiguration(selectedConfig, dockerCompose, outputDir) {
 
   // Write Docker Compose file
   const yamlContent = objectToYaml(dockerCompose);
-  fs.writeFileSync(dockerComposePath, yamlContent);
+  try {
+    // Protect an existing generated file before replacing its credential.
+    fs.chmodSync(dockerComposePath, 0o600);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  fs.writeFileSync(dockerComposePath, yamlContent, { mode: 0o600 });
+  fs.chmodSync(dockerComposePath, 0o600);
 
   // Write configuration info
   const configInfo = {
@@ -395,7 +446,7 @@ function main() {
     const selectedConfig = chooseBestConfiguration(hostInfo, dockerInfo);
 
     // Generate Docker Compose
-    const dockerCompose = generateDockerCompose(selectedConfig);
+    const dockerCompose = generateDockerCompose(selectedConfig, ensureDockerPassword());
 
     // Write configuration
     const outputDir = __dirname;
@@ -437,6 +488,7 @@ export {
   detectArchitecture,
   checkDockerCapabilities,
   chooseBestConfiguration,
+  ensureDockerPassword,
   generateDockerCompose,
   main
 };
