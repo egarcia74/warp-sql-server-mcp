@@ -163,7 +163,7 @@ function startServer() {
   loadConfigToEnv();
   // Start the actual MCP server
   const serverPath = path.join(__dirname, 'index.js');
-  const serverProcess = spawn('node', [serverPath], {
+  const serverProcess = spawn(process.execPath, [serverPath], {
     stdio: 'inherit',
     env: process.env
   });

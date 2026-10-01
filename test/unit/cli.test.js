@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -166,6 +167,40 @@ describe('CLI Security Tests', () => {
     expect(stdout).toContain(pkg.version);
     expect(stdout).toContain('@egarcia74/warp-sql-server-mcp');
   });
+
+  test.skipIf(process.platform === 'win32')(
+    'starts the server with the running Node executable instead of PATH',
+    async () => {
+      const fakeBinDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-cli-fake-node-'));
+      try {
+        fs.writeFileSync(
+          path.join(fakeBinDir, 'node'),
+          '#!/bin/sh\nprintf "PATH_NODE_EXECUTED\\n" >&2\nexit 42\n',
+          { mode: 0o755 }
+        );
+        const env = {
+          ...process.env,
+          HOME: testConfigDir,
+          USERPROFILE: testConfigDir,
+          PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ''}`
+        };
+        const proc = spawn(process.execPath, [CLI_PATH, 'start'], { env, stdio: 'pipe' });
+        let stderr = '';
+        proc.stderr.on('data', data => (stderr += data.toString()));
+        const closed = new Promise(resolve => proc.on('close', resolve));
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        proc.kill('SIGTERM');
+        await closed;
+
+        expect(stderr).toContain('Starting Warp SQL Server MCP');
+        expect(stderr).not.toContain('PATH_NODE_EXECUTED');
+      } finally {
+        fs.rmSync(fakeBinDir, { recursive: true, force: true });
+      }
+    },
+    15000
+  );
 
   describe('start keeps its banners off stdout', () => {
     // `start` spawns index.js with `stdio: 'inherit'`, so this process's stdout is the
