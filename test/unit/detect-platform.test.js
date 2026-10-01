@@ -75,11 +75,10 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   });
   const previousExec = vi.mocked(execFileSync).getMockImplementation();
   vi.mocked(execFileSync).mockImplementation((command, args, options) => {
-    if (
-      command === '/bin/ls' &&
-      (args.at(-1) === dockerEnvPath || args.at(-1) === dockerComposePath)
-    ) {
-      return '-rw------- 1 owner group 0 Jan 1 00:00 generated\n';
+    if (command === '/bin/ls' && hostPlatform === 'darwin') {
+      return args.at(-1) === path.dirname(dockerEnvPath)
+        ? 'drwx------ 1 owner group 0 Jan 1 00:00 docker\n'
+        : '-rw------- 1 owner group 0 Jan 1 00:00 generated\n';
     }
     return previousExec(command, args, options);
   });
