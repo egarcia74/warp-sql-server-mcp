@@ -76,7 +76,7 @@ function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvT
         !/^[A-Za-z0-9][A-Za-z0-9!_-]{23,127}$/.test(password) ||
         !/[a-z]/.test(password) ||
         !/[A-Z]/.test(password) ||
-        !/[0-9]/.test(password) ||
+        !/\d/.test(password) ||
         !/[!_-]/.test(password)
       ) {
         throw new Error(`Docker test password is not strong enough in ${envPath}`);
