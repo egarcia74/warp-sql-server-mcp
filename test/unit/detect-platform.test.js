@@ -312,7 +312,7 @@ describe('Docker platform configuration selection', () => {
       [
         'compose',
         '--project-directory',
-        expect.stringMatching(/test\/docker$/),
+        expect.stringMatching(/test[\\/]docker$/),
         '-f',
         '-',
         'config',
