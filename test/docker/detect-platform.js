@@ -23,11 +23,27 @@ const __dirname = path.dirname(__filename);
 const dockerEnvPath = path.join(__dirname, '.env.docker');
 const dockerEnvTemplatePath = path.join(__dirname, 'docker-env.template');
 
+function resolveComposeProjectName(runCompose = execFileSync) {
+  // Ask Compose to resolve its own project name, including .env and shell overrides,
+  // without reading or writing a password-bearing Compose file.
+  const config = runCompose(
+    'docker',
+    ['compose', '--project-directory', __dirname, '-f', '-', 'config', '--format', 'json'],
+    { input: 'services:\n  probe:\n    image: scratch\n', encoding: 'utf8' }
+  );
+  const name = JSON.parse(config).name;
+  if (typeof name !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/.test(name)) {
+    throw new Error('Docker Compose returned an invalid project name');
+  }
+  return name;
+}
+
 function assertNoExistingDockerDataVolume(
-  projectName = process.env.COMPOSE_PROJECT_NAME || path.basename(__dirname),
-  listVolumes = execFileSync
+  projectName,
+  listVolumes = execFileSync,
+  resolveProjectName = resolveComposeProjectName
 ) {
-  const volumeName = `${projectName}_sqlserver_data`;
+  const volumeName = `${projectName ?? resolveProjectName()}_sqlserver_data`;
   const names = listVolumes(
     'docker',
     ['volume', 'ls', '--format', '{{.Name}}', '--filter', `name=${volumeName}`],
@@ -110,7 +126,17 @@ function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvT
   }
   const password = `${randomBytes(24).toString('hex')}Aa1!`;
   const content = template.replace(/^SQL_SERVER_PASSWORD=$/m, `SQL_SERVER_PASSWORD=${password}`);
-  fs.writeFileSync(envPath, content, { flag: 'wx', mode: 0o600 });
+  const createdDescriptor = fs.openSync(
+    envPath,
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
+    0o600
+  );
+  try {
+    assertPrivateDockerFile(fs.fstatSync(createdDescriptor), envPath);
+    fs.writeFileSync(createdDescriptor, content);
+  } finally {
+    fs.closeSync(createdDescriptor);
+  }
   return password;
 }
 
@@ -535,7 +561,7 @@ function main() {
       console.log('\n🎯 Next Steps:');
       console.log('   npm run docker:start    # Start the optimized container');
       console.log('   npm run docker:wait     # Wait for database readiness');
-      console.log('   npm run test:manual:docker  # Run tests');
+      console.log('   npm run test:integration:manual:docker  # Run tests');
     }
   } catch (error) {
     console.error('\n❌ Configuration failed:', error.message);
@@ -550,11 +576,14 @@ if (process.argv[1] && __filename === path.resolve(process.argv[1])) {
 
 export {
   assertNoExistingDockerDataVolume,
+  assertDockerCredentialStorageSupported,
+  assertPrivateDockerFile,
   detectArchitecture,
   checkDockerCapabilities,
   chooseBestConfiguration,
   ensureDockerPassword,
   generateDockerCompose,
+  resolveComposeProjectName,
   writePrivateDockerCompose,
   main
 };

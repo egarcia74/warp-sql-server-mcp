@@ -11,6 +11,7 @@ import {
   ensureDockerPassword,
   generateDockerCompose,
   main,
+  resolveComposeProjectName,
   writePrivateDockerCompose
 } from '../docker/detect-platform.js';
 
@@ -20,6 +21,7 @@ const originalTestingMode = process.env.TESTING_MODE;
 const dockerEnvPath = fileURLToPath(new URL('../docker/.env.docker', import.meta.url));
 const dockerComposePath = fileURLToPath(new URL('../docker/docker-compose.yml', import.meta.url));
 const mockComposeDescriptor = 99123;
+const mockEnvDescriptor = 99124;
 
 function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   const realOpenSync = fs.openSync;
@@ -29,6 +31,7 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   const realCloseSync = fs.closeSync;
   vi.spyOn(fs, 'openSync').mockImplementation((file, ...args) => {
     if (file === dockerEnvPath) {
+      if ((args[0] & fs.constants.O_EXCL) !== 0) return mockEnvDescriptor;
       const error = new Error('Docker test environment not yet generated');
       error.code = 'ENOENT';
       throw error;
@@ -37,7 +40,7 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
     return realOpenSync(file, ...args);
   });
   vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
-    if (descriptor === mockComposeDescriptor) {
+    if (descriptor === mockComposeDescriptor || descriptor === mockEnvDescriptor) {
       return { isFile: () => true, mode: 0o600, uid: process.getuid() };
     }
     return realFstatSync(descriptor, ...args);
@@ -51,7 +54,7 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
     return realFtruncateSync(descriptor, ...args);
   });
   vi.spyOn(fs, 'closeSync').mockImplementation(descriptor => {
-    if (descriptor === mockComposeDescriptor) return;
+    if (descriptor === mockComposeDescriptor || descriptor === mockEnvDescriptor) return;
     return realCloseSync(descriptor);
   });
   const arch = Object.getOwnPropertyDescriptor(process, 'arch');
@@ -74,7 +77,9 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
 describe('Docker platform configuration selection', () => {
   beforeEach(() => {
     process.env.TESTING_MODE = 'true';
-    vi.mocked(execFileSync).mockReturnValue('');
+    vi.mocked(execFileSync).mockImplementation((command, args) =>
+      args[0] === 'compose' ? '{"name":"docker"}' : ''
+    );
   });
 
   afterEach(() => {
@@ -296,6 +301,60 @@ describe('Docker platform configuration selection', () => {
     expect(() => assertNoExistingDockerDataVolume('docker', () => '')).not.toThrow();
   });
 
+  it('uses the effective Compose project name for the legacy-volume guard', () => {
+    const runCompose = vi.fn(() => JSON.stringify({ name: 'customproject' }));
+    const projectName = resolveComposeProjectName(runCompose);
+    const listVolumes = vi.fn(() => 'customproject_sqlserver_data\n');
+
+    expect(projectName).toBe('customproject');
+    expect(runCompose).toHaveBeenCalledWith(
+      'docker',
+      [
+        'compose',
+        '--project-directory',
+        expect.stringMatching(/test\/docker$/),
+        '-f',
+        '-',
+        'config',
+        '--format',
+        'json'
+      ],
+      expect.objectContaining({ encoding: 'utf8', input: expect.stringContaining('services:') })
+    );
+    expect(() =>
+      assertNoExistingDockerDataVolume(undefined, listVolumes, () => projectName)
+    ).toThrow('customproject_sqlserver_data already exists');
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'checks actual permission bits before writing a new Docker password',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-create-mode-'));
+      const envPath = path.join(dir, '.env.docker');
+      const templatePath = path.join(dir, 'template');
+      const realFstatSync = fs.fstatSync;
+      try {
+        fs.writeFileSync(templatePath, 'SQL_SERVER_PASSWORD=\n');
+        vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
+          const actual = realFstatSync(descriptor, ...args);
+          return {
+            isFile: () => true,
+            mode: (actual.mode & ~0o777) | 0o644,
+            uid: actual.uid
+          };
+        });
+
+        expect(() => ensureDockerPassword(envPath, templatePath)).toThrow(
+          'unsafe permissions or ownership'
+        );
+        expect(fs.readFileSync(envPath, 'utf8')).toBe('');
+      } finally {
+        vi.restoreAllMocks();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
   it.skipIf(process.platform === 'win32')(
     'does not read a replacement path after opening the local credential',
     () => {
@@ -440,8 +499,15 @@ describe('Docker platform configuration selection', () => {
       expect(execSync).toHaveBeenCalledTimes(3);
       expect(log).not.toHaveBeenCalled();
       expect(write).toHaveBeenCalledTimes(3);
-      expect(write.mock.calls[0][0]).toMatch(/test\/docker\/\.env\.docker$/);
-      expect(write.mock.calls[0][2]).toEqual({ flag: 'wx', mode: 0o600 });
+      expect(fs.openSync).toHaveBeenCalledWith(
+        dockerEnvPath,
+        fs.constants.O_WRONLY |
+          fs.constants.O_CREAT |
+          fs.constants.O_EXCL |
+          fs.constants.O_NOFOLLOW,
+        0o600
+      );
+      expect(write.mock.calls[0][0]).toBe(mockEnvDescriptor);
       const password = write.mock.calls[0][1].match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m)[1];
       expect(password).toMatch(/^[0-9a-f]{48}Aa1!$/);
       expect(fs.openSync).toHaveBeenCalledWith(

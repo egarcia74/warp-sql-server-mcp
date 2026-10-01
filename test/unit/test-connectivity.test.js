@@ -1,27 +1,39 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 const cliPath = fileURLToPath(new URL('../docker/test-connectivity.js', import.meta.url));
 const loaderPath = fileURLToPath(new URL('./fixtures/connectivity-loader.mjs', import.meta.url));
-const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
-
 function runConnectivity(scenario) {
-  const result = spawnSync(
-    process.execPath,
-    ['--no-warnings', '--experimental-loader', loaderPath, cliPath],
-    {
-      cwd: repoRoot,
-      env: { ...process.env, CONNECTIVITY_TEST_CASE: scenario },
-      encoding: 'utf8',
-      timeout: 10000
-    }
-  );
-  expect(result.error).toBeUndefined();
-  return result;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-connectivity-env-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'test', 'docker'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'test', 'docker', '.env.docker'),
+      'MCP_TESTING_MODE=docker\nSQL_SERVER_HOST=localhost\nSQL_SERVER_PORT=14330\nSQL_SERVER_USER=sa\nSQL_SERVER_PASSWORD=LocalPasswordAa1!2026\n',
+      { mode: 0o600 }
+    );
+    const result = spawnSync(
+      process.execPath,
+      ['--no-warnings', '--experimental-loader', loaderPath, cliPath],
+      {
+        cwd: dir,
+        env: { ...process.env, CONNECTIVITY_TEST_CASE: scenario, MCP_TESTING_MODE: 'docker' },
+        encoding: 'utf8',
+        timeout: 10000
+      }
+    );
+    expect(result.error).toBeUndefined();
+    return result;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
-describe('Docker connectivity CLI', () => {
+describe.skipIf(process.platform === 'win32')('Docker connectivity CLI', () => {
   test('reports counted databases, SQL Server year and counted tables in order', () => {
     const result = runConnectivity('counted-lists');
 

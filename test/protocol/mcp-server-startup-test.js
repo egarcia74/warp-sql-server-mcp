@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { loadRequiredDockerEnvironment } from '../docker/load-docker-environment.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,7 +23,7 @@ dotenv.config();
 // Check if we're in Docker testing mode and load Docker environment
 if (process.env.MCP_TESTING_MODE === 'docker') {
   console.log('🐳 Docker mode detected - loading Docker environment configuration...');
-  dotenv.config({ path: './test/docker/.env.docker', override: true });
+  loadRequiredDockerEnvironment();
   console.log('✅ Docker environment configuration loaded');
   console.log(`🔧 Database: ${process.env.SQL_SERVER_HOST}:${process.env.SQL_SERVER_PORT}`);
   console.log(`👤 User: ${process.env.SQL_SERVER_USER}`);

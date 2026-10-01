@@ -901,6 +901,11 @@ Windows. Windows Docker testing remains unavailable until a separate change prot
 credential and generated Compose files with private ACLs. The external-SQL-Server test commands do
 not use those generated Docker credentials.
 
+Docker-mode initialization and test runners refuse to connect if the private generated environment
+file is missing or incomplete, even when external database credentials are present in the shell.
+The legacy-volume guard asks Docker Compose for its effective project name before creating a new
+credential, so a custom Compose project cannot silently reuse an old-volume password.
+
 After manually starting the Docker container, use the explicit
 `test:integration:manual:docker`, `test:integration:protocol:docker`, or
 `test:integration:performance:docker` entrypoints so the generated credentials load. The unsuffixed

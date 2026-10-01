@@ -8,13 +8,16 @@
 
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import dotenv from 'dotenv';
+import { loadRequiredDockerEnvironment } from '../docker/load-docker-environment.js';
 
 // Only Docker-mode runs may load the generated local credential. An external
 // Windows-authentication run intentionally has no SQL user or password.
-function loadPerformanceTestEnvironment(environment = process.env, config = dotenv.config) {
+function loadPerformanceTestEnvironment(
+  environment = process.env,
+  loadDockerEnvironment = loadRequiredDockerEnvironment
+) {
   if (environment.MCP_TESTING_MODE === 'docker') {
-    config({ path: './test/docker/.env.docker', override: true });
+    loadDockerEnvironment(environment);
   }
 }
 

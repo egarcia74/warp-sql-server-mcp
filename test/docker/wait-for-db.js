@@ -6,13 +6,9 @@
  */
 
 import sql from 'mssql';
-import dotenv from 'dotenv';
+import { loadRequiredDockerEnvironment } from './load-docker-environment.js';
 
-// Load Docker-specific environment
-dotenv.config({
-  path: './test/docker/.env.docker',
-  override: process.env.MCP_TESTING_MODE === 'docker'
-});
+if (process.env.MCP_TESTING_MODE === 'docker') loadRequiredDockerEnvironment();
 
 // Dynamic timing based on platform with intelligent retry logic
 function getTimingConfig() {

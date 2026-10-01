@@ -10,11 +10,18 @@ describe('manual performance test environment', () => {
   });
 
   it('loads the generated credential only in Docker mode', () => {
-    const config = vi.fn();
-    loadPerformanceTestEnvironment({ MCP_TESTING_MODE: 'docker' }, config);
-    expect(config).toHaveBeenCalledWith({
-      path: './test/docker/.env.docker',
-      override: true
+    const loadDockerEnvironment = vi.fn();
+    const environment = { MCP_TESTING_MODE: 'docker' };
+    loadPerformanceTestEnvironment(environment, loadDockerEnvironment);
+    expect(loadDockerEnvironment).toHaveBeenCalledWith(environment);
+  });
+
+  it('propagates a missing Docker credential failure', () => {
+    const loadDockerEnvironment = vi.fn(() => {
+      throw new Error('Generated Docker environment is required');
     });
+    expect(() =>
+      loadPerformanceTestEnvironment({ MCP_TESTING_MODE: 'docker' }, loadDockerEnvironment)
+    ).toThrow('Generated Docker environment is required');
   });
 });

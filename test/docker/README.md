@@ -187,6 +187,10 @@ If either existing generated file has unsafe permissions or ownership, generatio
 than reusing a potentially exposed password. Back up any needed test data and rotate the local
 credential together with its data volume; changing the file mode alone cannot revoke an exposed
 password.
+The generator verifies the actual mode and ownership of a newly created credential file before
+writing its password. Docker-mode initialization, readiness, connectivity, and integration tests
+fail if the generated file is missing, incomplete, or unsafe, even if external SQL Server credentials
+are set in the shell. External-server test commands remain separate.
 
 The generated password is stored only in ignored local Docker files, and the generator restricts
 `.env.docker` to the current user. The Compose healthcheck reads the container environment rather
@@ -194,6 +198,8 @@ than embedding another copy of the password. Keep `.env.docker` while retaining 
 volume; deleting it alone would otherwise generate a new password that does not match the existing
 SQL Server login. The generator now stops if the credential file is missing but this project's data
 volume exists, including after upgrading from a checkout with the previously tracked test password.
+The guard uses Docker Compose's effective project name, including a custom name from Compose's
+environment configuration, when identifying that volume.
 It does not remove the volume automatically because that would delete its database contents. For a disposable
 test database, explicitly run `docker compose -f test/docker/docker-compose.yml down -v`, remove
 `.env.docker`, then run `npm run docker:start`. The Compose command removes this project's test data

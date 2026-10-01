@@ -69,25 +69,46 @@ function expectedPreamble() {
 }
 
 describe('Docker database readiness CLI', () => {
-  test('uses the generated Docker credential over an unrelated parent environment', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-readiness-env-'));
-    try {
-      fs.mkdirSync(path.join(dir, 'test', 'docker'), { recursive: true });
-      fs.writeFileSync(
-        path.join(dir, 'test', 'docker', '.env.docker'),
-        'SQL_SERVER_PASSWORD=LocalPasswordAa1!2026\nSQL_SERVER_HOST=fixture-host\nSQL_SERVER_PORT=14330\n'
-      );
-      const result = runReadiness('check-local-password', 'ParentPasswordAa1!2026', dir, {
-        MCP_TESTING_MODE: 'docker',
-        WAIT_DB_EXPECT_PASSWORD: 'LocalPasswordAa1!2026'
-      });
-
-      expect(result.status).toBe(0);
-      expect(events(result.trace, 'construct')).toHaveLength(1);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+  test.skipIf(process.platform === 'win32')(
+    'does not connect to inherited credentials when Docker mode has no generated file',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-readiness-missing-'));
+      try {
+        const result = runReadiness('immediate-success', 'ParentPasswordAa1!2026', dir, {
+          MCP_TESTING_MODE: 'docker'
+        });
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain('Generated Docker environment is required');
+        expect(result.trace).toEqual([]);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
-  });
+  );
+
+  test.skipIf(process.platform === 'win32')(
+    'uses the generated Docker credential over an unrelated parent environment',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-readiness-env-'));
+      try {
+        fs.mkdirSync(path.join(dir, 'test', 'docker'), { recursive: true });
+        fs.writeFileSync(
+          path.join(dir, 'test', 'docker', '.env.docker'),
+          'MCP_TESTING_MODE=docker\nSQL_SERVER_PASSWORD=LocalPasswordAa1!2026\nSQL_SERVER_USER=sa\nSQL_SERVER_HOST=fixture-host\nSQL_SERVER_PORT=14330\n',
+          { mode: 0o600 }
+        );
+        const result = runReadiness('check-local-password', 'ParentPasswordAa1!2026', dir, {
+          MCP_TESTING_MODE: 'docker',
+          WAIT_DB_EXPECT_PASSWORD: 'LocalPasswordAa1!2026'
+        });
+
+        expect(result.status).toBe(0);
+        expect(events(result.trace, 'construct')).toHaveLength(1);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
 
   test('fails before connecting when no database password is configured', () => {
     const result = runReadiness('immediate-success', '');

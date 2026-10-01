@@ -10,14 +10,10 @@
  * without the complexity of full test suites.
  */
 
-import dotenv from 'dotenv';
 import { SqlServerMCP } from '../../index.js';
+import { loadRequiredDockerEnvironment } from './load-docker-environment.js';
 
-// Load Docker environment configuration
-dotenv.config({
-  path: 'test/docker/.env.docker',
-  override: process.env.MCP_TESTING_MODE === 'docker'
-});
+loadRequiredDockerEnvironment();
 
 function reportDatabaseConnection(response) {
   if (Array.isArray(response) && response[0]?.type === 'text') {
@@ -73,9 +69,6 @@ function reportTableOperations(response) {
 }
 
 async function runConnectivityTests() {
-  // Set testing mode
-  process.env.MCP_TESTING_MODE = 'docker';
-
   console.log('🦣 MCP Docker Connectivity Test\n');
 
   let server;
