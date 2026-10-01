@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,6 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { loadRequiredDockerEnvironment } from '../docker/load-docker-environment.js';
+import { ensureDockerPassword, writePrivateDockerCompose } from '../docker/detect-platform.js';
 
 const initCli = fileURLToPath(new URL('../docker/init-db-node.js', import.meta.url));
 
@@ -70,6 +71,42 @@ describe('required Docker environment', () => {
       0o644
     );
   });
+
+  it.skipIf(process.platform !== 'darwin')(
+    'rejects a 0600 credential with a macOS read ACL',
+    () => {
+      withDockerEnvironment(
+        'MCP_TESTING_MODE=docker\nSQL_SERVER_HOST=localhost\nSQL_SERVER_PORT=14330\nSQL_SERVER_USER=sa\nSQL_SERVER_PASSWORD=LocalPasswordAa1!2026\n',
+        envPath => {
+          execFileSync('/bin/chmod', ['+a', 'everyone allow read', envPath]);
+          expect(fs.statSync(envPath).mode & 0o777).toBe(0o600);
+          expect(() =>
+            loadRequiredDockerEnvironment({ MCP_TESTING_MODE: 'docker' }, envPath)
+          ).toThrow('ACL');
+        }
+      );
+    }
+  );
+
+  it.skipIf(process.platform !== 'darwin')(
+    'refuses to write a new password into an ACL-inheriting directory',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-acl-'));
+      const envPath = path.join(dir, '.env.docker');
+      const composePath = path.join(dir, 'docker-compose.yml');
+      const templatePath = path.join(dir, 'template');
+      try {
+        execFileSync('/bin/chmod', ['+a', 'everyone allow read,file_inherit', dir]);
+        fs.writeFileSync(templatePath, 'MCP_TESTING_MODE=docker\nSQL_SERVER_PASSWORD=\n');
+        expect(() => ensureDockerPassword(envPath, templatePath)).toThrow('ACL');
+        expect(fs.readFileSync(envPath, 'utf8')).toBe('');
+        expect(() => writePrivateDockerCompose(composePath, 'password: secret')).toThrow('ACL');
+        expect(fs.readFileSync(composePath, 'utf8')).toBe('');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
 
   it('rejects calls outside explicit Docker mode', () => {
     expect(() => loadRequiredDockerEnvironment({}, '/nonexistent/.env.docker')).toThrow(

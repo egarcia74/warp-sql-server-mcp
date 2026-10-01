@@ -191,6 +191,8 @@ The generator verifies the actual mode and ownership of a newly created credenti
 writing its password. Docker-mode initialization, readiness, connectivity, and integration tests
 fail if the generated file is missing, incomplete, or unsafe, even if external SQL Server credentials
 are set in the shell. External-server test commands remain separate.
+On macOS, the same checks reject ACL-bearing files or parent directories even when the file mode is
+`0600`; use a private checkout directory without inherited ACLs for Docker tests.
 
 The generated password is stored only in ignored local Docker files, and the generator restricts
 `.env.docker` to the current user. The Compose healthcheck reads the container environment rather

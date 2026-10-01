@@ -68,6 +68,37 @@ function assertDockerCredentialStorageSupported() {
   }
 }
 
+function assertNoMacAcl(filePath, file) {
+  if (process.platform !== 'darwin') return;
+
+  // macOS ACL grants are independent of the POSIX mode bits. Inspect both the
+  // file and its directory before using a password-bearing descriptor.
+  const directoryPath = fs.realpathSync(path.dirname(filePath));
+  for (const inspectedPath of [directoryPath, filePath]) {
+    const listing = execFileSync('/bin/ls', ['-lde', '--', inspectedPath], {
+      encoding: 'utf8',
+      env: { ...process.env, CLICOLOR: '0' }
+    });
+    const permissions = listing.match(/^[bcdlps-][rwxStTs-]{9}([+@]?)\s/);
+    if (!permissions || permissions[1] === '+' || /^\s*\d+:/m.test(listing)) {
+      throw new Error(`Docker test file or directory has an unsafe ACL: ${inspectedPath}`);
+    }
+  }
+
+  const directory = fs.statSync(directoryPath);
+  const currentPath = fs.lstatSync(filePath);
+  if (
+    !directory.isDirectory() ||
+    directory.uid !== process.getuid() ||
+    (directory.mode & 0o022) !== 0 ||
+    currentPath.isSymbolicLink() ||
+    currentPath.dev !== file.dev ||
+    currentPath.ino !== file.ino
+  ) {
+    throw new Error(`Docker test file or directory changed or is unsafe: ${filePath}`);
+  }
+}
+
 function assertPrivateDockerFile(file, filePath) {
   if (!file.isFile()) {
     throw new Error(`Docker test file must be a regular file: ${filePath}`);
@@ -78,6 +109,7 @@ function assertPrivateDockerFile(file, filePath) {
         'Rotate the credential and reset its data volume before retrying.'
     );
   }
+  assertNoMacAcl(filePath, file);
 }
 
 function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvTemplatePath) {

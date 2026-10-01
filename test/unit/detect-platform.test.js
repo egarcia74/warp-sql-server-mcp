@@ -16,6 +16,7 @@ import {
 } from '../docker/detect-platform.js';
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn(), execSync: vi.fn() }));
+const { execFileSync: realExecFileSync } = await vi.importActual('node:child_process');
 
 const originalTestingMode = process.env.TESTING_MODE;
 const dockerEnvPath = fileURLToPath(new URL('../docker/.env.docker', import.meta.url));
@@ -29,6 +30,7 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   const realFchmodSync = fs.fchmodSync;
   const realFtruncateSync = fs.ftruncateSync;
   const realCloseSync = fs.closeSync;
+  const realLstatSync = fs.lstatSync;
   vi.spyOn(fs, 'openSync').mockImplementation((file, ...args) => {
     if (file === dockerEnvPath) {
       if ((args[0] & fs.constants.O_EXCL) !== 0) return mockEnvDescriptor;
@@ -41,7 +43,7 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   });
   vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
     if (descriptor === mockComposeDescriptor || descriptor === mockEnvDescriptor) {
-      return { isFile: () => true, mode: 0o600, uid: process.getuid() };
+      return { isFile: () => true, mode: 0o600, uid: process.getuid(), dev: 1, ino: 42 };
     }
     return realFstatSync(descriptor, ...args);
   });
@@ -57,6 +59,12 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
     if (descriptor === mockComposeDescriptor || descriptor === mockEnvDescriptor) return;
     return realCloseSync(descriptor);
   });
+  vi.spyOn(fs, 'lstatSync').mockImplementation((file, ...args) => {
+    if (file === dockerEnvPath || file === dockerComposePath) {
+      return { isSymbolicLink: () => false, dev: 1, ino: 42 };
+    }
+    return realLstatSync(file, ...args);
+  });
   const arch = Object.getOwnPropertyDescriptor(process, 'arch');
   const platform = Object.getOwnPropertyDescriptor(process, 'platform');
   Object.defineProperty(process, 'arch', { configurable: true, value: hostArch });
@@ -64,6 +72,16 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   vi.mocked(execSync).mockImplementation(command => {
     if (command.includes('--format')) return `${dockerArch}\n`;
     return '';
+  });
+  const previousExec = vi.mocked(execFileSync).getMockImplementation();
+  vi.mocked(execFileSync).mockImplementation((command, args, options) => {
+    if (
+      command === '/bin/ls' &&
+      (args.at(-1) === dockerEnvPath || args.at(-1) === dockerComposePath)
+    ) {
+      return '-rw------- 1 owner group 0 Jan 1 00:00 generated\n';
+    }
+    return previousExec(command, args, options);
   });
 
   try {
@@ -77,9 +95,10 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
 describe('Docker platform configuration selection', () => {
   beforeEach(() => {
     process.env.TESTING_MODE = 'true';
-    vi.mocked(execFileSync).mockImplementation((command, args) =>
-      args[0] === 'compose' ? '{"name":"docker"}' : ''
-    );
+    vi.mocked(execFileSync).mockImplementation((command, args, options) => {
+      if (command === '/bin/ls') return realExecFileSync(command, args, options);
+      return args[0] === 'compose' ? '{"name":"docker"}' : '';
+    });
   });
 
   afterEach(() => {
@@ -261,9 +280,17 @@ describe('Docker platform configuration selection', () => {
           return realFstatSync(descriptor, ...args);
         });
 
-        writePrivateDockerCompose(composePath, 'new secret');
+        if (process.platform === 'darwin') {
+          expect(() => writePrivateDockerCompose(composePath, 'new secret')).toThrow(
+            'changed or is unsafe'
+          );
+        } else {
+          writePrivateDockerCompose(composePath, 'new secret');
+        }
         expect(replaced).toBe(true);
-        expect(fs.readFileSync(originalPath, 'utf8')).toBe('new secret');
+        expect(fs.readFileSync(originalPath, 'utf8')).toBe(
+          process.platform === 'darwin' ? 'old' : 'new secret'
+        );
         expect(fs.readFileSync(targetPath, 'utf8')).toBe('unmodified');
       } finally {
         vi.restoreAllMocks();
@@ -379,7 +406,11 @@ describe('Docker platform configuration selection', () => {
           return realFstatSync(descriptor, ...args);
         });
 
-        expect(ensureDockerPassword(envPath)).toBe(originalPassword);
+        if (process.platform === 'darwin') {
+          expect(() => ensureDockerPassword(envPath)).toThrow('changed or is unsafe');
+        } else {
+          expect(ensureDockerPassword(envPath)).toBe(originalPassword);
+        }
         expect(replaced).toBe(true);
         expect(fs.statSync(originalPath).mode & 0o777).toBe(0o600);
         expect(fs.statSync(replacementPath).mode & 0o777).toBe(0o644);

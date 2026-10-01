@@ -901,6 +901,11 @@ Windows. Windows Docker testing remains unavailable until a separate change prot
 credential and generated Compose files with private ACLs. The external-SQL-Server test commands do
 not use those generated Docker credentials.
 
+On macOS, POSIX mode `0600` is not enough if an inherited ACL grants another account access.
+Generation and Docker-mode loading reject ACL-bearing credential files or parent directories, and
+verify the opened file still matches its path before using it. Use a private checkout directory
+without inherited ACLs for Docker tests.
+
 Docker-mode initialization and test runners refuse to connect if the private generated environment
 file is missing or incomplete, even when external database credentials are present in the shell.
 The legacy-volume guard asks Docker Compose for its effective project name before creating a new
