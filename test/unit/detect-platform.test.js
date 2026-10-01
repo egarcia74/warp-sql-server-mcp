@@ -18,14 +18,14 @@ const originalTestingMode = process.env.TESTING_MODE;
 const dockerEnvPath = fileURLToPath(new URL('../docker/.env.docker', import.meta.url));
 
 function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
-  const realLstatSync = fs.lstatSync;
-  vi.spyOn(fs, 'lstatSync').mockImplementation(file => {
+  const realOpenSync = fs.openSync;
+  vi.spyOn(fs, 'openSync').mockImplementation((file, ...args) => {
     if (file === dockerEnvPath) {
       const error = new Error('Docker test environment not yet generated');
       error.code = 'ENOENT';
       throw error;
     }
-    return realLstatSync(file);
+    return realOpenSync(file, ...args);
   });
   const arch = Object.getOwnPropertyDescriptor(process, 'arch');
   const platform = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -133,6 +133,78 @@ describe('Docker platform configuration selection', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'does not read a replacement path after opening the local credential',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-race-'));
+      const envPath = path.join(dir, '.env.docker');
+      const replacementPath = path.join(dir, 'replacement');
+      const originalPassword = 'OriginalDockerPasswordAa1!2026';
+      const replacementPassword = 'ReplacementDockerPasswordAa1!2026';
+      const originalPath = path.join(dir, 'original');
+      const realFstatSync = fs.fstatSync;
+      let replaced = false;
+      try {
+        fs.writeFileSync(envPath, `SQL_SERVER_PASSWORD=${originalPassword}\n`);
+        fs.writeFileSync(replacementPath, `SQL_SERVER_PASSWORD=${replacementPassword}\n`);
+        fs.chmodSync(replacementPath, 0o644);
+        vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
+          if (!replaced) {
+            fs.renameSync(envPath, originalPath);
+            fs.symlinkSync(replacementPath, envPath);
+            replaced = true;
+          }
+          return realFstatSync(descriptor, ...args);
+        });
+
+        expect(ensureDockerPassword(envPath)).toBe(originalPassword);
+        expect(replaced).toBe(true);
+        expect(fs.statSync(originalPath).mode & 0o777).toBe(0o600);
+        expect(fs.statSync(replacementPath).mode & 0o777).toBe(0o644);
+      } finally {
+        vi.restoreAllMocks();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')('rejects a symlink as the Docker credential file', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-link-'));
+    const envPath = path.join(dir, '.env.docker');
+    const targetPath = path.join(dir, 'target');
+    try {
+      fs.writeFileSync(targetPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n');
+      fs.symlinkSync(targetPath, envPath);
+
+      expect(() => ensureDockerPassword(envPath)).toThrow();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform !== 'win32')(
+    'rejects a non-regular credential path without O_NOFOLLOW',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-link-'));
+      const envPath = path.join(dir, '.env.docker');
+      const realLstatSync = fs.lstatSync;
+      try {
+        fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n');
+        vi.spyOn(fs, 'lstatSync').mockImplementation((target, ...args) => {
+          if (target === envPath) return { isFile: () => false };
+          return realLstatSync(target, ...args);
+        });
+
+        expect(() => ensureDockerPassword(envPath)).toThrow(
+          'Docker test environment must be a regular file'
+        );
+      } finally {
+        vi.restoreAllMocks();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
 
   it('uses emulated SQL Server for Apple Silicon with AMD64 support', () => {
     const selected = chooseBestConfiguration(

@@ -24,29 +24,50 @@ const dockerEnvPath = path.join(__dirname, '.env.docker');
 const dockerEnvTemplatePath = path.join(__dirname, 'docker-env.template');
 
 function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvTemplatePath) {
+  let descriptor;
   try {
-    const stat = fs.lstatSync(envPath);
-    if (!stat.isFile()) {
-      throw new Error(`Docker test environment must be a regular file: ${envPath}`);
-    }
-    const match = fs.readFileSync(envPath, 'utf8').match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m);
-    if (!match) {
-      throw new Error(`Docker test password is missing from ${envPath}`);
-    }
-    const password = match[1];
-    if (
-      !/^[A-Za-z0-9][A-Za-z0-9!_-]{23,127}$/.test(password) ||
-      !/[a-z]/.test(password) ||
-      !/[A-Z]/.test(password) ||
-      !/[0-9]/.test(password) ||
-      !/[!_-]/.test(password)
-    ) {
-      throw new Error(`Docker test password is not strong enough in ${envPath}`);
-    }
-    fs.chmodSync(envPath, 0o600);
-    return password;
+    descriptor = fs.openSync(envPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
+  }
+
+  if (descriptor !== undefined) {
+    try {
+      const openedFile = fs.fstatSync(descriptor);
+      if (!openedFile.isFile()) {
+        throw new Error(`Docker test environment must be a regular file: ${envPath}`);
+      }
+      // Windows lacks O_NOFOLLOW. Check the path is a direct regular file and still
+      // refers to the opened inode; all subsequent operations use the descriptor.
+      if (!fs.constants.O_NOFOLLOW) {
+        const pathFile = fs.lstatSync(envPath);
+        if (
+          !pathFile.isFile() ||
+          pathFile.dev !== openedFile.dev ||
+          pathFile.ino !== openedFile.ino
+        ) {
+          throw new Error(`Docker test environment must be a regular file: ${envPath}`);
+        }
+      }
+      const match = fs.readFileSync(descriptor, 'utf8').match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m);
+      if (!match) {
+        throw new Error(`Docker test password is missing from ${envPath}`);
+      }
+      const password = match[1];
+      if (
+        !/^[A-Za-z0-9][A-Za-z0-9!_-]{23,127}$/.test(password) ||
+        !/[a-z]/.test(password) ||
+        !/[A-Z]/.test(password) ||
+        !/[0-9]/.test(password) ||
+        !/[!_-]/.test(password)
+      ) {
+        throw new Error(`Docker test password is not strong enough in ${envPath}`);
+      }
+      fs.fchmodSync(descriptor, 0o600);
+      return password;
+    } finally {
+      fs.closeSync(descriptor);
+    }
   }
 
   const template = fs.readFileSync(templatePath, 'utf8');
