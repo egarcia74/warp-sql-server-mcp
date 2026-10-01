@@ -46,11 +46,11 @@ describe('Warp MCP performance CLI', () => {
     expect(result.stderr).toBe('');
     expect(events(result.trace, 'spawn')).toHaveLength(5);
     expect(events(result.trace, 'spawn').map(item => [item.command, item.args])).toEqual([
-      ['node', ['index.js']],
-      ['node', ['index.js']],
-      ['node', ['index.js']],
-      ['node', ['index.js']],
-      ['node', ['index.js']]
+      [process.execPath, ['index.js']],
+      [process.execPath, ['index.js']],
+      [process.execPath, ['index.js']],
+      [process.execPath, ['index.js']],
+      [process.execPath, ['index.js']]
     ]);
     expect(events(result.trace, 'timer').map(item => item.delay)).toEqual([
       20000, 15000, 15000, 25000, 25000

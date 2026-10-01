@@ -44,7 +44,7 @@ class MCPServerStartupTest {
       // Start MCP server process
       console.log('🔗 Starting MCP server process...');
 
-      this.serverProcess = spawn('node', [this.serverScriptPath], {
+      this.serverProcess = spawn(process.execPath, [this.serverScriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,

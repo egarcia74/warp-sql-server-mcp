@@ -46,7 +46,7 @@ class ImprovedPerformanceTest {
     console.log('🚀 Starting persistent MCP server process...');
 
     return new Promise((resolve, reject) => {
-      this.mcpProcess = spawn('node', ['index.js'], {
+      this.mcpProcess = spawn(process.execPath, ['index.js'], {
         stdio: ['pipe', 'pipe', 'pipe'],
         // NODE_ENV=test (from .env.docker) suppresses the startup banner this
         // harness waits for; 'development' keeps the same developmentMode
