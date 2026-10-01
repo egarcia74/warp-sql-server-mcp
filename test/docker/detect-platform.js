@@ -79,9 +79,22 @@ function assertNoMacAcl(filePath, file) {
       encoding: 'utf8',
       env: { ...process.env, CLICOLOR: '0' }
     });
-    const permissions = listing.match(/^[bcdlps-][rwxStTs-]{9}([+@]?)\s/);
-    if (!permissions || permissions[1] === '+' || /^\s*\d+:/m.test(listing)) {
-      throw new Error(`Docker test file or directory has an unsafe ACL: ${inspectedPath}`);
+    const marker = listing[10];
+    const hasAclEntries = listing
+      .split('\n')
+      .slice(1)
+      .some(line => {
+        const entryNumber = line.trimStart().split(':', 1)[0];
+        return entryNumber.length > 0 && Number.isInteger(Number(entryNumber));
+      });
+    if (
+      !['-', 'd'].includes(listing[0]) ||
+      ![' ', '@', '+'].includes(marker) ||
+      (marker !== ' ' && listing[11] !== ' ') ||
+      marker === '+' ||
+      hasAclEntries
+    ) {
+      throw new Error(`Docker test file or directory has an unsafe ACL or path: ${inspectedPath}`);
     }
   }
 

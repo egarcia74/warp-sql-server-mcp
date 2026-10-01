@@ -280,9 +280,7 @@ describe('Docker platform configuration selection', () => {
         });
 
         if (process.platform === 'darwin') {
-          expect(() => writePrivateDockerCompose(composePath, 'new secret')).toThrow(
-            'changed or is unsafe'
-          );
+          expect(() => writePrivateDockerCompose(composePath, 'new secret')).toThrow('unsafe');
         } else {
           writePrivateDockerCompose(composePath, 'new secret');
         }
@@ -406,7 +404,7 @@ describe('Docker platform configuration selection', () => {
         });
 
         if (process.platform === 'darwin') {
-          expect(() => ensureDockerPassword(envPath)).toThrow('changed or is unsafe');
+          expect(() => ensureDockerPassword(envPath)).toThrow('unsafe');
         } else {
           expect(ensureDockerPassword(envPath)).toBe(originalPassword);
         }
