@@ -57,12 +57,14 @@ vi.mock('mssql', () => ({
 }));
 
 // Mock dotenv
-vi.mock('dotenv', () => ({
-  default: {
-    config: vi.fn()
-  },
-  config: vi.fn()
-}));
+vi.mock('dotenv', async importOriginal => {
+  const actual = await importOriginal();
+  return {
+    default: { ...actual.default, config: vi.fn() },
+    config: vi.fn(),
+    parse: actual.parse
+  };
+});
 
 // Global test utilities
 globalThis.mockSql = sqlMock;

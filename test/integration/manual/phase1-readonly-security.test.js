@@ -7,10 +7,10 @@
 
 import { SqlServerMCP } from '../../../index.js';
 import { TestDatabaseHelper } from './test-database-helper.js';
-import dotenv from 'dotenv';
+import { loadTestEnvironment } from './load-test-environment.js';
 
-// Load environment variables from .env file first
-dotenv.config();
+// Load Docker credentials before constructing the MCP server.
+loadTestEnvironment();
 
 // Override only the security settings for testing (credentials loaded from .env)
 process.env.SQL_SERVER_READ_ONLY = 'true';

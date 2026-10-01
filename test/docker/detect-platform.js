@@ -14,11 +14,176 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { execFileSync, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const dockerEnvPath = path.join(__dirname, '.env.docker');
+const dockerEnvTemplatePath = path.join(__dirname, 'docker-env.template');
+
+function resolveComposeProjectName(runCompose = execFileSync) {
+  // Ask Compose to resolve its own project name, including .env and shell overrides,
+  // without reading or writing a password-bearing Compose file.
+  const config = runCompose(
+    'docker',
+    ['compose', '--project-directory', __dirname, '-f', '-', 'config', '--format', 'json'],
+    { input: 'services:\n  probe:\n    image: scratch\n', encoding: 'utf8' }
+  );
+  const name = JSON.parse(config).name;
+  if (typeof name !== 'string' || !/^[a-z0-9][a-z0-9_-]*$/.test(name)) {
+    throw new Error('Docker Compose returned an invalid project name');
+  }
+  return name;
+}
+
+function assertNoExistingDockerDataVolume(
+  projectName,
+  listVolumes = execFileSync,
+  resolveProjectName = resolveComposeProjectName
+) {
+  const volumeName = `${projectName ?? resolveProjectName()}_sqlserver_data`;
+  const names = listVolumes(
+    'docker',
+    ['volume', 'ls', '--format', '{{.Name}}', '--filter', `name=${volumeName}`],
+    { encoding: 'utf8' }
+  );
+  if (names.split(/\r?\n/).includes(volumeName)) {
+    throw new Error(
+      `Docker data volume ${volumeName} already exists but ${dockerEnvPath} is missing. ` +
+        'Back up any needed data, then remove only this volume before generating a new password.'
+    );
+  }
+}
+
+function assertDockerCredentialStorageSupported() {
+  if (process.platform === 'win32') {
+    throw new Error(
+      'Windows Docker credential storage is not supported until private ACLs protect both generated files'
+    );
+  }
+  if (!fs.constants.O_NOFOLLOW) {
+    throw new Error('Docker credential storage requires O_NOFOLLOW support');
+  }
+}
+
+function assertNoMacAcl(filePath, file) {
+  if (process.platform !== 'darwin') return;
+
+  // macOS ACL grants are independent of the POSIX mode bits. Inspect both the
+  // file and its directory before using a password-bearing descriptor.
+  const directoryPath = fs.realpathSync(path.dirname(filePath));
+  for (const inspectedPath of [directoryPath, filePath]) {
+    const listing = execFileSync('/bin/ls', ['-lde', '--', inspectedPath], {
+      encoding: 'utf8',
+      env: { ...process.env, CLICOLOR: '0' }
+    });
+    const marker = listing[10];
+    const hasAclEntries = listing
+      .split('\n')
+      .slice(1)
+      .some(line => {
+        const entryNumber = line.trimStart().split(':', 1)[0];
+        return entryNumber.length > 0 && Number.isInteger(Number(entryNumber));
+      });
+    if (
+      !['-', 'd'].includes(listing[0]) ||
+      ![' ', '@', '+'].includes(marker) ||
+      (marker !== ' ' && listing[11] !== ' ') ||
+      marker === '+' ||
+      hasAclEntries
+    ) {
+      throw new Error(`Docker test file or directory has an unsafe ACL or path: ${inspectedPath}`);
+    }
+  }
+
+  const directory = fs.statSync(directoryPath);
+  const currentPath = fs.lstatSync(filePath);
+  if (
+    !directory.isDirectory() ||
+    directory.uid !== process.getuid() ||
+    (directory.mode & 0o022) !== 0 ||
+    currentPath.isSymbolicLink() ||
+    currentPath.dev !== file.dev ||
+    currentPath.ino !== file.ino
+  ) {
+    throw new Error(`Docker test file or directory changed or is unsafe: ${filePath}`);
+  }
+}
+
+function assertPrivateDockerFile(file, filePath) {
+  if (!file.isFile()) {
+    throw new Error(`Docker test file must be a regular file: ${filePath}`);
+  }
+  if ((file.mode & 0o777) !== 0o600 || file.uid !== process.getuid()) {
+    throw new Error(
+      `Docker test file has unsafe permissions or ownership: ${filePath}. ` +
+        'Rotate the credential and reset its data volume before retrying.'
+    );
+  }
+  assertNoMacAcl(filePath, file);
+}
+
+function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvTemplatePath) {
+  assertDockerCredentialStorageSupported();
+  let descriptor;
+  try {
+    descriptor = fs.openSync(envPath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
+  if (descriptor !== undefined) {
+    try {
+      const openedFile = fs.fstatSync(descriptor);
+      assertPrivateDockerFile(openedFile, envPath);
+      const match = fs.readFileSync(descriptor, 'utf8').match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m);
+      if (!match) {
+        throw new Error(`Docker test password is missing from ${envPath}`);
+      }
+      const password = match[1];
+      if (
+        !/^[A-Za-z0-9][A-Za-z0-9!_-]{23,127}$/.test(password) ||
+        !/[a-z]/.test(password) ||
+        !/[A-Z]/.test(password) ||
+        !/\d/.test(password) ||
+        !/[!_-]/.test(password)
+      ) {
+        throw new Error(`Docker test password is not strong enough in ${envPath}`);
+      }
+      fs.fchmodSync(descriptor, 0o600);
+      return password;
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  }
+
+  if (envPath === dockerEnvPath) {
+    assertNoExistingDockerDataVolume();
+  }
+
+  const template = fs.readFileSync(templatePath, 'utf8');
+  if (!/^SQL_SERVER_PASSWORD=$/m.test(template)) {
+    throw new Error(
+      `Docker test environment template has no password placeholder: ${templatePath}`
+    );
+  }
+  const password = `${randomBytes(24).toString('hex')}Aa1!`;
+  const content = template.replace(/^SQL_SERVER_PASSWORD=$/m, `SQL_SERVER_PASSWORD=${password}`);
+  const createdDescriptor = fs.openSync(
+    envPath,
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
+    0o600
+  );
+  try {
+    assertPrivateDockerFile(fs.fstatSync(createdDescriptor), envPath);
+    fs.writeFileSync(createdDescriptor, content);
+  } finally {
+    fs.closeSync(createdDescriptor);
+  }
+  return password;
+}
 
 // Configuration templates
 const CONFIG_TEMPLATES = {
@@ -34,7 +199,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P WarpMCP123! -C -Q "SELECT 1" || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1'
       ]
     }
   },
@@ -54,7 +219,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "WarpMCP123!" -C -Q "SELECT 1" -t 10 || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1'
       ],
       interval: '15s',
       timeout: '10s',
@@ -91,7 +256,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "WarpMCP123!" -C -Q "SELECT 1" -t 10 || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1'
       ],
       interval: '12s',
       timeout: '8s',
@@ -234,7 +399,10 @@ function chooseArm64Configuration(hostInfo, dockerInfo, isQuiet) {
 /**
  * Generate Docker Compose YAML
  */
-function generateDockerCompose(selectedConfig) {
+function generateDockerCompose(selectedConfig, password) {
+  if (!password) {
+    throw new Error('A local Docker test password is required');
+  }
   const baseCompose = {
     services: {
       sqlserver: {
@@ -244,12 +412,12 @@ function generateDockerCompose(selectedConfig) {
         hostname: 'warp-mcp-sqlserver',
         environment: {
           ACCEPT_EULA: 'Y',
-          SA_PASSWORD: 'WarpMCP123!',
+          SA_PASSWORD: password,
           ...selectedConfig.config.environment
         },
         // Host port 14330 avoids colliding with a local SQL Server on 1433;
         // the container-internal port stays 1433.
-        ports: ['14330:1433'],
+        ports: ['127.0.0.1:14330:1433'],
         volumes: ['./init-db.sql:/tmp/init-db.sql:ro', 'sqlserver_data:/var/opt/mssql'],
         healthcheck: {
           test: selectedConfig.config.healthcheck.test,
@@ -348,13 +516,30 @@ function formatYamlScalar(key, value) {
 /**
  * Write configuration files
  */
+function writePrivateDockerCompose(composePath, yamlContent) {
+  assertDockerCredentialStorageSupported();
+  const descriptor = fs.openSync(
+    composePath,
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW,
+    0o600
+  );
+  try {
+    assertPrivateDockerFile(fs.fstatSync(descriptor), composePath);
+    fs.fchmodSync(descriptor, 0o600);
+    fs.ftruncateSync(descriptor, 0);
+    fs.writeFileSync(descriptor, yamlContent);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 function writeConfiguration(selectedConfig, dockerCompose, outputDir) {
   const dockerComposePath = path.join(outputDir, 'docker-compose.yml');
   const configInfoPath = path.join(outputDir, '.platform-config.json');
 
   // Write Docker Compose file
   const yamlContent = objectToYaml(dockerCompose);
-  fs.writeFileSync(dockerComposePath, yamlContent);
+  writePrivateDockerCompose(dockerComposePath, yamlContent);
 
   // Write configuration info
   const configInfo = {
@@ -380,6 +565,7 @@ function main() {
   }
 
   try {
+    assertDockerCredentialStorageSupported();
     // Detect host capabilities
     const hostInfo = detectArchitecture();
     if (!hostInfo) {
@@ -395,7 +581,7 @@ function main() {
     const selectedConfig = chooseBestConfiguration(hostInfo, dockerInfo);
 
     // Generate Docker Compose
-    const dockerCompose = generateDockerCompose(selectedConfig);
+    const dockerCompose = generateDockerCompose(selectedConfig, ensureDockerPassword());
 
     // Write configuration
     const outputDir = __dirname;
@@ -420,7 +606,7 @@ function main() {
       console.log('\n🎯 Next Steps:');
       console.log('   npm run docker:start    # Start the optimized container');
       console.log('   npm run docker:wait     # Wait for database readiness');
-      console.log('   npm run test:manual:docker  # Run tests');
+      console.log('   npm run test:integration:manual:docker  # Run tests');
     }
   } catch (error) {
     console.error('\n❌ Configuration failed:', error.message);
@@ -429,14 +615,20 @@ function main() {
 }
 
 // Run if called directly (ES module equivalent)
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && __filename === path.resolve(process.argv[1])) {
   main();
 }
 
 export {
+  assertNoExistingDockerDataVolume,
+  assertDockerCredentialStorageSupported,
+  assertPrivateDockerFile,
   detectArchitecture,
   checkDockerCapabilities,
   chooseBestConfiguration,
+  ensureDockerPassword,
   generateDockerCompose,
+  resolveComposeProjectName,
+  writePrivateDockerCompose,
   main
 };

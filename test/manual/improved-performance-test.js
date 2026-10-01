@@ -8,13 +8,20 @@
 
 import { spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import dotenv from 'dotenv';
+import { loadRequiredDockerEnvironment } from '../docker/load-docker-environment.js';
 
-// Load the Docker test environment (host, port 14330, credentials) so the
-// spawned MCP server targets the test container instead of the production
-// default localhost:1433. Existing environment variables take precedence,
-// so a manual run against another server can still override these values.
-dotenv.config({ path: './test/docker/.env.docker' });
+// Only Docker-mode runs may load the generated local credential. An external
+// Windows-authentication run intentionally has no SQL user or password.
+function loadPerformanceTestEnvironment(
+  environment = process.env,
+  loadDockerEnvironment = loadRequiredDockerEnvironment
+) {
+  if (environment.MCP_TESTING_MODE === 'docker') {
+    loadDockerEnvironment(environment);
+  }
+}
+
+loadPerformanceTestEnvironment();
 
 class ImprovedPerformanceTest {
   constructor() {
@@ -586,4 +593,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 // Export for testing
-export { ImprovedPerformanceTest };
+export { ImprovedPerformanceTest, loadPerformanceTestEnvironment };

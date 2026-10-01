@@ -1,4 +1,7 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
@@ -10,14 +13,21 @@ const initialDelay = isAppleSilicon ? 2000 : 1000;
 const maxAttempts = isAppleSilicon ? 25 : 15;
 const maxRetryDelay = isAppleSilicon ? 8000 : 5000;
 
-function runReadiness(scenario) {
+function runReadiness(
+  scenario,
+  password = 'FixturePasswordAa1!2026',
+  cwd = repoRoot,
+  extraEnv = {}
+) {
   const result = spawnSync(process.execPath, ['--import', preloadPath, cliPath], {
-    cwd: repoRoot,
+    cwd,
     env: {
       ...process.env,
       WAIT_DB_SCENARIO: scenario,
       SQL_SERVER_HOST: 'fixture-host',
-      SQL_SERVER_PORT: '14330'
+      SQL_SERVER_PORT: '14330',
+      SQL_SERVER_PASSWORD: password,
+      ...extraEnv
     },
     encoding: 'utf8',
     timeout: 10000
@@ -59,6 +69,55 @@ function expectedPreamble() {
 }
 
 describe('Docker database readiness CLI', () => {
+  test.skipIf(process.platform === 'win32')(
+    'does not connect to inherited credentials when Docker mode has no generated file',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-readiness-missing-'));
+      try {
+        const result = runReadiness('immediate-success', 'ParentPasswordAa1!2026', dir, {
+          MCP_TESTING_MODE: 'docker'
+        });
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain('Generated Docker environment is required');
+        expect(result.trace).toEqual([]);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test.skipIf(process.platform === 'win32')(
+    'uses the generated Docker credential over an unrelated parent environment',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-readiness-env-'));
+      try {
+        fs.mkdirSync(path.join(dir, 'test', 'docker'), { recursive: true });
+        fs.writeFileSync(
+          path.join(dir, 'test', 'docker', '.env.docker'),
+          'MCP_TESTING_MODE=docker\nSQL_SERVER_PASSWORD=LocalPasswordAa1!2026\nSQL_SERVER_USER=sa\nSQL_SERVER_HOST=fixture-host\nSQL_SERVER_PORT=14330\n',
+          { mode: 0o600 }
+        );
+        const result = runReadiness('check-local-password', 'ParentPasswordAa1!2026', dir, {
+          MCP_TESTING_MODE: 'docker',
+          WAIT_DB_EXPECT_PASSWORD: 'LocalPasswordAa1!2026'
+        });
+
+        expect(result.status).toBe(0);
+        expect(events(result.trace, 'construct')).toHaveLength(1);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test('fails before connecting when no database password is configured', () => {
+    const result = runReadiness('immediate-success', '');
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('SQL_SERVER_PASSWORD is required for Docker readiness');
+    expect(result.trace).toEqual([]);
+  });
+
   test('surfaces a scheduled callback failure without an unhandled promise', () => {
     const probe = `
       process.on('uncaughtException', error => {

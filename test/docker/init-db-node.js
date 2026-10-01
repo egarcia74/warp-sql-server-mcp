@@ -1,13 +1,10 @@
 import mssql from 'mssql';
 import fs from 'node:fs';
 import path from 'node:path';
-import dotenv from 'dotenv';
+import { loadRequiredDockerEnvironment } from './load-docker-environment.js';
 
-// Load Docker env
-const envPath = path.join(process.cwd(), 'test/docker/.env.docker');
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-}
+// Never initialize a database using inherited external credentials.
+loadRequiredDockerEnvironment();
 
 const config = {
   user: process.env.SQL_SERVER_USER || process.env.DB_USER || 'sa',

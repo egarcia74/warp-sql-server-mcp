@@ -8,6 +8,12 @@ function trace(event, id, extra = {}) {
 export class ConnectionPool {
   constructor(config) {
     this.id = nextId++;
+    if (
+      scenario === 'check-local-password' &&
+      config.password !== process.env.WAIT_DB_EXPECT_PASSWORD
+    ) {
+      throw new Error('readiness used a different password than the local Docker container');
+    }
     if (config.database !== 'master' || config.pool?.max !== 1) {
       throw new Error('unexpected readiness pool configuration');
     }

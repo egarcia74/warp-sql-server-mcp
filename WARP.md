@@ -896,6 +896,26 @@ Generated files:
 
 **Automated SQL Server Container Testing**: Complete testing environment in Docker containers for fast, consistent validation.
 
+Generated Docker test credentials currently require POSIX file permissions and fail closed on
+Windows. Windows Docker testing remains unavailable until a separate change protects both the
+credential and generated Compose files with private ACLs. The external-SQL-Server test commands do
+not use those generated Docker credentials.
+
+On macOS, POSIX mode `0600` is not enough if an inherited ACL grants another account access.
+Generation and Docker-mode loading reject ACL-bearing credential files or parent directories, and
+verify the opened file still matches its path before using it. Use a private checkout directory
+without inherited ACLs for Docker tests.
+
+Docker-mode initialization and test runners refuse to connect if the private generated environment
+file is missing or incomplete, even when external database credentials are present in the shell.
+The legacy-volume guard asks Docker Compose for its effective project name before creating a new
+credential, so a custom Compose project cannot silently reuse an old-volume password.
+
+After manually starting the Docker container, use the explicit
+`test:integration:manual:docker`, `test:integration:protocol:docker`, or
+`test:integration:performance:docker` entrypoints so the generated credentials load. The unsuffixed
+commands remain suitable for externally configured SQL Server instances.
+
 ```bash
 # Quick automated testing with container management
 # Docker testing is done automatically via test:integration
@@ -912,7 +932,7 @@ npm run docker:clean                  # Remove all data and containers
 
 **Docker Benefits:**
 
-- ✅ **Zero Configuration**: Works immediately on any Docker-enabled system
+- ✅ **Zero Configuration**: Works immediately on supported macOS/Linux Docker hosts
 - ✅ **Complete Isolation**: No interference with existing SQL Server instances
 - ✅ **Consistent Environment**: SQL Server 2022 with standardized test data
 - ✅ **Fast Setup**: 2-3 minutes vs 30+ minutes for manual setup
@@ -987,7 +1007,8 @@ test/
 └── docker/                                  # Docker testing infrastructure
     ├── README.md, PLATFORM-DETECTION.md, QUICK-REFERENCE.md,
     │   STRESS-TESTING.md, TESTING-SUMMARY.md, MCP-BENEFIT-SUMMARY.md
-    ├── .env.docker                          # Docker environment variables
+    ├── docker-env.template                  # Tracked Docker environment template
+    ├── .env.docker                          # Generated, ignored local Docker credentials
     ├── detect-platform.js                   # Generates docker-compose.yml (untracked)
     ├── command-utils.js, verify-platform-detection.js, troubleshoot-apple-silicon.js
     ├── init-db.sql, init-db-node.js, wait-for-db.js, test-connectivity.js

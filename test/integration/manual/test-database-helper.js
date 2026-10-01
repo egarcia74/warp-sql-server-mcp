@@ -4,8 +4,8 @@
  */
 
 import crypto from 'node:crypto';
-import dotenv from 'dotenv';
 import { serverConfig } from '../../../lib/config/server-config.js';
+import { loadRequiredDockerEnvironment } from '../../docker/load-docker-environment.js';
 
 function restorePermissionEnvironment(originalConfig) {
   for (const [name, value] of Object.entries(originalConfig)) {
@@ -42,18 +42,10 @@ export class TestDatabaseHelper {
    */
   loadDockerEnvironment() {
     console.log('🐳 Docker mode detected - loading Docker environment configuration...');
-
-    try {
-      // Load Docker-specific environment variables
-      const dockerEnvPath = './test/docker/.env.docker';
-      dotenv.config({ path: dockerEnvPath, override: true });
-
-      console.log('✅ Docker environment configuration loaded');
-      console.log(`🔧 Database: ${process.env.SQL_SERVER_HOST}:${process.env.SQL_SERVER_PORT}`);
-      console.log(`👤 User: ${process.env.SQL_SERVER_USER}`);
-    } catch (error) {
-      console.warn('⚠️  Could not load Docker environment:', error.message);
-    }
+    loadRequiredDockerEnvironment();
+    console.log('✅ Docker environment configuration loaded');
+    console.log(`🔧 Database: ${process.env.SQL_SERVER_HOST}:${process.env.SQL_SERVER_PORT}`);
+    console.log(`👤 User: ${process.env.SQL_SERVER_USER}`);
   }
 
   /**

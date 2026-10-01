@@ -6,10 +6,9 @@
  */
 
 import sql from 'mssql';
-import dotenv from 'dotenv';
+import { loadRequiredDockerEnvironment } from './load-docker-environment.js';
 
-// Load Docker-specific environment
-dotenv.config({ path: './test/docker/.env.docker' });
+if (process.env.MCP_TESTING_MODE === 'docker') loadRequiredDockerEnvironment();
 
 // Dynamic timing based on platform with intelligent retry logic
 function getTimingConfig() {
@@ -40,7 +39,7 @@ const config = {
   server: process.env.SQL_SERVER_HOST || 'localhost',
   port: Number.parseInt(process.env.SQL_SERVER_PORT) || 1433,
   user: process.env.SQL_SERVER_USER || 'sa',
-  password: process.env.SQL_SERVER_PASSWORD || 'WarpMCP123!',
+  password: process.env.SQL_SERVER_PASSWORD,
   database: 'master',
   pool: {
     max: 1,
@@ -139,6 +138,10 @@ async function connectWithRetries(attempt, currentRetryDelay) {
 
 // Main execution
 async function main() {
+  if (!config.password) {
+    console.error('❌ SQL_SERVER_PASSWORD is required for Docker readiness');
+    process.exit(1);
+  }
   console.log('🚀 Starting SQL Server readiness check...');
   console.log(`🔧 Configuration: ${config.server}:${config.port}`);
 

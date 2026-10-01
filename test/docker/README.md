@@ -75,9 +75,9 @@ npm run test:integration
 npm run docker:start
 
 # Run individual test components (requires running container)
-npm run test:integration:manual      # All security phases (20+10+10 tests)
-npm run test:integration:protocol    # MCP protocol tests
-npm run test:integration:performance # Performance tests
+npm run test:integration:manual:docker      # All security phases (20+10+10 tests)
+npm run test:integration:protocol:docker    # MCP protocol tests
+npm run test:integration:performance:docker # Performance tests
 
 # Stop container when done
 npm run docker:stop
@@ -99,9 +99,9 @@ npm run docker:status    # Check container status
 
 ```bash
 npm run test:integration                # All integration tests with Docker lifecycle
-npm run test:integration:manual        # Manual security phases (requires running container)
-npm run test:integration:protocol      # MCP protocol testing (requires running container)
-npm run test:integration:performance   # Performance testing (requires running container)
+npm run test:integration:manual:docker      # Manual security phases (requires running container)
+npm run test:integration:protocol:docker    # MCP protocol testing (requires running container)
+npm run test:integration:performance:docker # Performance testing (requires running container)
 ```
 
 ### Debugging Commands
@@ -140,14 +140,17 @@ The Docker container automatically creates:
 
 ### Environment Variables
 
-Docker testing uses `test/docker/.env.docker`:
+`npm run docker:detect` creates a private, ignored `test/docker/.env.docker` from
+`docker-env.template`. It generates a strong local SA password on first use and reuses it on
+subsequent starts so the credential stays in sync with the persistent SQL Server data volume.
+Docker testing then uses that file:
 
 ```bash
 # Database connection (container defaults)
 SQL_SERVER_HOST=localhost
 SQL_SERVER_PORT=14330
 SQL_SERVER_USER=sa
-SQL_SERVER_PASSWORD=WarpMCP123!
+SQL_SERVER_PASSWORD=<generated locally; do not commit>
 
 # SSL disabled for container testing
 SQL_SERVER_ENCRYPT=false
@@ -164,7 +167,7 @@ SQL_SERVER_TRUST_CERT=true
 
 - **Image**: `mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f`
   - Note: Using a pinned digest ensures reproducible builds and satisfies supply‑chain checks.
-- **Port**: `14330` on the host, mapped to `1433` inside the container (avoids colliding with a local SQL Server)
+- **Port**: `127.0.0.1:14330` on the host, mapped to `1433` inside the container (not exposed on other host interfaces)
 - **Memory**: 2GB allocated
 - **Storage**: Persistent volume for data
 - **Network**: Isolated Docker network
@@ -175,16 +178,35 @@ Design notes:
 - Legacy test entrypoint scripts and a custom Dockerfile have been removed to reduce drift and maintenance.
 - Initialization runs the mounted SQL script after the container passes health checks.
 
-### Password Standardization
+### Local Docker Password
 
-**All environments now use the same password: `WarpMCP123!`**
+Docker credential generation fails closed on Windows. POSIX `0600` does not ensure private Windows
+ACLs, and both `.env.docker` and the generated Compose file contain the password. Windows Docker
+support will require private ACLs for both files and separate Windows validation.
+If either existing generated file has unsafe permissions or ownership, generation also stops rather
+than reusing a potentially exposed password. Back up any needed test data and rotate the local
+credential together with its data volume; changing the file mode alone cannot revoke an exposed
+password.
+The generator verifies the actual mode and ownership of a newly created credential file before
+writing its password. Docker-mode initialization, readiness, connectivity, and integration tests
+fail if the generated file is missing, incomplete, or unsafe, even if external SQL Server credentials
+are set in the shell. External-server test commands remain separate.
+On macOS, the same checks reject ACL-bearing files or parent directories even when the file mode is
+`0600`; use a private checkout directory without inherited ACLs for Docker tests.
 
-- **Docker Container**: Hardcoded in `docker-compose.yml`
-- **Docker Tests**: Configured in `test/docker/.env.docker`
-- **Local Development**: Configured in `.env` and `.env.demo`
-- **Template**: Example shown in `.env.example`
-
-This ensures consistency across all testing and development environments.
+The generated password is stored only in ignored local Docker files, and the generator restricts
+`.env.docker` to the current user. The Compose healthcheck reads the container environment rather
+than embedding another copy of the password. Keep `.env.docker` while retaining the Docker data
+volume; deleting it alone would otherwise generate a new password that does not match the existing
+SQL Server login. The generator now stops if the credential file is missing but this project's data
+volume exists, including after upgrading from a checkout with the previously tracked test password.
+The guard uses Docker Compose's effective project name, including a custom name from Compose's
+environment configuration, when identifying that volume.
+It does not remove the volume automatically because that would delete its database contents. For a disposable
+test database, explicitly run `docker compose -f test/docker/docker-compose.yml down -v`, remove
+`.env.docker`, then run `npm run docker:start`. The Compose command removes this project's test data
+volume; back up any test data you need first. Do not remove `.env.docker` without also resetting the
+corresponding volume.
 
 ## 🧪 **Testing Phases**
 
@@ -192,7 +214,7 @@ This ensures consistency across all testing and development environments.
 
 ```bash
 # Run all phases including Phase 1 via:
-npm run test:integration:manual
+npm run test:integration:manual:docker
 ```
 
 **Tests:**
@@ -207,7 +229,7 @@ npm run test:integration:manual
 
 ```bash
 # Run all phases including Phase 2 via:
-npm run test:integration:manual
+npm run test:integration:manual:docker
 ```
 
 **Tests:**
@@ -222,7 +244,7 @@ npm run test:integration:manual
 
 ```bash
 # Run all phases including Phase 3 via:
-npm run test:integration:manual
+npm run test:integration:manual:docker
 ```
 
 **Tests:**
@@ -300,7 +322,7 @@ sudo usermod -aG docker $USER
 
 ## 🏭 **When to Use Manual Setup Instead**
 
-Use **manual setup** (`npm run test:integration:manual`) when you need:
+Use **manual setup** (`npm run test:integration:manual:docker`) when you need:
 
 ### Production Validation
 
@@ -362,13 +384,13 @@ node scripts/test-summary.js
 `npm run test:integration` starts the container defined in this directory, runs the live-database
 suites against it, and tears it down again:
 
-| Step                                   | What it runs                                        |
-| -------------------------------------- | --------------------------------------------------- |
-| `npm run docker:start:init`            | Brings up `docker-compose.yml` and seeds the schema |
-| `npm run test:integration:manual`      | Phase 1/2/3 security tests (20 + 10 + 10)           |
-| `npm run test:integration:protocol`    | `test/protocol/mcp-server-startup-test.js`          |
-| `npm run test:integration:performance` | `test/manual/improved-performance-test.js`          |
-| `npm run docker:stop`                  | Tears the container down                            |
+| Step                                   | What it runs                                                      |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| `npm run docker:start:init`            | Brings up `docker-compose.yml` and seeds the schema               |
+| `npm run test:integration:manual`      | Phase 1/2/3 security tests (20 + 10 + 10), inheriting Docker mode |
+| `npm run test:integration:protocol`    | `test/protocol/mcp-server-startup-test.js`                        |
+| `npm run test:integration:performance` | `test/manual/improved-performance-test.js`                        |
+| `npm run docker:stop`                  | Tears the container down                                          |
 
 Both matrix legs — `Tests (22)` and `Tests (24)` — are **required status checks on `main`**, so
 the 40 live-database tests gate every pull request. Running `npm test` locally exercises the same
@@ -408,7 +430,8 @@ the protocol phase (see
 
 - **`docker-compose.yml`**: Container orchestration configuration
 - **`init-db.sql`**: Database initialization script with sample data
-- **`.env.docker`**: Docker-specific environment variables
+- **`docker-env.template`**: Tracked Docker environment template without a password
+- **`.env.docker`**: Generated, ignored local Docker environment and password
 - **`wait-for-db.js`**: Database readiness verification script
 - **`README.md`**: This documentation file
 

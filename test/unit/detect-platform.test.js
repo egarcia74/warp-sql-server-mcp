@@ -1,14 +1,70 @@
 import fs from 'node:fs';
-import { execSync } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync, execSync } from 'node:child_process';
+import { fileURLToPath, URL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { chooseBestConfiguration, generateDockerCompose, main } from '../docker/detect-platform.js';
+import {
+  assertNoExistingDockerDataVolume,
+  chooseBestConfiguration,
+  ensureDockerPassword,
+  generateDockerCompose,
+  main,
+  resolveComposeProjectName,
+  writePrivateDockerCompose
+} from '../docker/detect-platform.js';
 
-vi.mock('node:child_process', () => ({ execSync: vi.fn() }));
+vi.mock('node:child_process', () => ({ execFileSync: vi.fn(), execSync: vi.fn() }));
+const { execFileSync: realExecFileSync } = await vi.importActual('node:child_process');
 
 const originalTestingMode = process.env.TESTING_MODE;
+const dockerEnvPath = fileURLToPath(new URL('../docker/.env.docker', import.meta.url));
+const dockerComposePath = fileURLToPath(new URL('../docker/docker-compose.yml', import.meta.url));
+const mockComposeDescriptor = 99123;
+const mockEnvDescriptor = 99124;
 
 function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
+  const realOpenSync = fs.openSync;
+  const realFstatSync = fs.fstatSync;
+  const realFchmodSync = fs.fchmodSync;
+  const realFtruncateSync = fs.ftruncateSync;
+  const realCloseSync = fs.closeSync;
+  const realLstatSync = fs.lstatSync;
+  vi.spyOn(fs, 'openSync').mockImplementation((file, ...args) => {
+    if (file === dockerEnvPath) {
+      if ((args[0] & fs.constants.O_EXCL) !== 0) return mockEnvDescriptor;
+      const error = new Error('Docker test environment not yet generated');
+      error.code = 'ENOENT';
+      throw error;
+    }
+    if (file === dockerComposePath) return mockComposeDescriptor;
+    return realOpenSync(file, ...args);
+  });
+  vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
+    if (descriptor === mockComposeDescriptor || descriptor === mockEnvDescriptor) {
+      return { isFile: () => true, mode: 0o600, uid: process.getuid(), dev: 1, ino: 42 };
+    }
+    return realFstatSync(descriptor, ...args);
+  });
+  vi.spyOn(fs, 'fchmodSync').mockImplementation((descriptor, ...args) => {
+    if (descriptor === mockComposeDescriptor) return;
+    return realFchmodSync(descriptor, ...args);
+  });
+  vi.spyOn(fs, 'ftruncateSync').mockImplementation((descriptor, ...args) => {
+    if (descriptor === mockComposeDescriptor) return;
+    return realFtruncateSync(descriptor, ...args);
+  });
+  vi.spyOn(fs, 'closeSync').mockImplementation(descriptor => {
+    if (descriptor === mockComposeDescriptor || descriptor === mockEnvDescriptor) return;
+    return realCloseSync(descriptor);
+  });
+  vi.spyOn(fs, 'lstatSync').mockImplementation((file, ...args) => {
+    if (file === dockerEnvPath || file === dockerComposePath) {
+      return { isSymbolicLink: () => false, dev: 1, ino: 42 };
+    }
+    return realLstatSync(file, ...args);
+  });
   const arch = Object.getOwnPropertyDescriptor(process, 'arch');
   const platform = Object.getOwnPropertyDescriptor(process, 'platform');
   Object.defineProperty(process, 'arch', { configurable: true, value: hostArch });
@@ -16,6 +72,15 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   vi.mocked(execSync).mockImplementation(command => {
     if (command.includes('--format')) return `${dockerArch}\n`;
     return '';
+  });
+  const previousExec = vi.mocked(execFileSync).getMockImplementation();
+  vi.mocked(execFileSync).mockImplementation((command, args, options) => {
+    if (command === '/bin/ls' && hostPlatform === 'darwin') {
+      return args.at(-1) === path.dirname(dockerEnvPath)
+        ? 'drwx------ 1 owner group 0 Jan 1 00:00 docker\n'
+        : '-rw------- 1 owner group 0 Jan 1 00:00 generated\n';
+    }
+    return previousExec(command, args, options);
   });
 
   try {
@@ -29,6 +94,10 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
 describe('Docker platform configuration selection', () => {
   beforeEach(() => {
     process.env.TESTING_MODE = 'true';
+    vi.mocked(execFileSync).mockImplementation((command, args, options) => {
+      if (command === '/bin/ls') return realExecFileSync(command, args, options);
+      return args[0] === 'compose' ? '{"name":"docker"}' : '';
+    });
   });
 
   afterEach(() => {
@@ -52,10 +121,352 @@ describe('Docker platform configuration selection', () => {
       compatibility: 'Full SQL Server feature set',
       config: { platform: null, environment: { MSSQL_AGENT_ENABLED: 'true' } }
     });
-    expect(generateDockerCompose(selected).services.sqlserver).toMatchObject({
-      ports: ['14330:1433'],
+    expect(generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver).toMatchObject({
+      ports: ['127.0.0.1:14330:1433'],
       healthcheck: { interval: '10s', timeout: '5s', retries: 5, start_period: '30s' }
     });
+  });
+
+  it('uses the supplied local credential without copying it into the healthcheck command', () => {
+    const selected = chooseBestConfiguration(
+      { arch: 'x64', isAppleSilicon: false },
+      { hasDocker: false, supportsAMD64: false }
+    );
+    const service = generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver;
+
+    expect(service.environment.SA_PASSWORD).toBe('GeneratedAa1!');
+    expect(service.healthcheck.test[1]).toContain('$$SA_PASSWORD');
+    expect(service.healthcheck.test[1]).not.toContain('GeneratedAa1!');
+  });
+
+  it('publishes the local test database only on the host loopback interface', () => {
+    const selected = chooseBestConfiguration(
+      { arch: 'x64', isAppleSilicon: false },
+      { hasDocker: false, supportsAMD64: false }
+    );
+
+    expect(generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver.ports).toEqual([
+      '127.0.0.1:14330:1433'
+    ]);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'reuses the generated password across starts and keeps its file private',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-'));
+      const envPath = path.join(dir, '.env.docker');
+      const templatePath = path.join(dir, 'docker-env.template');
+      try {
+        fs.writeFileSync(templatePath, 'SQL_SERVER_HOST=localhost\nSQL_SERVER_PASSWORD=\n');
+        const first = ensureDockerPassword(envPath, templatePath);
+        const second = ensureDockerPassword(envPath, templatePath);
+
+        expect(first).toMatch(/^[0-9a-f]{48}Aa1!$/);
+        expect(second).toBe(first);
+        expect(fs.readFileSync(envPath, 'utf8')).toBe(
+          `SQL_SERVER_HOST=localhost\nSQL_SERVER_PASSWORD=${first}\n`
+        );
+        if (process.platform !== 'win32') {
+          expect(fs.statSync(envPath).mode & 0o777).toBe(0o600);
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects a weak existing Docker credential rather than reusing it',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-'));
+      const envPath = path.join(dir, '.env.docker');
+      try {
+        fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=ShortAa1!\n', { mode: 0o600 });
+        expect(() => ensureDockerPassword(envPath)).toThrow(
+          'Docker test password is not strong enough'
+        );
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects an existing credential whose permissions were exposed',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-exposed-'));
+      const envPath = path.join(dir, '.env.docker');
+      try {
+        fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n', {
+          mode: 0o644
+        });
+        expect(() => ensureDockerPassword(envPath)).toThrow('unsafe permissions or ownership');
+        expect(fs.statSync(envPath).mode & 0o777).toBe(0o644);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  describe.skipIf(process.platform === 'win32')('macOS ACL listing checks', () => {
+    it.each([
+      ['an ACL marker', '-rw-------+ 1 owner group 0 Jan 1 00:00 generated\n', true],
+      ['an xattr-only marker', '-rw-------@ 1 owner group 0 Jan 1 00:00 generated\n', false],
+      [
+        'a numbered ACL entry without a marker',
+        '-rw------- 1 owner group 0 Jan 1 00:00 generated\n\t0: group:everyone deny delete\n',
+        true
+      ]
+    ])('handles %s on a Docker credential', (_case, fileListing, shouldReject) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-acl-listing-'));
+      const envPath = path.join(dir, '.env.docker');
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+      try {
+        fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n', {
+          mode: 0o600
+        });
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' });
+        vi.mocked(execFileSync).mockImplementation((command, args) => {
+          if (command !== '/bin/ls') throw new Error(`Unexpected command: ${command}`);
+          return args.at(-1) === fs.realpathSync(dir)
+            ? 'drwx------ 1 owner group 0 Jan 1 00:00 docker\n'
+            : fileListing;
+        });
+
+        if (shouldReject) {
+          expect(() => ensureDockerPassword(envPath)).toThrow('unsafe ACL or path');
+        } else {
+          expect(ensureDockerPassword(envPath)).toBe('StrongDockerPasswordAa1!2026');
+        }
+      } finally {
+        Object.defineProperty(process, 'platform', originalPlatform);
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects a credential owned by another user', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-owner-'));
+    const envPath = path.join(dir, '.env.docker');
+    try {
+      fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n', {
+        mode: 0o600
+      });
+      vi.spyOn(fs, 'fstatSync').mockReturnValue({
+        isFile: () => true,
+        mode: 0o600,
+        uid: process.getuid() + 1
+      });
+      expect(() => ensureDockerPassword(envPath)).toThrow('unsafe permissions or ownership');
+    } finally {
+      vi.restoreAllMocks();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects a symlink Compose destination', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-compose-link-'));
+    const composePath = path.join(dir, 'docker-compose.yml');
+    const targetPath = path.join(dir, 'target');
+    try {
+      fs.writeFileSync(targetPath, 'original');
+      fs.symlinkSync(targetPath, composePath);
+      expect(() => writePrivateDockerCompose(composePath, 'secret')).toThrow();
+      expect(fs.readFileSync(targetPath, 'utf8')).toBe('original');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects an existing Compose file whose password may already have been exposed',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-compose-exposed-'));
+      const composePath = path.join(dir, 'docker-compose.yml');
+      try {
+        fs.writeFileSync(composePath, 'old secret', { mode: 0o644 });
+        expect(() => writePrivateDockerCompose(composePath, 'new secret')).toThrow(
+          'unsafe permissions or ownership'
+        );
+        expect(fs.readFileSync(composePath, 'utf8')).toBe('old secret');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'writes Compose through its opened descriptor after a path swap',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-compose-race-'));
+      const composePath = path.join(dir, 'docker-compose.yml');
+      const originalPath = path.join(dir, 'original');
+      const targetPath = path.join(dir, 'target');
+      const realFstatSync = fs.fstatSync;
+      let replaced = false;
+      try {
+        fs.writeFileSync(composePath, 'old', { mode: 0o600 });
+        fs.writeFileSync(targetPath, 'unmodified');
+        vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
+          if (!replaced) {
+            fs.renameSync(composePath, originalPath);
+            fs.symlinkSync(targetPath, composePath);
+            replaced = true;
+          }
+          return realFstatSync(descriptor, ...args);
+        });
+
+        if (process.platform === 'darwin') {
+          expect(() => writePrivateDockerCompose(composePath, 'new secret')).toThrow('unsafe');
+        } else {
+          writePrivateDockerCompose(composePath, 'new secret');
+        }
+        expect(replaced).toBe(true);
+        expect(fs.readFileSync(originalPath, 'utf8')).toBe(
+          process.platform === 'darwin' ? 'old' : 'new secret'
+        );
+        expect(fs.readFileSync(targetPath, 'utf8')).toBe('unmodified');
+      } finally {
+        vi.restoreAllMocks();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it('fails closed rather than storing a Docker credential on Windows', () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' });
+    try {
+      expect(() => ensureDockerPassword('/unused/docker.env', '/unused/template')).toThrow(
+        'Windows Docker credential storage is not supported'
+      );
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform);
+    }
+  });
+
+  it('stops before generating a new credential for an existing Docker data volume', () => {
+    const listVolumes = vi.fn(() => 'docker_sqlserver_data\n');
+
+    expect(() => assertNoExistingDockerDataVolume('docker', listVolumes)).toThrow(
+      'docker_sqlserver_data already exists'
+    );
+    expect(listVolumes).toHaveBeenCalledWith(
+      'docker',
+      ['volume', 'ls', '--format', '{{.Name}}', '--filter', 'name=docker_sqlserver_data'],
+      { encoding: 'utf8' }
+    );
+  });
+
+  it('allows first-run credential generation when no Docker data volume exists', () => {
+    expect(() => assertNoExistingDockerDataVolume('docker', () => '')).not.toThrow();
+  });
+
+  it('uses the effective Compose project name for the legacy-volume guard', () => {
+    const runCompose = vi.fn(() => JSON.stringify({ name: 'customproject' }));
+    const projectName = resolveComposeProjectName(runCompose);
+    const listVolumes = vi.fn(() => 'customproject_sqlserver_data\n');
+
+    expect(projectName).toBe('customproject');
+    expect(runCompose).toHaveBeenCalledWith(
+      'docker',
+      [
+        'compose',
+        '--project-directory',
+        expect.stringMatching(/test[\\/]docker$/),
+        '-f',
+        '-',
+        'config',
+        '--format',
+        'json'
+      ],
+      expect.objectContaining({ encoding: 'utf8', input: expect.stringContaining('services:') })
+    );
+    expect(() =>
+      assertNoExistingDockerDataVolume(undefined, listVolumes, () => projectName)
+    ).toThrow('customproject_sqlserver_data already exists');
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'checks actual permission bits before writing a new Docker password',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-create-mode-'));
+      const envPath = path.join(dir, '.env.docker');
+      const templatePath = path.join(dir, 'template');
+      const realFstatSync = fs.fstatSync;
+      try {
+        fs.writeFileSync(templatePath, 'SQL_SERVER_PASSWORD=\n');
+        vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
+          const actual = realFstatSync(descriptor, ...args);
+          return {
+            isFile: () => true,
+            mode: (actual.mode & ~0o777) | 0o644,
+            uid: actual.uid
+          };
+        });
+
+        expect(() => ensureDockerPassword(envPath, templatePath)).toThrow(
+          'unsafe permissions or ownership'
+        );
+        expect(fs.readFileSync(envPath, 'utf8')).toBe('');
+      } finally {
+        vi.restoreAllMocks();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'does not read a replacement path after opening the local credential',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-race-'));
+      const envPath = path.join(dir, '.env.docker');
+      const replacementPath = path.join(dir, 'replacement');
+      const originalPassword = 'OriginalDockerPasswordAa1!2026';
+      const replacementPassword = 'ReplacementDockerPasswordAa1!2026';
+      const originalPath = path.join(dir, 'original');
+      const realFstatSync = fs.fstatSync;
+      let replaced = false;
+      try {
+        fs.writeFileSync(envPath, `SQL_SERVER_PASSWORD=${originalPassword}\n`, { mode: 0o600 });
+        fs.writeFileSync(replacementPath, `SQL_SERVER_PASSWORD=${replacementPassword}\n`);
+        fs.chmodSync(replacementPath, 0o644);
+        vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
+          if (!replaced) {
+            fs.renameSync(envPath, originalPath);
+            fs.symlinkSync(replacementPath, envPath);
+            replaced = true;
+          }
+          return realFstatSync(descriptor, ...args);
+        });
+
+        if (process.platform === 'darwin') {
+          expect(() => ensureDockerPassword(envPath)).toThrow('unsafe');
+        } else {
+          expect(ensureDockerPassword(envPath)).toBe(originalPassword);
+        }
+        expect(replaced).toBe(true);
+        expect(fs.statSync(originalPath).mode & 0o777).toBe(0o600);
+        expect(fs.statSync(replacementPath).mode & 0o777).toBe(0o644);
+      } finally {
+        vi.restoreAllMocks();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')('rejects a symlink as the Docker credential file', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-link-'));
+    const envPath = path.join(dir, '.env.docker');
+    const targetPath = path.join(dir, 'target');
+    try {
+      fs.writeFileSync(targetPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n');
+      fs.symlinkSync(targetPath, envPath);
+
+      expect(() => ensureDockerPassword(envPath)).toThrow();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('uses emulated SQL Server for Apple Silicon with AMD64 support', () => {
@@ -70,7 +481,7 @@ describe('Docker platform configuration selection', () => {
       compatibility: 'Full SQL Server feature set',
       config: { platform: 'linux/amd64', environment: { MSSQL_AGENT_ENABLED: 'true' } }
     });
-    expect(generateDockerCompose(selected).services.sqlserver).toMatchObject({
+    expect(generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver).toMatchObject({
       platform: 'linux/amd64',
       init: true,
       healthcheck: { interval: '15s', timeout: '10s', retries: 8, start_period: '45s' }
@@ -95,7 +506,9 @@ describe('Docker platform configuration selection', () => {
       compatibility: 'SQL Server core features (no SQL Agent)',
       config: { platform: null, environment: { MSSQL_AGENT_ENABLED: 'false' } }
     });
-    expect(generateDockerCompose(selected).services.sqlserver.healthcheck).toMatchObject({
+    expect(
+      generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver.healthcheck
+    ).toMatchObject({
       interval: '12s',
       timeout: '8s',
       retries: 6,
@@ -141,121 +554,155 @@ describe('Docker platform configuration selection', () => {
     ]);
   });
 
-  it('writes YAML with unchanged quoting, indentation, array syntax, and file destinations', () => {
-    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    runDetectionForHost('x64', 'linux', 'x86_64');
-
-    expect(execSync).toHaveBeenCalledTimes(3);
-    expect(log).not.toHaveBeenCalled();
-    expect(write).toHaveBeenCalledTimes(2);
-    expect(write.mock.calls[0][0]).toMatch(/test\/docker\/docker-compose\.yml$/);
-    expect(write.mock.calls[1][0]).toMatch(/test\/docker\/\.platform-config\.json$/);
-    expect(write.mock.calls[0][1]).toBe(
-      [
-        'services:',
-        '  sqlserver:',
-        '    image: "mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f"',
-        '    container_name: warp-mcp-sqlserver',
-        '    hostname: warp-mcp-sqlserver',
-        '    environment:',
-        '      ACCEPT_EULA: Y',
-        '      SA_PASSWORD: WarpMCP123!',
-        '      MSSQL_PID: Developer',
-        '      MSSQL_AGENT_ENABLED: "true"',
-        '      MSSQL_COLLATION: SQL_Latin1_General_CP1_CI_AS',
-        '    ports:',
-        '      - 14330:1433',
-        '    volumes:',
-        '      - ./init-db.sql:/tmp/init-db.sql:ro',
-        '      - sqlserver_data:/var/opt/mssql',
-        '    healthcheck:',
-        '      test:',
-        '        - CMD-SHELL',
-        '        - \'/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P WarpMCP123! -C -Q "SELECT 1" || exit 1\'',
-        '      interval: 10s',
-        '      timeout: 5s',
-        '      retries: 5',
-        '      start_period: 30s',
-        '    restart: unless-stopped',
-        '    networks:',
-        '      - warp-mcp-network',
-        'volumes:',
-        '  sqlserver_data:',
-        '    driver: local',
-        'networks:',
-        '  warp-mcp-network:',
-        '    driver: bridge',
-        ''
-      ].join('\n')
-    );
-    expect(JSON.parse(write.mock.calls[1][1])).toMatchObject({
-      architecture: 'x64',
-      platform: 'linux',
-      selected: { reason: 'Native AMD64 architecture - optimal performance' },
-      dockerCompose: 'docker-compose.yml'
-    });
-  });
-
-  it('writes Apple Silicon overrides and string arrays to YAML', () => {
-    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-    runDetectionForHost('arm64', 'darwin', 'aarch64');
-
-    expect(execSync).toHaveBeenCalledTimes(3);
-    expect(write).toHaveBeenCalledTimes(2);
-    const yaml = write.mock.calls[0][1];
-    expect(yaml).toContain('    platform: linux/amd64\n');
-    expect(yaml).toContain('      MSSQL_MEMORY_LIMIT_MB: 2048\n');
-    expect(yaml).toContain('      start_period: 45s\n');
-    expect(yaml).toContain('          memory: 2.5G\n');
-    expect(yaml).toContain('    init: true\n');
-    expect(yaml).toContain('    cap_add:\n      - SYS_PTRACE\n');
-    expect(yaml).toContain('    security_opt:\n      - seccomp:unconfined\n');
-    expect(yaml).toContain('    tmpfs:\n      - /tmp:noexec,nosuid,size=100m\n');
-    expect(JSON.parse(write.mock.calls[1][1])).toMatchObject({
-      architecture: 'arm64',
-      platform: 'darwin',
-      selected: { reason: 'Apple Silicon with Rosetta 2 emulation - full SQL Server compatibility' }
-    });
-  });
-
-  it('escapes backslashes and double quotes in a special-character scalar', () => {
-    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-    const selected = chooseBestConfiguration(
-      { arch: 'x64', isAppleSilicon: false },
-      { hasDocker: true, supportsAMD64: true }
-    );
-    const environment = selected.config.environment;
-    const originalPid = environment.MSSQL_PID;
-    environment.MSSQL_PID = 'Dev\\Tools "quoted" # tag';
-
-    try {
+  it.skipIf(process.platform === 'win32')(
+    'writes YAML with unchanged quoting, indentation, array syntax, and file destinations',
+    () => {
+      const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
       runDetectionForHost('x64', 'linux', 'x86_64');
-    } finally {
-      environment.MSSQL_PID = originalPid;
+
+      expect(execSync).toHaveBeenCalledTimes(3);
+      expect(log).not.toHaveBeenCalled();
+      expect(write).toHaveBeenCalledTimes(3);
+      expect(fs.openSync).toHaveBeenCalledWith(
+        dockerEnvPath,
+        fs.constants.O_WRONLY |
+          fs.constants.O_CREAT |
+          fs.constants.O_EXCL |
+          fs.constants.O_NOFOLLOW,
+        0o600
+      );
+      expect(write.mock.calls[0][0]).toBe(mockEnvDescriptor);
+      const password = write.mock.calls[0][1].match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m)[1];
+      expect(password).toMatch(/^[0-9a-f]{48}Aa1!$/);
+      expect(fs.openSync).toHaveBeenCalledWith(
+        dockerComposePath,
+        fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW,
+        0o600
+      );
+      expect(write.mock.calls[1][0]).toBe(mockComposeDescriptor);
+      expect(fs.fchmodSync).toHaveBeenCalledWith(mockComposeDescriptor, 0o600);
+      expect(vi.mocked(fs.fchmodSync).mock.invocationCallOrder[0]).toBeLessThan(
+        write.mock.invocationCallOrder[1]
+      );
+      expect(write.mock.calls[2][0]).toMatch(/test\/docker\/\.platform-config\.json$/);
+      expect(write.mock.calls[1][1]).toBe(
+        [
+          'services:',
+          '  sqlserver:',
+          '    image: "mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f"',
+          '    container_name: warp-mcp-sqlserver',
+          '    hostname: warp-mcp-sqlserver',
+          '    environment:',
+          '      ACCEPT_EULA: Y',
+          `      SA_PASSWORD: ${password}`,
+          '      MSSQL_PID: Developer',
+          '      MSSQL_AGENT_ENABLED: "true"',
+          '      MSSQL_COLLATION: SQL_Latin1_General_CP1_CI_AS',
+          '    ports:',
+          '      - 127.0.0.1:14330:1433',
+          '    volumes:',
+          '      - ./init-db.sql:/tmp/init-db.sql:ro',
+          '      - sqlserver_data:/var/opt/mssql',
+          '    healthcheck:',
+          '      test:',
+          '        - CMD-SHELL',
+          '        - \'/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1\'',
+          '      interval: 10s',
+          '      timeout: 5s',
+          '      retries: 5',
+          '      start_period: 30s',
+          '    restart: unless-stopped',
+          '    networks:',
+          '      - warp-mcp-network',
+          'volumes:',
+          '  sqlserver_data:',
+          '    driver: local',
+          'networks:',
+          '  warp-mcp-network:',
+          '    driver: bridge',
+          ''
+        ].join('\n')
+      );
+      expect(JSON.parse(write.mock.calls[2][1])).toMatchObject({
+        architecture: 'x64',
+        platform: 'linux',
+        selected: { reason: 'Native AMD64 architecture - optimal performance' },
+        dockerCompose: 'docker-compose.yml'
+      });
     }
+  );
 
-    expect(write.mock.calls[0][1]).toContain(
-      '      MSSQL_PID: "Dev\\\\Tools \\"quoted\\" # tag"\n'
-    );
-  });
+  it.skipIf(process.platform === 'win32')(
+    'writes Apple Silicon overrides and string arrays to YAML',
+    () => {
+      const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+      runDetectionForHost('arm64', 'darwin', 'aarch64');
 
-  it('doubles every apostrophe in a quoted YAML array item', () => {
-    const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-    const selected = chooseBestConfiguration(
-      { arch: 'x64', isAppleSilicon: false },
-      { hasDocker: true, supportsAMD64: true }
-    );
-    const healthcheck = selected.config.healthcheck;
-    const originalTest = healthcheck.test;
-    healthcheck.test = ['CMD-SHELL', "O'Brien's 'quoted' setting"];
-
-    try {
-      runDetectionForHost('x64', 'linux', 'x86_64');
-    } finally {
-      healthcheck.test = originalTest;
+      expect(execSync).toHaveBeenCalledTimes(3);
+      expect(write).toHaveBeenCalledTimes(3);
+      const yaml = write.mock.calls[1][1];
+      expect(yaml).toContain('    platform: linux/amd64\n');
+      expect(yaml).toContain('      MSSQL_MEMORY_LIMIT_MB: 2048\n');
+      expect(yaml).toContain('      start_period: 45s\n');
+      expect(yaml).toContain('          memory: 2.5G\n');
+      expect(yaml).toContain('    init: true\n');
+      expect(yaml).toContain('    cap_add:\n      - SYS_PTRACE\n');
+      expect(yaml).toContain('    security_opt:\n      - seccomp:unconfined\n');
+      expect(yaml).toContain('    tmpfs:\n      - /tmp:noexec,nosuid,size=100m\n');
+      expect(JSON.parse(write.mock.calls[2][1])).toMatchObject({
+        architecture: 'arm64',
+        platform: 'darwin',
+        selected: {
+          reason: 'Apple Silicon with Rosetta 2 emulation - full SQL Server compatibility'
+        }
+      });
     }
+  );
 
-    expect(write.mock.calls[0][1]).toContain("        - 'O''Brien''s ''quoted'' setting'\n");
-  });
+  it.skipIf(process.platform === 'win32')(
+    'escapes backslashes and double quotes in a special-character scalar',
+    () => {
+      const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+      const selected = chooseBestConfiguration(
+        { arch: 'x64', isAppleSilicon: false },
+        { hasDocker: true, supportsAMD64: true }
+      );
+      const environment = selected.config.environment;
+      const originalPid = environment.MSSQL_PID;
+      environment.MSSQL_PID = 'Dev\\Tools "quoted" # tag';
+
+      try {
+        runDetectionForHost('x64', 'linux', 'x86_64');
+      } finally {
+        environment.MSSQL_PID = originalPid;
+      }
+
+      expect(write.mock.calls[1][1]).toContain(
+        '      MSSQL_PID: "Dev\\\\Tools \\"quoted\\" # tag"\n'
+      );
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'doubles every apostrophe in a quoted YAML array item',
+    () => {
+      const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+      const selected = chooseBestConfiguration(
+        { arch: 'x64', isAppleSilicon: false },
+        { hasDocker: true, supportsAMD64: true }
+      );
+      const healthcheck = selected.config.healthcheck;
+      const originalTest = healthcheck.test;
+      healthcheck.test = ['CMD-SHELL', "O'Brien's 'quoted' setting"];
+
+      try {
+        runDetectionForHost('x64', 'linux', 'x86_64');
+      } finally {
+        healthcheck.test = originalTest;
+      }
+
+      expect(write.mock.calls[1][1]).toContain("        - 'O''Brien''s ''quoted'' setting'\n");
+    }
+  );
 });

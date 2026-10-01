@@ -78,6 +78,7 @@ jspm_packages/
 test/temp/
 
 # Generated Docker platform detection files
+test/docker/.env.docker
 test/docker/.platform-config.json
 test/docker/docker-compose.yml
 
