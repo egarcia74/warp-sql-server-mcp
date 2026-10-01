@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { runDockerIntegration } from '../../scripts/ci/run-docker-integration.mjs';
+import { runDockerTestHelper } from '../../scripts/ci/run-docker-test-helper.mjs';
 
 const packagePath = fileURLToPath(new URL('../../package.json', import.meta.url));
 const scripts = JSON.parse(readFileSync(packagePath, 'utf8')).scripts;
@@ -33,6 +34,27 @@ describe('Docker integration entrypoint', () => {
     for (const name of ['docker:start', 'docker:wait', 'docker:init', 'docker:test-connection']) {
       expect(scripts[name]).not.toMatch(/\b\w+=\w+\s+(?:npm|node)\b/);
     }
+  });
+
+  it('launches each Docker helper with Docker mode but no shell assignment', () => {
+    const spawn = vi.fn(() => ({ status: 0 }));
+    expect(runDockerTestHelper('wait', spawn, { EXISTING: 'yes' })).toBe(0);
+    expect(spawn).toHaveBeenCalledWith(
+      process.execPath,
+      [fileURLToPath(new URL('../docker/wait-for-db.js', import.meta.url))],
+      expect.objectContaining({ env: { EXISTING: 'yes', MCP_TESTING_MODE: 'docker' } })
+    );
+    expect(scripts['docker:wait']).toContain('node scripts/ci/run-docker-test-helper.mjs wait');
+    expect(scripts['docker:init']).toContain('node scripts/ci/run-docker-test-helper.mjs init');
+    expect(scripts['docker:test-connection']).toContain(
+      'node scripts/ci/run-docker-test-helper.mjs connect'
+    );
+  });
+
+  it('refuses an unlisted Docker helper', () => {
+    const spawn = vi.fn();
+    expect(() => runDockerTestHelper('../unlisted', spawn)).toThrow('Unknown Docker test helper');
+    expect(spawn).not.toHaveBeenCalled();
   });
 
   it.skipIf(process.platform !== 'win32')(

@@ -16,7 +16,7 @@ import { SqlServerMCP } from '../../index.js';
 // Load Docker environment configuration
 dotenv.config({
   path: 'test/docker/.env.docker',
-  override: true
+  override: process.env.MCP_TESTING_MODE === 'docker'
 });
 
 function reportDatabaseConnection(response) {

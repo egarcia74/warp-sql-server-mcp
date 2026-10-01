@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 // Load Docker env
 const envPath = path.join(process.cwd(), 'test/docker/.env.docker');
 if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath, override: true });
+  dotenv.config({ path: envPath, override: process.env.MCP_TESTING_MODE === 'docker' });
 }
 
 const config = {
