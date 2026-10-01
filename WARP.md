@@ -901,6 +901,11 @@ Windows. Windows Docker testing remains unavailable until a separate change prot
 credential and generated Compose files with private ACLs. The external-SQL-Server test commands do
 not use those generated Docker credentials.
 
+After manually starting the Docker container, use the explicit
+`test:integration:manual:docker`, `test:integration:protocol:docker`, or
+`test:integration:performance:docker` entrypoints so the generated credentials load. The unsuffixed
+commands remain suitable for externally configured SQL Server instances.
+
 ```bash
 # Quick automated testing with container management
 # Docker testing is done automatically via test:integration

@@ -52,6 +52,18 @@ function assertDockerCredentialStorageSupported() {
   }
 }
 
+function assertPrivateDockerFile(file, filePath) {
+  if (!file.isFile()) {
+    throw new Error(`Docker test file must be a regular file: ${filePath}`);
+  }
+  if ((file.mode & 0o777) !== 0o600 || file.uid !== process.getuid()) {
+    throw new Error(
+      `Docker test file has unsafe permissions or ownership: ${filePath}. ` +
+        'Rotate the credential and reset its data volume before retrying.'
+    );
+  }
+}
+
 function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvTemplatePath) {
   assertDockerCredentialStorageSupported();
   let descriptor;
@@ -64,9 +76,7 @@ function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvT
   if (descriptor !== undefined) {
     try {
       const openedFile = fs.fstatSync(descriptor);
-      if (!openedFile.isFile()) {
-        throw new Error(`Docker test environment must be a regular file: ${envPath}`);
-      }
+      assertPrivateDockerFile(openedFile, envPath);
       const match = fs.readFileSync(descriptor, 'utf8').match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m);
       if (!match) {
         throw new Error(`Docker test password is missing from ${envPath}`);
@@ -435,20 +445,30 @@ function formatYamlScalar(key, value) {
 /**
  * Write configuration files
  */
+function writePrivateDockerCompose(composePath, yamlContent) {
+  assertDockerCredentialStorageSupported();
+  const descriptor = fs.openSync(
+    composePath,
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW,
+    0o600
+  );
+  try {
+    assertPrivateDockerFile(fs.fstatSync(descriptor), composePath);
+    fs.fchmodSync(descriptor, 0o600);
+    fs.ftruncateSync(descriptor, 0);
+    fs.writeFileSync(descriptor, yamlContent);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 function writeConfiguration(selectedConfig, dockerCompose, outputDir) {
   const dockerComposePath = path.join(outputDir, 'docker-compose.yml');
   const configInfoPath = path.join(outputDir, '.platform-config.json');
 
   // Write Docker Compose file
   const yamlContent = objectToYaml(dockerCompose);
-  try {
-    // Protect an existing generated file before replacing its credential.
-    fs.chmodSync(dockerComposePath, 0o600);
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-  fs.writeFileSync(dockerComposePath, yamlContent, { mode: 0o600 });
-  fs.chmodSync(dockerComposePath, 0o600);
+  writePrivateDockerCompose(dockerComposePath, yamlContent);
 
   // Write configuration info
   const configInfo = {
@@ -535,5 +555,6 @@ export {
   chooseBestConfiguration,
   ensureDockerPassword,
   generateDockerCompose,
+  writePrivateDockerCompose,
   main
 };

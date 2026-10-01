@@ -23,6 +23,23 @@ describe('Docker integration entrypoint', () => {
     );
   });
 
+  it('offers explicit Docker-mode standalone phase, protocol, and performance entrypoints', () => {
+    const spawn = vi.fn(() => ({ status: 0 }));
+    const environment = { npm_execpath: '/npm-cli.js' };
+
+    expect(runDockerIntegration(spawn, environment, 'test:integration:manual')).toBe(0);
+    expect(spawn).toHaveBeenCalledWith(
+      process.execPath,
+      ['/npm-cli.js', 'run', 'test:integration:manual'],
+      expect.objectContaining({ env: { ...environment, MCP_TESTING_MODE: 'docker' } })
+    );
+    for (const name of ['manual', 'protocol', 'performance']) {
+      expect(scripts[`test:integration:${name}:docker`]).toContain(
+        `node scripts/ci/run-docker-integration.mjs test:integration:${name}`
+      );
+    }
+  });
+
   it('leaves external integration credentials out of Docker mode', () => {
     expect(scripts['test:integration:ci']).toContain('npm run test:integration:run');
     expect(scripts['test:integration:manual']).not.toContain('MCP_TESTING_MODE=docker');

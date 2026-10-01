@@ -75,9 +75,9 @@ npm run test:integration
 npm run docker:start
 
 # Run individual test components (requires running container)
-npm run test:integration:manual      # All security phases (20+10+10 tests)
-npm run test:integration:protocol    # MCP protocol tests
-npm run test:integration:performance # Performance tests
+npm run test:integration:manual:docker      # All security phases (20+10+10 tests)
+npm run test:integration:protocol:docker    # MCP protocol tests
+npm run test:integration:performance:docker # Performance tests
 
 # Stop container when done
 npm run docker:stop
@@ -99,9 +99,9 @@ npm run docker:status    # Check container status
 
 ```bash
 npm run test:integration                # All integration tests with Docker lifecycle
-npm run test:integration:manual        # Manual security phases (requires running container)
-npm run test:integration:protocol      # MCP protocol testing (requires running container)
-npm run test:integration:performance   # Performance testing (requires running container)
+npm run test:integration:manual:docker      # Manual security phases (requires running container)
+npm run test:integration:protocol:docker    # MCP protocol testing (requires running container)
+npm run test:integration:performance:docker # Performance testing (requires running container)
 ```
 
 ### Debugging Commands
@@ -183,6 +183,10 @@ Design notes:
 Docker credential generation fails closed on Windows. POSIX `0600` does not ensure private Windows
 ACLs, and both `.env.docker` and the generated Compose file contain the password. Windows Docker
 support will require private ACLs for both files and separate Windows validation.
+If either existing generated file has unsafe permissions or ownership, generation also stops rather
+than reusing a potentially exposed password. Back up any needed test data and rotate the local
+credential together with its data volume; changing the file mode alone cannot revoke an exposed
+password.
 
 The generated password is stored only in ignored local Docker files, and the generator restricts
 `.env.docker` to the current user. The Compose healthcheck reads the container environment rather
@@ -202,7 +206,7 @@ corresponding volume.
 
 ```bash
 # Run all phases including Phase 1 via:
-npm run test:integration:manual
+npm run test:integration:manual:docker
 ```
 
 **Tests:**
@@ -217,7 +221,7 @@ npm run test:integration:manual
 
 ```bash
 # Run all phases including Phase 2 via:
-npm run test:integration:manual
+npm run test:integration:manual:docker
 ```
 
 **Tests:**
@@ -232,7 +236,7 @@ npm run test:integration:manual
 
 ```bash
 # Run all phases including Phase 3 via:
-npm run test:integration:manual
+npm run test:integration:manual:docker
 ```
 
 **Tests:**
@@ -310,7 +314,7 @@ sudo usermod -aG docker $USER
 
 ## 🏭 **When to Use Manual Setup Instead**
 
-Use **manual setup** (`npm run test:integration:manual`) when you need:
+Use **manual setup** (`npm run test:integration:manual:docker`) when you need:
 
 ### Production Validation
 
@@ -372,13 +376,13 @@ node scripts/test-summary.js
 `npm run test:integration` starts the container defined in this directory, runs the live-database
 suites against it, and tears it down again:
 
-| Step                                   | What it runs                                        |
-| -------------------------------------- | --------------------------------------------------- |
-| `npm run docker:start:init`            | Brings up `docker-compose.yml` and seeds the schema |
-| `npm run test:integration:manual`      | Phase 1/2/3 security tests (20 + 10 + 10)           |
-| `npm run test:integration:protocol`    | `test/protocol/mcp-server-startup-test.js`          |
-| `npm run test:integration:performance` | `test/manual/improved-performance-test.js`          |
-| `npm run docker:stop`                  | Tears the container down                            |
+| Step                                   | What it runs                                                      |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| `npm run docker:start:init`            | Brings up `docker-compose.yml` and seeds the schema               |
+| `npm run test:integration:manual`      | Phase 1/2/3 security tests (20 + 10 + 10), inheriting Docker mode |
+| `npm run test:integration:protocol`    | `test/protocol/mcp-server-startup-test.js`                        |
+| `npm run test:integration:performance` | `test/manual/improved-performance-test.js`                        |
+| `npm run docker:stop`                  | Tears the container down                                          |
 
 Both matrix legs — `Tests (22)` and `Tests (24)` — are **required status checks on `main`**, so
 the 40 live-database tests gate every pull request. Running `npm test` locally exercises the same

@@ -10,23 +10,49 @@ import {
   chooseBestConfiguration,
   ensureDockerPassword,
   generateDockerCompose,
-  main
+  main,
+  writePrivateDockerCompose
 } from '../docker/detect-platform.js';
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn(), execSync: vi.fn() }));
 
 const originalTestingMode = process.env.TESTING_MODE;
 const dockerEnvPath = fileURLToPath(new URL('../docker/.env.docker', import.meta.url));
+const dockerComposePath = fileURLToPath(new URL('../docker/docker-compose.yml', import.meta.url));
+const mockComposeDescriptor = 99123;
 
 function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   const realOpenSync = fs.openSync;
+  const realFstatSync = fs.fstatSync;
+  const realFchmodSync = fs.fchmodSync;
+  const realFtruncateSync = fs.ftruncateSync;
+  const realCloseSync = fs.closeSync;
   vi.spyOn(fs, 'openSync').mockImplementation((file, ...args) => {
     if (file === dockerEnvPath) {
       const error = new Error('Docker test environment not yet generated');
       error.code = 'ENOENT';
       throw error;
     }
+    if (file === dockerComposePath) return mockComposeDescriptor;
     return realOpenSync(file, ...args);
+  });
+  vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
+    if (descriptor === mockComposeDescriptor) {
+      return { isFile: () => true, mode: 0o600, uid: process.getuid() };
+    }
+    return realFstatSync(descriptor, ...args);
+  });
+  vi.spyOn(fs, 'fchmodSync').mockImplementation((descriptor, ...args) => {
+    if (descriptor === mockComposeDescriptor) return;
+    return realFchmodSync(descriptor, ...args);
+  });
+  vi.spyOn(fs, 'ftruncateSync').mockImplementation((descriptor, ...args) => {
+    if (descriptor === mockComposeDescriptor) return;
+    return realFtruncateSync(descriptor, ...args);
+  });
+  vi.spyOn(fs, 'closeSync').mockImplementation(descriptor => {
+    if (descriptor === mockComposeDescriptor) return;
+    return realCloseSync(descriptor);
   });
   const arch = Object.getOwnPropertyDescriptor(process, 'arch');
   const platform = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -132,11 +158,110 @@ describe('Docker platform configuration selection', () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-env-'));
       const envPath = path.join(dir, '.env.docker');
       try {
-        fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=ShortAa1!\n');
+        fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=ShortAa1!\n', { mode: 0o600 });
         expect(() => ensureDockerPassword(envPath)).toThrow(
           'Docker test password is not strong enough'
         );
       } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects an existing credential whose permissions were exposed',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-exposed-'));
+      const envPath = path.join(dir, '.env.docker');
+      try {
+        fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n', {
+          mode: 0o644
+        });
+        expect(() => ensureDockerPassword(envPath)).toThrow('unsafe permissions or ownership');
+        expect(fs.statSync(envPath).mode & 0o777).toBe(0o644);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')('rejects a credential owned by another user', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-owner-'));
+    const envPath = path.join(dir, '.env.docker');
+    try {
+      fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n', {
+        mode: 0o600
+      });
+      vi.spyOn(fs, 'fstatSync').mockReturnValue({
+        isFile: () => true,
+        mode: 0o600,
+        uid: process.getuid() + 1
+      });
+      expect(() => ensureDockerPassword(envPath)).toThrow('unsafe permissions or ownership');
+    } finally {
+      vi.restoreAllMocks();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects a symlink Compose destination', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-compose-link-'));
+    const composePath = path.join(dir, 'docker-compose.yml');
+    const targetPath = path.join(dir, 'target');
+    try {
+      fs.writeFileSync(targetPath, 'original');
+      fs.symlinkSync(targetPath, composePath);
+      expect(() => writePrivateDockerCompose(composePath, 'secret')).toThrow();
+      expect(fs.readFileSync(targetPath, 'utf8')).toBe('original');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects an existing Compose file whose password may already have been exposed',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-compose-exposed-'));
+      const composePath = path.join(dir, 'docker-compose.yml');
+      try {
+        fs.writeFileSync(composePath, 'old secret', { mode: 0o644 });
+        expect(() => writePrivateDockerCompose(composePath, 'new secret')).toThrow(
+          'unsafe permissions or ownership'
+        );
+        expect(fs.readFileSync(composePath, 'utf8')).toBe('old secret');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'writes Compose through its opened descriptor after a path swap',
+    () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-compose-race-'));
+      const composePath = path.join(dir, 'docker-compose.yml');
+      const originalPath = path.join(dir, 'original');
+      const targetPath = path.join(dir, 'target');
+      const realFstatSync = fs.fstatSync;
+      let replaced = false;
+      try {
+        fs.writeFileSync(composePath, 'old', { mode: 0o600 });
+        fs.writeFileSync(targetPath, 'unmodified');
+        vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
+          if (!replaced) {
+            fs.renameSync(composePath, originalPath);
+            fs.symlinkSync(targetPath, composePath);
+            replaced = true;
+          }
+          return realFstatSync(descriptor, ...args);
+        });
+
+        writePrivateDockerCompose(composePath, 'new secret');
+        expect(replaced).toBe(true);
+        expect(fs.readFileSync(originalPath, 'utf8')).toBe('new secret');
+        expect(fs.readFileSync(targetPath, 'utf8')).toBe('unmodified');
+      } finally {
+        vi.restoreAllMocks();
         fs.rmSync(dir, { recursive: true, force: true });
       }
     }
@@ -183,7 +308,7 @@ describe('Docker platform configuration selection', () => {
       const realFstatSync = fs.fstatSync;
       let replaced = false;
       try {
-        fs.writeFileSync(envPath, `SQL_SERVER_PASSWORD=${originalPassword}\n`);
+        fs.writeFileSync(envPath, `SQL_SERVER_PASSWORD=${originalPassword}\n`, { mode: 0o600 });
         fs.writeFileSync(replacementPath, `SQL_SERVER_PASSWORD=${replacementPassword}\n`);
         fs.chmodSync(replacementPath, 0o644);
         vi.spyOn(fs, 'fstatSync').mockImplementation((descriptor, ...args) => {
@@ -309,7 +434,6 @@ describe('Docker platform configuration selection', () => {
     'writes YAML with unchanged quoting, indentation, array syntax, and file destinations',
     () => {
       const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-      const chmod = vi.spyOn(fs, 'chmodSync').mockImplementation(() => {});
       const log = vi.spyOn(console, 'log').mockImplementation(() => {});
       runDetectionForHost('x64', 'linux', 'x86_64');
 
@@ -320,10 +444,16 @@ describe('Docker platform configuration selection', () => {
       expect(write.mock.calls[0][2]).toEqual({ flag: 'wx', mode: 0o600 });
       const password = write.mock.calls[0][1].match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m)[1];
       expect(password).toMatch(/^[0-9a-f]{48}Aa1!$/);
-      expect(write.mock.calls[1][0]).toMatch(/test\/docker\/docker-compose\.yml$/);
-      expect(write.mock.calls[1][2]).toEqual({ mode: 0o600 });
-      expect(chmod).toHaveBeenCalledWith(write.mock.calls[1][0], 0o600);
-      expect(chmod.mock.invocationCallOrder[0]).toBeLessThan(write.mock.invocationCallOrder[1]);
+      expect(fs.openSync).toHaveBeenCalledWith(
+        dockerComposePath,
+        fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW,
+        0o600
+      );
+      expect(write.mock.calls[1][0]).toBe(mockComposeDescriptor);
+      expect(fs.fchmodSync).toHaveBeenCalledWith(mockComposeDescriptor, 0o600);
+      expect(vi.mocked(fs.fchmodSync).mock.invocationCallOrder[0]).toBeLessThan(
+        write.mock.invocationCallOrder[1]
+      );
       expect(write.mock.calls[2][0]).toMatch(/test\/docker\/\.platform-config\.json$/);
       expect(write.mock.calls[1][1]).toBe(
         [
@@ -376,7 +506,6 @@ describe('Docker platform configuration selection', () => {
     'writes Apple Silicon overrides and string arrays to YAML',
     () => {
       const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-      vi.spyOn(fs, 'chmodSync').mockImplementation(() => {});
       runDetectionForHost('arm64', 'darwin', 'aarch64');
 
       expect(execSync).toHaveBeenCalledTimes(3);
@@ -404,7 +533,6 @@ describe('Docker platform configuration selection', () => {
     'escapes backslashes and double quotes in a special-character scalar',
     () => {
       const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-      vi.spyOn(fs, 'chmodSync').mockImplementation(() => {});
       const selected = chooseBestConfiguration(
         { arch: 'x64', isAppleSilicon: false },
         { hasDocker: true, supportsAMD64: true }
@@ -429,7 +557,6 @@ describe('Docker platform configuration selection', () => {
     'doubles every apostrophe in a quoted YAML array item',
     () => {
       const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
-      vi.spyOn(fs, 'chmodSync').mockImplementation(() => {});
       const selected = chooseBestConfiguration(
         { arch: 'x64', isAppleSilicon: false },
         { hasDocker: true, supportsAMD64: true }
