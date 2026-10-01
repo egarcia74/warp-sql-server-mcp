@@ -208,6 +208,43 @@ describe('Docker platform configuration selection', () => {
     }
   );
 
+  describe.skipIf(process.platform === 'win32')('macOS ACL listing checks', () => {
+    it.each([
+      ['an ACL marker', '-rw-------+ 1 owner group 0 Jan 1 00:00 generated\n', true],
+      ['an xattr-only marker', '-rw-------@ 1 owner group 0 Jan 1 00:00 generated\n', false],
+      [
+        'a numbered ACL entry without a marker',
+        '-rw------- 1 owner group 0 Jan 1 00:00 generated\n\t0: group:everyone deny delete\n',
+        true
+      ]
+    ])('handles %s on a Docker credential', (_case, fileListing, shouldReject) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-acl-listing-'));
+      const envPath = path.join(dir, '.env.docker');
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+      try {
+        fs.writeFileSync(envPath, 'SQL_SERVER_PASSWORD=StrongDockerPasswordAa1!2026\n', {
+          mode: 0o600
+        });
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' });
+        vi.mocked(execFileSync).mockImplementation((command, args) => {
+          if (command !== '/bin/ls') throw new Error(`Unexpected command: ${command}`);
+          return args.at(-1) === fs.realpathSync(dir)
+            ? 'drwx------ 1 owner group 0 Jan 1 00:00 docker\n'
+            : fileListing;
+        });
+
+        if (shouldReject) {
+          expect(() => ensureDockerPassword(envPath)).toThrow('unsafe ACL or path');
+        } else {
+          expect(ensureDockerPassword(envPath)).toBe('StrongDockerPasswordAa1!2026');
+        }
+      } finally {
+        Object.defineProperty(process, 'platform', originalPlatform);
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
   it.skipIf(process.platform === 'win32')('rejects a credential owned by another user', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-owner-'));
     const envPath = path.join(dir, '.env.docker');
