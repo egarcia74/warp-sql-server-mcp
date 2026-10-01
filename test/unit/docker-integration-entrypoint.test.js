@@ -34,10 +34,24 @@ describe('Docker integration entrypoint', () => {
       expect.objectContaining({ env: { ...environment, MCP_TESTING_MODE: 'docker' } })
     );
     for (const name of ['manual', 'protocol', 'performance']) {
+      expect(runDockerIntegration(spawn, environment, `test:integration:${name}`)).toBe(0);
+      expect(spawn).toHaveBeenCalledWith(
+        process.execPath,
+        ['/npm-cli.js', 'run', `test:integration:${name}`],
+        expect.objectContaining({ env: { ...environment, MCP_TESTING_MODE: 'docker' } })
+      );
       expect(scripts[`test:integration:${name}:docker`]).toContain(
         `node scripts/ci/run-docker-integration.mjs test:integration:${name}`
       );
     }
+  });
+
+  it('rejects unexpected CLI-supplied script names before spawning npm', () => {
+    const spawn = vi.fn();
+    expect(() =>
+      runDockerIntegration(spawn, { npm_execpath: '/npm-cli.js' }, 'test:integration:manual --evil')
+    ).toThrow('Unknown Docker integration script');
+    expect(spawn).not.toHaveBeenCalled();
   });
 
   it('leaves external integration credentials out of Docker mode', () => {
