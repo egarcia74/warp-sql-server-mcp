@@ -896,6 +896,11 @@ Generated files:
 
 **Automated SQL Server Container Testing**: Complete testing environment in Docker containers for fast, consistent validation.
 
+Generated Docker test credentials currently require POSIX file permissions and fail closed on
+Windows. Windows Docker testing remains unavailable until a separate change protects both the
+credential and generated Compose files with private ACLs. The external-SQL-Server test commands do
+not use those generated Docker credentials.
+
 ```bash
 # Quick automated testing with container management
 # Docker testing is done automatically via test:integration
@@ -912,7 +917,7 @@ npm run docker:clean                  # Remove all data and containers
 
 **Docker Benefits:**
 
-- ✅ **Zero Configuration**: Works immediately on any Docker-enabled system
+- ✅ **Zero Configuration**: Works immediately on supported macOS/Linux Docker hosts
 - ✅ **Complete Isolation**: No interference with existing SQL Server instances
 - ✅ **Consistent Environment**: SQL Server 2022 with standardized test data
 - ✅ **Fast Setup**: 2-3 minutes vs 30+ minutes for manual setup

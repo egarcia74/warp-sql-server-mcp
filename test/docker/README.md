@@ -180,12 +180,17 @@ Design notes:
 
 ### Local Docker Password
 
+Docker credential generation fails closed on Windows. POSIX `0600` does not ensure private Windows
+ACLs, and both `.env.docker` and the generated Compose file contain the password. Windows Docker
+support will require private ACLs for both files and separate Windows validation.
+
 The generated password is stored only in ignored local Docker files, and the generator restricts
 `.env.docker` to the current user. The Compose healthcheck reads the container environment rather
 than embedding another copy of the password. Keep `.env.docker` while retaining the Docker data
-volume; deleting it alone would generate a new password that does not match the existing SQL Server
-login. This also applies when upgrading from a checkout that used the previously tracked test
-password: the old data volume cannot authenticate with the new generated password. For a disposable
+volume; deleting it alone would otherwise generate a new password that does not match the existing
+SQL Server login. The generator now stops if the credential file is missing but this project's data
+volume exists, including after upgrading from a checkout with the previously tracked test password.
+It does not remove the volume automatically because that would delete its database contents. For a disposable
 test database, explicitly run `docker compose -f test/docker/docker-compose.yml down -v`, remove
 `.env.docker`, then run `npm run docker:start`. The Compose command removes this project's test data
 volume; back up any test data you need first. Do not remove `.env.docker` without also resetting the

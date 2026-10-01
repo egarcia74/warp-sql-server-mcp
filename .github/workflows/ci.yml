@@ -74,6 +74,25 @@ jobs:
       - name: Run tests
         run: npm test
 
+  windows-docker-credential-safety:
+    name: Windows Docker Credential Safety
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify Docker credential generation fails closed
+        run: npx vitest run test/unit/detect-platform.test.js test/unit/docker-integration-entrypoint.test.js test/unit/manual-test-environment.test.js
+
   coverage:
     name: Test Coverage
     runs-on: ubuntu-latest

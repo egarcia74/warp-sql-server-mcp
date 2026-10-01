@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,10 +23,40 @@ const __dirname = path.dirname(__filename);
 const dockerEnvPath = path.join(__dirname, '.env.docker');
 const dockerEnvTemplatePath = path.join(__dirname, 'docker-env.template');
 
+function assertNoExistingDockerDataVolume(
+  projectName = process.env.COMPOSE_PROJECT_NAME || path.basename(__dirname),
+  listVolumes = execFileSync
+) {
+  const volumeName = `${projectName}_sqlserver_data`;
+  const names = listVolumes(
+    'docker',
+    ['volume', 'ls', '--format', '{{.Name}}', '--filter', `name=${volumeName}`],
+    { encoding: 'utf8' }
+  );
+  if (names.split(/\r?\n/).includes(volumeName)) {
+    throw new Error(
+      `Docker data volume ${volumeName} already exists but ${dockerEnvPath} is missing. ` +
+        'Back up any needed data, then remove only this volume before generating a new password.'
+    );
+  }
+}
+
+function assertDockerCredentialStorageSupported() {
+  if (process.platform === 'win32') {
+    throw new Error(
+      'Windows Docker credential storage is not supported until private ACLs protect both generated files'
+    );
+  }
+  if (!fs.constants.O_NOFOLLOW) {
+    throw new Error('Docker credential storage requires O_NOFOLLOW support');
+  }
+}
+
 function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvTemplatePath) {
+  assertDockerCredentialStorageSupported();
   let descriptor;
   try {
-    descriptor = fs.openSync(envPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+    descriptor = fs.openSync(envPath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
@@ -36,18 +66,6 @@ function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvT
       const openedFile = fs.fstatSync(descriptor);
       if (!openedFile.isFile()) {
         throw new Error(`Docker test environment must be a regular file: ${envPath}`);
-      }
-      // Windows lacks O_NOFOLLOW. Check the path is a direct regular file and still
-      // refers to the opened inode; all subsequent operations use the descriptor.
-      if (!fs.constants.O_NOFOLLOW) {
-        const pathFile = fs.lstatSync(envPath);
-        if (
-          !pathFile.isFile() ||
-          pathFile.dev !== openedFile.dev ||
-          pathFile.ino !== openedFile.ino
-        ) {
-          throw new Error(`Docker test environment must be a regular file: ${envPath}`);
-        }
       }
       const match = fs.readFileSync(descriptor, 'utf8').match(/^SQL_SERVER_PASSWORD=([^\r\n]+)$/m);
       if (!match) {
@@ -68,6 +86,10 @@ function ensureDockerPassword(envPath = dockerEnvPath, templatePath = dockerEnvT
     } finally {
       fs.closeSync(descriptor);
     }
+  }
+
+  if (envPath === dockerEnvPath) {
+    assertNoExistingDockerDataVolume();
   }
 
   const template = fs.readFileSync(templatePath, 'utf8');
@@ -452,6 +474,7 @@ function main() {
   }
 
   try {
+    assertDockerCredentialStorageSupported();
     // Detect host capabilities
     const hostInfo = detectArchitecture();
     if (!hostInfo) {
@@ -501,11 +524,12 @@ function main() {
 }
 
 // Run if called directly (ES module equivalent)
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && __filename === path.resolve(process.argv[1])) {
   main();
 }
 
 export {
+  assertNoExistingDockerDataVolume,
   detectArchitecture,
   checkDockerCapabilities,
   chooseBestConfiguration,

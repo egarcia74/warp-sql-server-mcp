@@ -11,7 +11,7 @@ import dotenv from 'dotenv';
 // Load Docker-specific environment
 dotenv.config({
   path: './test/docker/.env.docker',
-  override: process.env.MCP_TESTING_MODE === 'docker'
+  override: true
 });
 
 // Dynamic timing based on platform with intelligent retry logic
