@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-02
+
 ### Added
 
 - **`export_table_csv` now warns when an export holds values a spreadsheet would execute.** A CSV
@@ -1504,4 +1506,6 @@ This release represents a significant architectural evolution with enterprise-gr
   - Improved navigation for new users
   - Better documentation discoverability
 
+[Unreleased]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.0.0...v2.0.1
