@@ -141,6 +141,9 @@
     "vitest": "^5.0.0"
   },
   "overrides": {
+    "get-uri": {
+      "basic-ftp": "6.2.1"
+    },
     "smol-toml": "1.8.0"
   },
   "engines": {
