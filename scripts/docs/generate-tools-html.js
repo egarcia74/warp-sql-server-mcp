@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { writeDocsHtml } from './write-html.js';
 
 /**
@@ -19,11 +18,10 @@ function escapeHtmlAttribute(value) {
 
 function generateToolsHTML(toolsData) {
   if (!toolsData) {
-    const toolsDataPath = path.resolve('docs-data/tools.json');
-    if (!fs.existsSync(toolsDataPath)) {
+    if (!fs.existsSync('docs-data/tools.json')) {
       throw new Error('Tools data file not found. Run extract-docs.js first.');
     }
-    toolsData = JSON.parse(fs.readFileSync(toolsDataPath, 'utf8'));
+    toolsData = JSON.parse(fs.readFileSync('docs-data/tools.json', 'utf8'));
   }
   const { version, tools } = toolsData;
 

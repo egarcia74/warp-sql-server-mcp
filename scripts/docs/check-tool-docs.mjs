@@ -102,13 +102,17 @@ export function checkToolDocs(sources = {}) {
     if (!documented) return [];
     const { properties = {}, required = [], ...schema } = tool.inputSchema ?? {};
     const documentedRequired = Array.isArray(documented.required)
-      ? [...documented.required].sort()
+      ? [...documented.required].sort((a, b) => a.localeCompare(b))
       : documented.required;
     return [
       ...differentFields(tool.description, documented.description, `${tool.name}.description`),
       ...differentFields(schema, documented.schema, `${tool.name}.schema`),
       ...differentFields(properties, documented.parameters, `${tool.name}.parameters`),
-      ...differentFields([...required].sort(), documentedRequired, `${tool.name}.required`)
+      ...differentFields(
+        [...required].sort((a, b) => a.localeCompare(b)),
+        documentedRequired,
+        `${tool.name}.required`
+      )
     ];
   });
 

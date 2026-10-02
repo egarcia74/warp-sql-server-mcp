@@ -41,10 +41,10 @@ function getPackageVersion() {
   }
 }
 
-function preserveTimestampIfUnchanged(docData, outPath) {
+function preserveTimestampIfUnchanged(docData) {
   try {
-    if (!fs.existsSync(outPath)) return;
-    const previous = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+    if (!fs.existsSync('docs-data/tools.json')) return;
+    const previous = JSON.parse(fs.readFileSync('docs-data/tools.json', 'utf8'));
     const normalize = data => {
       const copy = globalThis.structuredClone(data);
       delete copy.generatedAt;
@@ -88,7 +88,7 @@ export function generateToolsDocumentation(registryTools = getAllTools()) {
   const outputDir = 'docs-data';
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
   const outPath = path.join(outputDir, 'tools.json');
-  preserveTimestampIfUnchanged(docData, outPath);
+  preserveTimestampIfUnchanged(docData);
   fs.writeFileSync(outPath, JSON.stringify(docData, null, 2));
 
   try {
