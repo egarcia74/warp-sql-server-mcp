@@ -135,12 +135,15 @@
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "markdown-link-check": "^3.13.7",
-    "markdownlint-cli2": "^0.23.0",
+    "markdownlint-cli2": "^0.23.3",
     "prettier": "^3.3.3",
     "sinon": "^22.0.0",
     "vitest": "^5.0.0"
   },
   "overrides": {
+    "get-uri": {
+      "basic-ftp": "6.2.1"
+    },
     "smol-toml": "1.8.0"
   },
   "engines": {

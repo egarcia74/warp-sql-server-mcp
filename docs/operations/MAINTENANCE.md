@@ -190,9 +190,16 @@ repository as readily as it has cleared one.
 
 Current entries:
 
-| Package     | Pin     | Why it exists                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `smol-toml` | `1.8.0` | **Load-bearing - do not remove.** `markdownlint-cli2` depends on `smol-toml` at an exact `1.7.0`, which carries an advisory. Without this override `npm audit` fails, and because the pre-push hook runs `npm audit`, **every push is blocked**. The alternative npm suggests - downgrading `markdownlint-cli2` - was rejected: the linter baseline is 0 issues in 54 files and downgrading risks changing it. |
+| Package               | Pin     | Why it exists                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get-uri → basic-ftp` | `6.2.1` | **Security override.** `get-uri@8.0.1` requires `basic-ftp:^5.3.1`, but [GHSA-c475-qrg2-pj4r](https://github.com/advisories/GHSA-c475-qrg2-pj4r) is fixed only in `6.2.1`. This scoped pin protects the `pac+ftp:` proxy path used by the development link checker without downgrading the checker. Recheck upstream `get-uri` support for 6.x and remove the override once its own dependency range is patched. |
+| `smol-toml`           | `1.8.0` | **Load-bearing - do not remove.** `markdownlint-cli2` depends on `smol-toml` at an exact `1.7.0`, which carries an advisory. Without this override `npm audit` fails, and because the pre-push hook runs `npm audit`, **every push is blocked**. The alternative npm suggests - downgrading `markdownlint-cli2` - was rejected: the linter baseline is 0 issues in 54 files and downgrading risks changing it.   |
+
+The `basic-ftp` 6.x upgrade also rejects FTP data connections from a host other
+than the control server by default. That may affect an unusual FTP-hosted PAC
+file served across separate control and data hosts; this repository does not
+configure that path. Keep this hardening behavior rather than enabling the
+legacy cross-host transfer option.
 
 When reviewing this block, for each entry ask what the consumers actually require:
 

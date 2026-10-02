@@ -77,7 +77,7 @@ class WarpMCPPerformanceTest {
       };
 
       // Use stdio transport (same as Warp uses)
-      const child = spawn('node', ['index.js'], {
+      const child = spawn(process.execPath, ['index.js'], {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
