@@ -7,10 +7,15 @@ import { pathToFileURL } from 'node:url';
 
 import { getAllTools } from '../../lib/tools/tool-registry.js';
 
+function numericExampleValue(param, advanced) {
+  if (param !== 'limit') return 1;
+  return advanced ? 50 : 100;
+}
+
 function exampleValue(param, schema, advanced) {
   if (schema.enum?.length) return schema.enum[0];
   const { type } = schema;
-  if (type === 'number' || type === 'integer') return param === 'limit' ? (advanced ? 50 : 100) : 1;
+  if (type === 'number' || type === 'integer') return numericExampleValue(param, advanced);
   if (type === 'boolean') return advanced;
   if (param.includes('query')) return 'SELECT * FROM your_table';
   if (param.includes('table')) return 'your_table_name';
