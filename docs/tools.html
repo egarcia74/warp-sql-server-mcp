@@ -251,6 +251,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -301,6 +302,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <div class="no-params">No parameters required</div>
       </div>
 
@@ -319,6 +321,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -362,6 +365,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -418,6 +422,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -464,6 +469,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -496,7 +502,11 @@
               <td><span class="param-name">limit</span></td>
               <td><span class="param-type">integer</span></td>
               <td><span class="optional">OPTIONAL</span></td>
-              <td>Maximum number of rows to return (optional, defaults to 100)</td>
+              <td>
+                Maximum number of rows to return (optional, defaults to 100)<br /><small>
+                  Minimum: 1</small
+                >
+              </td>
             </tr>
             <tr>
               <td><span class="param-name">offset</span></td>
@@ -505,7 +515,9 @@
               <td>
                 Number of rows to skip before returning results (optional, defaults to 0). Pair with
                 limit to page through a table. Row order is not guaranteed without an ORDER BY, so
-                pages may overlap or skip rows on tables without a clustered index.
+                pages may overlap or skip rows on tables without a clustered index.<br /><small>
+                  Minimum: 0</small
+                >
               </td>
             </tr>
             <tr>
@@ -530,7 +542,7 @@
           <h4>🔸 Advanced Usage</h4>
           <div class="example-code">
             { "tool": "get_table_data", "arguments": { "table_name": "your_table_name", "database":
-            "MyDatabase", "schema": "dbo", "where": "id > 100" } }
+            "MyDatabase", "schema": "dbo", "limit": 50, "offset": 1, "where": "id &gt; 100" } }
           </div>
         </div>
       </div>
@@ -542,6 +554,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -598,7 +611,7 @@
           <h4>🔸 Advanced Usage</h4>
           <div class="example-code">
             { "tool": "export_table_csv", "arguments": { "table_name": "your_table_name",
-            "database": "MyDatabase", "schema": "dbo", "limit": 50, "where": "id > 100" } }
+            "database": "MyDatabase", "schema": "dbo", "limit": 50, "where": "id &gt; 100" } }
           </div>
         </div>
       </div>
@@ -610,6 +623,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -624,7 +638,10 @@
               <td><span class="param-name">timeframe</span></td>
               <td><span class="param-type">string</span></td>
               <td><span class="optional">OPTIONAL</span></td>
-              <td>Time period for stats:</td>
+              <td>
+                Time period for stats: "recent" (last 5 min), "session" (since startup), "all"
+                (default)<br /><small> Allowed values: recent, session, all</small>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -635,7 +652,7 @@
         <div class="example">
           <h4>🔸 Advanced Usage</h4>
           <div class="example-code">
-            { "tool": "get_performance_stats", "arguments": { "timeframe": "optional_value" } }
+            { "tool": "get_performance_stats", "arguments": { "timeframe": "recent" } }
           </div>
         </div>
       </div>
@@ -647,6 +664,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -697,6 +715,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <div class="no-params">No parameters required</div>
       </div>
 
@@ -715,6 +734,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -771,6 +791,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -822,6 +843,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -880,6 +902,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -906,7 +929,11 @@
               <td><span class="param-name">severity_filter</span></td>
               <td><span class="param-type">string</span></td>
               <td><span class="optional">OPTIONAL</span></td>
-              <td>Filter by severity level: LOW, MEDIUM, HIGH, CRITICAL (optional)</td>
+              <td>
+                Filter by severity level: LOW, MEDIUM, HIGH, CRITICAL (optional)<br /><small>
+                  Allowed values: LOW, MEDIUM, HIGH, CRITICAL</small
+                >
+              </td>
             </tr>
           </tbody>
         </table>
@@ -918,7 +945,7 @@
           <h4>🔸 Advanced Usage</h4>
           <div class="example-code">
             { "tool": "detect_query_bottlenecks", "arguments": { "database": "MyDatabase", "limit":
-            50, "severity_filter": "optional_value" } }
+            50, "severity_filter": "LOW" } }
           </div>
         </div>
       </div>
@@ -932,6 +959,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -958,7 +986,9 @@
                 consistently: missing-index aggregates are cumulative (reset only by a server
                 restart or index/database changes) while query-stats rows last only while their plan
                 stays in cache, so results reflect the lifetime of each source regardless of the
-                value sent; the response discloses this in its analysisPeriod field.
+                value sent; the response discloses this in its analysisPeriod field.<br /><small>
+                  Allowed values: 24_HOURS, 7_DAYS, 30_DAYS</small
+                >
               </td>
             </tr>
           </tbody>
@@ -971,7 +1001,7 @@
           <h4>🔸 Advanced Usage</h4>
           <div class="example-code">
             { "tool": "get_optimization_insights", "arguments": { "database": "MyDatabase",
-            "analysis_period": "optional_value" } }
+            "analysis_period": "24_HOURS" } }
           </div>
         </div>
       </div>
@@ -983,6 +1013,7 @@
 
       <div class="section">
         <h3>📝 Parameters</h3>
+
         <table class="parameters-table">
           <thead>
             <tr>
@@ -1023,7 +1054,7 @@
         padding-top: 1rem;
       "
     >
-      <p>Generated automatically from code • Last updated: 9/24/2026</p>
+      <p>Generated automatically from code • Last updated: 10/2/2026</p>
     </footer>
   </body>
 </html>
