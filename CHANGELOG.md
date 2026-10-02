@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.0] - 2026-10-02
 
+### Security
+
+- **Docker-backed SQL Server tests now generate a private local SA password** instead of using a
+  tracked credential. Credential and Compose files must remain user-owned and private; Windows
+  fails closed until private ACL storage is supported. If an old test data volume remains without
+  its credential, setup stops rather than resetting or deleting that volume. See #1385.
+
+- **Database text returned by MCP tools is explicitly documented as untrusted input to the
+  consuming model.** The advisory appears in the security documentation and affected tool
+  descriptions. It does not filter or rewrite database rows or CSV bytes. Closes #1264.
+
 ### Added
 
 - **`export_table_csv` now warns when an export holds values a spreadsheet would execute.** A CSV
@@ -93,6 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ordinary sentence read as a count claim. That work is tracked separately and wants a real
   Markdown parser rather than another normalisation pass.
 
+- **The tool-reference gate now detects content drift, not just missing tool names.** It compares
+  committed descriptions, parameter schemas, required fields and constraints with the live tool
+  registry, and the generated reference renders those constraints. Closes #1269.
+
 - **`npm run docs:check` now reports every documentation check rather than stopping at the
   first.** It chained them with `&&`, so a contributor fixing orphan drift would only discover
   env-var or tool drift on the next CI run. `scripts/docs/run-doc-checks.mjs` runs all three,
@@ -120,6 +135,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no check enforces it.
 
 ### Fixed
+
+- **Streamed CSV rows now retain the header column order even when object key order differs.**
+  Serialization uses the first batch's headers for every row, including later batches, so values
+  cannot silently appear under the wrong column names. Closes #1266.
+
+- **Startup configuration reports no longer copy raw process arguments into logs.** A custom
+  direct launcher could pass a secret as an argument; omitting those arguments prevents the
+  structured report and stderr fallback from disclosing it. Closes #1306.
 
 - **The Markdown link-check commands now fail when any file has a broken link.** The previous
   `find -exec … {} \;` commands ran the checker once per file but returned `find`'s successful exit
