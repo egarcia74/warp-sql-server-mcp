@@ -117,6 +117,18 @@ describe('csv helpers', () => {
       expect(formatted).toBe(streamed);
     });
 
+    it('keeps columns aligned when later rows use a different object key order', () => {
+      const reordered = [
+        { id: 1, name: 'Ada' },
+        { name: 'Lin', id: 2 }
+      ];
+      const expected = 'id,name\n1,Ada\n2,Lin\n';
+
+      expect(DatabaseToolsHandler.prototype.recordsetToCsv.call(null, reordered)).toBe(expected);
+      expect(BaseToolHandler.prototype.formatAsCsv.call(null, reordered)[0].text).toBe(expected);
+      expect(new StreamingHandler().batchToCsv(reordered, {})).toBe(expected);
+    });
+
     it('serialises the whole awkward batch exactly, header escaping included', () => {
       const expected = [
         '"last,name",note,cr,quote',
