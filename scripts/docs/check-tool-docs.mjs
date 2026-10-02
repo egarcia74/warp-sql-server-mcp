@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Fails when `docs-data/tools.json` and `lib/tools/tool-registry.js` disagree about which MCP
- * tools exist.
+ * Fails when `docs-data/tools.json` and `lib/tools/tool-registry.js` disagree about the MCP
+ * tool names, descriptions, parameters, constraints, or required fields.
  *
  * ## What this replaces
  *
@@ -22,8 +22,8 @@
  * Moving the count to an explicit marker did not help either, because the marker still had to be
  * found in Markdown, and a marker inside a code fence counts as real.
  *
- * The comparison below has produced no such findings, because it interprets nothing: both sides
- * are structured data, and the check is set equality plus an integer. That is the difference
+ * The comparison below interprets no prose: both sides are structured data, and the check compares
+ * registry fields as well as names and counts. That is the difference
  * that matters - not how exact the rule is, but whether it has to understand a document to apply
  * it. Checking that the prose documents each tool is worth doing and is tracked separately; it
  * needs a real Markdown parser or a structured source, not another normalisation pass.
@@ -34,6 +34,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -46,6 +47,24 @@ export const GENERATED_DATA = 'docs-data/tools.json';
 
 const readRepoFile = relative => readFileSync(path.join(repoRoot, relative), 'utf8');
 
+function differentFields(expected, actual, prefix) {
+  if (isDeepStrictEqual(expected, actual)) return [];
+  if (
+    expected === null ||
+    actual === null ||
+    typeof expected !== 'object' ||
+    typeof actual !== 'object' ||
+    Array.isArray(expected) ||
+    Array.isArray(actual)
+  ) {
+    return [prefix];
+  }
+
+  return [...new Set([...Object.keys(expected), ...Object.keys(actual)])].flatMap(key =>
+    differentFields(expected[key], actual[key], `${prefix}.${key}`)
+  );
+}
+
 /**
  * Compares the registry against the committed generated data.
  *
@@ -53,11 +72,12 @@ const readRepoFile = relative => readFileSync(path.join(repoRoot, relative), 'ut
  * the repository's own current state - a suite that only asserts "the repo passes" cannot show
  * that the gate is able to fail, which is exactly how its predecessor went unnoticed.
  *
- * @param {object} [sources] - Overrides for the registry tool names and the generated data
+ * @param {object} [sources] - Overrides for registry tools and generated data
  * @returns {object} Counts, the drift in each direction, and `ok`
  */
 export function checkToolDocs(sources = {}) {
-  const tools = sources.tools ?? getAllTools().map(tool => tool.name);
+  const registryTools = sources.tools ?? getAllTools();
+  const tools = registryTools.map(tool => (typeof tool === 'string' ? tool : tool.name));
   const generated = sources.generated ?? JSON.parse(readRepoFile(GENERATED_DATA));
 
   const generatedTools = (generated?.tools ?? []).map(tool => tool.name);
@@ -76,6 +96,22 @@ export function checkToolDocs(sources = {}) {
   // reporting success over data it never looked at.
   const countFieldWrong = generated?.toolsCount !== generatedTools.length;
 
+  const contentDrift = registryTools.flatMap(tool => {
+    if (typeof tool === 'string') return [];
+    const documented = (generated?.tools ?? []).find(item => item.name === tool.name);
+    if (!documented) return [];
+    const { properties = {}, required = [], ...schema } = tool.inputSchema ?? {};
+    const documentedRequired = Array.isArray(documented.required)
+      ? [...documented.required].sort()
+      : documented.required;
+    return [
+      ...differentFields(tool.description, documented.description, `${tool.name}.description`),
+      ...differentFields(schema, documented.schema, `${tool.name}.schema`),
+      ...differentFields(properties, documented.parameters, `${tool.name}.parameters`),
+      ...differentFields([...required].sort(), documentedRequired, `${tool.name}.required`)
+    ];
+  });
+
   return {
     tools,
     generatedCount: generatedTools.length,
@@ -83,11 +119,13 @@ export function checkToolDocs(sources = {}) {
     missingFromData,
     staleInData,
     duplicatesInData,
+    contentDrift,
     countFieldWrong,
     ok:
       missingFromData.length === 0 &&
       staleInData.length === 0 &&
       duplicatesInData.length === 0 &&
+      contentDrift.length === 0 &&
       generatedTools.length === tools.length &&
       !countFieldWrong
   };
@@ -110,6 +148,9 @@ export function formatReport(result) {
     lines.push(
       `❌ **Listed more than once in \`${GENERATED_DATA}\`**: ${list(result.duplicatesInData)}`
     );
+  }
+  if (result.contentDrift.length > 0) {
+    lines.push(`❌ **Content differs from the registry**: ${list(result.contentDrift)}`);
   }
   if (result.countFieldWrong) {
     lines.push(

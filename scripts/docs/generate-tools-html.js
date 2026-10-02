@@ -9,15 +9,22 @@ import { writeDocsHtml } from './write-html.js';
  * Uses the extracted tools data from docs-data/tools.json
  */
 
-function generateToolsHTML() {
-  // Read the extracted tools data
-  const toolsDataPath = path.resolve('docs-data/tools.json');
+function escapeHtmlText(value) {
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
 
-  if (!fs.existsSync(toolsDataPath)) {
-    throw new Error('Tools data file not found. Run extract-docs.js first.');
+function escapeHtmlAttribute(value) {
+  return escapeHtmlText(value).replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
+function generateToolsHTML(toolsData) {
+  if (!toolsData) {
+    const toolsDataPath = path.resolve('docs-data/tools.json');
+    if (!fs.existsSync(toolsDataPath)) {
+      throw new Error('Tools data file not found. Run extract-docs.js first.');
+    }
+    toolsData = JSON.parse(fs.readFileSync(toolsDataPath, 'utf8'));
   }
-
-  const toolsData = JSON.parse(fs.readFileSync(toolsDataPath, 'utf8'));
   const { version, tools } = toolsData;
 
   const html = `<!DOCTYPE html>
@@ -191,7 +198,7 @@ function generateToolsHTML() {
         <h1>🛠️ MCP Tools Documentation</h1>
         <p>Detailed reference for all available SQL Server MCP tools</p>
         <div>
-            <strong>Version ${version} • ${tools.length} Tools Available</strong>
+            <strong>Version ${escapeHtmlText(version)} • ${tools.length} Tools Available</strong>
         </div>
     </div>
 
@@ -204,7 +211,7 @@ function generateToolsHTML() {
     <div class="toc" id="toc">
         <h3>📋 Table of Contents</h3>
         <ul>
-${tools.map(tool => `            <li><a href="#${tool.name}">${tool.name}</a> - ${tool.description}</li>`).join('\n')}
+${tools.map(tool => `            <li><a href="#${escapeHtmlAttribute(tool.name)}">${escapeHtmlText(tool.name)}</a> - ${escapeHtmlText(tool.description)}</li>`).join('\n')}
         </ul>
     </div>
 
@@ -220,15 +227,24 @@ ${tools.map(tool => generateToolSection(tool)).join('\n\n')}
 }
 
 function generateToolSection(tool) {
-  const { name, description, parameters, required, examples } = tool;
+  const { name, description, schema, parameters, required, examples } = tool;
   const hasParameters = Object.keys(parameters).length > 0;
+  const rootConstraints = Object.entries(schema ?? {})
+    .filter(([key]) => key !== 'type')
+    .map(([key, value]) =>
+      key === 'additionalProperties'
+        ? `Additional properties: ${JSON.stringify(value)}`
+        : `${key}: ${JSON.stringify(value)}`
+    )
+    .join('; ');
 
-  return `    <div class="tool" id="${name}">
-        <h2><span class="tool-name">${name}</span></h2>
-        <div class="description">${description}</div>
+  return `    <div class="tool" id="${escapeHtmlAttribute(name)}">
+        <h2><span class="tool-name">${escapeHtmlText(name)}</span></h2>
+        <div class="description">${escapeHtmlText(description)}</div>
         
         <div class="section">
             <h3>📝 Parameters</h3>
+            ${rootConstraints ? `<p>${escapeHtmlText(rootConstraints)}</p>` : ''}
             ${hasParameters ? generateParametersTable(parameters, required) : '<div class="no-params">No parameters required</div>'}
         </div>
         
@@ -251,12 +267,21 @@ function generateParametersTable(parameters, required) {
     const requiredBadge = isRequired
       ? '<span class="required">REQUIRED</span>'
       : '<span class="optional">OPTIONAL</span>';
+    const constraints = Object.entries(paramInfo)
+      .filter(([key]) => key !== 'type' && key !== 'description')
+      .map(([key, value]) => {
+        if (key === 'enum') return `Allowed values: ${value.join(', ')}`;
+        if (key === 'minimum') return `Minimum: ${value}`;
+        if (key === 'maximum') return `Maximum: ${value}`;
+        return `${key}: ${JSON.stringify(value)}`;
+      })
+      .join('; ');
 
     return `                <tr>
-                    <td><span class="param-name">${paramName}</span></td>
-                    <td><span class="param-type">${paramInfo.type}</span></td>
+                    <td><span class="param-name">${escapeHtmlText(paramName)}</span></td>
+                    <td><span class="param-type">${escapeHtmlText(paramInfo.type)}</span></td>
                     <td>${requiredBadge}</td>
-                    <td>${paramInfo.description}</td>
+                    <td>${escapeHtmlText(paramInfo.description)}${constraints ? `<br><small> ${escapeHtmlText(constraints)}</small>` : ''}</td>
                 </tr>`;
   });
 
@@ -285,21 +310,21 @@ function generateExamples(toolName, examples) {
   if (hasBasicExample) {
     exampleHtml += `            <div class="example">
                 <h4>🔹 Basic Usage</h4>
-                <div class="example-code">${JSON.stringify({ tool: toolName, arguments: basic }, null, 2)}</div>
+                <div class="example-code">${escapeHtmlText(JSON.stringify({ tool: toolName, arguments: basic }, null, 2))}</div>
             </div>`;
   }
 
   if (hasAdvancedExample && JSON.stringify(basic) !== JSON.stringify(advanced)) {
     exampleHtml += `            <div class="example">
                 <h4>🔸 Advanced Usage</h4>
-                <div class="example-code">${JSON.stringify({ tool: toolName, arguments: advanced }, null, 2)}</div>
+                <div class="example-code">${escapeHtmlText(JSON.stringify({ tool: toolName, arguments: advanced }, null, 2))}</div>
             </div>`;
   }
 
   if (!hasBasicExample && !hasAdvancedExample) {
     exampleHtml = `            <div class="example">
                 <h4>🔹 Usage</h4>
-                <div class="example-code">${JSON.stringify({ tool: toolName, arguments: {} }, null, 2)}</div>
+                <div class="example-code">${escapeHtmlText(JSON.stringify({ tool: toolName, arguments: {} }, null, 2))}</div>
             </div>`;
   }
 

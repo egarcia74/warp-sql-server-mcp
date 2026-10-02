@@ -3,392 +3,103 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
-/**
- * Extracts MCP tool documentation from the main index.js file
- * This parses the tools array in setupToolHandlers() and extracts structured information
- */
+import { getAllTools } from '../../lib/tools/tool-registry.js';
 
-function extractToolsFromCode() {
-  // Tools are now defined in the tool registry, not in index.js
-  const registryPath = path.resolve('lib/tools/tool-registry.js');
-
-  if (!fs.existsSync(registryPath)) {
-    throw new Error('Could not find tool registry at lib/tools/tool-registry.js');
-  }
-
-  const content = fs.readFileSync(registryPath, 'utf8');
-
-  // Extract all tool arrays (DATABASE_TOOLS, DATA_TOOLS, etc.)
-  const toolArrays = extractToolArrays(content);
-  const allTools = [];
-
-  toolArrays.forEach(toolArray => {
-    const tools = parseToolArray(toolArray);
-    allTools.push(...tools);
-  });
-
-  return allTools;
+function exampleValue(param, schema, advanced) {
+  if (schema.enum?.length) return schema.enum[0];
+  const { type } = schema;
+  if (type === 'number' || type === 'integer') return param === 'limit' ? (advanced ? 50 : 100) : 1;
+  if (type === 'boolean') return advanced;
+  if (param.includes('query')) return 'SELECT * FROM your_table';
+  if (param.includes('table')) return 'your_table_name';
+  if (param === 'database') return advanced ? 'MyDatabase' : 'your_database';
+  if (param === 'schema') return 'dbo';
+  if (param === 'where') return 'id > 100';
+  return advanced ? 'optional_value' : 'example_value';
 }
 
-// Extract tool arrays from the registry content
-function extractToolArrays(content) {
-  const toolArrays = [];
-
-  // Look for const TOOL_NAME = [ ... ]; patterns
-  const arrayRegex = /const\s+(\w*TOOLS?)\s*=\s*\[(.*?)\];/gs;
-  let match;
-
-  while ((match = arrayRegex.exec(content)) !== null) {
-    const arrayName = match[1];
-    const arrayContent = match[2];
-
-    console.log(`Found tool array: ${arrayName}`);
-    toolArrays.push(arrayContent);
-  }
-
-  return toolArrays;
-}
-
-// Parse individual tool array content
-function parseToolArray(arrayContent) {
-  const tools = [];
-  const toolParts = splitToolObjects(arrayContent);
-
-  toolParts.forEach(toolPart => {
-    const tool = parseIndividualTool(toolPart);
-    if (tool) {
-      tools.push(tool);
-    }
-  });
-
-  return tools;
-}
-
-function splitToolObjects(content) {
-  return splitBraceDelimitedObjects(content).filter(
-    part => part.includes('name:') && part.includes('description:')
+function generateExamples(parameters, required) {
+  const basic = Object.fromEntries(
+    required
+      .filter(param => parameters[param])
+      .map(param => [param, exampleValue(param, parameters[param], false)])
   );
-}
-
-function nextStringChar(char, prevChar, stringChar) {
-  if (!stringChar && (char === '"' || char === "'" || char === '`')) {
-    return char;
+  const advanced = { ...basic };
+  for (const [param, schema] of Object.entries(parameters)) {
+    if (!required.includes(param)) advanced[param] = exampleValue(param, schema, true);
   }
-  if (stringChar && char === stringChar && prevChar !== '\\') {
-    return '';
-  }
-  return stringChar;
-}
-
-function splitBraceDelimitedObjects(content) {
-  const parts = [];
-  let current = '';
-  let braceDepth = 0;
-  let stringChar = '';
-
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i];
-    const prevChar = i > 0 ? content[i - 1] : '';
-
-    current += char;
-
-    const nextChar = nextStringChar(char, prevChar, stringChar);
-    if (nextChar !== stringChar) {
-      stringChar = nextChar;
-      continue;
-    }
-    if (stringChar) continue;
-
-    if (char === '{') {
-      braceDepth++;
-    } else if (char === '}') {
-      braceDepth--;
-
-      // A completed outermost object becomes one part.
-      if (braceDepth === 0) {
-        parts.push(current.trim());
-        current = '';
-      }
-    }
-  }
-
-  // Add any remaining content
-  if (current.trim()) {
-    parts.push(current.trim());
-  }
-
-  return parts;
-}
-
-function parseIndividualTool(toolContent) {
-  // Extract name
-  const nameRegex = /name:\s*['"`]([^'"`]+)['"`]/;
-  const nameMatch = toolContent.match(nameRegex);
-
-  // Extract description
-  const descriptionRegex = /description:\s*['"`]([^'"`]+)['"`]/;
-  const descriptionMatch = toolContent.match(descriptionRegex);
-
-  if (!nameMatch || !descriptionMatch) {
-    return null;
-  }
-
-  const name = nameMatch[1];
-  const description = descriptionMatch[1];
-
-  // Extract input schema
-  const inputSchemaRegex = /inputSchema:\s*\{([\s\S]*?)\}\s*$/;
-  const inputSchemaMatch = toolContent.match(inputSchemaRegex);
-
-  let properties = {};
-  let required = [];
-
-  if (inputSchemaMatch) {
-    const schemaContent = inputSchemaMatch[1];
-    properties = parseInputSchemaProperties(schemaContent);
-    required = parseRequiredFields(schemaContent);
-  }
-
-  return {
-    name,
-    description,
-    parameters: properties,
-    required: required
-  };
-}
-
-function parseInputSchemaProperties(schemaContent) {
-  const properties = {};
-
-  // First, extract the entire properties block
-  const propertiesStart = /properties:\s*\{/.exec(schemaContent);
-
-  if (!propertiesStart) {
-    return properties;
-  }
-
-  // The first opener can reach any suffix a later opener could reach. Search once,
-  // and keep the whitespace before an optional comma in one unambiguous run.
-  const remainder = schemaContent.slice(propertiesStart.index + propertiesStart[0].length);
-  const propertiesEnd = /\}\s*(?:required|,\s*required|$)/.exec(remainder);
-  if (!propertiesEnd) return properties;
-  const propertiesContent = remainder.slice(0, propertiesEnd.index);
-
-  // Now parse individual property objects by splitting them properly
-  const propObjects = splitPropertyObjects(propertiesContent);
-
-  propObjects.forEach(propObj => {
-    const parsed = parseIndividualProperty(propObj);
-    if (parsed) {
-      properties[parsed.name] = {
-        type: parsed.type,
-        description: parsed.description
-      };
-    }
-  });
-
-  return properties;
-}
-
-function splitPropertyObjects(content) {
-  return splitBraceDelimitedObjects(content).filter(
-    part => part.includes(':') && part.includes('{')
-  );
-}
-
-function parseIndividualProperty(propContent) {
-  // Extract property name (the key before the colon)
-  // Only the start of a word can produce the first match; do not retry every suffix.
-  const nameRegex = /\b(\w+):\s*\{/;
-  const nameMatch = propContent.match(nameRegex);
-
-  // Extract type
-  const typeRegex = /type:\s*['"`]([^'"`]+)['"`]/;
-  const typeMatch = propContent.match(typeRegex);
-
-  // Extract description
-  const descRegex = /description:\s*['"`]([^'"`]+)['"`]/;
-  const descMatch = propContent.match(descRegex);
-
-  if (!nameMatch || !typeMatch || !descMatch) {
-    return null;
-  }
-
-  return {
-    name: nameMatch[1],
-    type: typeMatch[1],
-    description: descMatch[1]
-  };
-}
-
-function parseRequiredFields(schemaContent) {
-  const requiredRegex = /required:\s*\[([\s\S]*?)\]/;
-  const requiredMatch = schemaContent.match(requiredRegex);
-
-  if (!requiredMatch) {
-    return [];
-  }
-
-  const requiredContent = requiredMatch[1];
-  const fieldRegex = /['"`]([^'"`]+)['"`]/g;
-  const required = [];
-
-  let fieldMatch;
-  while ((fieldMatch = fieldRegex.exec(requiredContent)) !== null) {
-    required.push(fieldMatch[1]);
-  }
-
-  return required;
-}
-
-function generateExamples(toolName, parameters, required) {
-  const examples = {
-    basic: {},
-    advanced: {}
-  };
-
-  // Generate basic example with only required parameters
-  required.forEach(param => {
-    if (parameters[param]) {
-      switch (parameters[param].type) {
-        case 'string':
-          if (param.includes('query')) {
-            examples.basic[param] = 'SELECT * FROM your_table';
-          } else if (param.includes('table')) {
-            examples.basic[param] = 'your_table_name';
-          } else if (param.includes('database')) {
-            examples.basic[param] = 'your_database';
-          } else {
-            examples.basic[param] = 'example_value';
-          }
-          break;
-        case 'number':
-          examples.basic[param] = param === 'limit' ? 100 : 1;
-          break;
-        case 'boolean':
-          examples.basic[param] = false;
-          break;
-        default:
-          examples.basic[param] = 'example_value';
-      }
-    }
-  });
-
-  // Generate advanced example with optional parameters
-  examples.advanced = { ...examples.basic };
-  Object.keys(parameters).forEach(param => {
-    if (!required.includes(param)) {
-      switch (parameters[param].type) {
-        case 'string':
-          if (param === 'database') {
-            examples.advanced[param] = 'MyDatabase';
-          } else if (param === 'schema') {
-            examples.advanced[param] = 'dbo';
-          } else if (param === 'where') {
-            examples.advanced[param] = 'id > 100';
-          } else {
-            examples.advanced[param] = 'optional_value';
-          }
-          break;
-        case 'number':
-          examples.advanced[param] = param === 'limit' ? 50 : 1;
-          break;
-        case 'boolean':
-          examples.advanced[param] = true;
-          break;
-      }
-    }
-  });
-
-  return examples;
-}
-
-function generateToolsDocumentation() {
-  console.log('Extracting MCP tools documentation...');
-
-  try {
-    const tools = extractToolsFromCode();
-    console.log(`Found ${tools.length} MCP tools`);
-
-    // Add examples to each tool
-    const enhancedTools = tools.map(tool => ({
-      ...tool,
-      examples: generateExamples(tool.name, tool.parameters, tool.required)
-    }));
-
-    // Generate the documentation data (candidate)
-    const docData = {
-      version: getPackageVersion(),
-      generatedAt: new Date().toISOString(),
-      toolsCount: enhancedTools.length,
-      tools: enhancedTools
-    };
-
-    // Save to a JSON file that can be used by the GitHub Actions workflow
-    const outputDir = 'docs-data';
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-
-    const outPath = path.join(outputDir, 'tools.json');
-
-    // Avoid trivial PRs: if the only change is generatedAt, keep the previous timestamp
-    try {
-      if (fs.existsSync(outPath)) {
-        const prev = JSON.parse(fs.readFileSync(outPath, 'utf8'));
-        const normalize = obj => {
-          const copy = globalThis.structuredClone(obj);
-          delete copy.generatedAt;
-          return copy;
-        };
-        const prevNorm = normalize(prev);
-        const nextNorm = normalize(docData);
-        if (JSON.stringify(prevNorm) === JSON.stringify(nextNorm)) {
-          // Preserve previous generatedAt to keep file identical
-          docData.generatedAt = prev.generatedAt || docData.generatedAt;
-        }
-      }
-    } catch {
-      // Non-fatal: proceed with current docData
-    }
-
-    fs.writeFileSync(outPath, JSON.stringify(docData, null, 2));
-
-    // Format the generated JSON with Prettier to ensure consistency
-    try {
-      execSync('npx prettier --write docs-data/tools.json', { stdio: 'inherit' });
-      console.log('Documentation data saved and formatted: docs-data/tools.json');
-    } catch {
-      console.log('Documentation data saved to docs-data/tools.json (formatting skipped)');
-    }
-    return docData;
-  } catch (error) {
-    console.error('Error extracting documentation:', error.message);
-    process.exit(1);
-  }
+  return { basic, advanced };
 }
 
 function getPackageVersion() {
   try {
-    const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-    return packageJson.version;
+    return JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
   } catch {
     return '1.0.0';
   }
 }
 
-// Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const docData = generateToolsDocumentation();
-
-  // Output summary for GitHub Actions
-  console.log('\n📊 Documentation Summary:');
-  console.log(`Version: ${docData.version}`);
-  console.log(`Tools: ${docData.toolsCount}`);
-  docData.tools.forEach(tool => {
-    console.log(`  • ${tool.name}: ${tool.description}`);
-  });
+function preserveTimestampIfUnchanged(docData, outPath) {
+  try {
+    if (!fs.existsSync(outPath)) return;
+    const previous = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+    const normalize = data => {
+      const copy = globalThis.structuredClone(data);
+      delete copy.generatedAt;
+      return copy;
+    };
+    if (JSON.stringify(normalize(previous)) === JSON.stringify(normalize(docData))) {
+      docData.generatedAt = previous.generatedAt || docData.generatedAt;
+    }
+  } catch {
+    // A missing or malformed previous snapshot must not prevent regeneration.
+  }
 }
 
-export { generateToolsDocumentation };
+export function generateToolsDocumentation(registryTools = getAllTools()) {
+  const tools = registryTools.map(tool => {
+    const {
+      properties = {},
+      required: requiredFields = [],
+      ...rootSchema
+    } = tool.inputSchema ?? {};
+    const schema = globalThis.structuredClone(rootSchema);
+    const parameters = globalThis.structuredClone(properties);
+    const required = [...requiredFields];
+    return {
+      name: tool.name,
+      description: tool.description,
+      schema,
+      parameters,
+      required,
+      examples: generateExamples(parameters, required)
+    };
+  });
+
+  const docData = {
+    version: getPackageVersion(),
+    generatedAt: new Date().toISOString(),
+    toolsCount: tools.length,
+    tools
+  };
+
+  const outputDir = 'docs-data';
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+  const outPath = path.join(outputDir, 'tools.json');
+  preserveTimestampIfUnchanged(docData, outPath);
+  fs.writeFileSync(outPath, JSON.stringify(docData, null, 2));
+
+  try {
+    execSync('npx prettier --write docs-data/tools.json', { stdio: 'inherit' });
+  } catch {
+    console.log('Documentation data saved to docs-data/tools.json (formatting skipped)');
+  }
+  return docData;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const docData = generateToolsDocumentation();
+  console.log(`Documentation data saved: ${docData.toolsCount} MCP tools`);
+}
