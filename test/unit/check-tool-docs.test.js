@@ -22,6 +22,131 @@ const BASE = {
 const check = overrides => checkToolDocs({ ...BASE, ...overrides });
 
 describe('checkToolDocs', () => {
+  it('rejects stale descriptions and schema constraints even when tool names match', () => {
+    const result = checkToolDocs({
+      tools: [
+        {
+          name: 'get_performance_stats',
+          description: 'Get full statistics',
+          inputSchema: {
+            properties: {
+              timeframe: {
+                type: 'string',
+                description: 'Time period: "recent", "all"',
+                enum: ['recent', 'all']
+              }
+            },
+            required: ['timeframe']
+          }
+        }
+      ],
+      generated: {
+        toolsCount: 1,
+        tools: [
+          {
+            name: 'get_performance_stats',
+            description: 'Get full statistics',
+            schema: {},
+            parameters: { timeframe: { type: 'string', description: 'Time period: ' } },
+            required: []
+          }
+        ]
+      }
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.contentDrift).toEqual([
+      'get_performance_stats.parameters.timeframe.description',
+      'get_performance_stats.parameters.timeframe.enum',
+      'get_performance_stats.required'
+    ]);
+    expect(formatReport(result)).toContain('get_performance_stats.parameters.timeframe.enum');
+  });
+
+  it('ignores generated metadata and examples when registry content matches', () => {
+    const tool = {
+      name: 'example',
+      description: 'Example tool',
+      inputSchema: { properties: { limit: { type: 'integer', minimum: 1 } }, required: ['limit'] }
+    };
+    const result = checkToolDocs({
+      tools: [tool],
+      generated: {
+        generatedAt: 'old',
+        version: '0.0.0',
+        toolsCount: 1,
+        tools: [
+          {
+            name: 'example',
+            description: 'Example tool',
+            schema: {},
+            parameters: { limit: { type: 'integer', minimum: 1 } },
+            required: ['limit'],
+            examples: { basic: { limit: 1 } }
+          }
+        ]
+      }
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('detects drift in top-level schema constraints', () => {
+    const result = checkToolDocs({
+      tools: [
+        {
+          name: 'sample',
+          description: 'Sample',
+          inputSchema: { type: 'object', properties: {}, additionalProperties: false }
+        }
+      ],
+      generated: {
+        toolsCount: 1,
+        tools: [
+          {
+            name: 'sample',
+            description: 'Sample',
+            schema: { type: 'object' },
+            parameters: {},
+            required: []
+          }
+        ]
+      }
+    });
+
+    expect(result.contentDrift).toContain('sample.schema.additionalProperties');
+    expect(result.ok).toBe(false);
+  });
+
+  it('treats required fields as a set, not an ordered list', () => {
+    const result = checkToolDocs({
+      tools: [
+        {
+          name: 'sample',
+          description: 'Sample',
+          inputSchema: {
+            type: 'object',
+            properties: { first: { type: 'string' }, second: { type: 'string' } },
+            required: ['first', 'second']
+          }
+        }
+      ],
+      generated: {
+        toolsCount: 1,
+        tools: [
+          {
+            name: 'sample',
+            description: 'Sample',
+            schema: { type: 'object' },
+            parameters: { first: { type: 'string' }, second: { type: 'string' } },
+            required: ['second', 'first']
+          }
+        ]
+      }
+    });
+
+    expect(result.ok).toBe(true);
+  });
   it('passes when the generated data matches the registry', () => {
     const result = check({});
 

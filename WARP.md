@@ -837,10 +837,11 @@ documentation perfectly synchronized with the codebase:
 
 #### Documentation Generation Scripts
 
-- **`extract-docs.js`**: Parses MCP tool definitions from source code and extracts
-  structured information including tool names, descriptions, parameters, and usage examples
+- **`extract-docs.js`**: Reads the live MCP tool registry objects and extracts
+  structured information including tool names, descriptions, parameter constraints,
+  and usage examples
 - **`generate-tools-html.js`**: Creates comprehensive HTML documentation with parameter
-  tables, required/optional field indicators, and example usages
+  tables, constraints, required/optional field indicators, and example usages
 - **`generate-landing-page.js`**: Generates a dynamic landing page listing all MCP tools
   with tool counts and consistent styling
 

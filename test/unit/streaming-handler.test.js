@@ -548,6 +548,14 @@ describe('StreamingHandler', () => {
   });
 
   describe('batchToCsv', () => {
+    it('uses the first batch header order for every later batch', () => {
+      const context = {};
+      const first = handler.batchToCsv([{ id: 1, name: 'Ada' }], context);
+      const second = handler.batchToCsv([{ name: 'Lin', id: 2 }], context);
+
+      expect(first + second).toBe('id,name\n1,Ada\n2,Lin\n');
+    });
+
     it('should convert batch to CSV format', () => {
       const batch = [
         { id: 1, name: 'John', age: 30 },
