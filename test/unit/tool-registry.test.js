@@ -74,6 +74,15 @@ function dispatchBlockFor(toolName) {
 describe('Tool Registry', () => {
   const tools = getAllTools();
 
+  test.each(['execute_query', 'get_table_data', 'export_table_csv'])(
+    '%s warns that database content is untrusted',
+    name => {
+      const description = getTool(name).description;
+      expect(description).toMatch(/untrusted/i);
+      expect(description).toMatch(/instructions/i);
+    }
+  );
+
   describe('schema invariants', () => {
     test('registry exposes at least one tool', () => {
       expect(Array.isArray(tools)).toBe(true);
