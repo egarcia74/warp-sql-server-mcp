@@ -222,11 +222,13 @@ deterministic.
    spreadsheet; import it as text, or neutralise the flagged cells at the point of use. Ordinary
    negative numbers are exempt from the check, since no string is both a numeric literal and a
    formula. Decided in #1245.
-7. **Prompt Injection in Database Content**: Query results, table samples and CSV exports may
-   contain text supplied by database users or other untrusted sources. These raw values reach the
-   consuming model as MCP tool output, without a server- or protocol-enforced distinction between
-   data and instructions. A stored value can masquerade as an instruction and try to redirect the
-   model or induce another tool call. This is the broader trust-boundary risk underlying the
+7. **Prompt Injection in Database Content**: Query results, table samples, CSV exports, catalog
+   metadata (such as names and defaults), SQL text and index suggestions may contain text supplied
+   by database users or other untrusted sources. Query-performance history can also echo SQL and
+   database error text. These raw values reach the consuming model as MCP tool output, without a
+   server- or protocol-enforced distinction between data and instructions. A stored value can
+   masquerade as an instruction and try to redirect the model or induce another tool call. This
+   is the broader trust-boundary risk underlying the
    conditional spreadsheet case above: no paste or import step is needed for model exposure. SQL
    query controls protect the database, not the model's interpretation of returned data. Treat
    database content as data, never as authority; require independent user authorization before
