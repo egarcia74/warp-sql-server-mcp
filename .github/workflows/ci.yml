@@ -97,6 +97,10 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     needs: test
+    # The main catch-up workflow shares sonar-main. Ordering alone cannot prove freshness.
+    concurrency:
+      group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'sonar-main' || format('sonar-ci-{0}-{1}', github.run_id, github.run_attempt) }}
+      cancel-in-progress: false
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
@@ -153,6 +157,79 @@ jobs:
           name: codecov-warp-sql-server-mcp
           token: ${{ secrets.CODECOV_TOKEN }} # yamllint disable-line
         continue-on-error: true
+
+      - name: Check current revision immediately before Sonar scan
+        id: sonar-freshness
+        if: >-
+          vars.SONAR_CI_ENABLED == 'true' &&
+          ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+           (github.event_name == 'pull_request' &&
+            github.actor != 'dependabot[bot]' &&
+            github.event.pull_request.head.repo.id == github.event.repository.id &&
+            github.event.pull_request.user.login != 'dependabot[bot]'))
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v7
+        with:
+          script: |
+            const validSha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
+            const validId = value => Number.isSafeInteger(value) && value > 0;
+            const validRef = value => typeof value === 'string' &&
+              /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(value) && !value.includes('..');
+            const requireThat = (condition, message) => { if (!condition) throw new Error(message); };
+            const checkout = await exec.getExecOutput('git', ['rev-parse', 'HEAD']);
+            const checkedSha = checkout.stdout.trim();
+            const expectedPr = context.payload.pull_request;
+            const expectedSha = context.eventName === 'pull_request' ? expectedPr?.head?.sha : context.sha;
+            requireThat(checkout.exitCode === 0 && validSha(checkedSha) && validSha(expectedSha) &&
+              checkedSha === expectedSha, 'Checkout does not match the tested event revision');
+            let decision;
+            if (context.eventName === 'push' && context.ref === 'refs/heads/main') {
+              const { data: remote } = await github.rest.git.getRef({ ...context.repo, ref: 'heads/main' });
+              requireThat(remote?.ref === 'refs/heads/main' && remote.object?.type === 'commit' &&
+                validSha(remote.object.sha), 'Invalid remote main revision');
+              decision = remote.object.sha === checkedSha ? 'scan' : 'superseded';
+            } else if (context.eventName === 'pull_request') {
+              const repositoryId = context.payload.repository?.id;
+              requireThat(validId(repositoryId) && validId(expectedPr?.number) &&
+                expectedPr.head?.repo?.id === repositoryId && validRef(expectedPr.head.ref) &&
+                expectedPr.base?.repo?.id === repositoryId && validRef(expectedPr.base.ref) &&
+                expectedPr.user?.login && expectedPr.user.login !== 'dependabot[bot]',
+                'Invalid trusted PR event');
+              const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: expectedPr.number });
+              requireThat(pr?.number === expectedPr.number && ['open', 'closed'].includes(pr.state) &&
+                typeof pr.merged === 'boolean' && validSha(pr.head?.sha) && validRef(pr.head?.ref) &&
+                validId(pr.head?.repo?.id) && validId(pr.base?.repo?.id) && validRef(pr.base?.ref) &&
+                typeof pr.user?.login === 'string' && pr.user.login.length > 0,
+                'Invalid current PR API state');
+              decision = pr.state === 'open' && !pr.merged && pr.head.sha === checkedSha &&
+                pr.head.repo.id === repositoryId && pr.head.ref === expectedPr.head.ref &&
+                pr.base.repo.id === repositoryId && pr.base.ref === expectedPr.base.ref &&
+                pr.user.login === expectedPr.user.login ? 'scan' : 'superseded';
+            } else {
+              throw new Error('Unsupported direct scanner event');
+            }
+            const message = decision === 'scan'
+              ? `Sonar revision verified: ${checkedSha}`
+              : 'Sonar scan superseded: the PR state or remote main revision changed after coverage.';
+            core.info(message);
+            await core.summary.addRaw(message + '\n').write();
+            core.setOutput('sha', checkedSha);
+            core.setOutput('decision', decision);
+
+      - name: Scan trusted revision with Sonar
+        id: sonar-scan
+        if: >-
+          vars.SONAR_CI_ENABLED == 'true' &&
+          ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+           (github.event_name == 'pull_request' &&
+            github.actor != 'dependabot[bot]' &&
+            github.event.pull_request.head.repo.id == github.event.repository.id &&
+            github.event.pull_request.user.login != 'dependabot[bot]')) &&
+          steps.sonar-freshness.outputs.decision == 'scan'
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        with:
+          args: -Dsonar.scm.revision=${{ steps.sonar-freshness.outputs.sha }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   security:
     name: Security Audit
