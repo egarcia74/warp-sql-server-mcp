@@ -33,6 +33,7 @@ System design and security posture:
 - **[Architecture Guide](architecture/ARCHITECTURE.md)** - Technical deep-dive and system design
 - **[Security Guide](architecture/SECURITY.md)** - Security configuration and threat model
 - **[Auto-Config Detection Research](architecture/AUTO-CONFIG-DETECTION-RESEARCH.md)** - Design research for automatic configuration detection (spec for backlog item 5 / issue #57)
+- **[SonarCloud Coverage Design](architecture/SONARCLOUD-COVERAGE-DESIGN.md)** - Proposed CI-based coverage migration for issue #1403
 
 ## 📖 Reference
 
