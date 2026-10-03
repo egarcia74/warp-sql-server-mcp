@@ -9,6 +9,7 @@ ignores:
   - ".gitignore"
   - "**/.gitignore"
   - "**/.remember/**"
+  - "**/.superpowers/**"
   - "**/docs/superpowers/**"
   - "**/.github/instructions/**"
 config:
