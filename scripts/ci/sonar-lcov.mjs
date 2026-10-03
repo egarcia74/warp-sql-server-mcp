@@ -46,6 +46,20 @@ export function validateLcov(reportText, trackedFiles) {
     } else if (line === 'end_of_record') {
       if (!currentSource || !hasLines) throw new Error('LCOV source record missing line coverage');
       currentSource = undefined;
+    } else if (line.startsWith('TN:')) {
+      if (currentSource) throw new Error('LCOV test name must precede a source record');
+    } else if (line.startsWith('FN:')) {
+      if (!currentSource || !/^FN:[1-9]\d*(?:,[1-9]\d*)?,.+$/.test(line)) {
+        throw new Error('Invalid LCOV function definition');
+      }
+    } else if (line.startsWith('FNDA:')) {
+      if (!currentSource || !/^FNDA:\d+,.+$/.test(line)) {
+        throw new Error('Invalid LCOV function coverage');
+      }
+    } else if (/^(?:FNF|FNH|LF|LH|BRF|BRH):\d+$/.test(line)) {
+      if (!currentSource) throw new Error('LCOV source metadata outside a source record');
+    } else if (line !== '') {
+      throw new Error(`Unknown or malformed LCOV line: ${line}`);
     }
   }
 

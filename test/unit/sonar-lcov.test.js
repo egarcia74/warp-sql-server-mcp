@@ -31,6 +31,52 @@ describe('validateLcov', () => {
     expect(() => validateLcov(input, tracked)).toThrow(/empty|missing/i);
   });
 
+  it.each(['SF', 'DA', 'BRDA', 'end_of_record garbage', 'unknown:value', ' '])(
+    'rejects unknown or malformed nonempty line %s after a valid report',
+    line => {
+      expect(() => validateLcov(`${report}${line}\n`, tracked)).toThrow(/LCOV/i);
+    }
+  );
+
+  it('rejects the malformed structural-token sequence from review', () => {
+    expect(() => validateLcov(`${report}SF\nDA\nBRDA\nend_of_record garbage\n`, tracked)).toThrow();
+  });
+
+  it('rejects a malformed DA token inside an otherwise valid record', () => {
+    expect(() => validateLcov(report.replace('DA:1,1', 'DA:1,1\nDA '), tracked)).toThrow();
+  });
+
+  it('accepts supported optional LCOV metadata and blank separator lines', () => {
+    const metadata = [
+      'FN:1,first',
+      'FN:2,4,second',
+      'FNDA:1,first',
+      'FNDA:0,second',
+      'FNF:2',
+      'FNH:1',
+      'LF:1',
+      'LH:1',
+      'BRF:1',
+      'BRH:1'
+    ].join('\n');
+    const input = `TN:unit\n\n${report.replace('DA:1,1', `${metadata}\nDA:1,1`)}\n`;
+    expect(validateLcov(input, tracked).sourcePaths).toEqual([
+      'index.js',
+      'lib/config/server-config.js'
+    ]);
+  });
+
+  it.each(['FN:no,name', 'FNDA:no,name', 'FNF:no', 'LH:-1', 'TN'])(
+    'rejects malformed optional field %s',
+    line => {
+      expect(() => validateLcov(report.replace('DA:1,1', `${line}\nDA:1,1`), tracked)).toThrow();
+    }
+  );
+
+  it('rejects source metadata outside a source record', () => {
+    expect(() => validateLcov(`${report}LF:1\n`, tracked)).toThrow();
+  });
+
   it.each([
     ['traversal', '../index.js'],
     ['embedded traversal', 'lib/../index.js'],
