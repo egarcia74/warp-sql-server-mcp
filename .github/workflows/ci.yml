@@ -172,8 +172,15 @@ jobs:
           script: |
             const validSha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
             const validId = value => Number.isSafeInteger(value) && value > 0;
-            const validRef = value => typeof value === 'string' &&
-              /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(value) && !value.includes('..');
+            const validRef = async value => {
+              // Use Git's grammar, preserving '+' and Unicode. Reject controls and
+              // previous-checkout shorthand before passing the ref as one argument.
+              if (typeof value !== 'string' || value.length === 0 ||
+                  /[\u0000-\u0020\u007f-\u009f]/u.test(value) || value.includes('@{')) return false;
+              const result = await exec.getExecOutput('git', ['check-ref-format', '--branch', value],
+                { silent: true, ignoreReturnCode: true });
+              return result.exitCode === 0;
+            };
             const requireThat = (condition, message) => { if (!condition) throw new Error(message); };
             const checkout = await exec.getExecOutput('git', ['rev-parse', 'HEAD']);
             const checkedSha = checkout.stdout.trim();
@@ -190,14 +197,14 @@ jobs:
             } else if (context.eventName === 'pull_request') {
               const repositoryId = context.payload.repository?.id;
               requireThat(validId(repositoryId) && validId(expectedPr?.number) &&
-                expectedPr.head?.repo?.id === repositoryId && validRef(expectedPr.head.ref) &&
-                expectedPr.base?.repo?.id === repositoryId && validRef(expectedPr.base.ref) &&
+                expectedPr.head?.repo?.id === repositoryId && await validRef(expectedPr.head.ref) &&
+                expectedPr.base?.repo?.id === repositoryId && await validRef(expectedPr.base.ref) &&
                 expectedPr.user?.login && expectedPr.user.login !== 'dependabot[bot]',
                 'Invalid trusted PR event');
               const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: expectedPr.number });
               requireThat(pr?.number === expectedPr.number && ['open', 'closed'].includes(pr.state) &&
-                typeof pr.merged === 'boolean' && validSha(pr.head?.sha) && validRef(pr.head?.ref) &&
-                validId(pr.head?.repo?.id) && validId(pr.base?.repo?.id) && validRef(pr.base?.ref) &&
+                typeof pr.merged === 'boolean' && validSha(pr.head?.sha) && await validRef(pr.head?.ref) &&
+                validId(pr.head?.repo?.id) && validId(pr.base?.repo?.id) && await validRef(pr.base?.ref) &&
                 typeof pr.user?.login === 'string' && pr.user.login.length > 0,
                 'Invalid current PR API state');
               decision = pr.state === 'open' && !pr.merged && pr.head.sha === checkedSha &&

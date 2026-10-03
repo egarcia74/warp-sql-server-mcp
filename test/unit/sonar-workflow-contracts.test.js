@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { load } from 'js-yaml';
 
 const workflow = load(readFileSync('.github/workflows/ci.yml', 'utf8'));
@@ -110,9 +111,19 @@ async function runFreshness({
     }
   };
   const exec = {
-    getExecOutput: async (command, args) => {
-      expect([command, args]).toEqual(['git', ['rev-parse', 'HEAD']]);
-      return { exitCode: 0, stdout: checkoutSha + '\n', stderr: '' };
+    getExecOutput: async (command, args, options) => {
+      if (args[0] === 'rev-parse') {
+        expect([command, args]).toEqual(['git', ['rev-parse', 'HEAD']]);
+        return { exitCode: 0, stdout: checkoutSha + '\n', stderr: '' };
+      }
+      // Keep ref validation real: exercise Git's grammar without a shell.
+      expect(command).toBe('git');
+      expect(args.slice(0, 2)).toEqual(['check-ref-format', '--branch']);
+      expect(args).toHaveLength(3);
+      expect(options).toEqual({ silent: true, ignoreReturnCode: true });
+      const result = spawnSync(command, args, { encoding: 'utf8' });
+      if (result.error) throw result.error;
+      return { exitCode: result.status, stdout: result.stdout, stderr: result.stderr };
     }
   };
   await new AsyncFunction('github', 'context', 'core', 'exec', freshness.with.script)(
@@ -281,6 +292,33 @@ describe('trusted direct Sonar workflow contracts', () => {
     expect(result.calls).toEqual([
       ['pulls.get', { owner: 'owner', repo: 'repo', pull_number: 1403 }]
     ]);
+  });
+
+  it.each(['feature/coverage+fix', 'feature/修正', 'release/coverage+fix', 'release/修正'])(
+    'admits current trusted PR with Git-valid ref %s',
+    async ref => {
+      const github = fixture();
+      const field = ref.startsWith('release/') ? 'base' : 'head';
+      github.event.pull_request[field].ref = ref;
+      expect((await runFreshness({ github })).outputs).toEqual({ decision: 'scan', sha });
+    }
+  );
+
+  it.each([
+    'feature/bad\nref',
+    'feature/bad\u0000ref',
+    'feature/bad..ref',
+    'feature/@{ref',
+    '.hidden/ref',
+    'feature/ref.lock',
+    'feature//ref',
+    '-option',
+    'feature/ref.',
+    'feature/ref\\name'
+  ])('fails closed for malformed branch ref %s', async ref => {
+    const github = fixture();
+    github.event.pull_request.head.ref = ref;
+    await expect(runFreshness({ github })).rejects.toThrow(/Invalid trusted PR event/);
   });
 
   it.each([
