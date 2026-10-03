@@ -121,6 +121,28 @@ jobs:
       - name: Validate local LCOV report
         run: node scripts/ci/sonar-lcov.mjs validate coverage/lcov.info
 
+      - name: Create isolated-analysis coverage manifest
+        if: >-
+          github.event_name == 'pull_request' &&
+          (github.event.pull_request.head.repo.id != github.event.repository.id ||
+           github.event.pull_request.user.login == 'dependabot[bot]')
+        run: node scripts/ci/sonar-pr-artifact.mjs create coverage/lcov.info
+
+      - name: Upload isolated-analysis coverage artifact
+        if: >-
+          github.event_name == 'pull_request' &&
+          (github.event.pull_request.head.repo.id != github.event.repository.id ||
+           github.event.pull_request.user.login == 'dependabot[bot]')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sonar-coverage-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            coverage/manifest.json
+            coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 2
+          archive: true
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:

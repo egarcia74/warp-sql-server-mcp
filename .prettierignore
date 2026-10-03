@@ -28,6 +28,7 @@ yarn.lock
 
 # Session buffers and agent working docs
 .remember/
+.superpowers/
 docs/superpowers/
 
 # Claude Code local state (mirrors .gitignore; shared settings.json stays checked)
