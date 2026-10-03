@@ -1,0 +1,101 @@
+name: Sonar PR follow-up
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+jobs:
+  followup:
+    name: Validate and analyze fork or Dependabot coverage
+    if: >-
+      vars.SONAR_CI_ENABLED == 'true' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      (github.event.workflow_run.head_repository.id != github.event.repository.id ||
+      github.event.workflow_run.actor.login == 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout trusted workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Preserve trusted validators and scanner settings
+        run: |
+          mkdir "$RUNNER_TEMP/sonar-trusted"
+          cp scripts/ci/sonar-pr-followup.mjs scripts/ci/sonar-pr-artifact.mjs scripts/ci/sonar-lcov.mjs scripts/ci/sonar-artifact-archive.py "$RUNNER_TEMP/sonar-trusted/"
+          cp sonar-project.properties "$RUNNER_TEMP/sonar-project.properties"
+
+      - name: Validate authenticated origin
+        id: preflight
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ORIGIN_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: node "$RUNNER_TEMP/sonar-trusted/sonar-pr-followup.mjs" preflight "$ORIGIN_RUN_ID"
+
+      - name: Download and inspect bounded archive before extraction
+        if: steps.preflight.outputs.decision == 'scan'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.preflight.outputs.artifactId }}
+          ARCHIVE_DIGEST: ${{ steps.preflight.outputs.archiveDigest }}
+        run: |
+          mkdir "$RUNNER_TEMP/sonar-download"
+          python3 "$RUNNER_TEMP/sonar-trusted/sonar-artifact-archive.py" \
+          --repository egarcia74/warp-sql-server-mcp \
+          --artifact-id "$ARTIFACT_ID" --digest "$ARCHIVE_DIGEST" \
+          --output "$RUNNER_TEMP/sonar-download"
+
+      - name: Bind manifest and LCOV before checkout
+        if: steps.preflight.outputs.decision == 'scan'
+        run: node "$RUNNER_TEMP/sonar-trusted/sonar-pr-followup.mjs" verify-download "$RUNNER_TEMP/sonar-download"
+
+      - name: Checkout verified PR head as data
+        if: steps.preflight.outputs.decision == 'scan'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          repository: ${{ steps.preflight.outputs.headRepository }}
+          ref: ${{ steps.preflight.outputs.headSha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate tracked physical paths and place LCOV safely
+        if: steps.preflight.outputs.decision == 'scan'
+        run: node "$RUNNER_TEMP/sonar-trusted/sonar-pr-followup.mjs" verify-download "$RUNNER_TEMP/sonar-download" "$GITHUB_WORKSPACE"
+
+      # A push or merge can still race this last API read. Record that residual
+      # race; a superseded revision must receive fresh analysis/catch-up.
+      - name: Recheck current PR immediately before scan
+        id: final
+        if: steps.preflight.outputs.decision == 'scan'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node "$RUNNER_TEMP/sonar-trusted/sonar-pr-followup.mjs" final
+
+      - name: Analyze verified PR using trusted settings
+        id: scan
+        if: steps.final.outputs.decision == 'scan'
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          # Explicit empty input suppresses the action's default '.' argument;
+          # sonar.projectBaseDir is incompatible with project.settings.
+          projectBaseDir: ''
+          args: >-
+            "-Dproject.settings=${{ runner.temp }}/sonar-project.properties"
+            -Dsonar.pullrequest.key=${{ steps.final.outputs.prNumber }}
+            -Dsonar.pullrequest.branch=${{ steps.final.outputs.headRef }}
+            -Dsonar.pullrequest.base=${{ steps.final.outputs.baseRef }}
+            -Dsonar.scm.revision=${{ steps.final.outputs.headSha }}
+
+      - name: Surface failure for maintainer review
+        if: failure()
+        run: echo 'Sonar PR follow-up failed. Inspect the originating run and this job before manually merging a fork.' >> "$GITHUB_STEP_SUMMARY"
