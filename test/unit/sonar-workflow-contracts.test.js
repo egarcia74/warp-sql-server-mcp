@@ -322,10 +322,18 @@ describe('trusted direct Sonar workflow contracts', () => {
     'feature//ref',
     '-option',
     'feature/ref.',
-    'feature/ref\\name'
+    'feature/ref\\name',
+    'feature/${env.SONAR_TOKEN}',
+    'feature/${sonar.projectKey}',
+    'feature/${future-syntax}'
   ])('fails closed for malformed branch ref %s', async ref => {
     const github = fixture();
     github.event.pull_request.head.ref = ref;
+    await expect(runFreshness({ github })).rejects.toThrow(/Invalid trusted PR event/);
+  });
+  it('rejects scanner interpolation in the direct PR base before token admission', async () => {
+    const github = fixture();
+    github.event.pull_request.base.ref = 'release/${env.SONAR_TOKEN}';
     await expect(runFreshness({ github })).rejects.toThrow(/Invalid trusted PR event/);
   });
 

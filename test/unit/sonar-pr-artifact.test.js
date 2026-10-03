@@ -395,18 +395,50 @@ describe('verifyOrigin', () => {
     });
     expect(() => verifyOrigin(input)).toThrow();
   });
-  it('rejects ordinary same-repository PRs', () => {
+  it('marks authenticated ordinary same-repository PRs ineligible', () => {
     const input = validOrigin();
     input.repositoryId = 9;
     input.apiRun.repository.id = 9;
     input.eventRun.repository.id = 9;
     input.associatedPrs[0].detail.base.repo.id = 9;
+    input.associatedPrs[0].association.base.repo.id = 9;
     input.apiRun.pull_requests[0].base.repo.id = 9;
-    expect(() => verifyOrigin(input)).toThrow();
+    expect(verifyOrigin(input)).toEqual({ ineligible: true });
   });
 });
 
 describe('manifest and downloaded report', () => {
+  it.each([
+    'feature/coverage+fix',
+    'feature/修正',
+    'feature/quote"ref',
+    "feature/quote'ref",
+    'feature/a;echo',
+    'feature/$HOME',
+    'feature/`id`',
+    'feature/a&b',
+    'feature/a=b',
+    'feature/\u2003ref',
+    'feature/😀'
+  ])('round-trips Git-valid ref %s through manifest, provenance and downloaded report', ref => {
+    const origin = validOrigin();
+    origin.apiRun.head_branch = origin.eventRun.head_branch = ref;
+    for (const pr of [
+      origin.apiRun.pull_requests[0],
+      origin.eventRun.pull_requests[0],
+      origin.associatedPrs[0].association,
+      origin.associatedPrs[0].detail
+    ]) {
+      pr.head.ref = pr.base.ref = ref;
+    }
+    origin.artifacts[0].workflow_run.head_branch = ref;
+    const expected = verifyOrigin(origin);
+    expect(expected).toMatchObject({ headRef: ref, baseRef: ref });
+    const input = downloaded();
+    input.expected = expected;
+    input.manifest = createManifest({ ...manifestInput(), baseRef: ref });
+    expect(verifyDownloaded(input)).toMatchObject({ headSha: sha });
+  });
   it('round-trips all provenance claims and LCOV digest', () => {
     expect(createManifest(manifestInput())).toEqual({ schemaVersion: 1, ...manifestInput() });
     expect(verifyDownloaded(downloaded())).toEqual({
@@ -464,12 +496,16 @@ describe('manifest and downloaded report', () => {
       'bad LCOV paths',
       x => {
         x.reportText = report.replace('lib/a.js', '../a.js');
+        x.entries[1].size = Buffer.byteLength(x.reportText);
+        x.manifest.lcovSha256 = createHash('sha256').update(x.reportText).digest('hex');
       }
     ],
     [
       'tracked file outside measured set',
       x => {
         x.reportText = report + 'SF:cli.js\nDA:1,1\nend_of_record\n';
+        x.entries[1].size = Buffer.byteLength(x.reportText);
+        x.manifest.lcovSha256 = createHash('sha256').update(x.reportText).digest('hex');
       }
     ],
     [
@@ -481,14 +517,24 @@ describe('manifest and downloaded report', () => {
   ])('rejects %s', (_label, mutate) => {
     const input = downloaded();
     mutate(input);
-    expect(() => verifyDownloaded(input)).toThrow();
+    expect(() => verifyDownloaded(input)).toThrow(
+      ['bad LCOV paths', 'tracked file outside measured set'].includes(_label)
+        ? /Unsafe or untracked LCOV source path/
+        : undefined
+    );
   });
-  it.each(['main\noutput=bad', '-Dsonar.token=x', '../main', 'refs//main', 'bad name'])(
-    'rejects unsafe manifest ref %s',
-    baseRef => {
-      expect(() => createManifest({ ...manifestInput(), baseRef })).toThrow();
-    }
-  );
+  it.each([
+    'main\noutput=bad',
+    'main\routput=bad',
+    'main\0ref',
+    '@{-1}',
+    '-Dsonar.token=x',
+    '../main',
+    'refs//main',
+    'bad name'
+  ])('rejects unsafe manifest ref %s', baseRef => {
+    expect(() => createManifest({ ...manifestInput(), baseRef })).toThrow();
+  });
   it('creates the two-file producer artifact through the CLI', () => {
     const root = temp();
     mkdirSync(join(root, 'coverage'));

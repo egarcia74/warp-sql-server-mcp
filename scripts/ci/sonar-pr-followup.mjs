@@ -12,7 +12,12 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { verifyOrigin, verifyDownloaded } from './sonar-pr-artifact.mjs';
+import {
+  verifyOrigin,
+  verifyDownloaded,
+  validBranchRef,
+  validateScannerRefs
+} from './sonar-pr-artifact.mjs';
 
 const REPOSITORY = 'egarcia74/warp-sql-server-mcp';
 const PREFIX = `/repos/${REPOSITORY}`;
@@ -95,7 +100,7 @@ export async function resolveFollowup(runId, fetchJson, { eventRun } = {}) {
     attemptJobs,
     artifacts
   });
-  if (verdict.superseded || verdict.mergedDependabot)
+  if (verdict.ineligible || verdict.superseded || verdict.mergedDependabot)
     return { ...verdict, prNumber: detail.number, runId };
   const headRepository = await fetchJson(`/repositories/${verdict.headRepositoryId}`);
   requireThat(
@@ -217,10 +222,27 @@ function regularFile(path) {
   return stat;
 }
 
+function validateScannerTree(root) {
+  // sonar.sources=. includes files beyond LCOV's measured set. Reject every
+  // symlink without following it, including internal/dangling links and cycles.
+  // No PR code runs between this check and the scanner on the ephemeral runner.
+  const pending = [root];
+  while (pending.length) {
+    const path = pending.pop();
+    const stat = lstatSync(path);
+    requireThat(!stat.isSymbolicLink(), 'Unsafe scanner source symlink');
+    requireThat(stat.isDirectory() || stat.isFile(), 'Unsafe scanner source file type');
+    if (stat.isDirectory()) {
+      for (const name of readdirSync(path)) pending.push(join(path, name));
+    }
+  }
+}
+
 /** Called once before checkout (data validation) and again after exact-head
  * checkout (tracked/physical source validation and exclusive safe placement).
  */
 export function verifyDownload(artifactDir, sourceRoot, expected) {
+  if (sourceRoot) validateScannerTree(sourceRoot);
   requireThat(
     lstatSync(artifactDir).isDirectory() && !lstatSync(artifactDir).isSymbolicLink(),
     'Unsafe artifact directory'
@@ -307,7 +329,10 @@ async function requestJson(origin, path, token) {
 function output(values) {
   for (const [key, value] of Object.entries(values)) {
     requireThat(
-      /^[A-Za-z][A-Za-z0-9]*$/.test(key) && /^[A-Za-z0-9_./:-]+$/.test(String(value)),
+      /^[A-Za-z][A-Za-z0-9]*$/.test(key) &&
+        (['headRef', 'baseRef'].includes(key)
+          ? validBranchRef(value)
+          : /^[A-Za-z0-9_./:-]+$/.test(String(value))),
       'Unsafe workflow output'
     );
     appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
@@ -317,6 +342,11 @@ function summary(text) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text + '\n');
 }
 async function route(verdict, fetchGithub) {
+  if (verdict.ineligible) {
+    output({ decision: 'ineligible' });
+    summary('Ordinary same-repository PR uses the direct Sonar analysis path.');
+    return;
+  }
   if (verdict.superseded) {
     output({ decision: 'superseded' });
     summary('Sonar PR analysis superseded by a changed or closed pull request.');
@@ -342,6 +372,23 @@ async function route(verdict, fetchGithub) {
     artifactId: verdict.artifactId,
     archiveDigest: verdict.archiveDigest
   });
+}
+
+function writePrRefs(verdict, settingsPath) {
+  validateScannerRefs(verdict.headRef, verdict.baseRef);
+  regularFile(settingsPath);
+  // Java Properties.load decodes UTF-16 escapes. Encode each code unit so even
+  // quotes, Unicode whitespace, separators and metacharacters remain data. Refs
+  // never enter the action's string-argv tokenizer or a shell command.
+  const encode = value =>
+    value
+      .split('')
+      .map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`)
+      .join('');
+  appendFileSync(
+    settingsPath,
+    `\nsonar.pullrequest.branch=${encode(verdict.headRef)}\nsonar.pullrequest.base=${encode(verdict.baseRef)}\n`
+  );
 }
 
 async function main(args) {
@@ -382,7 +429,10 @@ async function main(args) {
       verifyDownload(args[1], args[2], expected);
     } else if (args[0] === 'final' && args.length === 1) {
       const expected = JSON.parse(readFileSync(statePath, 'utf8'));
-      await route(await finalRead(expected, fetchGithub), fetchGithub);
+      const verdict = await finalRead(expected, fetchGithub);
+      if (!verdict.superseded && !verdict.mergedDependabot)
+        writePrRefs(verdict, join(process.env.RUNNER_TEMP, 'sonar-project.properties'));
+      await route(verdict, fetchGithub);
     } else {
       throw new Error('Invalid command');
     }

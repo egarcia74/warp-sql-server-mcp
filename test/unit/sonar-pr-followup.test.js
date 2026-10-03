@@ -2,7 +2,16 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { runGit } from '../helpers/git.js';
 import { scrubbedEnv } from '../../scripts/ci/verify-publish-tree.mjs';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  symlinkSync,
+  rmSync,
+  lstatSync,
+  existsSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { load } from 'js-yaml';
@@ -107,6 +116,68 @@ function fixture() {
 }
 
 describe('follow-up authenticated resolution', () => {
+  it.each([
+    'feature/${env.SONAR_TOKEN}',
+    'feature/${sonar.projectKey}',
+    'feature/${unknown}',
+    'feature/${future-syntax}'
+  ])('fails closed before scanner property interpolation for %s', async ref => {
+    const f = fixture();
+    f.run.head_branch = f.pr.head.ref = f.run.pull_requests[0].head.ref = ref;
+    f.data[
+      `${prefix}/actions/runs/42/artifacts?per_page=100&page=1`
+    ].artifacts[0].workflow_run.head_branch = ref;
+    await expect(resolveFollowup(42, f.fetch)).rejects.toThrow(/interpolation/i);
+  });
+  it('uses the authenticated Dependabot PR author when a maintainer triggers the run', async () => {
+    const f = fixture();
+    f.run.actor = { login: 'maintainer' };
+    f.run.head_repository.id = 7;
+    f.pr.head.repo.id = 7;
+    f.pr.user = { login: 'dependabot[bot]', type: 'Bot' };
+    f.run.pull_requests[0].head.repo.id = 7;
+    f.data[
+      `${prefix}/actions/runs/42/artifacts?per_page=100&page=1`
+    ].artifacts[0].workflow_run.head_repository_id = 7;
+    f.data['/repositories/7'] = { id: 7, full_name: 'egarcia74/warp-sql-server-mcp' };
+    const job = load(readFileSync('.github/workflows/sonar-pr-followup.yml', 'utf8')).jobs.followup;
+    const admitted = new Function('github', 'vars', `return (${job.if});`)(
+      { event: { workflow_run: f.run, repository: { id: 7 } } },
+      { SONAR_CI_ENABLED: 'true' }
+    );
+    expect(admitted).toBe(true);
+    const ci = load(readFileSync('.github/workflows/ci.yml', 'utf8')).jobs.coverage;
+    const github = {
+      event_name: 'pull_request',
+      actor: 'maintainer',
+      event: { repository: { id: 7 }, pull_request: f.pr }
+    };
+    const evaluate = expression =>
+      new Function(
+        'github',
+        'vars',
+        'steps',
+        `return (${expression.replaceAll('steps.sonar-freshness', 'steps["sonar-freshness"]')});`
+      )(
+        github,
+        { SONAR_CI_ENABLED: 'true' },
+        { 'sonar-freshness': { outputs: { decision: 'scan' } } }
+      );
+    expect(
+      evaluate(ci.steps.find(step => step.name === 'Create isolated-analysis coverage manifest').if)
+    ).toBe(true);
+    expect(evaluate(ci.steps.find(step => step.id === 'sonar-scan').if)).toBe(false);
+    expect(await resolveFollowup(42, f.fetch)).toMatchObject({ dependabot: true, artifactId: 12 });
+  });
+  it('skips authenticated ordinary same-repository PRs without demanding a fork artifact', async () => {
+    const f = fixture();
+    f.run.head_repository.id = f.pr.head.repo.id = f.run.pull_requests[0].head.repo.id = 7;
+    f.data[`${prefix}/actions/runs/42/artifacts?per_page=100&page=1`] = {
+      total_count: 0,
+      artifacts: []
+    };
+    expect(await resolveFollowup(42, f.fetch)).toMatchObject({ ineligible: true });
+  });
   it('resolves empty run PR list via commit association', async () => {
     const f = fixture();
     f.run.pull_requests = [];
@@ -377,6 +448,55 @@ describe('download and hostile source boundary', () => {
       vi.unstubAllEnvs();
     }
   });
+  it.each(['outside-file', 'outside-directory', 'chain', 'cycle', 'dangling', 'internal'])(
+    'rejects a real Git checkout with a non-LCOV %s symlink',
+    async kind => {
+      const f = await download();
+      mkdirSync(join(f.source, 'docs'));
+      writeFileSync(join(f.root, 'outside.js'), 'outside source');
+      const targets = {
+        'outside-file': join(f.root, 'outside.js'),
+        'outside-directory': f.root,
+        chain: 'second.js',
+        cycle: 'leak.js',
+        dangling: join(f.root, 'absent.js'),
+        internal: '../index.js'
+      };
+      symlinkSync(targets[kind], join(f.source, 'docs/leak.js'));
+      if (kind === 'chain')
+        symlinkSync(join(f.root, 'outside.js'), join(f.source, 'docs/second.js'));
+      runGit(['add', '.'], { cwd: f.source });
+      runGit(
+        [
+          '-c',
+          'user.name=Fixture',
+          '-c',
+          'user.email=fixture@example.test',
+          '-c',
+          'core.hooksPath=/dev/null',
+          'commit',
+          '-qm',
+          'fixture'
+        ],
+        { cwd: f.source }
+      );
+      expect(runGit(['ls-files', '--stage', 'docs/leak.js'], { cwd: f.source })).toMatch(
+        /^120000 /
+      );
+      const checkout = join(f.root, 'checkout');
+      runGit(['clone', '-q', '--no-hardlinks', f.source, checkout]);
+      expect(lstatSync(join(checkout, 'docs/leak.js')).isSymbolicLink()).toBe(true);
+      expect(() => verifyDownload(f.artifact, checkout, f.expected)).toThrow(/symlink/i);
+      expect(existsSync(join(checkout, 'coverage/lcov.info'))).toBe(false);
+    }
+  );
+  it('rejects untracked directory symlinks outside LCOV before placement', async () => {
+    const f = await download();
+    mkdirSync(join(f.source, 'extra'));
+    symlinkSync(f.root, join(f.source, 'extra/directory'));
+    expect(() => verifyDownload(f.artifact, f.source, f.expected)).toThrow(/symlink/i);
+    expect(existsSync(join(f.source, 'coverage/lcov.info'))).toBe(false);
+  });
   it.each(['coverage', 'source', 'manifest'])('rejects %s symlink before placement', async kind => {
     const f = await download();
     if (kind === 'coverage') symlinkSync(f.root, join(f.source, 'coverage'));
@@ -451,6 +571,202 @@ describe('download and hostile source boundary', () => {
 });
 
 describe('privileged workflow boundary', () => {
+  it.each(['headRef', 'baseRef'])(
+    'rejects scanner interpolation in saved %s at the final boundary',
+    async field => {
+      const f = fixture(),
+        root = temp();
+      const expected = await resolveFollowup(42, f.fetch);
+      expected[field] = 'feature/${env.SONAR_TOKEN}';
+      f.pr[field === 'headRef' ? 'head' : 'base'].ref = expected[field];
+      writeFileSync(join(root, 'sonar-followup-state.json'), JSON.stringify(expected));
+      const settings = join(root, 'sonar-project.properties');
+      writeFileSync(settings, 'sonar.projectKey=trusted\n');
+      const loader = join(root, 'api.mjs');
+      writeFileSync(
+        loader,
+        `globalThis.fetch = async () => new Response(${JSON.stringify(JSON.stringify(f.pr))});`
+      );
+      const output = join(root, 'output');
+      const result = spawnSync(
+        process.execPath,
+        ['--import', loader, resolve('scripts/ci/sonar-pr-followup.mjs'), 'final'],
+        { env: { ...scrubbedEnv(), RUNNER_TEMP: root, GITHUB_OUTPUT: output }, encoding: 'utf8' }
+      );
+      expect(result.status).toBe(1);
+      expect(existsSync(output)).toBe(false);
+      expect(readFileSync(settings, 'utf8')).toBe('sonar.projectKey=trusted\n');
+    }
+  );
+  it('carries producer coverage with Git-valid refs through exact checkout and final settings', () => {
+    const f = fixture(),
+      root = temp(),
+      source = join(root, 'source'),
+      artifact = join(root, 'artifact');
+    mkdirSync(source);
+    mkdirSync(artifact);
+    mkdirSync(join(source, 'lib'));
+    writeFileSync(join(source, 'index.js'), 'export const value = 1;');
+    writeFileSync(join(source, 'lib/a.js'), 'export const value = 1;');
+    writeFileSync(join(source, 'sonar-project.properties'), 'sonar.projectKey=attacker\n');
+    runGit(['init', '-q', source]);
+    runGit(['add', '.'], { cwd: source });
+    runGit(
+      [
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.test',
+        '-c',
+        'core.hooksPath=/dev/null',
+        'commit',
+        '-qm',
+        'fixture'
+      ],
+      { cwd: source }
+    );
+    const headSha = runGit(['rev-parse', 'HEAD'], { cwd: source }).trim();
+    const headRef = 'feature/coverage+修正',
+      baseRef = 'release/😀+fix';
+    f.pr.head.sha = f.run.head_sha = f.run.pull_requests[0].head.sha = headSha;
+    f.pr.head.ref = f.run.head_branch = f.run.pull_requests[0].head.ref = headRef;
+    f.pr.base.ref = f.run.pull_requests[0].base.ref = baseRef;
+    f.data[`${prefix}/actions/runs/42/attempts/2/jobs?per_page=100&page=1`].jobs[0].head_sha =
+      headSha;
+    Object.assign(
+      f.data[`${prefix}/actions/runs/42/artifacts?per_page=100&page=1`].artifacts[0].workflow_run,
+      { head_sha: headSha, head_branch: headRef }
+    );
+    const event = join(root, 'event.json'),
+      loader = join(root, 'api.mjs'),
+      output = join(root, 'output');
+    writeFileSync(
+      event,
+      JSON.stringify({
+        repository: { id: 7, full_name: 'egarcia74/warp-sql-server-mcp' },
+        workflow_run: f.run,
+        pull_request: f.pr
+      })
+    );
+    writeFileSync(
+      loader,
+      `const data = ${JSON.stringify(f.data)}; globalThis.fetch = async url => new Response(JSON.stringify(data[new URL(url).pathname + new URL(url).search]));`
+    );
+    const env = {
+      ...scrubbedEnv(),
+      RUNNER_TEMP: root,
+      GITHUB_EVENT_PATH: event,
+      GITHUB_OUTPUT: output,
+      GITHUB_RUN_ID: '42',
+      GITHUB_RUN_ATTEMPT: '2'
+    };
+    const run = (script, args, imports = []) => {
+      const result = spawnSync(process.execPath, [...imports, resolve(script), ...args], {
+        env,
+        encoding: 'utf8'
+      });
+      expect(result.status, result.stderr).toBe(0);
+    };
+    const report =
+      'SF:index.js\nDA:1,1\nBRDA:1,0,0,1\nend_of_record\nSF:lib/a.js\nDA:1,1\nend_of_record\n';
+    writeFileSync(join(artifact, 'lcov.info'), report);
+    run('scripts/ci/sonar-pr-artifact.mjs', ['create', join(artifact, 'lcov.info')]);
+    const cli = 'scripts/ci/sonar-pr-followup.mjs';
+    run(cli, ['preflight', '42'], ['--import', loader]);
+    run(cli, ['verify-download', artifact]);
+    const checkout = join(root, 'checkout');
+    runGit(['clone', '-q', '--no-hardlinks', source, checkout]);
+    run(cli, ['verify-download', artifact, checkout]);
+    writeFileSync(join(root, 'sonar-project.properties'), 'sonar.projectKey=trusted\n');
+    run(cli, ['final'], ['--import', loader]);
+    expect(readFileSync(join(checkout, 'coverage/lcov.info'), 'utf8')).toBe(report);
+    expect(readFileSync(join(root, 'sonar-project.properties'), 'utf8')).not.toContain('attacker');
+    expect(readFileSync(output, 'utf8')).toContain(
+      `headSha=${headSha}\nheadRef=${headRef}\nbaseRef=${baseRef}\n`
+    );
+  });
+  it.each([
+    'feature/coverage+fix',
+    'feature/修正',
+    'feature/quote"ref',
+    "feature/quote'ref",
+    'feature/a;echo',
+    'feature/$HOME',
+    'feature/`id`',
+    'feature/a&b',
+    'feature/a=b',
+    'feature/\u2003ref',
+    'feature/😀'
+  ])('preserves literal ref %s from API through CLI outputs and trusted settings', ref => {
+    const f = fixture(),
+      root = temp(),
+      output = join(root, 'outputs'),
+      loader = join(root, 'api.mjs'),
+      event = join(root, 'event.json');
+    f.run.head_branch = ref;
+    f.pr.head.ref = f.pr.base.ref = ref;
+    f.run.pull_requests[0].head.ref = f.run.pull_requests[0].base.ref = ref;
+    f.data[
+      `${prefix}/actions/runs/42/artifacts?per_page=100&page=1`
+    ].artifacts[0].workflow_run.head_branch = ref;
+    writeFileSync(
+      event,
+      JSON.stringify({
+        repository: { id: 7, full_name: 'egarcia74/warp-sql-server-mcp' },
+        workflow_run: f.run
+      })
+    );
+    writeFileSync(
+      loader,
+      `const data = ${JSON.stringify(f.data)}; globalThis.fetch = async url => { const key = new URL(url).pathname + new URL(url).search; if (!(key in data)) throw new Error('Unexpected request'); return new Response(JSON.stringify(data[key])); };`
+    );
+    const settings = join(root, 'sonar-project.properties');
+    writeFileSync(settings, 'sonar.projectKey=trusted\nsonar.exclusions=test/docker/init-db.sql\n');
+    const env = {
+      ...scrubbedEnv(),
+      GITHUB_EVENT_PATH: event,
+      GITHUB_OUTPUT: output,
+      RUNNER_TEMP: root
+    };
+    const cli = resolve('scripts/ci/sonar-pr-followup.mjs');
+    for (const args of [['preflight', '42'], ['final']]) {
+      const result = spawnSync(process.execPath, ['--import', loader, cli, ...args], {
+        env,
+        encoding: 'utf8'
+      });
+      expect(result.status, result.stderr).toBe(0);
+    }
+    expect(
+      readFileSync(output, 'utf8')
+        .split('\n')
+        .filter(line => line.startsWith('headRef='))
+    ).toEqual([`headRef=${ref}`, `headRef=${ref}`]);
+    const properties = Object.fromEntries(
+      readFileSync(settings, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(line => {
+          const separator = line.indexOf('=');
+          return [
+            line.slice(0, separator),
+            line
+              .slice(separator + 1)
+              .replace(/\\u([a-f0-9]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+          ];
+        })
+    );
+    expect(properties).toEqual({
+      'sonar.projectKey': 'trusted',
+      'sonar.exclusions': 'test/docker/init-db.sql',
+      'sonar.pullrequest.branch': ref,
+      'sonar.pullrequest.base': ref
+    });
+    const scan = load(
+      readFileSync('.github/workflows/sonar-pr-followup.yml', 'utf8')
+    ).jobs.followup.steps.find(step => step.id === 'scan');
+    expect(scan.with.args).not.toMatch(/outputs\.(headRef|baseRef)/);
+  });
   it('creates the empty download directory required by the bounded helper', () => {
     const workflow = load(readFileSync('.github/workflows/sonar-pr-followup.yml', 'utf8'));
     const step = workflow.jobs.followup.steps.find(step =>

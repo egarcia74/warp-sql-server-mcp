@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateLcov } from './sonar-lcov.mjs';
@@ -14,14 +15,27 @@ const requireThat = (condition, message) => {
 const id = value => Number.isSafeInteger(value) && value > 0;
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 const hash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-const ref = value =>
-  typeof value === 'string' &&
-  value.length <= 255 &&
-  /^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(value) &&
-  !value.includes('..') &&
-  value
-    .split('/')
-    .every(part => part && !part.startsWith('.') && !part.endsWith('.') && !part.endsWith('.lock'));
+export function validBranchRef(value) {
+  if (typeof value !== 'string' || !value || value.startsWith('-')) return false;
+  try {
+    // Validate the literal full ref, avoiding --branch's @{-n} expansion.
+    // An argv array keeps Git-valid shell metacharacters entirely inert.
+    execFileSync('git', ['check-ref-format', `refs/heads/${value}`], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+const ref = validBranchRef;
+
+export function validateScannerRefs(...refs) {
+  // Scanner CLI PropertyResolver expands ${...} even after Java-properties
+  // decoding. There is no literal escape at that boundary: fail before secrets.
+  requireThat(
+    refs.every(ref) && refs.every(value => !value.includes('${')),
+    'Invalid scanner ref or unsupported interpolation'
+  );
+}
 
 /** All fields are untrusted claims until verifyDownloaded binds them to API evidence. */
 export function createManifest({
@@ -58,6 +72,7 @@ function validatePr(pr, repositoryId) {
     pr.base?.repo?.id === repositoryId && ref(pr.base.ref),
     'Invalid PR base repository/ref'
   );
+  validateScannerRefs(pr.head.ref, pr.base.ref);
 }
 
 function matchAssociation(association, run, repositoryId) {
@@ -137,10 +152,7 @@ export function verifyOrigin({
     'Current PR repository/base association mismatch'
   );
   const dependabot = detail.user?.login === 'dependabot[bot]' && detail.user?.type === 'Bot';
-  requireThat(
-    dependabot || apiRun.head_repository.id !== repositoryId,
-    'Ordinary same-repository PR is not eligible'
-  );
+  if (!dependabot && apiRun.head_repository.id === repositoryId) return { ineligible: true };
   requireThat(['open', 'closed'].includes(detail.state), 'Invalid PR state');
   if (detail.head.sha !== apiRun.head_sha || detail.head.ref !== apiRun.head_branch)
     return { superseded: true };

@@ -13,11 +13,11 @@ permissions:
 jobs:
   followup:
     name: Validate and analyze fork or Dependabot coverage
+    # Run actor is not PR author (e.g. maintainer synchronization of Dependabot).
+    # Trusted preflight resolves author and skips ordinary same-repository PRs.
     if: >-
       vars.SONAR_CI_ENABLED == 'true' &&
-      github.event.workflow_run.event == 'pull_request' &&
-      (github.event.workflow_run.head_repository.id != github.event.repository.id ||
-      github.event.workflow_run.actor.login == 'dependabot[bot]')
+      github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -66,7 +66,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Validate tracked physical paths and place LCOV safely
+      - name: Reject scanner-tree symlinks, validate paths and place LCOV safely
         if: steps.preflight.outputs.decision == 'scan'
         run: node "$RUNNER_TEMP/sonar-trusted/sonar-pr-followup.mjs" verify-download "$RUNNER_TEMP/sonar-download" "$GITHUB_WORKSPACE"
 
@@ -89,11 +89,11 @@ jobs:
           # Explicit empty input suppresses the action's default '.' argument;
           # sonar.projectBaseDir is incompatible with project.settings.
           projectBaseDir: ''
+          # Branch/base are encoded in trusted settings by the final validator;
+          # never interpolate Git-valid quotes or whitespace into action args.
           args: >-
             "-Dproject.settings=${{ runner.temp }}/sonar-project.properties"
             -Dsonar.pullrequest.key=${{ steps.final.outputs.prNumber }}
-            -Dsonar.pullrequest.branch=${{ steps.final.outputs.headRef }}
-            -Dsonar.pullrequest.base=${{ steps.final.outputs.baseRef }}
             -Dsonar.scm.revision=${{ steps.final.outputs.headSha }}
 
       - name: Surface failure for maintainer review

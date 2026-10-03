@@ -6,7 +6,8 @@
 
 This runbook describes the controlled migration from Automatic Analysis to CI analysis for
 `egarcia74_warp-sql-server-mcp` in organization `egarcia74`. The workflows are staged behind
-the repository Actions variable `SONAR_CI_ENABLED`; only the exact string `true` enables scans.
+the repository Actions variable `SONAR_CI_ENABLED`; use `true` to enable scans. GitHub expression
+comparisons are case-insensitive, so `TRUE` also enables them; use `false` or leave it unset to disable scans.
 Documentation and local verification do not authorize activation. Obtain explicit cutover
 authorization after deployment, independent review, and hosted evidence. Keep
 [the approved design](../architecture/SONARCLOUD-COVERAGE-DESIGN.md) alongside this runbook.
@@ -98,6 +99,17 @@ Direct main scans identify their run/attempt with `sonar.buildString=gh-main-RUN
 catch-up scans use `gh-catch-up-RUN_ID-ATTEMPT`. Match that value to the successful scanner
 step in the authoritative run attempt. A matching SHA, a green coverage job, or an old
 Automatic Analysis record without this attribution is insufficient catch-up evidence.
+
+The privileged follow-up rejects every symlink in the scanner checkout, including links outside
+LCOV paths and links to files inside the checkout, before exposing `SONAR_TOKEN`. Rename or remove
+such links before retrying. Fork/Dependabot eligibility uses the authenticated PR author, so a
+maintainer-triggered run of a Dependabot PR still follows the isolated path.
+
+Branch names are validated with Git. Follow-up branch/base values use Unicode escapes in the
+trusted external settings file, preserving `+`, Unicode, quotes and shell metacharacters without
+passing them through the action's argument tokenizer. Both PR scanner paths reject names containing
+`${`: SonarScanner expands property placeholders after loading settings, so literal transport for
+that subset is unsupported. Rename those branches before retrying; do not relax the guard.
 
 ## Staging and activation sequence
 
