@@ -9,6 +9,8 @@ const PROJECT = 'egarcia74_warp-sql-server-mcp';
 const ANALYSES = `/api/project_analyses/search?project=${PROJECT}&branch=main&ps=1`;
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 const id = value => Number.isSafeInteger(value) && value > 0;
+const mainBuild = value =>
+  typeof value === 'string' && /^gh-(?:main|catch-up)-[1-9]\d*-[1-9]\d*$/.test(value);
 function requireThat(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -42,6 +44,7 @@ export function shouldScanMain({
     latestProcessedAnalysis.key.length > 0 &&
     typeof latestProcessedAnalysis.date === 'string' &&
     Number.isFinite(Date.parse(latestProcessedAnalysis.date)) &&
+    mainBuild(latestProcessedAnalysis.buildString) &&
     (latestProcessedAnalysis.status === undefined ||
       latestProcessedAnalysis.status === 'SUCCESS') &&
     lineCoverage !== undefined &&
@@ -102,14 +105,15 @@ async function list(path, key, fetchGithub) {
   throw new Error('API pagination limit');
 }
 
-async function ciEvidence(checkoutSha, fetchGithub) {
-  for (const [file, jobName, stepName, events] of [
-    ['ci.yml', 'Test Coverage', 'Scan trusted revision with Sonar', ['push']],
+async function ciEvidence(checkoutSha, analysis, fetchGithub) {
+  for (const [file, jobName, stepName, events, buildPrefix] of [
+    ['ci.yml', 'Test Coverage', 'Scan trusted revision with Sonar', ['push'], 'gh-main'],
     [
       'sonar-main-catch-up.yml',
       'Main coverage catch-up',
       'Analyze current main with Sonar',
-      ['workflow_dispatch', 'schedule']
+      ['workflow_dispatch', 'schedule'],
+      'gh-catch-up'
     ]
   ]) {
     const workflow = await fetchGithub(`${PREFIX}/actions/workflows/${file}`);
@@ -135,6 +139,9 @@ async function ciEvidence(checkoutSha, fetchGithub) {
         'Invalid workflow run provenance'
       );
       if (run.status !== 'completed' || !events.includes(run.event)) continue;
+      // An uploaded report does not prove background processing succeeded.
+      // The processed row itself must name this authenticated producer attempt.
+      if (analysis.buildString !== `${buildPrefix}-${run.id}-${run.run_attempt}`) continue;
       const jobs = await list(
         `${PREFIX}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs`,
         'jobs',
@@ -150,13 +157,28 @@ async function ciEvidence(checkoutSha, fetchGithub) {
         );
         const scans = job.steps.filter(step => step.name === stepName);
         requireThat(scans.length <= 1, 'Ambiguous scanner step');
+        if (!scans.length) continue;
+        const startedAt = Date.parse(scans[0].started_at);
+        const completedAt = Date.parse(scans[0].completed_at);
         if (
           job.status === 'completed' &&
           job.conclusion === 'success' &&
           scans[0]?.status === 'completed' &&
           scans[0].conclusion === 'success'
-        )
+        ) {
+          requireThat(
+            typeof scans[0].started_at === 'string' &&
+              typeof scans[0].completed_at === 'string' &&
+              Number.isFinite(startedAt) &&
+              Number.isFinite(completedAt) &&
+              completedAt >= startedAt,
+            'Invalid scanner timestamps'
+          );
+          // Sonar's analysis timestamp can precede completion of scanner upload;
+          // it must never precede this producer's scanner invocation.
+          if (Date.parse(analysis.date) < startedAt) continue;
           return true;
+        }
       }
     }
   }
@@ -166,7 +188,7 @@ async function ciEvidence(checkoutSha, fetchGithub) {
 export async function checkMain({ dispatchRef, checkoutSha, fetchGithub, fetchSonar }) {
   mainRevision(dispatchRef, checkoutSha, await remoteHead(fetchGithub));
   const first = await processed(fetchSonar);
-  if (!first || first.revision !== checkoutSha) return true;
+  if (!first || first.revision !== checkoutSha || !mainBuild(first.buildString)) return true;
   const date = encodeURIComponent(first.date);
   const result = await fetchSonar(
     `/api/measures/search_history?component=${PROJECT}&branch=main&metrics=lines_to_cover,conditions_to_cover,line_coverage,branch_coverage&from=${date}&to=${date}&ps=1000`
@@ -215,10 +237,15 @@ export async function checkMain({ dispatchRef, checkoutSha, fetchGithub, fetchSo
     values.conditions_to_cover > 0 &&
     values.line_coverage !== undefined &&
     values.branch_coverage !== undefined;
-  const successfulCiScanAtSha = hasCoverage ? await ciEvidence(checkoutSha, fetchGithub) : false;
+  const successfulCiScanAtSha = hasCoverage
+    ? await ciEvidence(checkoutSha, first, fetchGithub)
+    : false;
   const last = await processed(fetchSonar);
   requireThat(
-    last?.key === first.key && last.revision === first.revision && last.date === first.date,
+    last?.key === first.key &&
+      last.revision === first.revision &&
+      last.date === first.date &&
+      last.buildString === first.buildString,
     'Analysis changed during verification'
   );
   return shouldScanMain({

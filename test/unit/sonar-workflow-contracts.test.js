@@ -279,11 +279,19 @@ describe('trusted direct Sonar workflow contracts', () => {
     expect(freshness.uses).toBe('actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3');
     expect(coverage.steps.indexOf(scanner)).toBe(coverage.steps.indexOf(freshness) + 1);
     expect(scanner.with).not.toHaveProperty('projectBaseDir');
-    const args = scanner.with.args
-      .replace('${{ steps.sonar-freshness.outputs.sha }}', sha)
-      .trim()
-      .split(/\s+/);
-    expect(args).toEqual(['-Dsonar.scm.revision=' + sha]);
+    const render = github =>
+      scanner.with.args
+        .replace(/\$\{\{([\s\S]*?)\}\}/g, (_, expression) => evaluate(expression, github))
+        .trim()
+        .split(/\s+/);
+    expect(render(fixture('push'))).toEqual([
+      '-Dsonar.scm.revision=' + sha,
+      '-Dsonar.buildString=gh-main-42-1'
+    ]);
+    expect(render({ ...fixture('push'), run_attempt: 2 }).at(-1)).toBe(
+      '-Dsonar.buildString=gh-main-42-2'
+    );
+    expect(render(fixture()).at(-1)).toBe('-Dsonar.buildString=gh-pr-42-1');
   });
 
   it('reads current PR API state and admits the exact checked-out head', async () => {

@@ -10,7 +10,12 @@ import { shouldScanMain, checkMain } from '../../scripts/ci/sonar-main-catch-up.
 const sha = 'a'.repeat(40);
 const oldSha = 'b'.repeat(40);
 const prefix = '/repos/egarcia74/warp-sql-server-mcp';
-const analysis = { key: 'analysis-1', revision: sha, date: '2026-10-04T01:00:00Z' };
+const analysis = {
+  key: 'analysis-1',
+  revision: sha,
+  date: '2026-10-04T01:00:00Z',
+  buildString: 'gh-main-42-2'
+};
 const roots = [];
 afterEach(() => roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })));
 function cli(command, scenario, expectedSha) {
@@ -36,7 +41,8 @@ function cli(command, scenario, expectedSha) {
       ref: 'refs/heads/main', object: { type: 'commit', sha: ${JSON.stringify(scenario === 'drift' ? oldSha : checkoutSha)} }
     }));
     if (url.startsWith('https://sonarcloud.io/api/project_analyses/search?')) return new Response(JSON.stringify({analyses: [{
-      key: 'automatic', revision: ${JSON.stringify(checkoutSha)}, date: '2026-10-04T01:00:00Z'
+      key: 'automatic', revision: ${JSON.stringify(checkoutSha)}, date: '2026-10-04T01:00:00Z',
+      ...(${JSON.stringify(scenario)} === 'verified' ? { buildString: 'gh-main-42-2' } : {})
     }]}));
     if (${JSON.stringify(scenario)} === 'verified' && url.startsWith('https://sonarcloud.io/api/measures/search_history?')) return new Response(JSON.stringify(${JSON.stringify(f.measures)}));
     if (url.startsWith('https://sonarcloud.io/api/measures/search_history?')) return new Response(JSON.stringify({
@@ -76,6 +82,7 @@ function verified() {
   };
 }
 function apiFixture() {
+  const latestAnalysis = { ...analysis };
   const data = {
     [`${prefix}/git/ref/heads/main`]: { ref: 'refs/heads/main', object: { type: 'commit', sha } },
     [`${prefix}/actions/workflows/ci.yml`]: { id: 11, path: '.github/workflows/ci.yml' },
@@ -115,7 +122,13 @@ function apiFixture() {
           status: 'completed',
           conclusion: 'success',
           steps: [
-            { name: 'Scan trusted revision with Sonar', status: 'completed', conclusion: 'success' }
+            {
+              name: 'Scan trusted revision with Sonar',
+              status: 'completed',
+              conclusion: 'success',
+              started_at: '2026-10-04T00:59:00Z',
+              completed_at: '2026-10-04T01:01:00Z'
+            }
           ]
         }
       ]
@@ -133,12 +146,14 @@ function apiFixture() {
   return {
     data,
     measures,
+    analysis: latestAnalysis,
     fetchGithub: async path => {
       if (!(path in data)) throw new Error('Unexpected API path: ' + path);
       return globalThis.structuredClone(data[path]);
     },
     fetchSonar: async path => {
-      if (path.startsWith('/api/project_analyses/search?')) return { analyses: [analysis] };
+      if (path.startsWith('/api/project_analyses/search?'))
+        return { analyses: [{ ...latestAnalysis }] };
       if (path.startsWith('/api/measures/search_history?'))
         return globalThis.structuredClone(measures);
       throw new Error('Unexpected Sonar path');
@@ -161,6 +176,10 @@ describe('main catch-up decision', () => {
     ).toBe(true);
   });
   it.each([
+    [
+      'missing producer identifier',
+      { latestProcessedAnalysis: { ...analysis, buildString: undefined } }
+    ],
     ['incomplete analysis identity', { latestProcessedAnalysis: { revision: sha } }],
     ['old Sonar SHA', { latestProcessedAnalysis: { ...analysis, revision: oldSha } }],
     ['old CI job', { successfulCiScanAtSha: false }],
@@ -187,6 +206,43 @@ describe('read-only main evidence', () => {
   const check = f => checkMain({ dispatchRef: 'refs/heads/main', checkoutSha: sha, ...f });
   it('binds processed historical measures and successful scanner step to current main', async () => {
     expect(await check(apiFixture())).toBe(false);
+  });
+  it('does not attribute an Oct 1 processed analysis to an Oct 4 scanner at the same SHA', async () => {
+    const f = apiFixture();
+    f.analysis.date = '2026-10-01T01:00:00Z';
+    f.measures.measures.forEach(measure => {
+      measure.history[0].date = f.analysis.date;
+    });
+    expect(await check(f)).toBe(true);
+  });
+  it.each([
+    ['missing buildString', undefined],
+    ['different producing run', 'gh-main-41-2'],
+    ['different producing attempt', 'gh-main-42-1'],
+    ['PR producer', 'gh-pr-42-2'],
+    ['failed background task leaves previous processed row', 'gh-main-41-1'],
+    ['unprocessed background task leaves previous processed row', 'gh-main-40-1']
+  ])('requests a scan for %s despite successful same-SHA upload', async (_, buildString) => {
+    const f = apiFixture();
+    f.analysis.buildString = buildString;
+    expect(await check(f)).toBe(true);
+  });
+  it('requires valid scanner start and completion times', async () => {
+    const f = apiFixture();
+    f.data[
+      `${prefix}/actions/runs/42/attempts/2/jobs?per_page=100&page=1`
+    ].jobs[0].steps[0].started_at = 'invalid';
+    await expect(check(f)).rejects.toThrow();
+  });
+  it('rejects producer identity changing during the analysis bracket', async () => {
+    const f = apiFixture();
+    const fetch = f.fetchSonar;
+    let reads = 0;
+    f.fetchSonar = path =>
+      path.startsWith('/api/project_analyses/search?') && ++reads === 2
+        ? { analyses: [{ ...f.analysis, buildString: 'gh-main-41-1' }] }
+        : fetch(path);
+    await expect(check(f)).rejects.toThrow();
   });
   it('does not skip the first cutover dispatch with a current Automatic Analysis record', async () => {
     const f = apiFixture();
@@ -282,6 +338,7 @@ describe('read-only main evidence', () => {
   });
   it('accepts successful catch-up scanner evidence after a token-driven merge', async () => {
     const f = apiFixture();
+    f.analysis.buildString = 'gh-catch-up-43-1';
     f.data[`${prefix}/actions/workflows/11/runs?branch=main&head_sha=${sha}&per_page=100&page=1`] =
       { total_count: 0, workflow_runs: [] };
     f.data[`${prefix}/actions/workflows/12/runs?branch=main&head_sha=${sha}&per_page=100&page=1`] =
@@ -313,7 +370,13 @@ describe('read-only main evidence', () => {
           status: 'completed',
           conclusion: 'success',
           steps: [
-            { name: 'Analyze current main with Sonar', status: 'completed', conclusion: 'success' }
+            {
+              name: 'Analyze current main with Sonar',
+              status: 'completed',
+              conclusion: 'success',
+              started_at: '2026-10-04T00:59:00Z',
+              completed_at: '2026-10-04T01:01:00Z'
+            }
           ]
         }
       ]
@@ -428,5 +491,25 @@ describe('main catch-up workflow boundaries', () => {
     expect(scanner.if).toBe(
       "steps.decision.outputs.scan == 'true' && steps.freshness.outputs.scan == 'true'"
     );
+  });
+  it('passes distinct catch-up run/attempt identifiers into the scanner', () => {
+    const scanner = workflow().jobs.catchup.steps.find(s => s.id === 'scan');
+    const render = (runId, runAttempt) =>
+      scanner.with.args
+        .replace(/\$\{\{([\s\S]*?)\}\}/g, (_, expression) =>
+          new Function('github', 'steps', 'format', `return (${expression});`)(
+            { run_id: runId, run_attempt: runAttempt },
+            { freshness: { outputs: { sha } } },
+            (pattern, ...values) => pattern.replace(/\{(\d+)\}/g, (_, index) => values[index])
+          )
+        )
+        .trim()
+        .split(/\s+/);
+    expect(render(43, 1)).toEqual([
+      '-Dsonar.branch.name=main',
+      '-Dsonar.scm.revision=' + sha,
+      '-Dsonar.buildString=gh-catch-up-43-1'
+    ]);
+    expect(render(43, 2).at(-1)).toBe('-Dsonar.buildString=gh-catch-up-43-2');
   });
 });

@@ -75,7 +75,10 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          args: -Dsonar.branch.name=main -Dsonar.scm.revision=${{ steps.freshness.outputs.sha }}
+          args: >-
+            -Dsonar.branch.name=main
+            -Dsonar.scm.revision=${{ steps.freshness.outputs.sha }}
+            -Dsonar.buildString=${{ format('gh-catch-up-{0}-{1}', github.run_id, github.run_attempt) }}
 
       - name: Surface validation or scanner failure
         if: failure()
