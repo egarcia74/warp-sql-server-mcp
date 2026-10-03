@@ -538,14 +538,13 @@ spec.loader.exec_module(module)
 kind = sys.argv[3]
 buffer = io.BytesIO()
 with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
-    archive.writestr('manifest.json', '{}')
+    archive.writestr('lcov.info' if kind == 'duplicate' else 'manifest.json', '{}')
     info = zipfile.ZipInfo('../lcov.info' if kind == 'traversal' else 'lcov.info')
     info.create_system = 3
     info.external_attr = (stat.S_IFLNK | 0o777 if kind == 'symlink' else stat.S_IFREG | 0o600) << 16
     info.compress_type = zipfile.ZIP_DEFLATED
     archive.writestr(info, 'x' * (10 * 1024 * 1024 + 1) if kind == 'bomb' else 'report')
     if kind == 'extra': archive.writestr('extra', 'bad')
-    if kind == 'duplicate': archive.writestr('lcov.info', 'duplicate')
 raw = buffer.getvalue()
 if kind == 'false-size':
     raw = bytearray(raw)
@@ -620,6 +619,8 @@ describe('bounded artifact ZIP extraction', () => {
     const { output, result } = runArchive(kind);
     expect(result.status).toBe(1);
     expect(result.stderr).not.toMatch(/FileNotFoundError|AttributeError|ModuleNotFoundError/);
+    if (kind === 'raw-oversize') expect(result.stderr).toMatch(/Raw artifact exceeds/);
+    if (kind === 'duplicate') expect(result.stderr).toMatch(/duplicate ZIP entry/);
     expect(readdirSync(output)).toEqual([]);
   });
   it('downloads the artifact ID and strips authorization on the storage request', () => {
