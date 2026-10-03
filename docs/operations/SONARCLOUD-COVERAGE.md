@@ -162,17 +162,21 @@ projectBaseDir: ''
 args: >-
   "-Dproject.settings=${{ runner.temp }}/sonar-project.properties"
   -Dsonar.pullrequest.key=${{ steps.final.outputs.prNumber }}
-  -Dsonar.pullrequest.branch=${{ steps.final.outputs.headRef }}
-  -Dsonar.pullrequest.base=${{ steps.final.outputs.baseRef }}
   -Dsonar.scm.revision=${{ steps.final.outputs.headSha }}
 ```
 
-On 2026-10-03 at 17:22:04 UTC, the retained local characterization passed against the actual
+The final validator writes branch/base values as Unicode escapes in the trusted settings file;
+they do not enter `with.args`. The current characterization verifies exactly three scanner
+arguments: the trusted settings path, PR number and revision. It also verifies literal branch/base
+decoding through Java properties and the scanner's property resolver, with `${` refs rejected.
+
+On 2026-10-03 at 17:22:04 UTC, the original local characterization passed against the actual
 immutable action bundle/core, with scanner process execution stubbed. Explicit empty input
 suppressed `sonar.projectBaseDir`; omitted/default input added `-Dsonar.projectBaseDir=.`.
-Trusted paths containing spaces remained one unquoted absolute settings argument, and all
-four PR/revision arguments were preserved. This confirms argument construction, not a real
-scanner import. The implementation's ignored SDD workspace retains the executable recipe:
+Trusted paths containing spaces remained one unquoted absolute settings argument. That historical
+version also preserved four PR/revision arguments, including branch/base; the current transport
+above supersedes it. These checks confirm local transport, not a real scanner import. The
+implementation's ignored SDD workspace retains the updated argument-characterization recipe:
 
 ```bash
 node .superpowers/sdd/2026-10-03-sonarcloud-vitest-coverage/verify-pinned-scanner.mjs
