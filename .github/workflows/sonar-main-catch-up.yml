@@ -1,0 +1,82 @@
+name: Sonar main catch-up
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * *'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  rejectRef:
+    if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-main manual dispatch
+        run: |
+          echo 'Sonar main catch-up must be dispatched on main.' >&2
+          exit 1
+
+  catchup:
+    name: Main coverage catch-up
+    if: vars.SONAR_CI_ENABLED == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: sonar-main
+      cancel-in-progress: false
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Check processed main coverage and CI evidence
+        id: decision
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/ci/sonar-main-catch-up.mjs check
+
+      - name: Install dependencies
+        if: steps.decision.outputs.scan == 'true'
+        run: npm ci --ignore-scripts
+
+      - name: Generate main coverage
+        if: steps.decision.outputs.scan == 'true'
+        run: npm run test:coverage
+
+      - name: Validate local LCOV report
+        if: steps.decision.outputs.scan == 'true'
+        run: node scripts/ci/sonar-lcov.mjs validate coverage/lcov.info
+
+      # Shared concurrency is not a freshness guarantee. Drift fails visibly;
+      # retry against current main. A push can still race this final API read.
+      - name: Recheck remote main immediately before submission
+        id: freshness
+        if: steps.decision.outputs.scan == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_EXPECTED_SHA: ${{ steps.decision.outputs.sha }}
+        run: node scripts/ci/sonar-main-catch-up.mjs fresh
+
+      - name: Analyze current main with Sonar
+        id: scan
+        if: steps.decision.outputs.scan == 'true' && steps.freshness.outputs.scan == 'true'
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: -Dsonar.branch.name=main -Dsonar.scm.revision=${{ steps.freshness.outputs.sha }}
+
+      - name: Surface validation or scanner failure
+        if: failure()
+        run: echo 'Main catch-up failed. Inspect evidence and retry on current main.' >> "$GITHUB_STEP_SUMMARY"
