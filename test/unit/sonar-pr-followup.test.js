@@ -413,6 +413,41 @@ describe('download and hostile source boundary', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).not.toContain('ATTACK');
   });
+  it('links the originating run even when API provenance fails, without reflecting its error', () => {
+    const root = temp(),
+      event = join(root, 'event.json'),
+      summary = join(root, 'summary.md'),
+      loader = join(root, 'offline.mjs');
+    writeFileSync(
+      event,
+      JSON.stringify({
+        repository: { id: 7, full_name: 'egarcia74/warp-sql-server-mcp' },
+        workflow_run: fixture().run
+      })
+    );
+    writeFileSync(
+      loader,
+      'globalThis.fetch = async () => { throw new Error("ATTACK <script> secret"); };'
+    );
+    const result = spawnSync(
+      process.execPath,
+      ['--import', loader, resolve('scripts/ci/sonar-pr-followup.mjs'), 'preflight', '42'],
+      {
+        env: {
+          ...scrubbedEnv(),
+          GITHUB_EVENT_PATH: event,
+          GITHUB_STEP_SUMMARY: summary,
+          RUNNER_TEMP: root
+        },
+        encoding: 'utf8'
+      }
+    );
+    expect(result.status).toBe(1);
+    expect(readFileSync(summary, 'utf8')).toContain(
+      'https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/42'
+    );
+    expect(readFileSync(summary, 'utf8') + result.stderr).not.toContain('ATTACK');
+  });
 });
 
 describe('privileged workflow boundary', () => {

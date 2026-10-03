@@ -350,11 +350,14 @@ async function main(args) {
     const fetchGithub = path =>
       requestJson('https://api.github.com', path, process.env.GITHUB_TOKEN);
     if (args[0] === 'preflight' && args.length === 2) {
-      requireThat(/^[1-9]\d*$/.test(args[1]), 'Invalid run ID');
+      requireThat(/^[1-9]\d*$/.test(args[1]) && id(Number(args[1])), 'Invalid run ID');
       const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
       requireThat(
         event.repository?.full_name === REPOSITORY && id(event.repository.id),
         'Wrong event repository'
+      );
+      summary(
+        `Origin: [CI run ${args[1]}](https://github.com/${REPOSITORY}/actions/runs/${args[1]}).`
       );
       const verdict = await resolveFollowup(Number(args[1]), fetchGithub, {
         eventRun: event.workflow_run
@@ -365,7 +368,7 @@ async function main(args) {
       );
       writeFileSync(statePath, JSON.stringify(verdict), { flag: 'wx', mode: 0o600 });
       summary(
-        `Origin: [CI run ${verdict.runId}](https://github.com/${REPOSITORY}/actions/runs/${verdict.runId}), [PR ${verdict.prNumber}](https://github.com/${REPOSITORY}/pull/${verdict.prNumber}).`
+        `Validated target: [PR ${verdict.prNumber}](https://github.com/${REPOSITORY}/pull/${verdict.prNumber}).`
       );
       await route(verdict, fetchGithub);
     } else if (args[0] === 'verify-download' && [2, 3].includes(args.length)) {
