@@ -14,7 +14,7 @@
 - ✅ **Security audit**: Runs `npm audit --audit-level=high` to check for vulnerabilities
 - ✅ **ESLint check**: Validates all JavaScript files with `npx eslint .`
 - ✅ **Prettier check**: Validates code formatting with `npx prettier --check`
-- ✅ **Markdown lint**: Validates all markdown files with `npx markdownlint-cli2`
+- ✅ **Markdown lint**: Validates all Markdown files with `npm run markdown:lint`
 - ✅ **Link checking**: Checks for dead links in markdown files
 
 _These happen automatically when you `git push` - push will be blocked if any fail!_
