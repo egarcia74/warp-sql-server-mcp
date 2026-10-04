@@ -105,6 +105,25 @@ describe('Sonar PR artifact provenance', () => {
     });
   });
 
+  it('accepts Git-valid plus and at-sign branch names without changing PR identity', () => {
+    const origin = validOrigin();
+    origin.eventRun.head_branch = 'feature+coverage@v2';
+    origin.apiRun.head_branch = 'feature+coverage@v2';
+    origin.associatedPrs[0].head.ref = 'feature+coverage@v2';
+    expect(verifyOrigin(origin)).toMatchObject({ headRef: 'feature+coverage@v2' });
+    expect(
+      createManifest({
+        runId: 42,
+        runAttempt: 2,
+        prNumber: 1403,
+        headRepositoryId: 20,
+        headSha: sha,
+        baseRef: 'release+coverage@v2',
+        lcovSha256: digest
+      })
+    ).toMatchObject({ baseRef: 'release+coverage@v2' });
+  });
+
   it('rejects an artifact from an old attempt', () => {
     const origin = validOrigin();
     origin.artifacts[0].name = 'sonar-pr-lcov-42-1';
@@ -259,6 +278,34 @@ describe('Sonar PR artifact provenance', () => {
         sourceRoot
       })
     ).toEqual({ headSha: sha, prNumber: 1403, sha256: manifest.lcovSha256 });
+  });
+
+  it('requires coverage for the shipped CLI when it is tracked', () => {
+    const sourceRoot = makeSourceRoot();
+    writeFileSync(join(sourceRoot, 'cli.js'), 'export {};\n');
+    const expected = verifyOrigin(validOrigin());
+    const trackedFiles = new Set(['index.js', 'cli.js', 'lib/config.js']);
+    const verifyReport = reportText =>
+      verifyDownloaded({
+        expected,
+        manifest: createManifest({
+          runId: 42,
+          runAttempt: 2,
+          prNumber: 1403,
+          headRepositoryId: 20,
+          headSha: sha,
+          baseRef: 'main',
+          lcovSha256: createHash('sha256').update(reportText).digest('hex')
+        }),
+        entries: ['manifest.json', 'lcov.info'],
+        reportText,
+        trackedFiles,
+        sourceRoot
+      });
+
+    expect(() => verifyReport(lcov)).toThrow(/coverage set/i);
+    const withCli = `${lcov}SF:cli.js\nDA:1,1\nend_of_record\n`;
+    expect(verifyReport(withCli)).toMatchObject({ headSha: sha, prNumber: 1403 });
   });
 
   it('rejects missing or duplicate measured source records', () => {

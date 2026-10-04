@@ -29,6 +29,12 @@ present SonarCloud setting. Confirm the project's **Administration → Analysis 
 the UI immediately before cutover. Do not alter the quality gate, rules, profiles, branch
 protection, Codecov policy, or test scope.
 
+The CI coverage metric is scoped to the shipped MCP server and CLI (`index.js`, `cli.js`, and
+`lib/**/*.js`). `sonar.sources=.` still indexes maintenance scripts and configuration for
+security and quality findings; `sonar.coverage.exclusions` removes only `scripts/**`,
+`eslint.config.js`, and `vitest.config.js` from the coverage denominator. Verify the first
+scanner-based analysis reports both line and branch measures without shrinking issue scope.
+
 ## Deploy and preflight with scanners disabled
 
 1. Land the coverage producer, guarded direct scan, privileged PR follow-up, and main catch-up

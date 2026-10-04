@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { URL } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import vitestConfig from '../../vitest.config.js';
 import { decideScan, isDirectScanEligible } from '../../scripts/ci/sonar-scan-guard.mjs';
 
 const sha = 'a'.repeat(40);
@@ -44,6 +45,15 @@ describe('trusted Sonar scanner workflow contract', () => {
     );
   });
 
+  it('measures shipped MCP entry points without excluding maintenance scripts from issue analysis', () => {
+    const config = properties('../../sonar-project.properties');
+    expect(vitestConfig.test.coverage.include).toEqual(['index.js', 'cli.js', 'lib/**/*.js']);
+    expect(config['sonar.exclusions']).toBe('test/docker/init-db.sql');
+    expect(config['sonar.coverage.exclusions']).toBe(
+      'scripts/**,eslint.config.js,vitest.config.js'
+    );
+  });
+
   it('passes the Sonar token only to a pinned scanner step behind the cutover switch', () => {
     const coverage = coverageJob();
     const scan = coverage.steps.find(step => step.name === 'Submit trusted Sonar analysis');
@@ -64,6 +74,13 @@ describe('trusted Sonar scanner workflow contract', () => {
     expect(checkout.with.ref).toContain('github.event.pull_request.head.sha');
     expect(checkout.with['fetch-depth']).toBe(0);
     expect(checkout.with['persist-credentials']).toBe(false);
+  });
+
+  it('retains pending coverage producers while serializing Sonar submissions', () => {
+    const concurrency = coverageJob().concurrency;
+    expect(concurrency.group).toContain('sonar-');
+    expect(concurrency['cancel-in-progress']).toBe(false);
+    expect(concurrency.queue).toBe('max');
   });
 
   it('allows only main push and same-repository non-Dependabot PRs', () => {

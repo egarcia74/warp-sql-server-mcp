@@ -893,6 +893,11 @@ Generated files:
 - **Production Validation**: 40 comprehensive integration tests validate all three security phases with live database
 - **🐳 Docker Testing**: Automated containerized SQL Server for zero-configuration testing
 
+The LCOV coverage report measures the shipped MCP server and command-line entry point:
+`index.js`, `cli.js`, and `lib/**/*.js`. SonarCloud still analyzes maintenance scripts and
+configuration for issues; its coverage-only exclusions keep those files out of the product
+coverage percentage.
+
 ### 🐳 **Docker Testing (Recommended for Development)**
 
 **Automated SQL Server Container Testing**: Complete testing environment in Docker containers for fast, consistent validation.

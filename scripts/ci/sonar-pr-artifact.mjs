@@ -7,7 +7,7 @@ import { scrubbedEnv } from './verify-publish-tree.mjs';
 
 const shaPattern = /^[a-f0-9]{40}$/i;
 const digestPattern = /^[a-f0-9]{64}$/i;
-const safeRefPattern = /^(?!-)(?!.*\.\.)(?!.*\/\/)[A-Za-z0-9._/-]+$/;
+const safeRefPattern = /^(?!-)(?!.*\.\.)(?!.*\/\/)[A-Za-z0-9._/@+-]+$/;
 const repositoryNamePattern = /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/;
 const maxArchiveBytes = 10 * 1024 * 1024;
 
@@ -30,6 +30,7 @@ function safeRef(value, label) {
   if (
     typeof value !== 'string' ||
     value.length > 255 ||
+    value === '@' ||
     !safeRefPattern.test(value) ||
     value.startsWith('/') ||
     value.endsWith('/') ||
@@ -214,7 +215,11 @@ export function verifyOrigin({
 }
 
 function requireSafeLcovSource(path, trackedFiles, sourceRoot) {
-  if (path !== 'index.js' && (!path.startsWith('lib/') || !path.endsWith('.js')))
+  if (
+    path !== 'index.js' &&
+    path !== 'cli.js' &&
+    (!path.startsWith('lib/') || !path.endsWith('.js'))
+  )
     throw new Error('LCOV source path outside measured scope');
   if (
     path.includes('..') ||
@@ -273,7 +278,9 @@ function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
     throw new Error('invalid LCOV report');
   if (!(trackedFiles instanceof Set)) throw new Error('missing tracked file set');
   const expectedSources = new Set(
-    [...trackedFiles].filter(path => path === 'index.js' || /^lib\/.*\.js$/.test(path))
+    [...trackedFiles].filter(
+      path => path === 'index.js' || path === 'cli.js' || /^lib\/.*\.js$/.test(path)
+    )
   );
   const seenSources = new Set();
   let hasData = false;
