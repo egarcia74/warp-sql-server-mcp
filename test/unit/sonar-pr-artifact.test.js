@@ -43,7 +43,7 @@ function validOrigin() {
     head_sha: sha,
     head_branch: 'fix/coverage',
     repository: { id: 10 },
-    head_repository: { id: 20 }
+    head_repository: { id: 20, full_name: 'forker/warp-sql-server-mcp' }
   };
   return {
     repositoryId: 10,
@@ -57,7 +57,11 @@ function validOrigin() {
         number: 1403,
         state: 'open',
         merged: false,
-        head: { sha, ref: 'fix/coverage', repo: { id: 20 } },
+        head: {
+          sha,
+          ref: 'fix/coverage',
+          repo: { id: 20, full_name: 'forker/warp-sql-server-mcp' }
+        },
         base: { ref: 'main' },
         user: { login: 'fork-user' }
       }
@@ -76,6 +80,11 @@ function validOrigin() {
 }
 
 describe('Sonar PR artifact provenance', () => {
+  it('rejects a head repository name that differs from the API or PR', () => {
+    const origin = validOrigin();
+    origin.associatedPrs[0].head.repo.full_name = 'someone-else/warp-sql-server-mcp';
+    expect(() => verifyOrigin(origin)).toThrow(/PR head does not match/i);
+  });
   it('binds a successful coverage attempt to exactly one open PR and artifact', () => {
     expect(verifyOrigin(validOrigin())).toMatchObject({
       runId: 42,
@@ -122,13 +131,20 @@ describe('Sonar PR artifact provenance', () => {
     const origin = validOrigin();
     origin.apiRun.head_repository.id = 10;
     origin.eventRun.head_repository.id = 10;
+    origin.apiRun.head_repository.full_name = 'egarcia74/warp-sql-server-mcp';
+    origin.eventRun.head_repository.full_name = 'egarcia74/warp-sql-server-mcp';
     origin.associatedPrs[0].head.repo.id = 10;
+    origin.associatedPrs[0].head.repo.full_name = 'egarcia74/warp-sql-server-mcp';
     origin.artifacts[0].workflow_run.head_repository_id = 10;
     origin.associatedPrs[0].user.login = 'dependabot[bot]';
     origin.associatedPrs[0].state = 'closed';
     origin.associatedPrs[0].merged = true;
     origin.associatedPrs[0].merge_commit_sha = 'd'.repeat(40);
-    expect(verifyOrigin(origin)).toEqual({ mergedDependabot: true, mergeSha: 'd'.repeat(40) });
+    expect(verifyOrigin(origin)).toEqual({
+      mergedDependabot: true,
+      mergeSha: 'd'.repeat(40),
+      prNumber: 1403
+    });
   });
 
   it('creates a manifest with only validated provenance fields', () => {

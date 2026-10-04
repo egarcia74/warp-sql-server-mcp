@@ -1,0 +1,84 @@
+name: Sonar PR Coverage Follow-up
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+# This workflow is privileged relative to a fork PR. It never executes PR code,
+# installs PR dependencies, or restores PR-writable caches. All scanner inputs
+# are checked against GitHub's API before SONAR_TOKEN reaches one scan step.
+jobs:
+  scan:
+    name: Validate and scan fork or Dependabot PR
+    if: vars.SONAR_CI_ENABLED == 'true' && github.event.workflow_run.event == 'pull_request' && (github.event.workflow_run.head_repository.id != github.event.repository.id || github.event.workflow_run.head_actor.login == 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout trusted main helpers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Preserve trusted scanner helpers
+        run: |
+          mkdir -m 700 "$RUNNER_TEMP/sonar-trusted"
+          cp -R scripts/ci scripts/lib "$RUNNER_TEMP/sonar-trusted/"
+          cp sonar-project.properties "$RUNNER_TEMP/sonar-trusted/sonar-project.properties"
+
+      - name: Validate originating run and PR
+        id: preflight
+        run: node "$RUNNER_TEMP/sonar-trusted/ci/sonar-pr-followup.mjs" preflight "$ORIGIN_RUN_ID"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ORIGIN_RUN_ID: ${{ github.event.workflow_run.id }}
+
+      - name: Download and inspect validated artifact
+        if: steps.preflight.outputs.scan == 'true'
+        run: python3 "$RUNNER_TEMP/sonar-trusted/ci/sonar-artifact-archive.py" download "$ARTIFACT_ID" "$ARCHIVE_DIGEST" "$RUNNER_TEMP/sonar-artifact"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.preflight.outputs.artifact_id }}
+          ARCHIVE_DIGEST: ${{ steps.preflight.outputs.archive_digest }}
+
+      - name: Checkout verified PR head
+        if: steps.preflight.outputs.scan == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          repository: ${{ steps.preflight.outputs.head_repo }}
+          ref: ${{ steps.preflight.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate checked-out source and LCOV
+        if: steps.preflight.outputs.scan == 'true'
+        id: verified
+        run: node "$RUNNER_TEMP/sonar-trusted/ci/sonar-pr-followup.mjs" verify-download "$RUNNER_TEMP/sonar-artifact"
+
+      - name: Recheck current PR before scanning
+        if: steps.verified.outputs.verified == 'true'
+        id: final_read
+        run: node "$RUNNER_TEMP/sonar-trusted/ci/sonar-pr-followup.mjs" final-check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      # A PR may change after this final read; the scanner is pinned to the
+      # previously verified head SHA, so it never scans a different revision.
+      - name: Submit isolated Sonar PR analysis
+        if: steps.final_read.outputs.scan == 'true'
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >-
+            -Dproject.settings=${{ runner.temp }}/sonar-trusted/sonar-project.properties
+            -Dsonar.javascript.lcov.reportPaths=${{ runner.temp }}/sonar-artifact/lcov.info
+            -Dsonar.pullrequest.key=${{ steps.preflight.outputs.pr_number }}
+            -Dsonar.pullrequest.branch=${{ steps.preflight.outputs.head_ref }}
+            -Dsonar.pullrequest.base=${{ steps.preflight.outputs.base_ref }}
+            -Dsonar.scm.revision=${{ steps.preflight.outputs.head_sha }}

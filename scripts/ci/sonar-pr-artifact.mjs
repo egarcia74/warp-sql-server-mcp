@@ -8,6 +8,7 @@ import { scrubbedEnv } from './verify-publish-tree.mjs';
 const shaPattern = /^[a-f0-9]{40}$/i;
 const digestPattern = /^[a-f0-9]{64}$/i;
 const safeRefPattern = /^(?!-)(?!.*\.\.)(?!.*\/\/)[A-Za-z0-9._/-]+$/;
+const repositoryNamePattern = /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/;
 const maxArchiveBytes = 10 * 1024 * 1024;
 
 function positiveInteger(value, label) {
@@ -76,6 +77,9 @@ export function verifyOrigin({
   const runAttempt = positiveInteger(eventRun?.run_attempt, 'event run attempt');
   const runSha = sha(eventRun?.head_sha, 'event run SHA');
   const headRepositoryId = positiveInteger(eventRun?.head_repository?.id, 'head repository ID');
+  const headRepositoryName = eventRun?.head_repository?.full_name;
+  if (typeof headRepositoryName !== 'string' || !repositoryNamePattern.test(headRepositoryName))
+    throw new Error('invalid head repository name');
   const fields = [
     'id',
     'workflow_id',
@@ -97,7 +101,8 @@ export function verifyOrigin({
     positiveInteger(eventRun.workflow_id, 'workflow ID') !== apiRun.workflow_id ||
     eventRun.repository?.id !== repoId ||
     apiRun.repository?.id !== repoId ||
-    apiRun.head_repository?.id !== headRepositoryId
+    apiRun.head_repository?.id !== headRepositoryId ||
+    apiRun.head_repository?.full_name !== headRepositoryName
   )
     throw new Error('workflow identity or repository mismatch');
   safeRef(eventRun.head_branch, 'run head ref');
@@ -119,6 +124,7 @@ export function verifyOrigin({
   const baseRef = safeRef(pr.base?.ref, 'PR base ref');
   if (
     pr.head?.repo?.id !== headRepositoryId ||
+    pr.head?.repo?.full_name !== headRepositoryName ||
     headSha !== runSha ||
     headRef !== eventRun.head_branch
   )
@@ -129,7 +135,7 @@ export function verifyOrigin({
     throw new Error('trusted same-repository PR does not use artifact follow-up');
   if (pr.state !== 'open') {
     if (isDependabot && pr.merged)
-      return { mergedDependabot: true, mergeSha: sha(pr.merge_commit_sha, 'merge SHA') };
+      return { mergedDependabot: true, mergeSha: sha(pr.merge_commit_sha, 'merge SHA'), prNumber };
     return { superseded: true };
   }
   if (!Array.isArray(artifacts)) throw new Error('missing artifacts');
@@ -162,6 +168,7 @@ export function verifyOrigin({
     runAttempt,
     prNumber,
     headRepositoryId,
+    headRepositoryName,
     headSha,
     headRef,
     baseRef,
