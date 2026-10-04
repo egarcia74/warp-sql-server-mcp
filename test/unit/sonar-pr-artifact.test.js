@@ -308,6 +308,32 @@ describe('Sonar PR artifact provenance', () => {
     expect(verifyReport(withCli)).toMatchObject({ headSha: sha, prNumber: 1403 });
   });
 
+  it('accepts an empty measured source record while requiring line data somewhere', () => {
+    const sourceRoot = makeSourceRoot();
+    writeFileSync(join(sourceRoot, 'lib/empty.js'), '\n');
+    const reportText = `${lcov}SF:lib/empty.js\nLF:0\nLH:0\nend_of_record\n`;
+    const expected = verifyOrigin(validOrigin());
+    const manifest = createManifest({
+      runId: 42,
+      runAttempt: 2,
+      prNumber: 1403,
+      headRepositoryId: 20,
+      headSha: sha,
+      baseRef: 'main',
+      lcovSha256: createHash('sha256').update(reportText).digest('hex')
+    });
+    expect(
+      verifyDownloaded({
+        expected,
+        manifest,
+        entries: ['manifest.json', 'lcov.info'],
+        reportText,
+        trackedFiles: new Set(['index.js', 'lib/config.js', 'lib/empty.js']),
+        sourceRoot
+      })
+    ).toMatchObject({ headSha: sha, prNumber: 1403 });
+  });
+
   it('rejects missing or duplicate measured source records', () => {
     const sourceRoot = makeSourceRoot();
     writeFileSync(join(sourceRoot, 'lib/other.js'), 'export {};\n');

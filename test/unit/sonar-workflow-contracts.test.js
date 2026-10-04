@@ -27,6 +27,13 @@ function coverageJob() {
   return workflow.jobs.coverage;
 }
 
+function forkFollowupJob() {
+  const workflow = parseYaml(
+    readFileSync(new URL('../../.github/workflows/sonar-pr-followup.yml', import.meta.url), 'utf8')
+  );
+  return workflow.jobs.scan;
+}
+
 describe('trusted Sonar scanner workflow contract', () => {
   it('keeps the existing T-SQL exclusion in both scanner scopes', () => {
     const config = properties('../../sonar-project.properties');
@@ -81,6 +88,20 @@ describe('trusted Sonar scanner workflow contract', () => {
     expect(concurrency.group).toContain('sonar-');
     expect(concurrency['cancel-in-progress']).toBe(false);
     expect(concurrency.queue).toBe('max');
+  });
+
+  it('retains every queued fork follow-up and scans with trusted compatible settings', () => {
+    const followup = forkFollowupJob();
+    const restore = followup.steps.find(
+      step => step.name === 'Restore trusted Sonar configuration'
+    );
+    const scan = followup.steps.find(step => step.name === 'Submit isolated Sonar PR analysis');
+    expect(followup.concurrency.queue).toBe('max');
+    expect(restore.if).toContain("steps.final_read.outputs.scan == 'true'");
+    expect(restore.run).toContain('rm -f -- sonar-project.properties');
+    expect(restore.run).toContain('"$RUNNER_TEMP/sonar-trusted/sonar-project.properties"');
+    expect(scan.with.args).not.toContain('project.settings');
+    expect(scan.with.args).toContain('sonar.working.directory=');
   });
 
   it('allows only main push and same-repository non-Dependabot PRs', () => {

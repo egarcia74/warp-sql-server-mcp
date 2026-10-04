@@ -286,6 +286,8 @@ function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
   let hasData = false;
   let inRecord = false;
   let recordData = false;
+  let zeroLineRecord = false;
+  let zeroHitRecord = false;
   for (const line of reportText.split(/\r?\n/)) {
     if (line === '') continue;
     if (line.startsWith('SF:')) {
@@ -293,13 +295,18 @@ function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
       addLcovSource(line, seenSources, trackedFiles, sourceRoot);
       inRecord = true;
       recordData = false;
+      zeroLineRecord = false;
+      zeroHitRecord = false;
     } else if (line === 'end_of_record') {
-      if (!inRecord || !recordData) throw new Error('incomplete LCOV record');
+      if (!inRecord || (!recordData && !(zeroLineRecord && zeroHitRecord)))
+        throw new Error('incomplete LCOV record');
       inRecord = false;
     } else {
       const isData = isLcovDataLine(line, inRecord);
       recordData ||= isData;
       hasData ||= isData;
+      zeroLineRecord ||= line === 'LF:0';
+      zeroHitRecord ||= line === 'LH:0';
     }
   }
   requireCompleteLcov({ inRecord, hasData, seenSources, expectedSources });

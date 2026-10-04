@@ -333,6 +333,7 @@ describe('read-only Sonar PR follow-up', () => {
     expect(job.concurrency.group).toContain('github.event.workflow_run.head_repository.id');
     expect(job.concurrency.group).toContain('github.event.workflow_run.head_branch');
     expect(job.concurrency['cancel-in-progress']).toBe(false);
+    expect(job.concurrency.queue).toBe('max');
     expect(job.permissions).toEqual({ actions: 'read', contents: 'read', 'pull-requests': 'read' });
     expect(job.env ?? {}).not.toHaveProperty('SONAR_TOKEN');
     const steps = job.steps;
@@ -343,16 +344,21 @@ describe('read-only Sonar PR follow-up', () => {
     expect(untrustedCheckout).toBeGreaterThan(trustedCopy);
     expect(scannerIndex).toBeGreaterThan(untrustedCheckout);
     for (const step of steps.slice(untrustedCheckout + 1, scannerIndex)) {
-      expect(step.run).toMatch(/^node "\$RUNNER_TEMP\/sonar-trusted\/ci\/sonar-pr-followup\.mjs" /);
+      if (step.name === 'Restore trusted Sonar configuration') {
+        expect(step.run).toContain('rm -f -- sonar-project.properties');
+        expect(step.run).toContain('"$RUNNER_TEMP/sonar-trusted/sonar-project.properties"');
+      } else {
+        expect(step.run).toMatch(
+          /^node "\$RUNNER_TEMP\/sonar-trusted\/ci\/sonar-pr-followup\.mjs" /
+        );
+      }
       expect(step.env ?? {}).not.toHaveProperty('SONAR_TOKEN');
     }
     expect(steps.some(step => /npm (?:ci|install|run|test)/.test(step.run ?? ''))).toBe(false);
     expect(steps.some(step => String(step.uses ?? '').includes('cache'))).toBe(false);
     const scanner = steps.find(step => step.name === 'Submit isolated Sonar PR analysis');
     expect(scanner.env).toHaveProperty('SONAR_TOKEN');
-    expect(scanner.with.args).toContain(
-      '-Dproject.settings=${{ runner.temp }}/sonar-trusted/sonar-project.properties'
-    );
+    expect(scanner.with.args).not.toContain('project.settings');
     expect(scanner.with.args).toContain(
       '-Dsonar.working.directory=${{ runner.temp }}/sonar-working'
     );

@@ -18,6 +18,7 @@ jobs:
     concurrency:
       group: sonar-pr-followup-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}
       cancel-in-progress: false
+      queue: max
     permissions:
       actions: read
       contents: read
@@ -72,6 +73,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Restore trusted Sonar configuration
+        if: steps.final_read.outputs.scan == 'true'
+        run: |
+          rm -f -- sonar-project.properties
+          cp -- "$RUNNER_TEMP/sonar-trusted/sonar-project.properties" sonar-project.properties
+
       # A PR may change after this final read; the scanner is pinned to the
       # previously verified head SHA, so it never scans a different revision.
       - name: Submit isolated Sonar PR analysis
@@ -81,7 +88,6 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >-
-            -Dproject.settings=${{ runner.temp }}/sonar-trusted/sonar-project.properties
             -Dsonar.working.directory=${{ runner.temp }}/sonar-working
             -Dsonar.javascript.lcov.reportPaths=${{ runner.temp }}/sonar-artifact/lcov.info
             -Dsonar.pullrequest.key=${{ steps.preflight.outputs.pr_number }}

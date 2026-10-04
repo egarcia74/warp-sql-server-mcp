@@ -48,12 +48,13 @@ scanner-based analysis reports both line and branch measures without shrinking i
    job, not a required PR check. Hold manual fork merges until it passes.
    The two checkouts in this `workflow_run` may be flagged by `githubactions:S7631`. The first
    explicitly checks out trusted `main`. The second checks out a verified fork SHA only as
-   **source data** for static analysis. After that checkout, the only shell commands invoke
-   previously copied trusted helpers from `$RUNNER_TEMP`; there is no dependency install,
+   **source data** for static analysis. After that checkout, the shell commands invoke
+   previously copied trusted helpers from `$RUNNER_TEMP` and replace the PR's scanner
+   configuration with the trusted copy; there is no dependency install,
    source script, PR-writable cache, submodule checkout, or retained Git credential. The helper
    rejects symlink and submodule entries in the verified checkout's Git index. The pinned scanner
-   receives `SONAR_TOKEN` only in its own step and uses trusted absolute paths for both
-   `project.settings` and its temporary working directory. Do not classify the warning as
+   receives `SONAR_TOKEN` only in its own step and uses a trusted scanner configuration and
+   absolute path for its temporary working directory. Do not classify the warning as
    harmless if any of those boundaries change; re-review the workflow and rehearse a hostile
    fork before cutover.
 3. Prove a real `coverage/lcov.info` is generated and the existing Codecov upload receives it.
