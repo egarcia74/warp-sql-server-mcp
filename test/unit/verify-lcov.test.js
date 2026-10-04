@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -8,12 +8,16 @@ import { fileURLToPath, URL } from 'node:url';
 const script = new URL('../../scripts/ci/verify-lcov.mjs', import.meta.url);
 const temporaryDirectories = [];
 
-function verify(contents) {
+function verify(contents, args = []) {
   const directory = mkdtempSync(join(tmpdir(), 'wssm-lcov-'));
   temporaryDirectories.push(directory);
-  const report = join(directory, 'lcov.info');
+  mkdirSync(join(directory, 'coverage'));
+  const report = join(directory, 'coverage', 'lcov.info');
   if (contents !== undefined) writeFileSync(report, contents);
-  return spawnSync(process.execPath, [fileURLToPath(script), report], { encoding: 'utf8' });
+  return spawnSync(process.execPath, [fileURLToPath(script), ...args], {
+    cwd: directory,
+    encoding: 'utf8'
+  });
 }
 
 afterEach(() => {
@@ -21,56 +25,42 @@ afterEach(() => {
 });
 
 describe('LCOV report verification', () => {
-  it('rejects a missing report', () => {
-    const result = verify();
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('LCOV report');
-  });
-
-  it('rejects an empty report', () => {
-    const result = verify('');
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('LCOV report');
-  });
-
-  it('rejects a report with no source-file coverage records', () => {
-    const result = verify('TN:\n');
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('LCOV report');
-  });
-
-  it('rejects an incomplete source-file record', () => {
-    const result = verify('SF:lib/example.js\nDA:1,1\n');
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('LCOV report');
-  });
-
-  it('accepts a report with a source-file coverage record', () => {
-    const result = verify('TN:\nSF:lib/example.js\nDA:1,1\nend_of_record\n');
-    expect(result.status).toBe(0);
-  });
-
-  it('rejects a malformed record after a valid one', () => {
-    const result = verify(
+  it.each([
+    ['missing report', undefined],
+    ['empty report', ''],
+    ['no source-file records', 'TN:\n'],
+    ['incomplete source-file record', 'SF:lib/example.js\nDA:1,1\n'],
+    [
+      'malformed later record',
       'SF:lib/valid.js\nDA:1,1\nend_of_record\nSF:lib/broken.js\nDA:broken\nend_of_record\n'
-    );
+    ],
+    ['non-numeric coverage total', 'SF:lib/example.js\nDA:1,1\nLF:not-a-number\nend_of_record\n'],
+    ['zero line number', 'SF:lib/example.js\nDA:0,1\nend_of_record\n'],
+    ['leading junk', 'junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n'],
+    ['trailing junk', 'SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n']
+  ])('rejects %s', (_description, contents) => {
+    const result = verify(contents);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('LCOV report');
+  });
+
+  it('rejects a caller-supplied report path outside the fixed coverage location', () => {
+    const externalDirectory = mkdtempSync(join(tmpdir(), 'wssm-lcov-external-'));
+    temporaryDirectories.push(externalDirectory);
+    const externalReport = join(externalDirectory, 'lcov.info');
+    writeFileSync(externalReport, 'SF:lib/example.js\nDA:1,1\nend_of_record\n');
+    const result = verify(undefined, [externalReport]);
     expect(result.status).toBe(1);
   });
 
-  it('rejects malformed coverage counts', () => {
-    expect(verify('SF:lib/example.js\nDA:1,1\nLF:not-a-number\nend_of_record\n').status).toBe(1);
-    expect(verify('SF:lib/example.js\nDA:0,1\nend_of_record\n').status).toBe(1);
-  });
-
-  it('rejects content outside coverage records', () => {
-    expect(verify('junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n').status).toBe(1);
-    expect(verify('SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n').status).toBe(1);
-  });
-
-  it('accepts multiple complete source-file records', () => {
-    const result = verify(
+  it.each([
+    ['one source record', 'TN:\nSF:lib/example.js\nDA:1,1\nend_of_record\n'],
+    [
+      'multiple source records',
       'TN:\nSF:lib/one.js\nDA:1,0\nend_of_record\nTN:\nSF:lib/two.js\nDA:2,1\nend_of_record\n'
-    );
+    ]
+  ])('accepts %s', (_description, contents) => {
+    const result = verify(contents);
     expect(result.status).toBe(0);
   });
 });

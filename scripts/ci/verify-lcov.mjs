@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 
-const reportPath = process.argv[2] ?? 'coverage/lcov.info';
+const reportPath = 'coverage/lcov.info';
 
 try {
+  if (process.argv.length > 2) throw new Error('report path arguments are not supported');
   const report = readFileSync(reportPath, 'utf8');
   let hasSource = false;
   let hasData = false;
