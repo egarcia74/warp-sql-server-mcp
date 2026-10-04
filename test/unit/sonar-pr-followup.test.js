@@ -4,6 +4,7 @@ import { URL } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import {
   decideFollowupFinal,
+  formatFailureSummary,
   resolveFollowup,
   verifyContainingMainCoverage
 } from '../../scripts/ci/sonar-pr-followup.mjs';
@@ -185,6 +186,40 @@ describe('read-only Sonar PR follow-up', () => {
     });
   });
 
+  it('accepts a containing main analysis when GitHub truncates the compare commits list', () => {
+    const analysisSha = 'd'.repeat(40);
+    const result = verifyContainingMainCoverage({
+      mergeSha,
+      analysis: { revision: analysisSha, date: '2026-10-04T06:11:39+0000' },
+      measures: {
+        component: {
+          measures: [
+            { metric: 'line_coverage', value: '72.5' },
+            { metric: 'branch_coverage', value: '61.0' }
+          ]
+        }
+      },
+      comparison: {
+        status: 'ahead',
+        base_commit: { sha: mergeSha },
+        merge_base_commit: { sha: mergeSha },
+        commits: Array.from({ length: 250 }, () => ({ sha: 'e'.repeat(40) }))
+      }
+    });
+    expect(result).toMatchObject({ verified: true, revision: analysisSha });
+  });
+
+  it('writes only fixed safe links in failure summaries', () => {
+    expect(formatFailureSummary({ runId: 42, prNumber: 1403 })).toContain(
+      'https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/42'
+    );
+    expect(formatFailureSummary({ runId: 42, prNumber: 1403 })).toContain(
+      'https://github.com/egarcia74/warp-sql-server-mcp/pull/1403'
+    );
+    expect(formatFailureSummary({ runId: 42, prNumber: '<script>' })).not.toContain('<script>');
+    expect(formatFailureSummary({ runId: '<script>', prNumber: 1403 })).not.toContain('<script>');
+  });
+
   it('does not accept a non-containing or malformed main analysis', () => {
     const analysisSha = 'd'.repeat(40);
     const analysis = { revision: analysisSha, date: '2026-10-04T06:11:39+0000' };
@@ -297,5 +332,9 @@ describe('read-only Sonar PR follow-up', () => {
     expect(scanner.with.args).toContain(
       '-Dsonar.scm.revision=${{ steps.preflight.outputs.head_sha }}'
     );
+    const failureReport = steps.find(step => step.name === 'Report failed follow-up');
+    expect(failureReport.if).toContain('failure()');
+    expect(failureReport.run).toContain('report-failure');
+    expect(failureReport.run).toMatch(/&& node .*report-failure.*; then\s+exit 0/);
   });
 });

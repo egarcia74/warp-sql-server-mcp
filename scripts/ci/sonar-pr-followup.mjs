@@ -92,9 +92,7 @@ export function verifyContainingMainCoverage({ mergeSha, analysis, measures, com
   const comparisonContainsMerge =
     comparison?.base_commit?.sha === mergeSha &&
     ((comparison.status === 'identical' && revision === mergeSha) ||
-      (comparison.status === 'ahead' &&
-        comparison.merge_base_commit?.sha === mergeSha &&
-        comparison.commits?.at(-1)?.sha === revision));
+      (comparison.status === 'ahead' && comparison.merge_base_commit?.sha === mergeSha));
   if (!comparisonContainsMerge)
     return { verified: false, reason: 'main analysis does not contain merge', revision };
   if (!Array.isArray(measures?.component?.measures))
@@ -193,6 +191,18 @@ function summary(message) {
   console.log(message);
 }
 
+export function formatFailureSummary({ runId, prNumber }) {
+  const runLink =
+    Number.isSafeInteger(runId) && runId > 0
+      ? `[originating CI run](https://github.com/${repository}/actions/runs/${runId})`
+      : 'originating CI run';
+  const prLink =
+    Number.isSafeInteger(prNumber) && prNumber > 0
+      ? ` for [PR #${prNumber}](https://github.com/${repository}/pull/${prNumber})`
+      : '';
+  return `Sonar PR coverage follow-up failed${prLink}; inspect the failed job and ${runLink}. No scanner success is claimed.`;
+}
+
 function verdictPath() {
   const path =
     process.env.SONAR_VERDICT_PATH ??
@@ -204,6 +214,17 @@ function verdictPath() {
 function readVerdict() {
   const path = verdictPath();
   return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function reportFailure(runId) {
+  positiveInteger(runId, 'run ID');
+  let prNumber;
+  try {
+    prNumber = readVerdict().prNumber;
+  } catch {
+    // A preflight failure has no validated PR yet.
+  }
+  summary(formatFailureSummary({ runId, prNumber }));
 }
 
 async function preflight(runId) {
@@ -277,6 +298,8 @@ async function main() {
   if (mode === 'preflight' && /^[1-9]\d*$/.test(argument ?? '')) return preflight(Number(argument));
   if (mode === 'verify-download' && argument) return verifyDownload(argument);
   if (mode === 'final-check' && !argument) return finalCheck();
+  if (mode === 'report-failure' && /^[1-9]\d*$/.test(argument ?? ''))
+    return reportFailure(Number(argument));
   throw new Error('invalid Sonar follow-up command');
 }
 

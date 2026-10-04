@@ -111,7 +111,6 @@ describe('Sonar PR artifact provenance', () => {
     ['old coverage job', origin => (origin.attemptJobs[0].run_attempt = 1)],
     ['duplicate artifact', origin => origin.artifacts.push(clone(origin.artifacts[0]))],
     ['ambiguous PR', origin => origin.associatedPrs.push(clone(origin.associatedPrs[0]))],
-    ['wrong PR head SHA', origin => (origin.associatedPrs[0].head.sha = 'c'.repeat(40))],
     ['wrong PR head repository', origin => (origin.associatedPrs[0].head.repo.id = 21)],
     ['invalid digest', origin => (origin.artifacts[0].digest = 'sha256:xyz')],
     ['unsafe ref', origin => (origin.associatedPrs[0].head.ref = 'evil\n-Dsonar.projectKey=other')]
@@ -124,6 +123,19 @@ describe('Sonar PR artifact provenance', () => {
   it('marks a stale fork PR as superseded instead of scanning it', () => {
     const origin = validOrigin();
     origin.associatedPrs[0].state = 'closed';
+    expect(verifyOrigin(origin)).toEqual({ superseded: true });
+  });
+
+  it('marks a newer head of the same fork PR as superseded', () => {
+    const origin = validOrigin();
+    origin.associatedPrs[0].head.sha = 'c'.repeat(40);
+    expect(verifyOrigin(origin)).toEqual({ superseded: true });
+  });
+
+  it('marks a closed fork with deleted head metadata as superseded', () => {
+    const origin = validOrigin();
+    origin.associatedPrs[0].state = 'closed';
+    origin.associatedPrs[0].head.repo = null;
     expect(verifyOrigin(origin)).toEqual({ superseded: true });
   });
 

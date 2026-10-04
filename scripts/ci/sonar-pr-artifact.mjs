@@ -119,25 +119,21 @@ export function verifyOrigin({
     throw new Error('ambiguous or missing PR association');
   const pr = associatedPrs[0];
   const prNumber = positiveInteger(pr.number, 'PR number');
-  const headSha = sha(pr.head?.sha, 'PR head SHA');
-  const headRef = safeRef(pr.head?.ref, 'PR head ref');
-  const baseRef = safeRef(pr.base?.ref, 'PR base ref');
-  if (
-    pr.head?.repo?.id !== headRepositoryId ||
-    pr.head?.repo?.full_name !== headRepositoryName ||
-    headSha !== runSha ||
-    headRef !== eventRun.head_branch
-  )
-    throw new Error('PR head does not match workflow run');
-
   const isDependabot = pr.user?.login === 'dependabot[bot]';
   if (headRepositoryId === repoId && !isDependabot)
     throw new Error('trusted same-repository PR does not use artifact follow-up');
-  if (pr.state !== 'open') {
+  if (!['open', 'closed'].includes(pr.state)) throw new Error('invalid PR state');
+  if (pr.state === 'closed') {
     if (isDependabot && pr.merged)
       return { mergedDependabot: true, mergeSha: sha(pr.merge_commit_sha, 'merge SHA'), prNumber };
     return { superseded: true };
   }
+  const headSha = sha(pr.head?.sha, 'PR head SHA');
+  const headRef = safeRef(pr.head?.ref, 'PR head ref');
+  const baseRef = safeRef(pr.base?.ref, 'PR base ref');
+  if (pr.head?.repo?.id !== headRepositoryId || pr.head?.repo?.full_name !== headRepositoryName)
+    throw new Error('PR head does not match workflow run repository');
+  if (headSha !== runSha || headRef !== eventRun.head_branch) return { superseded: true };
   if (!Array.isArray(artifacts)) throw new Error('missing artifacts');
   const artifactName = `sonar-pr-lcov-${runId}-${runAttempt}`;
   const matching = artifacts.filter(artifact => artifact?.name === artifactName);

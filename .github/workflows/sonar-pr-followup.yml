@@ -82,3 +82,17 @@ jobs:
             -Dsonar.pullrequest.branch=${{ steps.preflight.outputs.head_ref }}
             -Dsonar.pullrequest.base=${{ steps.preflight.outputs.base_ref }}
             -Dsonar.scm.revision=${{ steps.preflight.outputs.head_sha }}
+
+      - name: Report failed follow-up
+        if: ${{ failure() }}
+        env:
+          ORIGIN_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ -f "$RUNNER_TEMP/sonar-trusted/ci/sonar-pr-followup.mjs" ] && node "$RUNNER_TEMP/sonar-trusted/ci/sonar-pr-followup.mjs" report-failure "$ORIGIN_RUN_ID"; then
+            exit 0
+          fi
+          if [[ "$ORIGIN_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            printf 'Sonar PR coverage follow-up failed; inspect the failed job and [originating CI run](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/%s). No scanner success is claimed.\n' "$ORIGIN_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf 'Sonar PR coverage follow-up failed; inspect the failed job and originating CI run. No scanner success is claimed.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
