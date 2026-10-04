@@ -124,6 +124,28 @@ describe('Sonar PR artifact provenance', () => {
     ).toMatchObject({ baseRef: 'release+coverage@v2' });
   });
 
+  it.each(['feature!coverage', 'feature=coverage', 'feature,coverage', 'feature$(id)'])(
+    'accepts the Git-valid literal ref %s',
+    ref => {
+      const origin = validOrigin();
+      origin.eventRun.head_branch = ref;
+      origin.apiRun.head_branch = ref;
+      origin.associatedPrs[0].head.ref = ref;
+      expect(verifyOrigin(origin)).toMatchObject({ headRef: ref });
+      expect(
+        createManifest({
+          runId: 42,
+          runAttempt: 2,
+          prNumber: 1403,
+          headRepositoryId: 20,
+          headSha: sha,
+          baseRef: ref,
+          lcovSha256: digest
+        })
+      ).toMatchObject({ baseRef: ref });
+    }
+  );
+
   it('rejects an artifact from an old attempt', () => {
     const origin = validOrigin();
     origin.artifacts[0].name = 'sonar-pr-lcov-42-1';

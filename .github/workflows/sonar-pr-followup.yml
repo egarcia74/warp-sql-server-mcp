@@ -75,9 +75,13 @@ jobs:
 
       - name: Restore trusted Sonar configuration
         if: steps.final_read.outputs.scan == 'true'
+        env:
+          PR_HEAD_REF: ${{ steps.preflight.outputs.head_ref }}
+          PR_BASE_REF: ${{ steps.preflight.outputs.base_ref }}
         run: |
           rm -f -- sonar-project.properties
           cp -- "$RUNNER_TEMP/sonar-trusted/sonar-project.properties" sonar-project.properties
+          printf 'sonar.pullrequest.branch=%s\nsonar.pullrequest.base=%s\n' "$PR_HEAD_REF" "$PR_BASE_REF" >> sonar-project.properties
 
       # A PR may change after this final read; the scanner is pinned to the
       # previously verified head SHA, so it never scans a different revision.
@@ -91,8 +95,6 @@ jobs:
             -Dsonar.working.directory=${{ runner.temp }}/sonar-working
             -Dsonar.javascript.lcov.reportPaths=${{ runner.temp }}/sonar-artifact/lcov.info
             -Dsonar.pullrequest.key=${{ steps.preflight.outputs.pr_number }}
-            -Dsonar.pullrequest.branch=${{ steps.preflight.outputs.head_ref }}
-            -Dsonar.pullrequest.base=${{ steps.preflight.outputs.base_ref }}
             -Dsonar.scm.revision=${{ steps.preflight.outputs.head_sha }}
 
       - name: Report failed follow-up

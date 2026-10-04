@@ -100,7 +100,13 @@ describe('trusted Sonar scanner workflow contract', () => {
     expect(restore.if).toContain("steps.final_read.outputs.scan == 'true'");
     expect(restore.run).toContain('rm -f -- sonar-project.properties');
     expect(restore.run).toContain('"$RUNNER_TEMP/sonar-trusted/sonar-project.properties"');
+    expect(restore.run).toContain('"$PR_HEAD_REF"');
+    expect(restore.run).toContain('"$PR_BASE_REF"');
+    expect(restore.env.PR_HEAD_REF).toContain('steps.preflight.outputs.head_ref');
+    expect(restore.env.PR_BASE_REF).toContain('steps.preflight.outputs.base_ref');
     expect(scan.with.args).not.toContain('project.settings');
+    expect(scan.with.args).not.toContain('sonar.pullrequest.branch');
+    expect(scan.with.args).not.toContain('sonar.pullrequest.base');
     expect(scan.with.args).toContain('sonar.working.directory=');
   });
 

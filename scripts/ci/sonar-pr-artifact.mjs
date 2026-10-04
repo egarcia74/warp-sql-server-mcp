@@ -7,7 +7,6 @@ import { scrubbedEnv } from './verify-publish-tree.mjs';
 
 const shaPattern = /^[a-f0-9]{40}$/i;
 const digestPattern = /^[a-f0-9]{64}$/i;
-const safeRefPattern = /^(?!-)(?!.*\.\.)(?!.*\/\/)[A-Za-z0-9._/@+-]+$/;
 const repositoryNamePattern = /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/;
 const maxArchiveBytes = 10 * 1024 * 1024;
 
@@ -29,14 +28,20 @@ function digest(value, label) {
 function safeRef(value, label) {
   if (
     typeof value !== 'string' ||
+    value.length === 0 ||
     value.length > 255 ||
     value === '@' ||
-    !safeRefPattern.test(value) ||
-    value.startsWith('/') ||
-    value.endsWith('/') ||
-    value.endsWith('.')
+    value.startsWith('-')
   )
     throw new Error(`invalid ${label}`);
+  try {
+    execFileSync('/usr/bin/git', ['check-ref-format', `refs/heads/${value}`], {
+      env: scrubbedEnv(),
+      stdio: 'ignore'
+    });
+  } catch {
+    throw new Error(`invalid ${label}`);
+  }
   return value;
 }
 
