@@ -269,6 +269,11 @@ function requireCompleteLcov({ inRecord, hasData, seenSources, expectedSources }
     throw new Error('incomplete LCOV coverage set');
 }
 
+function requireCompleteLcovRecord({ inRecord, recordData, zeroLineRecord, zeroHitRecord }) {
+  if (!inRecord || (!recordData && !(zeroLineRecord && zeroHitRecord)))
+    throw new Error('incomplete LCOV record');
+}
+
 function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
   if (
     typeof reportText !== 'string' ||
@@ -298,8 +303,7 @@ function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
       zeroLineRecord = false;
       zeroHitRecord = false;
     } else if (line === 'end_of_record') {
-      if (!inRecord || (!recordData && !(zeroLineRecord && zeroHitRecord)))
-        throw new Error('incomplete LCOV record');
+      requireCompleteLcovRecord({ inRecord, recordData, zeroLineRecord, zeroHitRecord });
       inRecord = false;
     } else {
       const isData = isLcovDataLine(line, inRecord);
