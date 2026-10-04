@@ -43,7 +43,12 @@ function extract(entries, expectedDigest) {
   const { archive, directory } = makeArchive(entries);
   const destination = join(directory, 'extracted');
   const digest = expectedDigest ?? createHash('sha256').update(readFileSync(archive)).digest('hex');
-  const result = spawnSync('python3', [script, 'extract', archive, digest, destination], {
+  const harness = `import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('sonar_archive', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.extract_archive(pathlib.Path(sys.argv[2]).read_bytes(), sys.argv[3], sys.argv[4])`;
+  const result = spawnSync('python3', ['-B', '-c', harness, script, archive, digest, destination], {
     encoding: 'utf8'
   });
   return { ...result, destination };
@@ -58,6 +63,18 @@ describe('bounded Sonar artifact archive extraction', () => {
     { name: 'manifest.json', data: manifest },
     { name: 'lcov.info', data: report }
   ];
+
+  it('exposes no command-line mode for opening an arbitrary archive path', () => {
+    const result = spawnSync(
+      'python3',
+      [script, 'extract', '/tmp/other.zip', '0'.repeat(64), '/tmp/output'],
+      {
+        encoding: 'utf8'
+      }
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/usage/i);
+  });
 
   it('extracts only the expected two regular files after digest verification', () => {
     const result = extract(validEntries);

@@ -220,6 +220,15 @@ describe('read-only Sonar PR follow-up', () => {
     expect(formatFailureSummary({ runId: '<script>', prNumber: 1403 })).not.toContain('<script>');
   });
 
+  it('does not echo verdict-file values into runner logs', () => {
+    const source = readFileSync(
+      new URL('../../scripts/ci/sonar-pr-followup.mjs', import.meta.url),
+      'utf8'
+    );
+    expect(source).not.toContain('console.log(message)');
+    expect(source).not.toContain('LCOV validated for PR #${expected.prNumber}');
+  });
+
   it('does not accept a non-containing or malformed main analysis', () => {
     const analysisSha = 'd'.repeat(40);
     const analysis = { revision: analysisSha, date: '2026-10-04T06:11:39+0000' };
@@ -312,6 +321,11 @@ describe('read-only Sonar PR follow-up', () => {
     );
     const job = workflow.jobs.scan;
     expect(workflow.on.workflow_run.workflows).toEqual(['CI']);
+    expect(job.if).toContain("github.event.workflow_run.event == 'pull_request'");
+    expect(job.if).not.toContain('head_actor');
+    expect(job.concurrency.group).toContain('github.event.workflow_run.head_repository.id');
+    expect(job.concurrency.group).toContain('github.event.workflow_run.head_branch');
+    expect(job.concurrency['cancel-in-progress']).toBe(false);
     expect(job.permissions).toEqual({ actions: 'read', contents: 'read', 'pull-requests': 'read' });
     expect(job.env ?? {}).not.toHaveProperty('SONAR_TOKEN');
     const steps = job.steps;

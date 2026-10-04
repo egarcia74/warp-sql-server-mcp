@@ -37,10 +37,7 @@ class SafeRedirect(urllib.request.HTTPRedirectHandler):
             parsed.scheme != "https"
             or parsed.username
             or parsed.password
-            or not (
-                host.endswith(".githubusercontent.com")
-                or host.endswith(".blob.core.windows.net")
-            )
+            or not host.endswith((".githubusercontent.com", ".blob.core.windows.net"))
         ):
             raise ValueError("unsafe artifact redirect")
         # GitHub's bearer token must never follow a redirect to blob storage.
@@ -48,10 +45,10 @@ class SafeRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def download_artifact(artifact_id):
-    if re.fullmatch(r"[1-9][0-9]*", artifact_id) is None:
+    if re.fullmatch(r"[1-9]\d*", artifact_id, flags=re.ASCII) is None:
         raise ValueError("invalid artifact ID")
-    repository = os.environ.get("GITHUB_REPOSITORY", "")
-    if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None:
+    repository = "egarcia74/warp-sql-server-mcp"
+    if os.environ.get("GITHUB_REPOSITORY") != repository:
         raise ValueError("invalid repository identity")
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:
@@ -70,14 +67,10 @@ def download_artifact(artifact_id):
         return bounded_read(response)
 
 
-def extract_archive(raw, expected_digest, destination):
-    actual_digest = hashlib.sha256(raw).hexdigest()
-    if not hmac.compare_digest(actual_digest, validate_digest(expected_digest)):
-        raise ValueError("archive digest mismatch")
+def read_verified_entries(raw):
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
         infos = archive.infolist()
-        names = [info.filename for info in infos]
-        if len(names) != 2 or set(names) != EXPECTED_FILES:
+        if len(infos) != 2 or {info.filename for info in infos} != EXPECTED_FILES:
             raise ValueError("unexpected archive entries")
         total_size = 0
         files = {}
@@ -97,6 +90,14 @@ def extract_archive(raw, expected_digest, destination):
             if len(data) != info.file_size:
                 raise ValueError("archive entry length mismatch")
             files[info.filename] = data
+    return files
+
+
+def extract_archive(raw, expected_digest, destination):
+    actual_digest = hashlib.sha256(raw).hexdigest()
+    if not hmac.compare_digest(actual_digest, validate_digest(expected_digest)):
+        raise ValueError("archive digest mismatch")
+    files = read_verified_entries(raw)
     # Create the destination only after every entry has passed validation.
     os.mkdir(destination, mode=0o700)
     for name in sorted(files):
@@ -106,14 +107,14 @@ def extract_archive(raw, expected_digest, destination):
 
 
 def main(argv):
-    if len(argv) != 5 or argv[1] not in ("extract", "download"):
-        raise ValueError("usage: archive.py extract|download ARCHIVE_OR_ID SHA256 DESTINATION")
-    _, mode, archive_or_id, expected_digest, destination = argv
-    if mode == "download":
-        raw = download_artifact(archive_or_id)
-    else:
-        with open(archive_or_id, "rb") as source:
-            raw = bounded_read(source)
+    if len(argv) != 4 or argv[1] != "download":
+        raise ValueError("usage: archive.py download ARTIFACT_ID SHA256")
+    _, _, artifact_id, expected_digest = argv
+    runner_temp = os.environ.get("RUNNER_TEMP")
+    if not runner_temp or not os.path.isabs(runner_temp) or not os.path.isdir(runner_temp):
+        raise ValueError("invalid trusted runner temporary directory")
+    destination = os.path.join(runner_temp, "sonar-artifact")
+    raw = download_artifact(artifact_id)
     extract_archive(raw, expected_digest, destination)
 
 

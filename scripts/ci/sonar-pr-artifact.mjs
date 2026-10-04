@@ -64,14 +64,7 @@ export function createManifest({
   };
 }
 
-export function verifyOrigin({
-  eventRun,
-  apiRun,
-  attemptJobs,
-  associatedPrs,
-  artifacts,
-  repositoryId
-}) {
+function validateRun(eventRun, apiRun, repositoryId) {
   const repoId = positiveInteger(repositoryId, 'repository ID');
   const runId = positiveInteger(eventRun?.id, 'event run ID');
   const runAttempt = positiveInteger(eventRun?.run_attempt, 'event run attempt');
@@ -106,6 +99,10 @@ export function verifyOrigin({
   )
     throw new Error('workflow identity or repository mismatch');
   safeRef(eventRun.head_branch, 'run head ref');
+  return { repoId, runId, runAttempt, runSha, headRepositoryId, headRepositoryName };
+}
+
+function requireCoverageJob(attemptJobs, runAttempt) {
   if (!Array.isArray(attemptJobs)) throw new Error('missing attempt jobs');
   const coverageJobs = attemptJobs.filter(job => job?.name === 'Test Coverage');
   if (
@@ -115,25 +112,9 @@ export function verifyOrigin({
     coverageJobs[0].conclusion !== 'success'
   )
     throw new Error('coverage job did not succeed in this attempt');
-  if (!Array.isArray(associatedPrs) || associatedPrs.length !== 1)
-    throw new Error('ambiguous or missing PR association');
-  const pr = associatedPrs[0];
-  const prNumber = positiveInteger(pr.number, 'PR number');
-  const isDependabot = pr.user?.login === 'dependabot[bot]';
-  if (headRepositoryId === repoId && !isDependabot)
-    throw new Error('trusted same-repository PR does not use artifact follow-up');
-  if (!['open', 'closed'].includes(pr.state)) throw new Error('invalid PR state');
-  if (pr.state === 'closed') {
-    if (isDependabot && pr.merged)
-      return { mergedDependabot: true, mergeSha: sha(pr.merge_commit_sha, 'merge SHA'), prNumber };
-    return { superseded: true };
-  }
-  const headSha = sha(pr.head?.sha, 'PR head SHA');
-  const headRef = safeRef(pr.head?.ref, 'PR head ref');
-  const baseRef = safeRef(pr.base?.ref, 'PR base ref');
-  if (pr.head?.repo?.id !== headRepositoryId || pr.head?.repo?.full_name !== headRepositoryName)
-    throw new Error('PR head does not match workflow run repository');
-  if (headSha !== runSha || headRef !== eventRun.head_branch) return { superseded: true };
+}
+
+function requireArtifact(artifacts, { runId, runAttempt, runSha, repoId, headRepositoryId }) {
   if (!Array.isArray(artifacts)) throw new Error('missing artifacts');
   const artifactName = `sonar-pr-lcov-${runId}-${runAttempt}`;
   const matching = artifacts.filter(artifact => artifact?.name === artifactName);
@@ -158,7 +139,52 @@ export function verifyOrigin({
     throw new Error('artifact provenance or size mismatch');
   if (typeof artifact.digest !== 'string' || !artifact.digest.startsWith('sha256:'))
     throw new Error('missing artifact digest');
-  const archiveDigest = digest(artifact.digest.slice('sha256:'.length), 'artifact digest');
+  return {
+    artifactName,
+    artifactId,
+    archiveDigest: digest(artifact.digest.slice('sha256:'.length), 'artifact digest')
+  };
+}
+
+export function verifyOrigin({
+  eventRun,
+  apiRun,
+  attemptJobs,
+  associatedPrs,
+  artifacts,
+  repositoryId
+}) {
+  const { repoId, runId, runAttempt, runSha, headRepositoryId, headRepositoryName } = validateRun(
+    eventRun,
+    apiRun,
+    repositoryId
+  );
+  requireCoverageJob(attemptJobs, runAttempt);
+  if (!Array.isArray(associatedPrs) || associatedPrs.length !== 1)
+    throw new Error('ambiguous or missing PR association');
+  const pr = associatedPrs[0];
+  const prNumber = positiveInteger(pr.number, 'PR number');
+  const isDependabot = pr.user?.login === 'dependabot[bot]';
+  if (headRepositoryId === repoId && !isDependabot) return { trustedDirect: true };
+  if (!['open', 'closed'].includes(pr.state)) throw new Error('invalid PR state');
+  if (pr.state === 'closed') {
+    if (isDependabot && pr.merged)
+      return { mergedDependabot: true, mergeSha: sha(pr.merge_commit_sha, 'merge SHA'), prNumber };
+    return { superseded: true };
+  }
+  const headSha = sha(pr.head?.sha, 'PR head SHA');
+  const headRef = safeRef(pr.head?.ref, 'PR head ref');
+  const baseRef = safeRef(pr.base?.ref, 'PR base ref');
+  if (pr.head?.repo?.id !== headRepositoryId || pr.head?.repo?.full_name !== headRepositoryName)
+    throw new Error('PR head does not match workflow run repository');
+  if (headSha !== runSha || headRef !== eventRun.head_branch) return { superseded: true };
+  const { artifactName, artifactId, archiveDigest } = requireArtifact(artifacts, {
+    runId,
+    runAttempt,
+    runSha,
+    repoId,
+    headRepositoryId
+  });
   return {
     runId,
     runAttempt,
@@ -174,6 +200,39 @@ export function verifyOrigin({
   };
 }
 
+function requireSafeLcovSource(path, trackedFiles, sourceRoot) {
+  if (path !== 'index.js' && (!path.startsWith('lib/') || !path.endsWith('.js')))
+    throw new Error('LCOV source path outside measured scope');
+  if (
+    path.includes('..') ||
+    path.includes('\\') ||
+    path.includes('//') ||
+    !/^[A-Za-z0-9_./-]+$/.test(path) ||
+    !trackedFiles.has(path)
+  )
+    throw new Error('unsafe or untracked LCOV source path');
+  if (!sourceRoot) return;
+  let current = resolve(sourceRoot);
+  for (const segment of path.split('/')) {
+    current = join(current, segment);
+    if (lstatSync(current).isSymbolicLink()) throw new Error('symlinked LCOV source path');
+  }
+  if (!lstatSync(current).isFile()) throw new Error('non-regular LCOV source path');
+}
+
+function isLcovDataLine(line, inRecord) {
+  if (line.startsWith('DA:')) {
+    if (!inRecord || !/^DA:[1-9]\d*,\d+(?:,[^\r\n,]+)?$/.test(line))
+      throw new Error('malformed LCOV line data');
+    return true;
+  }
+  if (line.startsWith('TN:') || /^(?:FN|FNDA|BRDA|FNF|FNH|LF|LH|BRF|BRH):/.test(line)) {
+    if (!inRecord && !line.startsWith('TN:')) throw new Error('malformed LCOV record');
+    return false;
+  }
+  throw new Error('malformed LCOV report');
+}
+
 function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
   if (
     typeof reportText !== 'string' ||
@@ -182,9 +241,10 @@ function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
   )
     throw new Error('invalid LCOV report');
   if (!(trackedFiles instanceof Set)) throw new Error('missing tracked file set');
-  let sourceCount = 0;
-  let hasIndex = false;
-  let hasLib = false;
+  const expectedSources = new Set(
+    [...trackedFiles].filter(path => path === 'index.js' || /^lib\/.*\.js$/.test(path))
+  );
+  const seenSources = new Set();
   let hasData = false;
   let inRecord = false;
   let recordData = false;
@@ -193,44 +253,27 @@ function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
     if (line.startsWith('SF:')) {
       if (inRecord) throw new Error('incomplete LCOV record');
       const path = line.slice(3);
-      if (path !== 'index.js' && (!path.startsWith('lib/') || !path.endsWith('.js')))
-        throw new Error('LCOV source path outside measured scope');
-      if (
-        path.includes('..') ||
-        path.includes('\\') ||
-        path.includes('//') ||
-        !/^[A-Za-z0-9_./-]+$/.test(path) ||
-        !trackedFiles.has(path)
-      )
-        throw new Error('unsafe or untracked LCOV source path');
-      if (sourceRoot) {
-        let current = resolve(sourceRoot);
-        for (const segment of path.split('/')) {
-          current = join(current, segment);
-          if (lstatSync(current).isSymbolicLink()) throw new Error('symlinked LCOV source path');
-        }
-        if (!lstatSync(current).isFile()) throw new Error('non-regular LCOV source path');
-      }
-      hasIndex ||= path === 'index.js';
-      hasLib ||= path.startsWith('lib/');
-      sourceCount++;
+      requireSafeLcovSource(path, trackedFiles, sourceRoot);
+      if (seenSources.has(path)) throw new Error('incomplete LCOV coverage set: duplicate source');
+      seenSources.add(path);
       inRecord = true;
       recordData = false;
     } else if (line === 'end_of_record') {
       if (!inRecord || !recordData) throw new Error('incomplete LCOV record');
       inRecord = false;
-    } else if (line.startsWith('DA:')) {
-      if (!inRecord || !/^DA:[1-9]\d*,\d+(?:,[^\r\n,]+)?$/.test(line))
-        throw new Error('malformed LCOV line data');
-      recordData = true;
-      hasData = true;
-    } else if (line.startsWith('TN:') || /^(?:FN|FNDA|BRDA|FNF|FNH|LF|LH|BRF|BRH):/.test(line)) {
-      if (!inRecord && !line.startsWith('TN:')) throw new Error('malformed LCOV record');
     } else {
-      throw new Error('malformed LCOV report');
+      const isData = isLcovDataLine(line, inRecord);
+      recordData ||= isData;
+      hasData ||= isData;
     }
   }
-  if (inRecord || sourceCount === 0 || !hasData || !hasIndex || !hasLib)
+  if (
+    inRecord ||
+    !hasData ||
+    !expectedSources.has('index.js') ||
+    expectedSources.size < 2 ||
+    seenSources.size !== expectedSources.size
+  )
     throw new Error('incomplete LCOV coverage set');
 }
 
@@ -271,7 +314,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       throw new Error('usage: sonar-pr-artifact.mjs create');
     const reportText = readFileSync('coverage/lcov.info', 'utf8');
     const trackedFiles = new Set(
-      execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', env: scrubbedEnv() })
+      execFileSync('/usr/bin/git', ['ls-files', '-z'], { encoding: 'utf8', env: scrubbedEnv() })
         .split('\0')
         .filter(Boolean)
     );

@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { URL } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { shouldScanMain, successfulCiScannerStep } from '../../scripts/ci/sonar-main-catch-up.mjs';
+import {
+  shouldScanMain,
+  successfulCatchUpScannerStep,
+  successfulCiScannerStep
+} from '../../scripts/ci/sonar-main-catch-up.mjs';
 
 const sha = 'a'.repeat(40);
 const olderSha = 'b'.repeat(40);
@@ -16,6 +20,7 @@ function verifiedMain() {
     lineCoverage: '75.0',
     branchCoverage: '66.1',
     successfulCiScanAtSha: true,
+    successfulCatchUpScanAtSha: false,
     processingTask: false
   };
 }
@@ -43,6 +48,16 @@ describe('main Sonar coverage catch-up', () => {
     expect(shouldScanMain({ ...verifiedMain(), branchCoverage: undefined })).toBe(true);
     expect(shouldScanMain({ ...verifiedMain(), successfulCiScanAtSha: false })).toBe(true);
     expect(shouldScanMain({ ...verifiedMain(), latestProcessedAnalysis: undefined })).toBe(true);
+  });
+
+  it('skips a processed analysis from a successful prior catch-up scan', () => {
+    expect(
+      shouldScanMain({
+        ...verifiedMain(),
+        successfulCiScanAtSha: false,
+        successfulCatchUpScanAtSha: true
+      })
+    ).toBe(false);
   });
 
   it('fails visibly on wrong dispatch ref, remote drift, or processing Sonar task', () => {
@@ -79,11 +94,37 @@ describe('main Sonar coverage catch-up', () => {
       steps: [{ name: 'Submit trusted Sonar analysis', conclusion: 'success' }]
     };
     expect(successfulCiScannerStep(run, [job], sha)).toBe(true);
+    expect(successfulCiScannerStep({ ...run, conclusion: 'failure' }, [job], sha)).toBe(true);
     expect(successfulCiScannerStep({ ...run, head_sha: olderSha }, [job], sha)).toBe(false);
     expect(successfulCiScannerStep(run, [{ ...job, run_attempt: 1 }], sha)).toBe(false);
     expect(successfulCiScannerStep(run, [{ ...job, run_id: 43 }], sha)).toBe(false);
     expect(successfulCiScannerStep(run, [{ ...job, steps: [] }], sha)).toBe(false);
     expect(successfulCiScannerStep(run, [{ ...job, conclusion: 'failure' }], sha)).toBe(false);
+  });
+
+  it('recognizes the exact successful catch-up scanner step even if its workflow failed elsewhere', () => {
+    const run = {
+      id: 43,
+      name: 'Sonar Main Coverage Catch-up',
+      path: '.github/workflows/sonar-main-catch-up.yml',
+      event: 'schedule',
+      head_branch: 'main',
+      head_sha: sha,
+      run_attempt: 1,
+      status: 'completed',
+      conclusion: 'failure'
+    };
+    const job = {
+      name: 'Check and scan main coverage',
+      run_id: 43,
+      head_sha: sha,
+      run_attempt: 1,
+      status: 'completed',
+      conclusion: 'success',
+      steps: [{ name: 'Submit main catch-up analysis', conclusion: 'success' }]
+    };
+    expect(successfulCatchUpScannerStep(run, [job], sha)).toBe(true);
+    expect(successfulCatchUpScannerStep(run, [{ ...job, steps: [] }], sha)).toBe(false);
   });
 
   it('uses a main-only trusted workflow with serialized, step-scoped scanner credentials', () => {

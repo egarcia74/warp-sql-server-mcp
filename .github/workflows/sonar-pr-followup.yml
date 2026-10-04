@@ -11,8 +11,13 @@ on:
 jobs:
   scan:
     name: Validate and scan fork or Dependabot PR
-    if: vars.SONAR_CI_ENABLED == 'true' && github.event.workflow_run.event == 'pull_request' && (github.event.workflow_run.head_repository.id != github.event.repository.id || github.event.workflow_run.head_actor.login == 'dependabot[bot]')
+    if: vars.SONAR_CI_ENABLED == 'true' && github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
+    # A source branch has at most one active PR per base in this repository.
+    # Serialize updates of the same fork branch and recheck its live PR head in-slot.
+    concurrency:
+      group: sonar-pr-followup-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
     permissions:
       actions: read
       contents: read
@@ -40,7 +45,7 @@ jobs:
 
       - name: Download and inspect validated artifact
         if: steps.preflight.outputs.scan == 'true'
-        run: python3 "$RUNNER_TEMP/sonar-trusted/ci/sonar-artifact-archive.py" download "$ARTIFACT_ID" "$ARCHIVE_DIGEST" "$RUNNER_TEMP/sonar-artifact"
+        run: python3 "$RUNNER_TEMP/sonar-trusted/ci/sonar-artifact-archive.py" download "$ARTIFACT_ID" "$ARCHIVE_DIGEST"
         env:
           GITHUB_TOKEN: ${{ github.token }}
           ARTIFACT_ID: ${{ steps.preflight.outputs.artifact_id }}

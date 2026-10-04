@@ -27,6 +27,7 @@ export function shouldScanMain({
   lineCoverage,
   branchCoverage,
   successfulCiScanAtSha,
+  successfulCatchUpScanAtSha,
   processingTask
 }) {
   if (dispatchRef !== 'refs/heads/main') throw new Error('catch-up requires main ref');
@@ -39,28 +40,27 @@ export function shouldScanMain({
     revision === checkout &&
     coverageValue(lineCoverage) !== null &&
     coverageValue(branchCoverage) !== null &&
-    successfulCiScanAtSha === true
+    (successfulCiScanAtSha === true || successfulCatchUpScanAtSha === true)
   );
 }
 
-export function successfulCiScannerStep(run, jobs, expectedSha) {
+function successfulScannerStep(run, jobs, expectedSha, workflow) {
   const sha = validSha(expectedSha, 'expected SHA');
   if (
     !Number.isSafeInteger(run?.id) ||
     run.id < 1 ||
-    run.name !== 'CI' ||
-    run.path !== '.github/workflows/ci.yml' ||
-    run.event !== 'push' ||
+    run.name !== workflow.name ||
+    run.path !== workflow.path ||
+    !workflow.events.includes(run.event) ||
     run.head_branch !== 'main' ||
     run.head_sha !== sha ||
     !Number.isSafeInteger(run.run_attempt) ||
     run.run_attempt < 1 ||
     run.status !== 'completed' ||
-    run.conclusion !== 'success' ||
     !Array.isArray(jobs)
   )
     return false;
-  const coverageJobs = jobs.filter(job => job?.name === 'Test Coverage');
+  const coverageJobs = jobs.filter(job => job?.name === workflow.job);
   if (coverageJobs.length !== 1) return false;
   const job = coverageJobs[0];
   return (
@@ -70,10 +70,29 @@ export function successfulCiScannerStep(run, jobs, expectedSha) {
     job.status === 'completed' &&
     job.conclusion === 'success' &&
     Array.isArray(job.steps) &&
-    job.steps.filter(
-      step => step?.name === 'Submit trusted Sonar analysis' && step.conclusion === 'success'
-    ).length === 1
+    job.steps.filter(step => step?.name === workflow.step && step.conclusion === 'success')
+      .length === 1
   );
+}
+
+export function successfulCiScannerStep(run, jobs, expectedSha) {
+  return successfulScannerStep(run, jobs, expectedSha, {
+    name: 'CI',
+    path: '.github/workflows/ci.yml',
+    events: ['push'],
+    job: 'Test Coverage',
+    step: 'Submit trusted Sonar analysis'
+  });
+}
+
+export function successfulCatchUpScannerStep(run, jobs, expectedSha) {
+  return successfulScannerStep(run, jobs, expectedSha, {
+    name: 'Sonar Main Coverage Catch-up',
+    path: '.github/workflows/sonar-main-catch-up.yml',
+    events: ['schedule', 'workflow_dispatch'],
+    job: 'Check and scan main coverage',
+    step: 'Submit main catch-up analysis'
+  });
 }
 
 async function github(path) {
@@ -105,7 +124,7 @@ async function sonar(path) {
 
 function checkedOutSha() {
   return validSha(
-    execFileSync('git', ['rev-parse', 'HEAD'], {
+    execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
       encoding: 'utf8',
       env: scrubbedEnv()
     }).trim(),
@@ -130,21 +149,19 @@ async function remoteMainSha() {
   return validSha(ref?.object?.sha, 'remote main SHA');
 }
 
-async function ciScannerSucceededAt(sha) {
-  const response = await github(
-    '/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=100'
-  );
-  if (!Array.isArray(response?.workflow_runs)) throw new Error('invalid CI runs response');
+async function workflowScannerSucceededAt(sha, workflowFile, verify) {
+  const response = await github(`/actions/workflows/${workflowFile}/runs?branch=main&per_page=100`);
+  if (!Array.isArray(response?.workflow_runs)) throw new Error('invalid scanner runs response');
   for (const run of response.workflow_runs) {
-    if (run.head_sha !== sha || run.conclusion !== 'success') continue;
+    if (run.head_sha !== sha || run.status !== 'completed') continue;
     if (!Number.isSafeInteger(run.id) || !Number.isSafeInteger(run.run_attempt))
       throw new Error('invalid CI run identity');
     const jobs = await github(
       `/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`
     );
     if (!Array.isArray(jobs?.jobs) || jobs.total_count !== jobs.jobs.length)
-      throw new Error('incomplete CI job response');
-    if (successfulCiScannerStep(run, jobs.jobs, sha)) return true;
+      throw new Error('incomplete scanner job response');
+    if (verify(run, jobs.jobs, sha)) return true;
   }
   return false;
 }
@@ -157,19 +174,17 @@ async function check() {
   if (dispatchRef !== 'refs/heads/main') throw new Error('catch-up requires main ref');
   const checkoutSha = checkedOutSha();
   const remote = await remoteMainSha();
-  const [analyses, measures, ce, successfulCiScanAtSha] = await Promise.all([
-    sonar(`project_analyses/search?project=${project}&branch=main&ps=1`),
+  const analyses = await sonar(`project_analyses/search?project=${project}&branch=main&ps=1`);
+  if (!Array.isArray(analyses?.analyses)) throw new Error('invalid SonarCloud analysis response');
+  const [measures, ce, successfulCiScanAtSha, successfulCatchUpScanAtSha] = await Promise.all([
     sonar(
       `measures/component?component=${project}&branch=main&metricKeys=line_coverage,branch_coverage`
     ),
     sonar(`ce/component?component=${project}`),
-    ciScannerSucceededAt(checkoutSha)
+    workflowScannerSucceededAt(checkoutSha, 'ci.yml', successfulCiScannerStep),
+    workflowScannerSucceededAt(checkoutSha, 'sonar-main-catch-up.yml', successfulCatchUpScannerStep)
   ]);
-  if (
-    !Array.isArray(analyses?.analyses) ||
-    !Array.isArray(measures?.component?.measures) ||
-    !Array.isArray(ce?.queue)
-  )
+  if (!Array.isArray(measures?.component?.measures) || !Array.isArray(ce?.queue))
     throw new Error('invalid SonarCloud response');
   const latestAgain = await sonar(`project_analyses/search?project=${project}&branch=main&ps=1`);
   if (
@@ -186,6 +201,7 @@ async function check() {
     lineCoverage: byMetric.get('line_coverage'),
     branchCoverage: byMetric.get('branch_coverage'),
     successfulCiScanAtSha,
+    successfulCatchUpScanAtSha,
     processingTask: ce.queue.length > 0 || ['PENDING', 'IN_PROGRESS'].includes(ce.current?.status)
   });
   output('scan', String(scan));
@@ -213,8 +229,10 @@ async function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(error => {
+  try {
+    await main();
+  } catch (error) {
     console.error(`Sonar main catch-up failed: ${error.message}`);
     process.exitCode = 1;
-  });
+  }
 }

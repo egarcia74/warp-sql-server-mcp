@@ -128,4 +128,17 @@ describe('trusted Sonar scanner workflow contract', () => {
       reason: 'superseded PR'
     });
   });
+
+  it('runs Git only by its fixed system path in scanner-capable helpers', () => {
+    for (const name of [
+      'sonar-scan-guard.mjs',
+      'sonar-main-catch-up.mjs',
+      'sonar-pr-artifact.mjs',
+      'sonar-pr-followup.mjs'
+    ]) {
+      const source = readFileSync(new URL(`../../scripts/ci/${name}`, import.meta.url), 'utf8');
+      expect(source).not.toMatch(/execFileSync\(['"]git['"]/);
+      expect(source).toContain("execFileSync('/usr/bin/git'");
+    }
+  });
 });

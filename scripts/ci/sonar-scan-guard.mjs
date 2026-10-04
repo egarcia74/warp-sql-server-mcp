@@ -88,7 +88,7 @@ async function main() {
   const token = process.env.GITHUB_TOKEN;
   if (!token) throw new Error('missing GitHub read token');
   const eventName = process.env.GITHUB_EVENT_NAME;
-  const checkedOutSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+  const checkedOutSha = execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
     encoding: 'utf8',
     env: scrubbedEnv()
   }).trim();
@@ -129,8 +129,10 @@ async function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(error => {
+  try {
+    await main();
+  } catch (error) {
     console.error(`Sonar scan preflight failed: ${error.message}`);
     process.exitCode = 1;
-  });
+  }
 }

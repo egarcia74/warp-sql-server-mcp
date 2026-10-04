@@ -188,7 +188,6 @@ function workflowOutput(name, value) {
 function summary(message) {
   if (process.env.GITHUB_STEP_SUMMARY)
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${message}\n`);
-  console.log(message);
 }
 
 export function formatFailureSummary({ runId, prNumber }) {
@@ -235,6 +234,9 @@ async function preflight(runId) {
   if (verdict.superseded) {
     workflowOutput('scan', 'false');
     summary('Sonar PR follow-up skipped: fork PR is closed or superseded.');
+  } else if (verdict.trustedDirect) {
+    workflowOutput('scan', 'false');
+    summary('Sonar PR follow-up skipped: trusted direct PR scan.');
   } else if (verdict.mergedDependabot) {
     workflowOutput('scan', 'false');
     await verifyMergedMain(verdict.mergeSha);
@@ -256,7 +258,7 @@ async function preflight(runId) {
 
 function verifyDownload(artifactDirectory) {
   const expected = readVerdict();
-  const checkedOutSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+  const checkedOutSha = execFileSync('/usr/bin/git', ['rev-parse', 'HEAD'], {
     encoding: 'utf8',
     env: scrubbedEnv()
   }).trim();
@@ -266,7 +268,7 @@ function verifyDownload(artifactDirectory) {
   const manifest = JSON.parse(readFileSync(resolve(artifactDirectory, 'manifest.json'), 'utf8'));
   const reportText = readFileSync(resolve(artifactDirectory, 'lcov.info'), 'utf8');
   const trackedFiles = new Set(
-    execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', env: scrubbedEnv() })
+    execFileSync('/usr/bin/git', ['ls-files', '-z'], { encoding: 'utf8', env: scrubbedEnv() })
       .split('\0')
       .filter(Boolean)
   );
@@ -279,7 +281,7 @@ function verifyDownload(artifactDirectory) {
     sourceRoot: process.cwd()
   });
   workflowOutput('verified', 'true');
-  summary(`Sonar PR follow-up LCOV validated for PR #${expected.prNumber}.`);
+  summary('Sonar PR follow-up LCOV validated.');
 }
 
 async function finalCheck() {
@@ -304,8 +306,10 @@ async function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(error => {
+  try {
+    await main();
+  } catch (error) {
     console.error(`Sonar PR follow-up failed: ${error.message}`);
     process.exitCode = 1;
-  });
+  }
 }

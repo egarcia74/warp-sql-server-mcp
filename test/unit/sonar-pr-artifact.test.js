@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -126,6 +127,18 @@ describe('Sonar PR artifact provenance', () => {
     expect(verifyOrigin(origin)).toEqual({ superseded: true });
   });
 
+  it('skips a trusted same-repository PR before requiring an artifact', () => {
+    const origin = validOrigin();
+    origin.apiRun.head_repository.id = 10;
+    origin.eventRun.head_repository.id = 10;
+    origin.apiRun.head_repository.full_name = 'egarcia74/warp-sql-server-mcp';
+    origin.eventRun.head_repository.full_name = 'egarcia74/warp-sql-server-mcp';
+    origin.associatedPrs[0].head.repo.id = 10;
+    origin.associatedPrs[0].head.repo.full_name = 'egarcia74/warp-sql-server-mcp';
+    origin.artifacts = [];
+    expect(verifyOrigin(origin)).toEqual({ trustedDirect: true });
+  });
+
   it('marks a newer head of the same fork PR as superseded', () => {
     const origin = validOrigin();
     origin.associatedPrs[0].head.sha = 'c'.repeat(40);
@@ -239,6 +252,33 @@ describe('Sonar PR artifact provenance', () => {
         sourceRoot
       })
     ).toEqual({ headSha: sha, prNumber: 1403, sha256: manifest.lcovSha256 });
+  });
+
+  it('rejects missing or duplicate measured source records', () => {
+    const sourceRoot = makeSourceRoot();
+    writeFileSync(join(sourceRoot, 'lib/other.js'), 'export {};\n');
+    const expected = verifyOrigin(validOrigin());
+    for (const reportText of [lcov, `${lcov}SF:lib/config.js\nDA:1,1\nend_of_record\n`]) {
+      const manifest = createManifest({
+        runId: 42,
+        runAttempt: 2,
+        prNumber: 1403,
+        headRepositoryId: 20,
+        headSha: sha,
+        baseRef: 'main',
+        lcovSha256: createHash('sha256').update(reportText).digest('hex')
+      });
+      expect(() =>
+        verifyDownloaded({
+          expected,
+          manifest,
+          entries: ['manifest.json', 'lcov.info'],
+          reportText,
+          trackedFiles: new Set(['index.js', 'lib/config.js', 'lib/other.js']),
+          sourceRoot
+        })
+      ).toThrow(/coverage set/i);
+    }
   });
 
   it('rejects a manifest whose LCOV digest differs from the downloaded data', () => {
