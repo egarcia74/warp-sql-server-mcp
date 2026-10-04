@@ -135,7 +135,7 @@ describe('Markdown lint tooling', () => {
     }
   });
 
-  it('fails closed when a temporary-directory ancestor has a Markdown config', () => {
+  it('ignores a temporary-directory ancestor Markdown config', () => {
     const fixture = mkdtempSync(path.join(tmpdir(), 'wssm-markdownlint-temp-config-'));
     const work = path.join(fixture, 'work');
     const temporary = path.join(fixture, 'temporary');
@@ -153,9 +153,8 @@ describe('Markdown lint tooling', () => {
         env: { ...process.env, TMPDIR: temporary }
       });
 
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toContain('Cannot isolate markdownlint');
-      expect(readFileSync(path.join(work, 'bad.md'), 'utf8')).toBe('# Heading\nBody\n');
+      expect(result.status).toBe(0);
+      expect(readFileSync(path.join(work, 'bad.md'), 'utf8')).toBe('# Heading\n\nBody\n');
     } finally {
       rmSync(fixture, { recursive: true, force: true });
     }
