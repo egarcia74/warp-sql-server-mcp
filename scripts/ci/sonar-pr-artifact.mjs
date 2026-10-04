@@ -26,13 +26,7 @@ function digest(value, label) {
 }
 
 function safeRef(value, label) {
-  if (
-    typeof value !== 'string' ||
-    value.length === 0 ||
-    value.length > 255 ||
-    value === '@' ||
-    value.startsWith('-')
-  )
+  if (typeof value !== 'string' || value.length === 0 || value.length > 255)
     throw new Error(`invalid ${label}`);
   try {
     execFileSync('/usr/bin/git', ['check-ref-format', `refs/heads/${value}`], {
