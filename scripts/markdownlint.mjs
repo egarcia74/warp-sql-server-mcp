@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, URL } from 'node:url';
 import ignore from 'ignore';
 import MarkdownIt from 'markdown-it';
-import { applyFixes } from 'markdownlint';
 import { lint } from 'markdownlint/sync';
 import { globSync } from 'tinyglobby';
 
@@ -17,15 +19,10 @@ if (fs.existsSync('.markdownlintignore')) {
 const arguments_ = process.argv.slice(2);
 const fix = arguments_[0] === '--fix';
 const paths = fix ? arguments_.slice(1) : arguments_;
-const inputs = paths.length ? paths : ['**/*.md'];
-const files = [
-  ...new Set(
-    inputs.flatMap(input => {
-      if (fs.existsSync(input) && fs.statSync(input).isFile()) return [input];
-      return globSync(input, { dot: true, onlyFiles: true, expandDirectories: false });
-    })
-  )
-].filter(file => {
+const inputs = paths.length
+  ? paths
+  : globSync('**/*.md', { dot: true, onlyFiles: true, expandDirectories: false });
+const files = [...new Set(inputs)].filter(file => {
   const relative = path.relative(process.cwd(), file).split(path.sep).join('/');
   return relative && !relative.startsWith('../') && !ignores.ignores(relative);
 });
@@ -37,13 +34,41 @@ const lintOptions = {
 };
 
 if (fix) {
-  for (const file of files) {
-    const fixes = lint({ ...lintOptions, files: [file] })[file].filter(issue => issue.fixInfo);
-    if (fixes.length === 0) continue;
-    const original = fs.readFileSync(file, 'utf8');
-    const updated = applyFixes(original, fixes);
-    if (updated !== original) fs.writeFileSync(file, updated);
+  if (fs.existsSync('/etc/markdownlintrc') || fs.existsSync('/etc/markdownlint/config')) {
+    throw new Error('Cannot isolate markdownlint from a system-wide configuration');
   }
+  const environment = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.toLowerCase().startsWith('markdownlint_'))
+  );
+  environment.HOME = '';
+  environment.USERPROFILE = '';
+  const isolatedDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'wssm-markdownlint-'));
+  let result;
+  try {
+    for (let directory = isolatedDirectory; ; directory = path.dirname(directory)) {
+      if (fs.existsSync(path.join(directory, '.markdownlintrc'))) {
+        throw new Error('Cannot isolate markdownlint from a parent-directory configuration');
+      }
+      if (directory === path.dirname(directory)) break;
+    }
+    result = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(new URL('../node_modules/markdownlint-cli/markdownlint.js', import.meta.url)),
+        '--dot',
+        '--fix',
+        '--config',
+        path.resolve('.markdownlint.json'),
+        '--',
+        ...files.map(file => path.resolve(file))
+      ],
+      { cwd: isolatedDirectory, env: environment, stdio: 'inherit' }
+    );
+  } finally {
+    fs.rmdirSync(isolatedDirectory);
+  }
+  if (result.error) throw result.error;
+  if (result.status === null || result.status > 1) process.exitCode = result.status || 2;
 }
 
 const results = lint(lintOptions);

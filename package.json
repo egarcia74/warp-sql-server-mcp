@@ -138,6 +138,7 @@
     "markdown-link-check": "^3.13.7",
     "markdown-it": "15.0.1",
     "markdownlint": "0.41.1",
+    "markdownlint-cli": "0.49.1",
     "prettier": "^3.3.3",
     "sinon": "^22.0.0",
     "tinyglobby": "0.2.17",
@@ -146,6 +147,12 @@
   "overrides": {
     "get-uri": {
       "basic-ftp": "6.2.1"
+    },
+    "markdownlint-cli": {
+      "ini": "6.0.0",
+      "js-yaml": "5.4.2",
+      "markdown-it": "15.0.1",
+      "smol-toml": "1.8.0"
     }
   },
   "engines": {
