@@ -57,6 +57,11 @@ describe('LCOV report verification', () => {
     expect(result.status).toBe(1);
   });
 
+  it('rejects malformed coverage counts', () => {
+    expect(verify('SF:lib/example.js\nDA:1,1\nLF:not-a-number\nend_of_record\n').status).toBe(1);
+    expect(verify('SF:lib/example.js\nDA:0,1\nend_of_record\n').status).toBe(1);
+  });
+
   it('rejects content outside coverage records', () => {
     expect(verify('junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n').status).toBe(1);
     expect(verify('SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n').status).toBe(1);

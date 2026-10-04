@@ -21,10 +21,12 @@ try {
     } else if (line.startsWith('SF:') && !hasSource && line.length > 3) {
       hasSource = true;
       pendingTitle = false;
-    } else if (/^DA:\d+,\d+(?:,[^\r\n,]+)?$/.test(line) && hasSource) {
+    } else if (/^DA:[1-9]\d*,\d+(?:,[^\r\n,]+)?$/.test(line) && hasSource) {
       hasData = true;
-    } else if (/^(?:FN|FNDA|FNF|FNH|LF|LH|BRDA|BRF|BRH):/.test(line) && hasSource) {
-      // Other standard LCOV fields are left for Codecov to parse.
+    } else if (/^(?:FNF|FNH|LF|LH|BRF|BRH):\d+$/.test(line) && hasSource) {
+      // File totals are non-negative integer counts.
+    } else if (/^(?:FN|FNDA|BRDA):/.test(line) && hasSource) {
+      // Function and branch details are left for Codecov to parse.
     } else {
       throw new Error('malformed coverage record');
     }
