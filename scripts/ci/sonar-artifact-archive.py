@@ -67,6 +67,21 @@ def download_artifact(artifact_id):
         return bounded_read(response)
 
 
+def read_verified_entry(archive, info):
+    if info.is_dir() or info.flag_bits & 0x1:
+        raise ValueError("unsafe archive entry")
+    mode = info.external_attr >> 16 if info.create_system == 3 else 0
+    if mode and stat.S_IFMT(mode) not in (0, stat.S_IFREG):
+        raise ValueError("non-regular archive entry")
+    if info.file_size < 0 or info.file_size > MAX_BYTES:
+        raise ValueError("archive entry exceeds size limit")
+    with archive.open(info) as source:
+        data = bounded_read(source)
+    if len(data) != info.file_size:
+        raise ValueError("archive entry length mismatch")
+    return data
+
+
 def read_verified_entries(raw):
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
         infos = archive.infolist()
@@ -75,21 +90,10 @@ def read_verified_entries(raw):
         total_size = 0
         files = {}
         for info in infos:
-            if info.is_dir() or info.flag_bits & 0x1:
-                raise ValueError("unsafe archive entry")
-            mode = info.external_attr >> 16 if info.create_system == 3 else 0
-            if mode and stat.S_IFMT(mode) not in (0, stat.S_IFREG):
-                raise ValueError("non-regular archive entry")
-            if info.file_size < 0 or info.file_size > MAX_BYTES:
-                raise ValueError("archive entry exceeds size limit")
             total_size += info.file_size
             if total_size > MAX_BYTES:
                 raise ValueError("archive exceeds uncompressed size limit")
-            with archive.open(info) as source:
-                data = bounded_read(source)
-            if len(data) != info.file_size:
-                raise ValueError("archive entry length mismatch")
-            files[info.filename] = data
+            files[info.filename] = read_verified_entry(archive, info)
     return files
 
 

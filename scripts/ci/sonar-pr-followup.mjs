@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyDownloaded, verifyOrigin } from './sonar-pr-artifact.mjs';
+import { checkedTrackedFiles, verifyDownloaded, verifyOrigin } from './sonar-pr-artifact.mjs';
 import { scrubbedEnv } from './verify-publish-tree.mjs';
 
 const repository = 'egarcia74/warp-sql-server-mcp';
@@ -202,12 +202,14 @@ export function formatFailureSummary({ runId, prNumber }) {
   return `Sonar PR coverage follow-up failed${prLink}; inspect the failed job and ${runLink}. No scanner success is claimed.`;
 }
 
+export function trustedVerdictPath(runnerTemp) {
+  if (typeof runnerTemp !== 'string' || !isAbsolute(runnerTemp) || runnerTemp.includes('\0'))
+    throw new Error('invalid runner temporary directory');
+  return resolve(runnerTemp, 'sonar-trusted/verdict.json');
+}
+
 function verdictPath() {
-  const path =
-    process.env.SONAR_VERDICT_PATH ??
-    (process.env.RUNNER_TEMP && resolve(process.env.RUNNER_TEMP, 'sonar-trusted/verdict.json'));
-  if (!path) throw new Error('missing verdict path');
-  return path;
+  return trustedVerdictPath(process.env.RUNNER_TEMP);
 }
 
 function readVerdict() {
@@ -230,7 +232,7 @@ async function preflight(runId) {
   if (process.env.GITHUB_REPOSITORY !== repository) throw new Error('unexpected repository');
   const payload = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
   const verdict = await resolveFollowup(runId, fetchGitHubJson, payload.workflow_run);
-  writeFileSync(verdictPath(), `${JSON.stringify(verdict)}\n`, { flag: 'wx' });
+  writeFileSync(verdictPath(), `${JSON.stringify(verdict)}\n`, { flag: 'wx', mode: 0o600 });
   if (verdict.superseded) {
     workflowOutput('scan', 'false');
     summary('Sonar PR follow-up skipped: fork PR is closed or superseded.');
@@ -267,10 +269,11 @@ function verifyDownload(artifactDirectory) {
   const entries = readdirSync(artifactDirectory);
   const manifest = JSON.parse(readFileSync(resolve(artifactDirectory, 'manifest.json'), 'utf8'));
   const reportText = readFileSync(resolve(artifactDirectory, 'lcov.info'), 'utf8');
-  const trackedFiles = new Set(
-    execFileSync('/usr/bin/git', ['ls-files', '-z'], { encoding: 'utf8', env: scrubbedEnv() })
-      .split('\0')
-      .filter(Boolean)
+  const trackedFiles = checkedTrackedFiles(
+    execFileSync('/usr/bin/git', ['ls-files', '-s', '-z'], {
+      encoding: 'utf8',
+      env: scrubbedEnv()
+    })
   );
   verifyDownloaded({
     expected,

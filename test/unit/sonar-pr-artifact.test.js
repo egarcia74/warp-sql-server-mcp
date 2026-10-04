@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, URL } from 'node:url';
 import {
+  checkedTrackedFiles,
   createManifest,
   verifyDownloaded,
   verifyOrigin
@@ -81,6 +82,12 @@ function validOrigin() {
 }
 
 describe('Sonar PR artifact provenance', () => {
+  it('accepts only regular tracked files for privileged fork analysis', () => {
+    const regular = `100644 ${sha} 0\tindex.js\0`;
+    expect(checkedTrackedFiles(regular)).toEqual(new Set(['index.js']));
+    expect(() => checkedTrackedFiles(`120000 ${sha} 0\tlink.js\0`)).toThrow(/non-regular/i);
+    expect(() => checkedTrackedFiles(`160000 ${sha} 0\tdependency\0`)).toThrow(/non-regular/i);
+  });
   it('rejects a head repository name that differs from the API or PR', () => {
     const origin = validOrigin();
     origin.associatedPrs[0].head.repo.full_name = 'someone-else/warp-sql-server-mcp';

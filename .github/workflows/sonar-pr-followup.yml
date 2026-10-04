@@ -82,6 +82,7 @@ jobs:
         with:
           args: >-
             -Dproject.settings=${{ runner.temp }}/sonar-trusted/sonar-project.properties
+            -Dsonar.working.directory=${{ runner.temp }}/sonar-working
             -Dsonar.javascript.lcov.reportPaths=${{ runner.temp }}/sonar-artifact/lcov.info
             -Dsonar.pullrequest.key=${{ steps.preflight.outputs.pr_number }}
             -Dsonar.pullrequest.branch=${{ steps.preflight.outputs.head_ref }}

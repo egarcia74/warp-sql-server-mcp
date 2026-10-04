@@ -43,6 +43,19 @@ function sameDigest(first, second) {
   return timingSafeEqual(Buffer.from(first, 'hex'), Buffer.from(second, 'hex'));
 }
 
+export function checkedTrackedFiles(indexText) {
+  if (typeof indexText !== 'string' || !indexText.endsWith('\0'))
+    throw new Error('invalid Git index listing');
+  const files = new Set();
+  for (const entry of indexText.split('\0').slice(0, -1)) {
+    const match = /^(100644|100755) [a-f0-9]{40} 0\t([^\0]+)$/.exec(entry);
+    if (!match) throw new Error('non-regular or unmerged tracked path');
+    files.add(match[2]);
+  }
+  if (files.size === 0) throw new Error('empty Git index listing');
+  return files;
+}
+
 export function createManifest({
   runId,
   runAttempt,
@@ -233,6 +246,24 @@ function isLcovDataLine(line, inRecord) {
   throw new Error('malformed LCOV report');
 }
 
+function addLcovSource(line, seenSources, trackedFiles, sourceRoot) {
+  const path = line.slice(3);
+  requireSafeLcovSource(path, trackedFiles, sourceRoot);
+  if (seenSources.has(path)) throw new Error('incomplete LCOV coverage set: duplicate source');
+  seenSources.add(path);
+}
+
+function requireCompleteLcov({ inRecord, hasData, seenSources, expectedSources }) {
+  if (
+    inRecord ||
+    !hasData ||
+    !expectedSources.has('index.js') ||
+    expectedSources.size < 2 ||
+    seenSources.size !== expectedSources.size
+  )
+    throw new Error('incomplete LCOV coverage set');
+}
+
 function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
   if (
     typeof reportText !== 'string' ||
@@ -252,10 +283,7 @@ function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
     if (line === '') continue;
     if (line.startsWith('SF:')) {
       if (inRecord) throw new Error('incomplete LCOV record');
-      const path = line.slice(3);
-      requireSafeLcovSource(path, trackedFiles, sourceRoot);
-      if (seenSources.has(path)) throw new Error('incomplete LCOV coverage set: duplicate source');
-      seenSources.add(path);
+      addLcovSource(line, seenSources, trackedFiles, sourceRoot);
       inRecord = true;
       recordData = false;
     } else if (line === 'end_of_record') {
@@ -267,14 +295,7 @@ function validateLcovPaths(reportText, trackedFiles, sourceRoot) {
       hasData ||= isData;
     }
   }
-  if (
-    inRecord ||
-    !hasData ||
-    !expectedSources.has('index.js') ||
-    expectedSources.size < 2 ||
-    seenSources.size !== expectedSources.size
-  )
-    throw new Error('incomplete LCOV coverage set');
+  requireCompleteLcov({ inRecord, hasData, seenSources, expectedSources });
 }
 
 export function verifyDownloaded({

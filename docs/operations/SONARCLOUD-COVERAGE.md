@@ -40,6 +40,16 @@ protection, Codecov policy, or test scope.
    run/attempt/artifact/PR identity, downloads a bounded ZIP, verifies its digest and LCOV paths,
    and never runs PR code or restores PR-writable cache. A failed follow-up is a visible Actions
    job, not a required PR check. Hold manual fork merges until it passes.
+   The two checkouts in this `workflow_run` may be flagged by `githubactions:S7631`. The first
+   explicitly checks out trusted `main`. The second checks out a verified fork SHA only as
+   **source data** for static analysis. After that checkout, the only shell commands invoke
+   previously copied trusted helpers from `$RUNNER_TEMP`; there is no dependency install,
+   source script, PR-writable cache, submodule checkout, or retained Git credential. The helper
+   rejects symlink and submodule entries in the verified checkout's Git index. The pinned scanner
+   receives `SONAR_TOKEN` only in its own step and uses trusted absolute paths for both
+   `project.settings` and its temporary working directory. Do not classify the warning as
+   harmless if any of those boundaries change; re-review the workflow and rehearse a hostile
+   fork before cutover.
 3. Prove a real `coverage/lcov.info` is generated and the existing Codecov upload receives it.
    Run `npm run ci` locally and the SQL-backed hooks in a unique Docker Compose project. Confirm
    the scanner configuration still excludes the T-SQL fixture and indexes JavaScript tests.
@@ -88,7 +98,9 @@ race remains possible, so always verify the processed revision afterward.
   measures. Manually dispatch the catch-up when no ordinary `main` push CI analysis exists. Do
   not call all-event coverage complete if this route cannot be exercised.
 - **Main after token-driven merge:** Confirm the backstop's decision. A same-SHA Automatic
-  Analysis record without coverage or without a successful CI scanner step must trigger a scan.
+  Analysis record without coverage or without a successful CI or catch-up scanner step must
+  trigger a scan. A processed same-SHA analysis with coverage and a successful prior catch-up
+  scanner step must not repeat forever.
   The daily schedule is a backstop, not a release-time SLA; dispatch manually before release.
 
 For each route, distinguish a scanner submission from a processed SonarCloud analysis. Record
