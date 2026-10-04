@@ -49,4 +49,23 @@ describe('LCOV report verification', () => {
     const result = verify('TN:\nSF:lib/example.js\nDA:1,1\nend_of_record\n');
     expect(result.status).toBe(0);
   });
+
+  it('rejects a malformed record after a valid one', () => {
+    const result = verify(
+      'SF:lib/valid.js\nDA:1,1\nend_of_record\nSF:lib/broken.js\nDA:broken\nend_of_record\n'
+    );
+    expect(result.status).toBe(1);
+  });
+
+  it('rejects content outside coverage records', () => {
+    expect(verify('junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n').status).toBe(1);
+    expect(verify('SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n').status).toBe(1);
+  });
+
+  it('accepts multiple complete source-file records', () => {
+    const result = verify(
+      'TN:\nSF:lib/one.js\nDA:1,0\nend_of_record\nTN:\nSF:lib/two.js\nDA:2,1\nend_of_record\n'
+    );
+    expect(result.status).toBe(0);
+  });
 });
