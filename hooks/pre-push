@@ -80,7 +80,7 @@ if command -v npx >/dev/null 2>&1; then
   
   # Check markdown
   if find . -name "*.md" -not -path "./node_modules/*" | head -1 | grep -q .; then
-    if ! npx markdownlint-cli2; then
+    if ! npm run markdown:lint; then
       echo "[pre-push] ❌ Markdown lint failed. Push aborted."
       echo "[pre-push] 📝 To fix: Run 'npm run markdown:fix' and commit the changes"
       exit 1

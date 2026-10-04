@@ -60,7 +60,7 @@ if [ -n "$staged_files" ]; then
   fi
 fi
 
-# Lint and fix markdown files with markdownlint-cli2
+# Lint and fix staged markdown files with the repository Markdown lint wrapper
 md_files=""
 while IFS= read -r file; do
   [ -z "$file" ] && continue
@@ -71,7 +71,7 @@ if [ -n "$md_files" ]; then
   if command -v npx >/dev/null 2>&1; then
     echo "[pre-commit] Running markdownlint --fix on staged markdown files..."
     # shellcheck disable=SC2086
-    if ! eval npx markdownlint-cli2 --fix $md_files; then
+    if ! eval node scripts/markdownlint.mjs --fix $md_files; then
       echo "[pre-commit] markdownlint --fix failed. Please review and fix the remaining issues above."
       exit 1
     fi

@@ -5,5 +5,5 @@ dist/
 build/
 *.log
 .remember/
-docs/superpowers/
-.github/instructions/
+**/docs/superpowers/
+**/.github/instructions/
