@@ -111,15 +111,17 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Run test coverage
-        run: npm run test:coverage
+        run: npm run test:coverage:verified
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        continue-on-error: ${{ github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
         with:
           directory: ./coverage
           # Fork and Dependabot PRs do not receive the Actions secret. Keep their
           # upload best-effort while requiring a successful upload for trusted runs.
           fail_ci_if_error: ${{ github.actor != 'dependabot[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+          disable_search: true
           files: ./coverage/lcov.info
           flags: unittests
           name: codecov-warp-sql-server-mcp

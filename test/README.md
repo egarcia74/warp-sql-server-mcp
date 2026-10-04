@@ -601,15 +601,15 @@ Every security-related test must validate:
 
 ```bash
 # Run all security-related tests
-npm test -- --grep "security|safety|validate"
+npm run test:coverage -- --testNamePattern "security|safety|validate"
 
 # Run specific security test categories
-npm test -- --grep "validateQuery"
-npm test -- --grep "Security Configuration"
-npm test -- --grep "Read-Only Mode"
+npm run test:coverage -- --testNamePattern "validateQuery"
+npm run test:coverage -- --testNamePattern "Security Configuration"
+npm run test:coverage -- --testNamePattern "Read-Only Mode"
 
 # Security test coverage
-npm run test:coverage -- --grep "security"
+npm run test:coverage -- --testNamePattern "security"
 ```
 
 ### Security Testing Checklist

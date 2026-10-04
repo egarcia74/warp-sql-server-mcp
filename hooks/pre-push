@@ -35,7 +35,7 @@ fi
 # Run test coverage check if available
 if grep -q '"test:coverage"' package.json; then
   echo "[pre-push] Running test coverage check..."
-  if ! npm run test:coverage; then
+  if ! npm run test:coverage:verified; then
     echo "[pre-push] ❌ Coverage check failed. Push aborted."
     echo "[pre-push] 📊 To fix: Add tests to improve coverage or review coverage requirements"
     exit 1

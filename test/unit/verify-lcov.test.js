@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -25,6 +25,15 @@ afterEach(() => {
 });
 
 describe('LCOV report verification', () => {
+  it('keeps the developer coverage command open to Vitest options while CI verifies the report', () => {
+    const { scripts } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url)));
+    expect(scripts['test:coverage']).toBe('vitest run --coverage');
+    expect(scripts['test:coverage:verified']).toBe(
+      'npm run test:coverage && node scripts/ci/verify-lcov.mjs'
+    );
+    expect(scripts.ci).toContain('npm run test:coverage:verified');
+  });
+
   it.each([
     ['missing report', undefined],
     ['empty report', ''],
@@ -37,7 +46,8 @@ describe('LCOV report verification', () => {
     ['non-numeric coverage total', 'SF:lib/example.js\nDA:1,1\nLF:not-a-number\nend_of_record\n'],
     ['zero line number', 'SF:lib/example.js\nDA:0,1\nend_of_record\n'],
     ['leading junk', 'junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n'],
-    ['trailing junk', 'SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n']
+    ['trailing junk', 'SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n'],
+    ['only empty source files', 'SF:lib/empty.js\nLF:0\nend_of_record\n']
   ])('rejects %s', (_description, contents) => {
     const result = verify(contents);
     expect(result.status).toBe(1);
@@ -58,6 +68,10 @@ describe('LCOV report verification', () => {
     [
       'multiple source records',
       'TN:\nSF:lib/one.js\nDA:1,0\nend_of_record\nTN:\nSF:lib/two.js\nDA:2,1\nend_of_record\n'
+    ],
+    [
+      'an empty source file alongside covered files',
+      'SF:lib/one.js\nDA:1,1\nend_of_record\nSF:lib/empty.js\nLF:0\nend_of_record\n'
     ]
   ])('accepts %s', (_description, contents) => {
     const result = verify(contents);
