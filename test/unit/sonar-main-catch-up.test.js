@@ -138,6 +138,7 @@ describe('main Sonar coverage catch-up', () => {
     expect(workflow.on.schedule).toHaveLength(1);
     const job = workflow.jobs.scan;
     expect(job.concurrency.group).toBe('sonar-main');
+    expect(job.concurrency.queue).toBe('max');
     expect(job.permissions).toEqual({ contents: 'read', actions: 'read' });
     expect(job.env ?? {}).not.toHaveProperty('SONAR_TOKEN');
     const scanner = job.steps.find(step => step.name === 'Submit main catch-up analysis');

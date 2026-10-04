@@ -15,6 +15,7 @@ jobs:
     concurrency:
       group: sonar-main
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
       actions: read
