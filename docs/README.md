@@ -64,6 +64,7 @@ For running and maintaining the server:
 - **[System Maintenance Guide](operations/MAINTENANCE.md)** - Process cleanup and resource management
 - **[Release Token Setup](operations/RELEASE-TOKEN-SETUP.md)** - CI/CD and release configuration
 - **[Dependabot Auto-Triage](operations/DEPENDABOT-AUTO-TRIAGE.md)** - Dependency management automation
+- **[SonarCloud Coverage Migration](operations/SONARCLOUD-COVERAGE.md)** - CI scanner cutover, verification, and rollback
 - **[Apple Silicon Docker](operations/APPLE-SILICON-DOCKER.md)** - Running the test container on arm64
 
 ## 📊 API Documentation
