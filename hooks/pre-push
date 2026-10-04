@@ -71,7 +71,7 @@ if command -v npx >/dev/null 2>&1; then
   fi
   
   # Check formatting
-  if ! npx prettier --check "**/*.{js,mjs,cjs,json,md}" --ignore-path .gitignore; then
+  if ! npm run format:check; then
     echo "[pre-push] ❌ Prettier formatting check failed. Push aborted."
     echo "[pre-push] 💅 To fix: Run 'npm run format' and commit the changes"
     exit 1
