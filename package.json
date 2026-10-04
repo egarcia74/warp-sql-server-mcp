@@ -36,7 +36,7 @@
     "test:integration:warp": "node test/manual/warp-mcp-performance-test.js",
     "test:integration:ci": "echo '⚠️  This requires a running SQL Server and configured SQL_SERVER_PASSWORD' && npm run test:integration:run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage && node scripts/ci/verify-lcov.mjs",
     "test:ui": "vitest --ui",
     "test:all": "npm run test",
     "docker:detect": "node test/docker/detect-platform.js",
