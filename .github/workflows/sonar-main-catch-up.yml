@@ -1,0 +1,61 @@
+name: Sonar Main Coverage Catch-up
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '17 4 * * *'
+
+# Backstop for token-driven merges that do not trigger push CI. This workflow
+# runs trusted main only and remains off until the coordinated Sonar cutover.
+jobs:
+  scan:
+    name: Check and scan main coverage
+    if: vars.SONAR_CI_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: sonar-main
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Check processed main analysis and CI evidence
+        id: freshness
+        run: node scripts/ci/sonar-main-catch-up.mjs check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Install trusted main dependencies
+        if: steps.freshness.outputs.scan == 'true'
+        run: npm ci --ignore-scripts
+
+      - name: Generate and verify main LCOV
+        if: steps.freshness.outputs.scan == 'true'
+        run: npm run test:coverage:verified
+
+      - name: Recheck remote main immediately before scan
+        if: steps.freshness.outputs.scan == 'true'
+        run: node scripts/ci/sonar-main-catch-up.mjs recheck
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Submit main catch-up analysis
+        if: steps.freshness.outputs.scan == 'true'
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: -Dsonar.scm.revision=${{ steps.freshness.outputs.checkout_sha }}
