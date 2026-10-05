@@ -387,6 +387,36 @@ describe('Sonar PR artifact provenance', () => {
     }
   });
 
+  it.each(['cost@v2.js', 'foo+bar.js', 'foo..bar.js', 'foo bar.js', 'foo!bar.js'])(
+    'accepts a tracked measured source with a safe Git filename: %s',
+    filename => {
+      const sourceRoot = makeSourceRoot();
+      const sourcePath = `lib/${filename}`;
+      writeFileSync(join(sourceRoot, sourcePath), 'export {};\n');
+      const reportText = `${lcov}SF:${sourcePath}\nDA:1,1\nend_of_record\n`;
+      const expected = verifyOrigin(validOrigin());
+      const manifest = createManifest({
+        runId: 42,
+        runAttempt: 2,
+        prNumber: 1403,
+        headRepositoryId: 20,
+        headSha: sha,
+        baseRef: 'main',
+        lcovSha256: createHash('sha256').update(reportText).digest('hex')
+      });
+      expect(
+        verifyDownloaded({
+          expected,
+          manifest,
+          entries: ['manifest.json', 'lcov.info'],
+          reportText,
+          trackedFiles: new Set(['index.js', 'lib/config.js', sourcePath]),
+          sourceRoot
+        })
+      ).toMatchObject({ headSha: sha, prNumber: 1403 });
+    }
+  );
+
   it('rejects a manifest whose LCOV digest differs from the downloaded data', () => {
     const sourceRoot = makeSourceRoot();
     const expected = verifyOrigin(validOrigin());
@@ -441,12 +471,15 @@ describe('Sonar PR artifact provenance', () => {
 
   it.each([
     ['traversal', 'SF:../secret.js\nDA:1,1\nend_of_record\n'],
+    ['nested traversal', 'SF:lib/../secret.js\nDA:1,1\nend_of_record\n'],
     ['absolute', 'SF:/tmp/secret.js\nDA:1,1\nend_of_record\n'],
     ['untracked', 'SF:lib/secret.js\nDA:1,1\nend_of_record\n'],
     ['wrong scope', 'SF:test/secret.js\nDA:1,1\nend_of_record\n']
   ])('rejects %s in downloaded LCOV', (_name, reportText) => {
     const sourceRoot = makeSourceRoot();
     const expected = verifyOrigin(validOrigin());
+    const trackedFiles = new Set(['index.js', 'lib/config.js']);
+    if (_name !== 'untracked') trackedFiles.add(reportText.match(/^SF:(.+)$/m)[1]);
     const manifest = createManifest({
       runId: 42,
       runAttempt: 2,
@@ -454,7 +487,7 @@ describe('Sonar PR artifact provenance', () => {
       headRepositoryId: 20,
       headSha: sha,
       baseRef: 'main',
-      lcovSha256: 'c'.repeat(64)
+      lcovSha256: createHash('sha256').update(reportText).digest('hex')
     });
     expect(() =>
       verifyDownloaded({
@@ -462,7 +495,7 @@ describe('Sonar PR artifact provenance', () => {
         manifest,
         entries: ['manifest.json', 'lcov.info'],
         reportText,
-        trackedFiles: new Set(['index.js', 'lib/config.js']),
+        trackedFiles,
         sourceRoot
       })
     ).toThrow();

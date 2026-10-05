@@ -220,11 +220,10 @@ function requireSafeLcovSource(path, trackedFiles, sourceRoot) {
     (!path.startsWith('lib/') || !path.endsWith('.js'))
   )
     throw new Error('LCOV source path outside measured scope');
+  const segments = path.split('/');
   if (
-    path.includes('..') ||
-    path.includes('\\') ||
-    path.includes('//') ||
-    !/^[A-Za-z0-9_./-]+$/.test(path) ||
+    /[\0\r\n\\]/.test(path) ||
+    segments.some(segment => segment === '' || segment === '.' || segment === '..') ||
     !trackedFiles.has(path)
   )
     throw new Error('unsafe or untracked LCOV source path');
