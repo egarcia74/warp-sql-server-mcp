@@ -25,7 +25,7 @@ function digest(value, label) {
   return value.toLowerCase();
 }
 
-function safeRef(value, label) {
+export function safeRef(value, label) {
   if (typeof value !== 'string' || value.length === 0 || value.length > 255)
     throw new Error(`invalid ${label}`);
   try {

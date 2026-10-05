@@ -73,6 +73,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Fetch validated PR target branch
+        if: steps.final_read.outputs.scan == 'true'
+        run: node "$RUNNER_TEMP/sonar-trusted/ci/sonar-pr-followup.mjs" fetch-base
+
       - name: Restore trusted Sonar configuration
         if: steps.final_read.outputs.scan == 'true'
         env:

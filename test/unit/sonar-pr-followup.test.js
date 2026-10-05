@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { URL } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import * as followup from '../../scripts/ci/sonar-pr-followup.mjs';
+import { scrubbedEnv } from '../../scripts/ci/verify-publish-tree.mjs';
 import {
   decideFollowupFinal,
   formatFailureSummary,
@@ -13,6 +18,10 @@ import {
 const sha = 'a'.repeat(40);
 const mergeSha = 'b'.repeat(40);
 const digest = 'c'.repeat(64);
+
+function git(cwd, ...args) {
+  return execFileSync('/usr/bin/git', args, { cwd, encoding: 'utf8', env: scrubbedEnv() }).trim();
+}
 
 function fixture() {
   const run = {
@@ -80,6 +89,33 @@ function fixture() {
 }
 
 describe('read-only Sonar PR follow-up', () => {
+  it('fetches the validated target branch from the base repository without changing the PR head', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'wssm-sonar-base-'));
+    try {
+      const base = join(scratch, 'base');
+      const fork = join(scratch, 'fork');
+      git(scratch, 'init', '-q', '-b', 'main', base);
+      git(scratch, 'init', '-q', '-b', 'feature', fork);
+      for (const cwd of [base, fork]) {
+        git(cwd, 'config', 'user.name', 'Sonar test');
+        git(cwd, 'config', 'user.email', 'sonar-test@example.invalid');
+        writeFileSync(join(cwd, 'source.txt'), cwd === base ? 'base\n' : 'fork\n');
+        git(cwd, 'add', 'source.txt');
+        git(cwd, 'commit', '-q', '-m', 'fixture');
+      }
+      const baseSha = git(base, 'rev-parse', 'HEAD');
+      const forkSha = git(fork, 'rev-parse', 'HEAD');
+      expect(git(fork, 'branch', '-r')).toBe('');
+
+      followup.fetchValidatedBaseBranch('main', base, fork);
+
+      expect(git(fork, 'rev-parse', 'refs/remotes/origin/main')).toBe(baseSha);
+      expect(git(fork, 'rev-parse', 'HEAD')).toBe(forkSha);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   it('stores verdicts only under the trusted runner temporary directory', () => {
     expect(trustedVerdictPath('/tmp/runner')).toBe('/tmp/runner/sonar-trusted/verdict.json');
     expect(() => trustedVerdictPath('../checkout')).toThrow(/runner temporary/i);
@@ -339,9 +375,15 @@ describe('read-only Sonar PR follow-up', () => {
     const steps = job.steps;
     const trustedCopy = steps.findIndex(step => step.name === 'Preserve trusted scanner helpers');
     const untrustedCheckout = steps.findIndex(step => step.name === 'Checkout verified PR head');
+    const baseFetch = steps.findIndex(step => step.name === 'Fetch validated PR target branch');
     const scannerIndex = steps.findIndex(step => step.name === 'Submit isolated Sonar PR analysis');
     expect(trustedCopy).toBeGreaterThan(-1);
     expect(untrustedCheckout).toBeGreaterThan(trustedCopy);
+    expect(baseFetch).toBeGreaterThan(untrustedCheckout);
+    expect(baseFetch).toBeLessThan(scannerIndex);
+    expect(steps[baseFetch].run).toBe(
+      'node "$RUNNER_TEMP/sonar-trusted/ci/sonar-pr-followup.mjs" fetch-base'
+    );
     expect(scannerIndex).toBeGreaterThan(untrustedCheckout);
     for (const step of steps.slice(untrustedCheckout + 1, scannerIndex)) {
       if (step.name === 'Restore trusted Sonar configuration') {

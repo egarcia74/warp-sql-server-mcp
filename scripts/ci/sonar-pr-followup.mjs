@@ -2,7 +2,12 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkedTrackedFiles, verifyDownloaded, verifyOrigin } from './sonar-pr-artifact.mjs';
+import {
+  checkedTrackedFiles,
+  safeRef,
+  verifyDownloaded,
+  verifyOrigin
+} from './sonar-pr-artifact.mjs';
 import { scrubbedEnv } from './verify-publish-tree.mjs';
 
 const repository = 'egarcia74/warp-sql-server-mcp';
@@ -287,6 +292,36 @@ function verifyDownload(artifactDirectory) {
   summary('Sonar PR follow-up LCOV validated.');
 }
 
+export function fetchValidatedBaseBranch(baseRef, baseUrl, cwd = process.cwd()) {
+  const branch = safeRef(baseRef, 'PR base ref');
+  const target = `refs/remotes/origin/${branch}`;
+  execFileSync(
+    '/usr/bin/git',
+    [
+      'fetch',
+      '--no-tags',
+      '--no-write-fetch-head',
+      '--',
+      baseUrl,
+      `+refs/heads/${branch}:${target}`
+    ],
+    { cwd, env: scrubbedEnv(), stdio: ['ignore', 'pipe', 'pipe'] }
+  );
+  const fetched = execFileSync('/usr/bin/git', ['rev-parse', '--verify', target], {
+    cwd,
+    encoding: 'utf8',
+    env: scrubbedEnv()
+  }).trim();
+  if (!shaPattern.test(fetched)) throw new Error('invalid fetched PR base revision');
+  return fetched;
+}
+
+function fetchBase() {
+  const expected = readVerdict();
+  fetchValidatedBaseBranch(expected.baseRef, `https://github.com/${repository}.git`);
+  summary('Sonar PR follow-up target branch fetched from base repository.');
+}
+
 async function finalCheck() {
   const expected = readVerdict();
   const pr = await fetchGitHubJson(`/pulls/${expected.prNumber}`);
@@ -303,6 +338,7 @@ async function main() {
   if (mode === 'preflight' && /^[1-9]\d*$/.test(argument ?? '')) return preflight(Number(argument));
   if (mode === 'verify-download' && argument) return verifyDownload(argument);
   if (mode === 'final-check' && !argument) return finalCheck();
+  if (mode === 'fetch-base' && !argument) return fetchBase();
   if (mode === 'report-failure' && /^[1-9]\d*$/.test(argument ?? ''))
     return reportFailure(Number(argument));
   throw new Error('invalid Sonar follow-up command');
