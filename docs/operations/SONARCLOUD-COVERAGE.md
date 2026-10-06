@@ -48,21 +48,30 @@ revision: line coverage 86.4%, branch coverage 86.3%, and gate `OK`. The scanner
 `coverage/lcov.info` without an LCOV-path warning. Of 196 analyzed files, JavaScript unit tests
 were classified as tests and `test/docker/init-db.sql` was excluded. The shipped CLI is included
 in the coverage denominator but currently has 0% line coverage; that is a visible testing gap,
-not a missing import.
+not a missing import ([issue #1424](https://github.com/egarcia74/warp-sql-server-mcp/issues/1424)).
 
 The scanner surfaced nine open, minor, historically dated issues that the pre-cutover API query
 did not return: seven `javascript:S6551` logger stringification findings and two
 `javascript:S1874` deprecated `Server` findings in `index.js`. None is a security finding. They
-need separate triage; do not hide them or call the issue inventory unchanged merely because the
-new-code quality gate passes.
+need [separate triage](https://github.com/egarcia74/warp-sql-server-mcp/issues/1425); do not hide
+them or call the issue inventory unchanged merely because the new-code quality gate passes.
 
 The [Dependabot PR #1421](https://github.com/egarcia74/warp-sql-server-mcp/pull/1421) CI rerun
 generated its coverage artifact without submitting a token-bearing direct scan. Its
 [privileged follow-up](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37434534280)
 passed and SonarCloud registered an `OK` analysis for the exact PR head
 `bacbe56bc54e42622f5c52aef92b54cd15a3d2ff`, with both coverage measures present and zero
-open PR issues. Same-repository, hostile-fork, and token-driven post-merge paths remain to be
-verified before closing #1403.
+open PR issues.
+
+The [same-repository PR #1423](https://github.com/egarcia74/warp-sql-server-mcp/pull/1423)
+used the direct CI scanner. Its first head received an exact-head SonarCloud analysis with
+imported line and branch coverage, an `OK` gate, zero open PR issues, and a passing GitHub
+SonarCloud check. The scanner log retained `test/**` as test code, excluded the T-SQL fixture,
+and imported LCOV without a path warning. Recheck the final PR head after any documentation
+update. A second [main catch-up run](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37436954003)
+correctly skipped dependency installation, coverage generation, and scanner submission because
+the same main revision already had processed coverage. A real token-driven post-merge run and a
+controlled hostile-fork run remain to be verified before closing #1403.
 
 ## Deploy and preflight with scanners disabled
 
