@@ -1,13 +1,15 @@
 # SonarCloud coverage migration
 
 This runbook tracks [issue #1403](https://github.com/egarcia74/warp-sql-server-mcp/issues/1403).
-It is **not** authorization to change the analysis method before the workflows are merged,
-reviewed, and verified. Keep Automatic Analysis and CI scanner submissions mutually exclusive.
+The coordinated cutover was completed on 2026-10-06: Automatic Analysis is **off** and the guarded
+CI scanner is **on**. The preflight, cutover, and rollback steps below are retained as a historical
+record and recovery procedure; do not repeat the cutover against the current configuration.
+Keep Automatic Analysis and CI scanner submissions mutually exclusive.
 The CI switch is the repository Actions variable `SONAR_CI_ENABLED`; the credential is the
 repository Actions secret `SONAR_TOKEN`. Never print or copy the token into a PR workflow,
 Dependabot secret, artifact, or comment.
 
-## Current observation baseline
+## Pre-cutover observation baseline
 
 Snapshot at 2026-10-04 06:11:39 UTC, before CI scanner cutover; refresh all values immediately before switching:
 
@@ -34,6 +36,61 @@ The CI coverage metric is scoped to the shipped MCP server and CLI (`index.js`, 
 security and quality findings; `sonar.coverage.exclusions` removes only `scripts/**`,
 `eslint.config.js`, and `vitest.config.js` from the coverage denominator. Verify the first
 scanner-based analysis reports both line and branch measures without shrinking issue scope.
+
+## First CI scanner verification
+
+On 2026-10-06, immediately before cutover, Automatic Analysis was on, its background queue was
+empty, `SONAR_CI_ENABLED` was absent, and the latest processed `main` analysis matched
+`44105bc5f24161806a500628ac18eec267fb9d4d`. The gate was `OK`, the unresolved-issues API
+returned zero, and line and branch coverage were absent. After switching Automatic Analysis off
+and enabling the guarded CI scanner, the
+[main catch-up run](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37433771050)
+passed. SonarCloud processed analysis `0723d407-be8b-4d76-8c55-145614e2b9a7` for that exact
+revision: line coverage 86.4%, branch coverage 86.3%, and gate `OK`. The scanner log imported
+`coverage/lcov.info` without an LCOV-path warning. Of 196 analyzed files, JavaScript unit tests
+were classified as tests and `test/docker/init-db.sql` was excluded. The shipped CLI is included
+in the coverage denominator but currently has 0% line coverage; that is a visible testing gap,
+not a missing import ([issue #1424](https://github.com/egarcia74/warp-sql-server-mcp/issues/1424)).
+The processed analysis still indexes representative maintenance and configuration files:
+`scripts/ci/sonar-pr-followup.mjs`, `eslint.config.js`, and `vitest.config.js` are all SonarCloud
+source-file components dated 2026-10-06 08:06:09 UTC. The scanner's `sonar.sources=.` and sole
+issue-analysis exclusion `test/docker/init-db.sql` match the prior Automatic Analysis scope;
+the separate coverage exclusions do not remove those files from issue analysis.
+
+The post-cutover `main` gate is `OK`. Its evaluated conditions are new reliability, security,
+and maintainability ratings A; new coverage at least 80% (actual 96.3%); new duplication at most
+3% (actual 0.3%); and security hotspots reviewed 100%. The new-code definition remains
+`previous_version`, baseline 2025-09-27 10:06:12 UTC. The pre-cutover snapshot did not evaluate
+new coverage because no coverage measure existed, so `OK` alone must not be interpreted as proof
+of identical evaluated conditions before and after the switch.
+
+The scanner surfaced nine open, minor, historically dated issues that the pre-cutover API query
+did not return: seven `javascript:S6551` logger stringification findings and two
+`javascript:S1874` deprecated `Server` findings in `index.js`. None is a security finding. They
+need [separate triage](https://github.com/egarcia74/warp-sql-server-mcp/issues/1425); do not hide
+them or call the issue inventory unchanged merely because the new-code quality gate passes.
+
+The [Dependabot PR #1421](https://github.com/egarcia74/warp-sql-server-mcp/pull/1421) CI rerun
+generated its coverage artifact without submitting a token-bearing direct scan. Its
+[privileged follow-up](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37434534280)
+passed and SonarCloud registered an `OK` analysis for the exact PR head
+`bacbe56bc54e42622f5c52aef92b54cd15a3d2ff`, with 86.4% line and 86.3% branch coverage
+and zero open PR issues. Its scanner log confirms the JavaScript/TypeScript coverage sensor
+analyzed the downloaded `lcov.info` from the validated artifact without an LCOV-path warning.
+
+The [same-repository PR #1423](https://github.com/egarcia74/warp-sql-server-mcp/pull/1423)
+used the direct CI scanner. For first head `18e474c8ac438cc9329d2635fb13ddb85c8c1369`,
+[CI run 37436267545](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37436267545)
+submitted an analysis that SonarCloud processed at 2026-10-06 08:31:19 UTC (analysis
+`f982b328-1fab-4d9f-a638-7b4d9e46cd03`). It reported 86.4% line and 86.4% branch
+coverage, an `OK` gate, zero open PR issues, and a passing GitHub SonarCloud check. The scanner
+log retained `test/**` as test code, excluded the T-SQL fixture, and imported LCOV without a
+path warning. Recheck each later PR head; record its verification on #1403 rather than treating
+this first-head result as current. A second
+[main catch-up run](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37436954003)
+correctly skipped dependency installation, coverage generation, and scanner submission because
+the same main revision already had processed coverage. A real token-driven post-merge run and a
+controlled hostile-fork run remain to be verified before closing #1403.
 
 ## Deploy and preflight with scanners disabled
 
