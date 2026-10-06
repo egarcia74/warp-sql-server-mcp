@@ -79,11 +79,15 @@ and zero open PR issues. Its scanner log confirms the JavaScript/TypeScript cove
 analyzed the downloaded `lcov.info` from the validated artifact without an LCOV-path warning.
 
 The [same-repository PR #1423](https://github.com/egarcia74/warp-sql-server-mcp/pull/1423)
-used the direct CI scanner. Its first head received an exact-head SonarCloud analysis with
-imported line and branch coverage, an `OK` gate, zero open PR issues, and a passing GitHub
-SonarCloud check. The scanner log retained `test/**` as test code, excluded the T-SQL fixture,
-and imported LCOV without a path warning. Recheck the final PR head after any documentation
-update. A second [main catch-up run](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37436954003)
+used the direct CI scanner. For first head `18e474c8ac438cc9329d2635fb13ddb85c8c1369`,
+[CI run 37436267545](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37436267545)
+submitted an analysis that SonarCloud processed at 2026-10-06 08:31:19 UTC (analysis
+`f982b328-1fab-4d9f-a638-7b4d9e46cd03`). It reported 86.4% line and 86.4% branch
+coverage, an `OK` gate, zero open PR issues, and a passing GitHub SonarCloud check. The scanner
+log retained `test/**` as test code, excluded the T-SQL fixture, and imported LCOV without a
+path warning. Recheck each later PR head; record its verification on #1403 rather than treating
+this first-head result as current. A second
+[main catch-up run](https://github.com/egarcia74/warp-sql-server-mcp/actions/runs/37436954003)
 correctly skipped dependency installation, coverage generation, and scanner submission because
 the same main revision already had processed coverage. A real token-driven post-merge run and a
 controlled hostile-fork run remain to be verified before closing #1403.
