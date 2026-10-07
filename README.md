@@ -1,5 +1,7 @@
 # SQL Server MCP - AI-Powered Database Integration
 
+<!-- Temporary contributor-fork CI and SonarCloud coverage smoke test; do not merge. -->
+
 Connect AI assistants to your SQL Server databases with enterprise-grade security and performance.
 
 > **🤖 AI-First Database Access**: Enable GitHub Copilot, Warp AI, and other assistants to interact with your SQL
