@@ -133,6 +133,30 @@ describe('read-only Sonar PR follow-up', () => {
     });
   });
 
+  it('resolves a fork run when GitHub omits both run and commit PR associations', async () => {
+    const { run, pr, responses, fetchJson } = fixture();
+    responses[`/commits/${sha}/pulls?per_page=100`] = [];
+    responses['/pulls?state=all&head=forker%3Afix%2Fcoverage&per_page=100'] = [pr];
+
+    await expect(resolveFollowup(42, fetchJson, run)).resolves.toMatchObject({
+      prNumber: 1403,
+      headSha: sha,
+      headRepositoryId: 20,
+      artifactId: 99
+    });
+  });
+
+  it('rejects ambiguous fork-head PR associations', async () => {
+    const { run, pr, responses, fetchJson } = fixture();
+    responses[`/commits/${sha}/pulls?per_page=100`] = [];
+    responses['/pulls?state=all&head=forker%3Afix%2Fcoverage&per_page=100'] = [
+      pr,
+      { ...pr, number: 1404 }
+    ];
+
+    await expect(resolveFollowup(42, fetchJson, run)).rejects.toThrow(/ambiguous/i);
+  });
+
   it('rejects ambiguous commit-to-PR association', async () => {
     const { run, responses, fetchJson } = fixture();
     responses[`/commits/${sha}/pulls?per_page=100`] = [{ number: 1403 }, { number: 1404 }];
