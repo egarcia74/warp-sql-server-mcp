@@ -60,6 +60,9 @@ jobs:
           ref: ${{ steps.preflight.outputs.head_sha }}
           fetch-depth: 0
           persist-credentials: false
+          # Reviewed exception: only static source data is read after checkout.
+          # No fork script, dependency install, or PR-writable cache runs here.
+          allow-unsafe-pr-checkout: true
 
       - name: Validate checked-out source and LCOV
         if: steps.preflight.outputs.scan == 'true'

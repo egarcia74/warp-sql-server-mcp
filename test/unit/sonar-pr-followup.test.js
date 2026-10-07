@@ -403,6 +403,19 @@ describe('read-only Sonar PR follow-up', () => {
     const scannerIndex = steps.findIndex(step => step.name === 'Submit isolated Sonar PR analysis');
     expect(trustedCopy).toBeGreaterThan(-1);
     expect(untrustedCheckout).toBeGreaterThan(trustedCopy);
+    expect(steps[untrustedCheckout].with).toMatchObject({
+      repository: '${{ steps.preflight.outputs.head_repo }}',
+      ref: '${{ steps.preflight.outputs.head_sha }}',
+      'persist-credentials': false,
+      'allow-unsafe-pr-checkout': true
+    });
+    expect(
+      steps
+        .filter(
+          (step, index) => index !== untrustedCheckout && step.uses?.startsWith('actions/checkout@')
+        )
+        .every(step => step.with?.['allow-unsafe-pr-checkout'] !== true)
+    ).toBe(true);
     expect(baseFetch).toBeGreaterThan(untrustedCheckout);
     expect(baseFetch).toBeLessThan(scannerIndex);
     expect(steps[baseFetch].run).toBe(
