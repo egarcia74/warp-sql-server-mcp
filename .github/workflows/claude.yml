@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write # push commits to claude/* branches
+      contents: read # read repository content; the App token pushes commits
       pull-requests: write # comment on and open PRs
       issues: write # comment on issues
       id-token: write # OIDC token for the action's auth exchange
@@ -178,7 +178,7 @@ jobs:
 
           # Scopes of the app token minted by the OIDC exchange. These are NOT
           # inherited from the job's `permissions:` block, which only governs
-          # GITHUB_TOKEN (unused by this action). The exchange defaults to
+          # GITHUB_TOKEN (used for action setup and comment fallback). The exchange defaults to
           # contents/pull_requests/issues write, so Claude cannot read CI
           # results or logs unless actions:read is requested here.
           additional_permissions: |
