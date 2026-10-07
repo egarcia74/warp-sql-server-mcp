@@ -46,6 +46,19 @@ export async function resolveFollowup(runId, fetchJson, eventRun) {
   if (!Array.isArray(associations)) throw new Error('missing PR association field');
   if (associations.length === 0)
     associations = await fetchJson(`/commits/${eventRun.head_sha}/pulls?per_page=100`);
+  if (Array.isArray(associations) && associations.length === 0) {
+    const headRepositoryName = eventRun.head_repository?.full_name;
+    if (
+      typeof headRepositoryName !== 'string' ||
+      !/^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/.test(headRepositoryName)
+    )
+      throw new Error('invalid head repository name');
+    const owner = headRepositoryName.split('/')[0];
+    const head = `${owner}:${safeRef(eventRun.head_branch, 'run head ref')}`;
+    associations = await fetchJson(
+      `/pulls?state=all&head=${encodeURIComponent(head)}&per_page=100`
+    );
+  }
   if (!Array.isArray(associations) || associations.length !== 1)
     throw new Error('ambiguous or missing PR association');
   const prNumber = positiveInteger(associations[0]?.number, 'associated PR number');
