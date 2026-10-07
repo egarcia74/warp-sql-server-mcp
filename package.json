@@ -154,7 +154,7 @@
       "ini": "6.0.0",
       "js-yaml": "5.4.2",
       "markdown-it": "15.0.1",
-      "smol-toml": "1.8.0"
+      "smol-toml": "1.9.0"
     }
   },
   "engines": {
