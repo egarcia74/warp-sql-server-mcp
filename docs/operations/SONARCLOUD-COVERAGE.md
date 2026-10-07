@@ -105,7 +105,9 @@ controlled hostile-fork run remain to be verified before closing #1403.
    job, not a required PR check. Hold manual fork merges until it passes.
    The two checkouts in this `workflow_run` may be flagged by `githubactions:S7631`. The first
    explicitly checks out trusted `main`. The second checks out a verified fork SHA only as
-   **source data** for static analysis. After that checkout, the shell commands invoke
+   **source data** for static analysis. GitHub's checkout action therefore needs the explicit
+   `allow-unsafe-pr-checkout` opt-in on that second checkout only; this is not permission to
+   execute fork code. After that checkout, the shell commands invoke
    previously copied trusted helpers from `$RUNNER_TEMP` and replace the PR's scanner
    configuration with the trusted copy; there is no dependency install,
    source script, PR-writable cache, submodule checkout, or retained Git credential. The helper
