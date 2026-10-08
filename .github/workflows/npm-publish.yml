@@ -17,6 +17,8 @@ permissions:
 jobs:
   publish:
     name: Publish to npm
+    # GitHub expression string equality ignores case. The required environment's exact-main
+    # branch restriction must reject case variants; this YAML guard is defense in depth.
     if: ${{ github.repository == 'egarcia74/warp-sql-server-mcp' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     environment: npm-publish

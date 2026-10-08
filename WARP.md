@@ -1725,9 +1725,11 @@ gh run watch <run-id>
 Publishing is a separate workflow, `.github/workflows/npm-publish.yml`. It is **not** triggered by
 the tag or the Release - it triggers on a push to `main` that touches `package.json`, which in
 practice means the merge of the version-bump PR above. It can also be retried by hand with
-`gh workflow run npm-publish.yml --ref main` (`workflow_dispatch`). The job admits only the exact
-repository's main push or main dispatch, checks out that event SHA, and requests the `npm-publish`
-environment. The tag and npm-version gates below decide whether an admitted run publishes:
+`gh workflow run npm-publish.yml --ref main` (`workflow_dispatch`). The job guard checks the
+repository, event and main ref, checks out that event SHA, and requests the `npm-publish`
+environment. GitHub expression string equality ignores case, so a case-variant branch ref such as
+`refs/heads/MAIN` can pass the YAML check. The required exact-main environment branch rule must
+reject it. The tag and npm-version gates below decide whether an admitted run publishes:
 
 - It publishes only when a tag matching the new `package.json` version already exists, and skips if
   that version is already on npm - so a `package.json` edit that is not a release bump is a no-op.

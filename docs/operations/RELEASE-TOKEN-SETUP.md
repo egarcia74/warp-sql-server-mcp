@@ -283,7 +283,9 @@ Taken from [docs.npmjs.com/trusted-publishers](https://docs.npmjs.com/trusted-pu
 - **Main-only environment**: the `publish` job requests `npm-publish`. Configure that GitHub
   environment with selected branch/tag restrictions containing one exact **branch** `main` and
   no tag patterns. Do not use "protected branches only"; it can admit other protected branches.
-  The job-level main guard is useful defense in depth, but a branch can edit its own workflow.
+  GitHub expression string equality ignores case, so `refs/heads/MAIN` can pass the job's YAML
+  main-ref comparison. The exact-main environment rule must reject case-variant branch refs.
+  The job-level guard is useful defense in depth, but a branch can edit its own workflow.
   An environment-bound npm publisher must reject a branch that omits the environment.
 - **Provenance**: "When you publish using trusted publishing from GitHub Actions or GitLab CI/CD,
   npm automatically generates and publishes provenance attestations for your package. This happens
@@ -335,8 +337,9 @@ Do not run a publish solely to test these settings.
 
 5. Read GitHub's `npm-publish` environment settings back: selected branches/tags mode, only the
    exact `main` branch, no tag patterns, and the current reviewer, wait, bypass and custom rules.
-   Read the npm entries back as well. Source changes or a skipped off-main run alone do not prove
-   npm will reject an off-main publish.
+   Include case-variant branch refs such as `refs/heads/MAIN` in the external-policy acceptance
+   evidence. Read the npm entries back as well. Local fixtures or a skipped off-main run alone
+   do not prove npm will reject an off-main publish.
 
 ### Verify the next authorized release
 
@@ -360,9 +363,11 @@ gh workflow run npm-publish.yml --ref main
 gh run watch
 ```
 
-The job rejects branch and tag refs before checkout. The **Check if this is a release version
-bump** step publishes only when a `vX.Y.Z` tag matching `package.json` exists and that version is
-not already on npm.
+The job guard rejects other branch names and tag refs before checkout, subject to GitHub's
+case-insensitive expression equality: `refs/heads/MAIN` can pass the YAML comparison. The
+environment's exact-main rule must reject that case variant. The **Check if this is a release
+version bump** step publishes only when a `vX.Y.Z` tag matching `package.json` exists and that
+version is not already on npm.
 Use it after a failed publish has been fixed, or after a tag was created late. The existing tag
 lookup uses a short revision name, and a failed `npm view` is treated as unpublished; these gates
 are not a replacement for main-only admission or an exact-tag/registry-error guarantee.

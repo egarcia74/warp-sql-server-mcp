@@ -16,6 +16,9 @@ function admitted({
 } = {}) {
   const expression = publish.if?.match(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/)?.[1];
   expect(expression, 'publish job needs a GitHub Actions admission expression').toBeDefined();
+  // This checks the actual YAML expression against the lowercase fixtures below, using JS.
+  // GitHub's string == ignores case: refs/heads/MAIN can pass the YAML comparison even
+  // though JS rejects it. The exact-main environment restriction must cover that case.
   return runInNewContext(
     expression,
     { github: { repository, event_name, ref } },
