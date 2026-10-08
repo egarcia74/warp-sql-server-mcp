@@ -66,6 +66,15 @@ describe('rendered Winston logger output', () => {
     expect(rendered).not.toContain('[object Object]');
   });
 
+  test('development formatter explicitly renders null and scalars while omitting functions', () => {
+    const [main] = captureFormatters();
+    expect(main({ level: 'info', message: null })).toBe('[info] null');
+    expect(main({ level: 'info', timestamp: 17, message: false })).toBe('17 [info] false');
+    expect(main({ level: 'info', timestamp: 'time', message: () => 'sensitive' })).toBe(
+      'time [info] <object value omitted>'
+    );
+  });
+
   test('configuration layout keeps its summary and masks an object message', () => {
     const [main] = captureFormatters();
     const rendered = main({
