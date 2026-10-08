@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { ConnectionManager } from '../../lib/database/connection-manager.js';
 import { QueryOptimizer } from '../../lib/analysis/query-optimizer.js';
@@ -52,6 +52,11 @@ describe('SqlServerMCP Index', () => {
 
   afterEach(() => {
     sandbox.restore();
+  });
+
+  it('keeps the public low-level server through the supported MCP wrapper', () => {
+    expect(server.mcpServer).to.be.instanceOf(McpServer);
+    expect(server.server).to.equal(server.mcpServer.server);
   });
 
   describe('Error Handling and Edge Cases', () => {
@@ -699,7 +704,7 @@ describe('server entrypoint', () => {
 
   it('runs the direct entrypoint when stdio connection succeeds', async () => {
     const originalArgv1 = process.argv[1];
-    const connect = sinon.stub(Server.prototype, 'connect').resolves();
+    const connect = sinon.stub(McpServer.prototype, 'connect').resolves();
 
     try {
       process.argv[1] = fileURLToPath(entrypointUrl);
@@ -715,7 +720,7 @@ describe('server entrypoint', () => {
     const originalArgv1 = process.argv[1];
     const failure = new Error('stdio startup failed');
     const exitError = new Error('process exit intercepted');
-    const connect = sinon.stub(Server.prototype, 'connect').rejects(failure);
+    const connect = sinon.stub(McpServer.prototype, 'connect').rejects(failure);
     const stderr = sinon.stub(console, 'error');
     const exit = sinon.stub(process, 'exit').throws(exitError);
 

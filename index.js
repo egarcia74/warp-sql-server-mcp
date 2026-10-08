@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
@@ -63,7 +63,7 @@ const VERSION = packageJson.version;
 
 class SqlServerMCP {
   constructor() {
-    this.server = new Server(
+    this.mcpServer = new McpServer(
       {
         name: 'warp-sql-server-mcp',
         version: VERSION,
@@ -79,6 +79,7 @@ class SqlServerMCP {
           "🗄️ SQL Server MCP Server - Enterprise-grade database operations with graduated safety levels\n\n📊 Available Operations:\n• Database exploration: list_databases, list_tables, describe_table\n• Data operations: execute_query, get_table_data, export_table_csv\n• Performance analysis: get_performance_stats, analyze_query_performance\n• Query optimization: get_index_recommendations, detect_query_bottlenecks\n• Server diagnostics: get_server_info, get_connection_health\n\n🔒 Security Features:\n• Three-tier safety system with read-only, DML, and DDL restrictions\n• Query validation and SQL injection protection\n• Comprehensive audit logging and performance monitoring\n\n⚙️ Configuration:\n• Use 'get_server_info' tool to view current security settings\n• Supports both SQL Server and Windows authentication\n\n🚀 Quick Start: Try 'list_databases' to explore available databases"
       }
     );
+    this.server = this.mcpServer.server;
 
     // Initialize components with dependency injection
     this.config = serverConfig;
@@ -850,7 +851,7 @@ class SqlServerMCP {
 
   async run() {
     const transport = new StdioServerTransport();
-    await this.server.connect(transport);
+    await this.mcpServer.connect(transport);
 
     if (process.env.NODE_ENV !== 'test') {
       this.logger.info('SQL Server MCP server running on stdio');
