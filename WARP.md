@@ -504,6 +504,12 @@ This section documents standardized procedures for reviewing and responding to s
   - Example: `mcr.microsoft.com/mssql/server:2022-latest@sha256:d1d2fa72786dd255f25ef85a4862510db1d4f9aa844519db565136311c0d7c7f` (see `test/docker/detect-platform.js`).
   - Guidance: Periodically refresh to a newer digest after validation; keep docs in `test/docker/README.md` in sync.
 - GitHub Actions pinning: Third‑party actions are pinned to commit SHAs where feasible.
+- Documentation PRs: The main-only docs generator runs npm and repository scripts with read-only
+  permissions. A separate read-only writer job checks out the triggering main SHA, downloads only
+  that run's generated artifact, and validates its three expected files and hashes. Only its final
+  step receives `DOCS_PAT` to commit, push, and create a PR; a changed artifact fails closed if the
+  PAT is unavailable. A no-diff run needs no PAT. The hashes detect transfer changes, while the
+  main-only event gate and exact-SHA checkout establish the source trust boundary.
 - SAST coverage: CodeQL runs on all branches (push and pull_request) to maximize coverage and satisfy Scorecard SAST checks.
 - CI enforcement: Protect `main` by requiring "Tests" and "CodeQL" checks to pass before merge.
 
