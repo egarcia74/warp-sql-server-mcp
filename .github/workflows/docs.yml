@@ -243,6 +243,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      artifact_name: ${{ steps.describe-generated-docs.outputs.artifact_name }}
       tools_count: ${{ steps.describe-generated-docs.outputs.tools_count }}
       docs_index_sha256: ${{ steps.describe-generated-docs.outputs.docs_index_sha256 }}
       docs_tools_sha256: ${{ steps.describe-generated-docs.outputs.docs_tools_sha256 }}
@@ -290,6 +291,7 @@ jobs:
           tool_count=$(node -e "const {toolsCount} = require('./docs-data/tools.json'); if (!Number.isSafeInteger(toolsCount) || toolsCount < 1 || toolsCount > 999) process.exit(1); console.log(toolsCount);")
           echo "✅ Successfully generated documentation for $tool_count MCP tools"
           {
+            echo "artifact_name=generated-documentation-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             echo "tools_count=$tool_count"
             echo "docs_index_sha256=$(sha256sum docs/index.html | cut -d' ' -f1)"
             echo "docs_tools_sha256=$(sha256sum docs/tools.html | cut -d' ' -f1)"
@@ -300,7 +302,7 @@ jobs:
         id: upload-generated-docs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
-          name: generated-documentation-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ steps.describe-generated-docs.outputs.artifact_name }}
           path: |
             docs/index.html
             docs/tools.html
@@ -327,7 +329,7 @@ jobs:
         id: download-generated-docs
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: generated-documentation-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ needs.generate-api-docs.outputs.artifact_name }}
           path: ${{ runner.temp }}/generated-docs
 
       - name: Validate and stage generated documentation

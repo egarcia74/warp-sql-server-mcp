@@ -169,12 +169,11 @@ fallback and making `RELEASE_TOKEN` mandatory.
 
 ## Docs Automation Token (DOCS_PAT)
 
-The Documentation Automation workflow can use a fine‑grained PAT to ensure
-that auto‑generated docs PRs trigger CI/CodeQL checks. Without this token,
-PRs created by GITHUB_TOKEN may leave required checks in an
-"Expected — Waiting" state.
+`DOCS_PAT` is required when generated documentation files change, so the
+auto-generated PR can trigger CI/CodeQL checks. A no-diff run succeeds without
+`DOCS_PAT` because it does not push a branch or create a PR.
 
-### When to use
+### When required
 
 - You run `.github/workflows/docs.yml` to auto‑update docs (tools.json/tools.html) on `main`.
 - Your branch protection requires CI/CodeQL checks to run on pull requests.
@@ -196,8 +195,12 @@ PRs created by GITHUB_TOKEN may leave required checks in an
 
 ### Effect in workflow
 
-- `.github/workflows/docs.yml` prefers `DOCS_PAT` for pushing the auto‑update branch and creating the PR.
-- Falls back to `GITHUB_TOKEN` if `DOCS_PAT` is not set (checks may not trigger automatically).
+- The generator runs without a write token. Only the writer's final step receives `DOCS_PAT`
+  after a changed artifact has been validated.
+- If generated files change and `DOCS_PAT` is missing or invalid, the run fails; there is no
+  `GITHUB_TOKEN` write fallback. A no-diff run succeeds without `DOCS_PAT`.
+- If the branch push succeeds but PR creation fails, the error names the pushed branch for
+  manual inspection and cleanup. The workflow does not delete it automatically.
 
 ### Rotation
 

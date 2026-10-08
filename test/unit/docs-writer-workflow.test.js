@@ -22,15 +22,16 @@ const workflow = YAML.parse(readFileSync('.github/workflows/docs.yml', 'utf8'));
 const generate = workflow.jobs['generate-api-docs'];
 const writer = workflow.jobs['create-docs-pr'];
 const expectedFiles = ['docs-data/tools.json', 'docs/index.html', 'docs/tools.html'];
+const mainOnlyCondition =
+  "(github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')";
 
 function step(job, id) {
   return job?.steps?.find(candidate => candidate.id === id);
 }
 
 function allowed(job, eventName, ref) {
-  if (typeof job?.if !== 'string') return false;
-  const github = { event_name: eventName, ref };
-  return Function('github', `return Boolean(${job.if});`)(github);
+  expect(job?.if).toBe(mainOnlyCondition);
+  return (eventName === 'push' || eventName === 'workflow_dispatch') && ref === 'refs/heads/main';
 }
 
 function write(root, relative, content) {
@@ -150,6 +151,16 @@ function credentialedRun(item, overrides = {}) {
 }
 
 describe('documentation writer trust boundary', () => {
+  it('documents PAT-required changes and PAT-free no-diff runs', () => {
+    const guide = readFileSync('docs/operations/RELEASE-TOKEN-SETUP.md', 'utf8');
+    const section = guide
+      .split('## Docs Automation Token (DOCS_PAT)')[1]
+      ?.split('## Version-Bump PR Token')[0];
+    expect(section).toMatch(/DOCS_PAT.*required.*generated.*change/i);
+    expect(section).toMatch(/no-diff.*without.*DOCS_PAT/i);
+    expect(section).not.toMatch(/falls back to.*GITHUB_TOKEN/i);
+  });
+
   it.each([
     ['main push', 'push', 'refs/heads/main', true],
     ['main dispatch', 'workflow_dispatch', 'refs/heads/main', true],
@@ -174,15 +185,21 @@ describe('documentation writer trust boundary', () => {
     expect(source).not.toContain('pull-requests":"write');
   });
 
-  it('downloads only the same-run generated artifact into the writer', () => {
+  it('downloads the generator artifact, including on a failed-job rerun', () => {
     expect(writer?.needs).toBe('generate-api-docs');
+    const describe = step(generate, 'describe-generated-docs');
     const upload = step(generate, 'upload-generated-docs');
     const download = step(writer, 'download-generated-docs');
     expect(upload?.with?.['if-no-files-found']).toBe('error');
     expect(upload?.with?.path.trim().split(/\s+/).sort()).toEqual(expectedFiles);
-    expect(upload?.with?.name).toContain('${{ github.run_id }}');
-    expect(upload?.with?.name).toContain('${{ github.run_attempt }}');
-    expect(download?.with?.name).toBe(upload?.with?.name);
+    expect(describe?.run).toContain(
+      'artifact_name=generated-documentation-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}'
+    );
+    expect(generate?.outputs?.artifact_name).toBe(
+      '${{ steps.describe-generated-docs.outputs.artifact_name }}'
+    );
+    expect(upload?.with?.name).toBe('${{ steps.describe-generated-docs.outputs.artifact_name }}');
+    expect(download?.with?.name).toBe('${{ needs.generate-api-docs.outputs.artifact_name }}');
     expect(download?.with).not.toHaveProperty('run-id');
     expect(download?.with).not.toHaveProperty('repository');
     expect(download?.with).not.toHaveProperty('github-token');
