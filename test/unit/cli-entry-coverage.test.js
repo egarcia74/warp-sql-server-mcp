@@ -18,6 +18,9 @@ let savedSignalListeners;
 let child;
 let spawnMock;
 let stdout;
+let stdoutInfo;
+let stdoutDebug;
+let stdoutWrite;
 let stderr;
 let exitMock;
 
@@ -32,8 +35,15 @@ function output(spy) {
   return spy.mock.calls.map(args => args.join(' ')).join('\n');
 }
 
-// Vitest runs these tests serially; each import temporarily changes process-global state.
-describe('shipped CLI entry point under in-process coverage', () => {
+function expectNoProtocolStdout() {
+  expect(stdout).not.toHaveBeenCalled();
+  expect(stdoutInfo).not.toHaveBeenCalled();
+  expect(stdoutDebug).not.toHaveBeenCalled();
+  expect(stdoutWrite).not.toHaveBeenCalled();
+}
+
+// Each import temporarily changes process-global state, so the suite must not run concurrently.
+describe('shipped CLI entry point under in-process coverage', { concurrent: false }, () => {
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'wssm-cli-entry-'));
     configFile = join(home, '.warp-sql-server-mcp.json');
@@ -50,6 +60,9 @@ describe('shipped CLI entry point under in-process coverage', () => {
     child.kill = vi.fn();
     spawnMock = vi.fn(() => child);
     stdout = vi.spyOn(console, 'log').mockImplementation(() => {});
+    stdoutInfo = vi.spyOn(console, 'info').mockImplementation(() => {});
+    stdoutDebug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
     exitMock = vi.spyOn(process, 'exit').mockImplementation(() => {
       throw exitSentinel;
@@ -136,7 +149,7 @@ describe('shipped CLI entry point under in-process coverage', () => {
     expect(process.env.SQL_SERVER_HOST).toBe('from-config');
     expect(output(stderr)).toContain('Starting Warp SQL Server MCP');
     expect(output(stderr)).toContain('Configuration loaded from:');
-    expect(stdout).not.toHaveBeenCalled();
+    expectNoProtocolStdout();
   });
 
   it('retains existing environment values over saved configuration', async () => {
@@ -144,13 +157,13 @@ describe('shipped CLI entry point under in-process coverage', () => {
     writeFileSync(configFile, JSON.stringify({ SQL_SERVER_HOST: 'from-config' }));
     await runCli('start');
     expect(process.env.SQL_SERVER_HOST).toBe('from-environment');
-    expect(stdout).not.toHaveBeenCalled();
+    expectNoProtocolStdout();
   });
 
   it('starts with environment-only configuration when no file exists', async () => {
     await runCli('start');
     expect(output(stderr)).toContain('Using environment variables only');
-    expect(stdout).not.toHaveBeenCalled();
+    expectNoProtocolStdout();
   });
 
   it('stops on malformed config and never spawns a child', async () => {
@@ -159,7 +172,7 @@ describe('shipped CLI entry point under in-process coverage', () => {
     expect(exitMock).toHaveBeenCalledWith(1);
     expect(spawnMock).not.toHaveBeenCalled();
     expect(output(stderr)).toContain('Failed to load configuration file');
-    expect(stdout).not.toHaveBeenCalled();
+    expectNoProtocolStdout();
   });
 
   it('stops on malformed config display', async () => {
@@ -210,13 +223,14 @@ describe('shipped CLI entry point under in-process coverage', () => {
     expect(() => child.emit('error', new Error('synthetic spawn failure'))).toThrow(exitSentinel);
     expect(exitMock).toHaveBeenCalledWith(1);
     expect(output(stderr)).toContain('Failed to start server');
-    expect(stdout).not.toHaveBeenCalled();
+    expectNoProtocolStdout();
   });
 
   it('forwards the child exit code', async () => {
     await runCli('start');
     expect(() => child.emit('exit', 17)).toThrow(exitSentinel);
     expect(exitMock).toHaveBeenCalledWith(17);
+    expectNoProtocolStdout();
   });
 
   it.each(signals)('forwards %s to the child without writing stdout', async signal => {
@@ -227,6 +241,6 @@ describe('shipped CLI entry point under in-process coverage', () => {
     added[0]();
     expect(child.kill).toHaveBeenCalledWith(signal);
     expect(output(stderr)).toContain('Shutting down server');
-    expect(stdout).not.toHaveBeenCalled();
+    expectNoProtocolStdout();
   });
 });

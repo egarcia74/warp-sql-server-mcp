@@ -39,7 +39,7 @@ describe('LCOV report verification', () => {
   it.each([
     ['missing report', undefined],
     ['empty report', ''],
-    ['no source-file records', 'TN:\n'],
+    ['no source-file records', 'TN:\n', 'incomplete coverage record'],
     ['incomplete source-file record', `${coveredCli}SF:lib/example.js\nDA:1,1\n`],
     [
       'malformed later record',
@@ -50,13 +50,22 @@ describe('LCOV report verification', () => {
       `${coveredCli}SF:lib/example.js\nDA:1,1\nLF:not-a-number\nend_of_record\n`
     ],
     ['zero line number', `${coveredCli}SF:lib/example.js\nDA:0,1\nend_of_record\n`],
-    ['leading junk', 'junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n'],
+    [
+      'leading junk',
+      'junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n',
+      'malformed coverage record'
+    ],
     ['trailing junk', `${coveredCli}SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n`],
-    ['only empty source files', 'SF:lib/empty.js\nLF:0\nend_of_record\n']
-  ])('rejects %s', (_description, contents) => {
+    [
+      'only empty source files',
+      'SF:lib/empty.js\nLF:0\nend_of_record\n',
+      'incomplete coverage record'
+    ]
+  ])('rejects %s', (_description, contents, expectedReason) => {
     const result = verify(contents);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('LCOV report');
+    if (expectedReason) expect(result.stderr).toContain(expectedReason);
   });
 
   it('rejects a caller-supplied report path outside the fixed coverage location', () => {
