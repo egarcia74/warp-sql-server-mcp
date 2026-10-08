@@ -15,6 +15,7 @@ describe('Markdown math security', () => {
         extensions: [math()],
         htmlExtensions: [mathHtml()]
       });
+      expect(html).toContain('<mtext>\\href</mtext>');
       expect(html).not.toMatch(/<a(?:\s|>)/i);
     } finally {
       if (original) Object.defineProperty(Object.prototype, 'trust', original);

@@ -307,6 +307,11 @@ boundary is verified by `test/unit/markdown-math-security.test.js`: inherited
 trust cannot enable links, ordinary inline and block math still render, and
 explicit `trust: true` remains an opt-in for deliberate links.
 
+The regression test imports `micromark` and `micromark-extension-math` from
+`markdownlint`'s transitive dependency tree. When updating `markdownlint` or
+removing this override, check that the test still exercises the same math
+renderer and update its imports or dependency declaration if that tree changes.
+
 Remove the override when upstream declares a patched KaTeX range. Regenerate
 the lockfile, confirm a fresh `npm ci` resolves only patched KaTeX versions,
 and rerun the math regression tests and repository quality gates before
