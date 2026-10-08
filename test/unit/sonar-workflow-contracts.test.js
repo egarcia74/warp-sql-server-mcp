@@ -35,6 +35,20 @@ function forkFollowupJob() {
 }
 
 describe('trusted Sonar scanner workflow contract', () => {
+  it('defaults both Sonar workflows to read-only tokens while retaining each scan job scope', () => {
+    for (const [name, jobPermissions] of [
+      ['sonar-main-catch-up.yml', { contents: 'read', actions: 'read' }],
+      ['sonar-pr-followup.yml', { actions: 'read', contents: 'read', 'pull-requests': 'read' }]
+    ]) {
+      const workflow = parseYaml(
+        readFileSync(new URL(`../../.github/workflows/${name}`, import.meta.url), 'utf8')
+      );
+      expect(workflow.permissions).toEqual({ contents: 'read' });
+      expect(Object.keys(workflow.jobs)).toEqual(['scan']);
+      expect(workflow.jobs.scan.permissions).toEqual(jobPermissions);
+    }
+  });
+
   it('keeps the existing T-SQL exclusion in both scanner scopes', () => {
     const config = properties('../../sonar-project.properties');
     expect(config).toMatchObject({

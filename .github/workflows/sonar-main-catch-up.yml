@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: '17 4 * * *'
 
+permissions:
+  contents: read
+
 # Backstop for token-driven merges that do not trigger push CI. This workflow
 # runs trusted main only and remains off until the coordinated Sonar cutover.
 jobs:
