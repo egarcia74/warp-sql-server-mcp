@@ -295,6 +295,23 @@ npm run cleanup
 npm run dev
 ```
 
+## Markdown Math Dependency Override
+
+Dependabot alert #37 concerns KaTeX inheriting the `trust` option from a
+polluted object prototype. The development-only Markdown linting chain uses
+`markdownlint` → `micromark-extension-math` → `katex`; an npm override pins only
+that edge to patched KaTeX `0.18.2`.
+
+The math extension declares `^0.16.0`, so compatibility across this version
+boundary is verified by `test/unit/markdown-math-security.test.js`: inherited
+trust cannot enable links, ordinary inline and block math still render, and
+explicit `trust: true` remains an opt-in for deliberate links.
+
+Remove the override when upstream declares a patched KaTeX range. Regenerate
+the lockfile, confirm a fresh `npm ci` resolves only patched KaTeX versions,
+and rerun the math regression tests and repository quality gates before
+removing it.
+
 ## 💡 Prevention Strategies
 
 ### Automated Solutions
