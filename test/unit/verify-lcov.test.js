@@ -6,7 +6,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, URL } from 'node:url';
 
 const script = new URL('../../scripts/ci/verify-lcov.mjs', import.meta.url);
+const absoluteCli = fileURLToPath(new URL('../../cli.js', import.meta.url));
 const temporaryDirectories = [];
+const coveredCli = 'SF:cli.js\nDA:1,1\nDA:2,1\nDA:3,1\nDA:4,0\nLF:4\nLH:3\nend_of_record\n';
 
 function verify(contents, args = []) {
   const directory = mkdtempSync(join(tmpdir(), 'wssm-lcov-'));
@@ -37,44 +39,86 @@ describe('LCOV report verification', () => {
   it.each([
     ['missing report', undefined],
     ['empty report', ''],
-    ['no source-file records', 'TN:\n'],
-    ['incomplete source-file record', 'SF:lib/example.js\nDA:1,1\n'],
+    ['no source-file records', 'TN:\n', 'incomplete coverage record'],
+    ['incomplete source-file record', `${coveredCli}SF:lib/example.js\nDA:1,1\n`],
     [
       'malformed later record',
-      'SF:lib/valid.js\nDA:1,1\nend_of_record\nSF:lib/broken.js\nDA:broken\nend_of_record\n'
+      `${coveredCli}SF:lib/valid.js\nDA:1,1\nend_of_record\nSF:lib/broken.js\nDA:broken\nend_of_record\n`
     ],
-    ['non-numeric coverage total', 'SF:lib/example.js\nDA:1,1\nLF:not-a-number\nend_of_record\n'],
-    ['zero line number', 'SF:lib/example.js\nDA:0,1\nend_of_record\n'],
-    ['leading junk', 'junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n'],
-    ['trailing junk', 'SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n'],
-    ['only empty source files', 'SF:lib/empty.js\nLF:0\nend_of_record\n']
-  ])('rejects %s', (_description, contents) => {
+    [
+      'non-numeric coverage total',
+      `${coveredCli}SF:lib/example.js\nDA:1,1\nLF:not-a-number\nend_of_record\n`
+    ],
+    ['zero line number', `${coveredCli}SF:lib/example.js\nDA:0,1\nend_of_record\n`],
+    [
+      'leading junk',
+      'junk\nSF:lib/example.js\nDA:1,1\nend_of_record\n',
+      'malformed coverage record'
+    ],
+    ['trailing junk', `${coveredCli}SF:lib/example.js\nDA:1,1\nend_of_record\njunk\n`],
+    [
+      'only empty source files',
+      'SF:lib/empty.js\nLF:0\nend_of_record\n',
+      'incomplete coverage record'
+    ]
+  ])('rejects %s', (_description, contents, expectedReason) => {
     const result = verify(contents);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('LCOV report');
+    if (expectedReason) expect(result.stderr).toContain(expectedReason);
   });
 
   it('rejects a caller-supplied report path outside the fixed coverage location', () => {
     const externalDirectory = mkdtempSync(join(tmpdir(), 'wssm-lcov-external-'));
     temporaryDirectories.push(externalDirectory);
     const externalReport = join(externalDirectory, 'lcov.info');
-    writeFileSync(externalReport, 'SF:lib/example.js\nDA:1,1\nend_of_record\n');
+    writeFileSync(externalReport, coveredCli);
     const result = verify(undefined, [externalReport]);
     expect(result.status).toBe(1);
   });
 
   it.each([
-    ['one source record', 'TN:\nSF:lib/example.js\nDA:1,1\nend_of_record\n'],
+    ['one source record', `TN:\n${coveredCli}`],
     [
       'multiple source records',
-      'TN:\nSF:lib/one.js\nDA:1,0\nend_of_record\nTN:\nSF:lib/two.js\nDA:2,1\nend_of_record\n'
+      `TN:\nSF:lib/one.js\nDA:1,0\nend_of_record\nTN:\nSF:lib/two.js\nDA:2,1\nend_of_record\n${coveredCli}`
     ],
     [
       'an empty source file alongside covered files',
-      'SF:lib/one.js\nDA:1,1\nend_of_record\nSF:lib/empty.js\nLF:0\nend_of_record\n'
+      `SF:lib/one.js\nDA:1,1\nend_of_record\nSF:lib/empty.js\nLF:0\nend_of_record\n${coveredCli}`
     ]
   ])('accepts %s', (_description, contents) => {
     const result = verify(contents);
     expect(result.status).toBe(0);
+  });
+
+  it.each([
+    ['missing root CLI', 'SF:lib/example.js\nDA:1,1\nend_of_record\n'],
+    ['nested CLI misidentified as root', coveredCli.replace('SF:cli.js', 'SF:lib/cli.js')],
+    ['CLI with LF=0', coveredCli.replace('LF:4', 'LF:0')],
+    [
+      'CLI with zero hits',
+      coveredCli
+        .replaceAll('DA:1,1', 'DA:1,0')
+        .replaceAll('DA:2,1', 'DA:2,0')
+        .replaceAll('DA:3,1', 'DA:3,0')
+        .replace('LH:3', 'LH:0')
+    ],
+    ['CLI with inconsistent line count', coveredCli.replace('LF:4', 'LF:5')],
+    ['CLI with inconsistent hit count', coveredCli.replace('LH:3', 'LH:2')],
+    ['CLI with duplicate line data', coveredCli.replace('DA:4,0', 'DA:3,0')],
+    ['CLI below 70 percent', coveredCli.replace('DA:3,1', 'DA:3,0').replace('LH:3', 'LH:2')],
+    [
+      'duplicate CLI records',
+      `${coveredCli}${coveredCli.replace('SF:cli.js', `SF:${absoluteCli}`)}`
+    ]
+  ])('rejects %s', (_description, contents) => {
+    const result = verify(contents);
+    expect(result.status).toBe(1);
+  });
+
+  it('accepts exactly 70 percent CLI line coverage from an absolute source path', () => {
+    const record = `SF:${absoluteCli}\nDA:1,1\nDA:2,1\nDA:3,1\nDA:4,1\nDA:5,1\nDA:6,1\nDA:7,1\nDA:8,0\nDA:9,0\nDA:10,0\nLF:10\nLH:7\nend_of_record\n`;
+    expect(verify(record).status).toBe(0);
   });
 });
