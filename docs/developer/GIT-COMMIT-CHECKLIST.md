@@ -149,7 +149,7 @@ git add *.md
 
 ### 9. **Create Descriptive Commit**
 
-Use [Conventional Commits](https://conventionalcommits.org/) format:
+Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 
 ```bash
 git commit -m "<type>[optional scope]: <description>
