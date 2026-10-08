@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Automated documentation updates now isolate generation from writing.** The main-only generator
+  runs npm and documentation scripts without a write token; a separate read-only job validates the
+  same-run artifact before its final step receives `DOCS_PAT` to commit, push, and open the PR.
+  A documentation diff now requires a working `DOCS_PAT`; no-diff runs succeed without it, and
+  failed PR creation reports the pushed branch for manual inspection instead of deleting it.
+
 ## [2.1.1] - 2026-10-03
 
 This release supersedes the v2.1.0 GitHub tag, which was not published to npm. It includes the

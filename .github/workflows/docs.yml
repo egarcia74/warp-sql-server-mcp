@@ -241,11 +241,19 @@ jobs:
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+    outputs:
+      tools_count: ${{ steps.describe-generated-docs.outputs.tools_count }}
+      docs_index_sha256: ${{ steps.describe-generated-docs.outputs.docs_index_sha256 }}
+      docs_tools_sha256: ${{ steps.describe-generated-docs.outputs.docs_tools_sha256 }}
+      tools_json_sha256: ${{ steps.describe-generated-docs.outputs.tools_json_sha256 }}
     steps:
-      - name: Checkout
+      - name: Checkout exact main commit
+        id: checkout-source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -274,58 +282,182 @@ jobs:
           echo "- Tools documentation: docs/tools.html"
           echo "- Tools data: docs-data/tools.json"
 
-          # Show tool count for verification
-          tool_count=$(node -e "const data = require('./docs-data/tools.json'); console.log(data.toolsCount);")
-          echo "✅ Successfully generated documentation for $tool_count MCP tools"
-
-      - name: Create documentation update PR
-        env:
-          # Prefer a fine-grained PAT so CI/CodeQL workflows trigger on the PR branch
-          # Fallback to GITHUB_TOKEN if DOCS_PAT is not configured (PR may require a manual noop commit)
-          PUSH_TOKEN: ${{ secrets.DOCS_PAT || secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.DOCS_PAT || github.token }}
-          # Lets the script tell a real DOCS_PAT success apart from the
-          # implicit workflow-token fallback, which creates CI-blocked PRs.
-          DOCS_PAT_SET: ${{ secrets.DOCS_PAT != '' }}
+      - name: Describe generated documentation
+        id: describe-generated-docs
+        shell: bash
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          set -euo pipefail
+          tool_count=$(node -e "const {toolsCount} = require('./docs-data/tools.json'); if (!Number.isSafeInteger(toolsCount) || toolsCount < 1 || toolsCount > 999) process.exit(1); console.log(toolsCount);")
+          echo "✅ Successfully generated documentation for $tool_count MCP tools"
+          {
+            echo "tools_count=$tool_count"
+            echo "docs_index_sha256=$(sha256sum docs/index.html | cut -d' ' -f1)"
+            echo "docs_tools_sha256=$(sha256sum docs/tools.html | cut -d' ' -f1)"
+            echo "tools_json_sha256=$(sha256sum docs-data/tools.json | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
 
-          # Stage all generated documentation files
-          git add docs/index.html docs/tools.html docs-data/tools.json
+      - name: Upload generated documentation
+        id: upload-generated-docs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: generated-documentation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            docs/index.html
+            docs/tools.html
+            docs-data/tools.json
+          if-no-files-found: error
+          retention-days: 30
 
-          # Only proceed if there are changes
-          if git diff --staged --quiet; then
-            echo "No documentation changes to commit"
+  create-docs-pr:
+    name: Create documentation update PR
+    needs: generate-api-docs
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact main commit
+        id: checkout-main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download same-run generated documentation
+        id: download-generated-docs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: generated-documentation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/generated-docs
+
+      - name: Validate and stage generated documentation
+        id: validate-generated-docs
+        shell: bash
+        env:
+          DOCS_INDEX_SHA256: ${{ needs.generate-api-docs.outputs.docs_index_sha256 }}
+          DOCS_TOOLS_SHA256: ${{ needs.generate-api-docs.outputs.docs_tools_sha256 }}
+          TOOLS_JSON_SHA256: ${{ needs.generate-api-docs.outputs.tools_json_sha256 }}
+          TOOLS_COUNT: ${{ needs.generate-api-docs.outputs.tools_count }}
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/generated-docs"
+          if [[ ! -d "$artifact_dir" ]]; then
+            echo '::error::Generated documentation artifact is missing' >&2
+            exit 1
+          fi
+          if [[ ! $TOOLS_COUNT =~ ^[1-9][0-9]{0,2}$ ]]; then
+            echo '::error::Generated tool count is not a bounded integer' >&2
+            exit 1
+          fi
+
+          # Only these two directories and three regular files may cross the
+          # artifact boundary. The files are data; this job never executes them.
+          while IFS= read -r -d '' entry; do
+            relative="${entry#"$artifact_dir"/}"
+            case "$relative" in
+              docs|docs-data)
+                [[ -d "$entry" && ! -L "$entry" ]] || exit 1
+                ;;
+              docs/index.html|docs/tools.html|docs-data/tools.json)
+                [[ -f "$entry" && ! -L "$entry" ]] || exit 1
+                ;;
+              *)
+                echo "::error::Unexpected artifact path: $relative" >&2
+                exit 1
+                ;;
+            esac
+          done < <(find "$artifact_dir" -mindepth 1 -print0)
+
+          for relative in docs/index.html docs/tools.html docs-data/tools.json; do
+            [[ -f "$artifact_dir/$relative" && ! -L "$artifact_dir/$relative" ]] || {
+              echo "::error::Missing generated file: $relative" >&2
+              exit 1
+            }
+          done
+
+          for digest in "$DOCS_INDEX_SHA256" "$DOCS_TOOLS_SHA256" "$TOOLS_JSON_SHA256"; do
+            [[ $digest =~ ^[0-9a-f]{64}$ ]] || {
+              echo '::error::Malformed generated file digest' >&2
+              exit 1
+            }
+          done
+          [[ $(sha256sum "$artifact_dir/docs/index.html" | cut -d' ' -f1) == "$DOCS_INDEX_SHA256" ]] || exit 1
+          [[ $(sha256sum "$artifact_dir/docs/tools.html" | cut -d' ' -f1) == "$DOCS_TOOLS_SHA256" ]] || exit 1
+          [[ $(sha256sum "$artifact_dir/docs-data/tools.json" | cut -d' ' -f1) == "$TOOLS_JSON_SHA256" ]] || exit 1
+
+          cd "$GITHUB_WORKSPACE"
+          [[ -z $(git status --porcelain) ]] || {
+            echo '::error::Writer checkout is not clean' >&2
+            exit 1
+          }
+          cp "$artifact_dir/docs/index.html" docs/index.html
+          cp "$artifact_dir/docs/tools.html" docs/tools.html
+          cp "$artifact_dir/docs-data/tools.json" docs-data/tools.json
+          git add -- docs/index.html docs/tools.html docs-data/tools.json
+
+          while IFS= read -r relative; do
+            case "$relative" in
+              docs/index.html|docs/tools.html|docs-data/tools.json) ;;
+              *) echo "::error::Unexpected staged path: $relative" >&2; exit 1 ;;
+            esac
+          done < <(git diff --cached --name-only)
+
+          if git diff --cached --quiet; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'No documentation changes to commit'
           else
-            # Create a unique branch name. GITHUB_RUN_ID guards against
-            # concurrent runs sharing the second-precision timestamp — the
-            # failure path deletes $branch_name, and a shared name could
-            # delete a branch whose PR another run just created.
-            branch_name="docs/auto-update-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_ID}"
-            git checkout -b "$branch_name"
-            
-            # Get tool count for commit message
-            tool_count=$(node -e "const data = require('./docs-data/tools.json'); console.log(data.toolsCount);")
-            
-            git commit -m "docs: auto-update API documentation
-            
-            - Generated from latest source code
-            - Updated tools.html with comprehensive API reference
-            - Updated index.html with current tool count
-            - Extracted $tool_count MCP tools"
-            
-            # Push using token-authenticated URL to ensure CI can be triggered when using a PAT
-            git push "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$branch_name"
-            
-            # Create the PR via the REST API. `gh pr create` uses the GraphQL
-            # API, which rejects fine-grained PATs (HTTP 401) — that failure
-            # was silently swallowed here for months, orphaning one
-            # docs/auto-update-* branch per run. REST works with fine-grained
-            # PATs, classic PATs, and GITHUB_TOKEN alike.
-            # The heredoc terminator must be at column 0 of the script after
-            # YAML dedents this block, hence the outdented lines below.
-            cat > /tmp/pr-body.md <<'PR_BODY'
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create documentation PR with DOCS_PAT
+        id: create-documentation-pr
+        if: steps.validate-generated-docs.outputs.changed == 'true'
+        shell: bash
+        env:
+          DOCS_PAT: ${{ secrets.DOCS_PAT }}
+          TOOLS_COUNT: ${{ needs.generate-api-docs.outputs.tools_count }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DOCS_PAT:-}" ]]; then
+            echo '::error::DOCS_PAT is required to push a generated documentation update and trigger its PR checks' >&2
+            exit 1
+          fi
+          [[ $TOOLS_COUNT =~ ^[1-9][0-9]{0,2}$ ]] || exit 1
+          [[ $GITHUB_RUN_ID =~ ^[1-9][0-9]*$ && $GITHUB_RUN_ATTEMPT =~ ^[1-9][0-9]*$ ]] || exit 1
+          [[ $GITHUB_REPOSITORY =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || exit 1
+
+          origin_url=$(git remote get-url origin)
+          if [[ "$origin_url" != "https://github.com/$GITHUB_REPOSITORY" && "$origin_url" != "https://github.com/$GITHUB_REPOSITORY.git" ]]; then
+            echo '::error::Checkout origin is not the expected token-free repository URL' >&2
+            exit 1
+          fi
+
+          branch_name="docs/auto-update-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git config --local user.email 'action@github.com'
+          git config --local user.name 'GitHub Action'
+          git -c core.hooksPath=/dev/null commit -m 'docs: auto-update API documentation' -m "Generated from the main commit; extracted $TOOLS_COUNT MCP tools."
+
+          # Do not put the PAT in a URL, argument, git config, or log. The
+          # ephemeral helper reads it only when Git asks for HTTPS credentials.
+          askpass=$(mktemp "$RUNNER_TEMP/docs-askpass.XXXXXX")
+          pr_body=$(mktemp "$RUNNER_TEMP/docs-pr-body.XXXXXX")
+          trap 'rm -f "$askpass" "$pr_body"' EXIT
+          cat > "$askpass" <<'ASKPASS'
+          #!/usr/bin/env bash
+          case "$1" in
+            *Username*) printf '%s\n' 'x-access-token' ;;
+            *Password*) printf '%s\n' "$DOCS_PAT" ;;
+            *) exit 1 ;;
+          esac
+          ASKPASS
+          chmod 700 "$askpass"
+
+          if ! GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 git -c core.hooksPath=/dev/null -c credential.helper= push origin "HEAD:refs/heads/$branch_name"; then
+            echo "::error::Documentation push failed for $branch_name; no PR was created" >&2
+            exit 1
+          fi
+
+          cat > "$pr_body" <<'PR_BODY'
           ## 🤖 Automated Documentation Update
 
           This PR contains automatically generated documentation updates.
@@ -337,65 +469,31 @@ jobs:
             - `docs/tools.html` - Comprehensive API documentation
             - `docs-data/tools.json` - Structured tool data
 
-          ### 🔍 Verification
-          - ✅ All tools extracted successfully
-          - ✅ HTML documentation generated
-          - ✅ Landing page updated with current tool count
-
           ### 📋 Review Checklist
-          - [ ] Tool count matches expected number (currently __TOOL_COUNT__)
+          - [ ] Tool count matches expected number
           - [ ] HTML files are properly formatted
           - [ ] No sensitive information exposed
           - [ ] Documentation reflects current codebase
-
-          **This PR can be safely merged** - it only contains auto-generated documentation.
           PR_BODY
-            sed -i "s/__TOOL_COUNT__/$tool_count/g" /tmp/pr-body.md
+          body_template=$(< "$pr_body")
+          printf '%s\n' "${body_template//__TOOL_COUNT__/$TOOLS_COUNT}" > "$pr_body"
 
-            create_pr() {
-              GH_TOKEN="$1" gh api "repos/${{ github.repository }}/pulls" \
-                -f title="📚 Auto-update API documentation" \
-                -f head="$branch_name" \
-                -f base="main" \
-                -F body=@/tmp/pr-body.md \
-                --jq '.number'
-            }
-
-            # Prefer DOCS_PAT (its PRs trigger CI); fall back to the workflow
-            # token, whose PRs need a manual noop commit to run CI but still
-            # beat an orphaned branch. When DOCS_PAT is not configured,
-            # GH_TOKEN already holds the workflow token, so the first call
-            # succeeding is still the CI-blocked case — warn accordingly.
-            if pr_number=$(create_pr "$GH_TOKEN"); then
-              if [ "$DOCS_PAT_SET" = "true" ]; then
-                echo "✅ Documentation PR created: #$pr_number ($branch_name)"
-              else
-                echo "✅ Documentation PR created with workflow token: #$pr_number ($branch_name)"
-                echo "⚠️ CI will not trigger on this PR automatically — push a noop commit, or configure a DOCS_PAT secret."
-              fi
-            elif pr_number=$(create_pr "${{ github.token }}"); then
-              echo "✅ Documentation PR created with workflow token: #$pr_number ($branch_name)"
-              echo "⚠️ CI will not trigger on this PR automatically — push a noop commit or fix DOCS_PAT."
-            else
-              echo "❌ PR creation failed with both tokens — deleting the pushed branch so it does not orphan"
-              git push "https://$PUSH_TOKEN@github.com/${{ github.repository }}" --delete "$branch_name" || true
-              exit 1
-            fi
-
-            GH_TOKEN="${{ github.token }}" gh api "repos/${{ github.repository }}/issues/$pr_number/labels" \
-              -f "labels[]=documentation" -f "labels[]=automated" \
-              || echo "⚠️ Could not add labels to PR #$pr_number"
+          # REST accepts fine-grained PATs where `gh pr create`'s GraphQL call may not.
+          if ! pr_number=$(GH_TOKEN="$DOCS_PAT" gh api "repos/$GITHUB_REPOSITORY/pulls" \
+            -f title='📚 Auto-update API documentation' \
+            -f head="$branch_name" -f base=main -F "body=@$pr_body" --jq '.number'); then
+            echo "::error::PR creation failed. Branch $branch_name was pushed; inspect it before manual cleanup." >&2
+            exit 1
           fi
+          if [[ ! $pr_number =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::PR creation returned no number. Branch $branch_name was pushed; inspect it before manual cleanup." >&2
+            exit 1
+          fi
+          echo "✅ Documentation PR created: #$pr_number ($branch_name)"
 
-      - name: Upload documentation artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
-        with:
-          name: generated-documentation
-          path: |
-            docs/index.html
-            docs/tools.html
-            docs-data/tools.json
-          retention-days: 30
+          GH_TOKEN="$DOCS_PAT" gh api "repos/$GITHUB_REPOSITORY/issues/$pr_number/labels" \
+            -f 'labels[]=documentation' -f 'labels[]=automated' \
+            || echo "⚠️ Could not add labels to PR #$pr_number"
 
   spell-check:
     name: Spell Check Documentation
@@ -525,7 +623,7 @@ jobs:
   summary:
     name: Documentation Summary
     runs-on: ubuntu-latest
-    needs: [validate-docs, check-outdated-docs, spell-check, accessibility-check, generate-api-docs]
+    needs: [validate-docs, check-outdated-docs, spell-check, accessibility-check, generate-api-docs, create-docs-pr]
     if: always()
     steps:
       - name: Create summary
@@ -537,6 +635,7 @@ jobs:
           echo "**Spell Check**: ${{ needs.spell-check.result }}" >> $GITHUB_STEP_SUMMARY
           echo "**Accessibility**: ${{ needs.accessibility-check.result }}" >> $GITHUB_STEP_SUMMARY
           echo "**API Documentation**: ${{ needs.generate-api-docs.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Documentation PR**: ${{ needs.create-docs-pr.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 **All reports uploaded as artifacts**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
