@@ -167,6 +167,9 @@ jobs:
             const since = plan.lastTag ?? 'the beginning of history';
 
             const manualType = process.env.MANUAL_TYPE;
+            if (!['auto', 'patch', 'minor', 'major', 'prerelease'].includes(manualType)) {
+              throw new Error('Invalid manual release type');
+            }
             const forced = Boolean(manualType) && manualType !== 'auto';
 
             if (plan.commitCount === 0) {
@@ -210,6 +213,9 @@ jobs:
 
             const blockedByPaths = !forced && plan.ships === false;
             const releaseType = blockedByPaths ? 'none' : (forced ? manualType : plan.releaseType);
+            if (!['none', 'patch', 'minor', 'major', 'prerelease'].includes(releaseType)) {
+              throw new Error('Invalid computed release type');
+            }
             const shouldRelease = releaseType !== 'none' || process.env.DRY_RUN === 'true';
 
             // `plan.summary` states the AUTO-DETECTED outcome, and for `none` it ends
@@ -277,8 +283,8 @@ jobs:
 
             core.setOutput('should_release', shouldRelease.toString());
             core.setOutput('release_type', releaseType);
-            // A fixed literal, never plan.reason: cleanup interpolates this raw into a shell echo,
-            // and the enum member here would be `nothing-packed`, desynchronising that branch.
+            // Keep the workflow's fixed skip reason: plan.reason uses `nothing-packed`,
+            // which would desynchronise the cleanup and dry-run branches.
             if (blockedByPaths) core.setOutput('skip_reason', 'no-packed-changes');
 
   release:
@@ -371,31 +377,41 @@ jobs:
             changelog += section('🐛 Bug Fixes', plan.changelog.fixes);
             changelog += section('📝 Other Changes', plan.changelog.other);
 
-            changelog += `**Full Changelog**: https://github.com/${{ github.repository }}/compare/v${currentVersion}...HEAD`;
+            changelog += `**Full Changelog**: https://github.com/${process.env.GITHUB_REPOSITORY}/compare/v${currentVersion}...HEAD`;
 
             core.setOutput('changelog', changelog);
             return changelog;
 
       - name: Bump version
         id: version # This step dynamically sets the 'version' output
+        env:
+          RELEASE_TYPE: ${{ needs.check-changes.outputs.release_type }}
         run: |
-          RELEASE_TYPE="${{ needs.check-changes.outputs.release_type }}"
+          validate_version() {
+            VERSION="$1" node -e 'if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(process.env.VERSION) || /\s/.test(process.env.VERSION)) process.exit(1)'
+          }
+          case "$RELEASE_TYPE" in none|patch|minor|major|prerelease) ;; *) exit 1 ;; esac
           echo "Release type: $RELEASE_TYPE"
 
           if [ "$RELEASE_TYPE" = "none" ]; then
             echo "No version bump needed"
-            echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+            CANDIDATE=$(node -p "require('./package.json').version")
+            validate_version "$CANDIDATE"
+            echo "version=$CANDIDATE" >> "$GITHUB_OUTPUT"
           else
-            NEW_VERSION=$(npm version $RELEASE_TYPE --no-git-tag-version)
+            NEW_VERSION=$(npm version "$RELEASE_TYPE" --no-git-tag-version)
             CANDIDATE=${NEW_VERSION#v}
+            validate_version "$CANDIDATE"
             echo "Initial bumped version: v$CANDIDATE"
             # If the tag already exists, keep bumping patch until we find a free version
             while git rev-parse "v$CANDIDATE" >/dev/null 2>&1; do
               echo "Tag v$CANDIDATE already exists. Bumping patch..."
               NEW_VERSION=$(npm version patch --no-git-tag-version)
               CANDIDATE=${NEW_VERSION#v}
+              validate_version "$CANDIDATE"
             done
-            echo "version=$CANDIDATE" >> $GITHUB_OUTPUT
+            validate_version "$CANDIDATE"
+            echo "version=$CANDIDATE" >> "$GITHUB_OUTPUT"
             echo "Bumped to available version: v$CANDIDATE"
           fi
 
@@ -403,13 +419,15 @@ jobs:
         if: ${{ github.event.inputs.dry_run != 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
+          node -e 'if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(process.env.VERSION) || /\s/.test(process.env.VERSION)) process.exit(1)'
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
           # Use authenticated git push with token
-          git push https://$GITHUB_TOKEN@github.com/${{ github.repository }} "v${{ steps.version.outputs.version }}"
-          echo "✅ Created and pushed tag v${{ steps.version.outputs.version }}"
+          git push "https://$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY" "v$VERSION"
+          echo "✅ Created and pushed tag v$VERSION"
           echo "ℹ️  Note: Version bump not committed to main due to branch protection"
 
       # The changelog is built from commit subjects, so it must reach the shell through the
@@ -438,6 +456,7 @@ jobs:
           # Same rule the action's `prerelease:` input carried: any version with a hyphen.
           PRERELEASE: ${{ contains(steps.version.outputs.version, '-') }}
         run: |
+          node -e 'if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(process.env.VERSION) || /\s/.test(process.env.VERSION)) process.exit(1)'
           args=(--title "Release v$VERSION" --notes "$CHANGELOG")
           if [ "$PRERELEASE" = "true" ]; then
             args+=(--prerelease)
@@ -448,13 +467,14 @@ jobs:
       - name: Dry run summary
         if: ${{ github.event.inputs.dry_run == 'true' }}
         env:
+          SKIP_REASON: ${{ needs.check-changes.outputs.skip_reason }}
           VERSION: ${{ steps.version.outputs.version }}
           CHANGELOG: ${{ steps.changelog.outputs.changelog }}
         run: |
           {
             echo "## 🧪 Dry Run Summary"
             echo ""
-            if [ "${{ needs.check-changes.outputs.skip_reason }}" = "no-packed-changes" ]; then
+            if [ "$SKIP_REASON" = "no-packed-changes" ]; then
               # RELEASE_TYPE is `none` here, so the bump step echoed the CURRENT version - a
               # version that would never be created and is very likely already tagged. Printing
               # it as "would create" is worse than printing nothing.
@@ -487,14 +507,18 @@ jobs:
 
       - name: Create follow-up issue for documentation
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
         with:
           script: |
             const { owner, repo } = context.repo;
+            const version = process.env.VERSION;
+            if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version) || /\s/.test(version)) throw new Error('Invalid release version');
 
             await github.rest.issues.create({
               owner,
               repo,
-              title: `📝 Update documentation for release v${{ needs.release.outputs.version }}`,
+              title: `📝 Update documentation for release v${version}`,
               body: `## Post-release Documentation Tasks
               
               A new release has been created. Please review and update:
@@ -505,7 +529,7 @@ jobs:
               - [ ] Notify users about breaking changes (if any)
               - [ ] Update examples if API changed
               
-              **Release**: v${{ needs.release.outputs.version }}
+              **Release**: v${version}
               **Auto-created by**: Release automation workflow`,
               labels: ['documentation', 'automated', 'post-release']
             });
@@ -534,8 +558,9 @@ jobs:
         id: bumpfile
         env:
           PUSH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
         run: |
-          VERSION="${{ needs.release.outputs.version }}"
+          node -e 'if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(process.env.VERSION) || /\s/.test(process.env.VERSION)) process.exit(1)'
           BRANCH="chore/release/v$VERSION"
           echo "Using version: $VERSION"
           echo "Using branch: $BRANCH"
@@ -559,23 +584,26 @@ jobs:
             git add package.json package-lock.json
             git commit -m "chore(release): bump version to v$VERSION"
             # Try normal push first using token to ensure CI triggers
-            if ! git push -u "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$BRANCH"; then
+            if ! git push -u "https://$PUSH_TOKEN@github.com/$GITHUB_REPOSITORY" "$BRANCH"; then
               echo "Non-fast-forward push rejected. Rebasing and retrying with force-with-lease..."
               git pull --rebase origin "$BRANCH" || true
-              git push --force-with-lease "https://$PUSH_TOKEN@github.com/${{ github.repository }}" "$BRANCH"
+              git push --force-with-lease "https://$PUSH_TOKEN@github.com/$GITHUB_REPOSITORY" "$BRANCH"
             fi
           else
             echo "No version change needed in package.json/package-lock.json"
           fi
 
       - name: Open pull request
-        if: always()
+        if: success() && steps.bumpfile.outcome == 'success'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
         with:
           github-token: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
-            const version = process.env.VERSION || '${{ needs.release.outputs.version }}';
-            const branch = process.env.BRANCH || `chore/release/v${{ needs.release.outputs.version }}`;
+            const version = process.env.VERSION;
+            if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version) || /\s/.test(version)) throw new Error('Invalid release version');
+            const branch = `chore/release/v${version}`;
             const { owner, repo } = context.repo;
 
             // Check if PR already exists
@@ -609,31 +637,37 @@ jobs:
     if: always()
     steps:
       - name: Workflow summary
+        env:
+          SHOULD_RELEASE: ${{ needs.check-changes.outputs.should_release }}
+          RELEASE_TYPE: ${{ needs.check-changes.outputs.release_type }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          SKIP_REASON: ${{ needs.check-changes.outputs.skip_reason }}
+          RELEASE_RESULT: ${{ needs.release.result }}
         run: |
-          echo "## 🚀 Release Workflow Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Should Release**: ${{ needs.check-changes.outputs.should_release }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Release Type**: ${{ needs.check-changes.outputs.release_type }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Dry Run**: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Release Workflow Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Should Release**: $SHOULD_RELEASE" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Release Type**: $RELEASE_TYPE" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Dry Run**: $DRY_RUN" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           # The path verdict is checked FIRST, before the success branch. On a dry run the gate
           # deliberately leaves should_release=true so the downstream jobs still render a preview
           # - which means `needs.release.result` is `success` for a window the gate would have
           # refused, and reporting that as "Completed successfully" would be exactly backwards.
-          if [ "${{ needs.check-changes.outputs.skip_reason }}" = "no-packed-changes" ]; then
-            if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-              echo "⏭️ **Release Status**: Would be REFUSED - this window changes nothing npm packs (#1235). The dry-run summary shows the changelog the subjects would have produced, but no version: none would be taken." >> $GITHUB_STEP_SUMMARY
+          if [ "$SKIP_REASON" = "no-packed-changes" ]; then
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "⏭️ **Release Status**: Would be REFUSED - this window changes nothing npm packs (#1235). The dry-run summary shows the changelog the subjects would have produced, but no version: none would be taken." >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "⏭️ **Release Status**: Skipped - this window changes nothing npm packs (#1235)" >> $GITHUB_STEP_SUMMARY
+              echo "⏭️ **Release Status**: Skipped - this window changes nothing npm packs (#1235)" >> "$GITHUB_STEP_SUMMARY"
             fi
-          elif [ "${{ needs.release.result }}" = "success" ]; then
-            echo "✅ **Release Status**: Completed successfully" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.check-changes.outputs.should_release }}" = "false" ]; then
+          elif [ "$RELEASE_RESULT" = "success" ]; then
+            echo "✅ **Release Status**: Completed successfully" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$SHOULD_RELEASE" = "false" ]; then
             # The check-changes job's own summary says which of the two it was: no commits
             # at all, or commits whose subjects matched no conventional-commit type at all
             # (every recognised type releases) - or, per skip_reason below, a window that
             # classifies fine but changes nothing npm packs (#1235). See #1158.
-            echo "⏭️ **Release Status**: Skipped - see \"Release type\" above for why" >> $GITHUB_STEP_SUMMARY
+            echo "⏭️ **Release Status**: Skipped - see \"Release type\" above for why" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "❌ **Release Status**: Failed" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Release Status**: Failed" >> "$GITHUB_STEP_SUMMARY"
           fi
