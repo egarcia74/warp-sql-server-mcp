@@ -147,6 +147,11 @@
     "yaml": "2.9.1"
   },
   "overrides": {
+    "markdownlint": {
+      "micromark-extension-math": {
+        "katex": "0.18.2"
+      }
+    },
     "get-uri": {
       "basic-ftp": "6.2.1"
     },
