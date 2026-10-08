@@ -141,7 +141,7 @@ BEGIN TRY
     RAISERROR('[CLEAN] Table cleanup completed', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg NVARCHAR(255) = '❌ Error during table cleanup: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg NVARCHAR(255) = N'❌ Error during table cleanup: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -158,7 +158,7 @@ BEGIN TRY
     RAISERROR('   [OK] Table Categories created successfully', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg1 NVARCHAR(255) = '   ❌ Error creating Categories table: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg1 NVARCHAR(255) = N'   ❌ Error creating Categories table: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg1, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -183,7 +183,7 @@ BEGIN TRY
     RAISERROR('   [OK] Table Suppliers created successfully', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg2 NVARCHAR(255) = '   ❌ Error creating Suppliers table: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg2 NVARCHAR(255) = N'   ❌ Error creating Suppliers table: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg2, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -208,7 +208,7 @@ BEGIN TRY
     PRINT '   [OK] Table Products created successfully with foreign key constraints';
 END TRY
 BEGIN CATCH
-    PRINT '   ❌ Error creating Products table: ' + ERROR_MESSAGE();
+    PRINT N'   ❌ Error creating Products table: ' + ERROR_MESSAGE();
     THROW;
 END CATCH
 
@@ -231,7 +231,7 @@ BEGIN TRY
     PRINT '   [OK] Table Customers created successfully';
 END TRY
 BEGIN CATCH
-    PRINT '   ❌ Error creating Customers table: ' + ERROR_MESSAGE();
+    PRINT N'   ❌ Error creating Customers table: ' + ERROR_MESSAGE();
     THROW;
 END CATCH
 
@@ -258,7 +258,7 @@ BEGIN TRY
     PRINT '   [OK] Table Orders created successfully with foreign key constraints';
 END TRY
 BEGIN CATCH
-    PRINT '   ❌ Error creating Orders table: ' + ERROR_MESSAGE();
+    PRINT N'   ❌ Error creating Orders table: ' + ERROR_MESSAGE();
     THROW;
 END CATCH
 
@@ -278,7 +278,7 @@ BEGIN TRY
     PRINT '   [OK] Table Order Details created successfully with composite primary key and foreign key constraints';
 END TRY
 BEGIN CATCH
-    PRINT '   ❌ Error creating Order Details table: ' + ERROR_MESSAGE();
+    PRINT N'   ❌ Error creating Order Details table: ' + ERROR_MESSAGE();
     THROW;
 END CATCH
 
@@ -310,7 +310,7 @@ BEGIN TRY
     RAISERROR(@CatMsg, 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg3 NVARCHAR(255) = '   ❌ Error inserting Categories data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg3 NVARCHAR(255) = N'   ❌ Error inserting Categories data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg3, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -330,7 +330,7 @@ BEGIN TRY
     RAISERROR(@SupMsg, 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg4 NVARCHAR(255) = '   ❌ Error inserting Suppliers data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg4 NVARCHAR(255) = N'   ❌ Error inserting Suppliers data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg4, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -357,7 +357,7 @@ BEGIN TRY
     RAISERROR(@ProdMsg, 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg5 NVARCHAR(255) = '   ❌ Error inserting Products data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg5 NVARCHAR(255) = N'   ❌ Error inserting Products data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg5, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -377,7 +377,7 @@ BEGIN TRY
     RAISERROR(@CustMsg, 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg6 NVARCHAR(255) = '   ❌ Error inserting Customers data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg6 NVARCHAR(255) = N'   ❌ Error inserting Customers data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg6, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -397,7 +397,7 @@ BEGIN TRY
     RAISERROR(@OrderMsg, 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg7 NVARCHAR(255) = '   ❌ Error inserting Orders data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg7 NVARCHAR(255) = N'   ❌ Error inserting Orders data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg7, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -419,7 +419,7 @@ BEGIN TRY
     RAISERROR(@ODMsg, 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg8 NVARCHAR(255) = '   ❌ Error inserting Order Details data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg8 NVARCHAR(255) = N'   ❌ Error inserting Order Details data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg8, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -441,7 +441,7 @@ BEGIN TRY
     RAISERROR('   [OK] Index IX_Products_CategoryID created successfully', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg9 NVARCHAR(255) = '   ❌ Error creating IX_Products_CategoryID index: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg9 NVARCHAR(255) = N'   ❌ Error creating IX_Products_CategoryID index: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg9, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -453,7 +453,7 @@ BEGIN TRY
     RAISERROR('   [OK] Index IX_Products_SupplierID created successfully', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg10 NVARCHAR(255) = '   ❌ Error creating IX_Products_SupplierID index: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg10 NVARCHAR(255) = N'   ❌ Error creating IX_Products_SupplierID index: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg10, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -465,7 +465,7 @@ BEGIN TRY
     RAISERROR('   [OK] Index IX_Orders_CustomerID created successfully', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg11 NVARCHAR(255) = '   ❌ Error creating IX_Orders_CustomerID index: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg11 NVARCHAR(255) = N'   ❌ Error creating IX_Orders_CustomerID index: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg11, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -477,7 +477,7 @@ BEGIN TRY
     RAISERROR('   [OK] Index IX_Products_ProductName created successfully', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg12 NVARCHAR(255) = '   ❌ Error creating IX_Products_ProductName index: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg12 NVARCHAR(255) = N'   ❌ Error creating IX_Products_ProductName index: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg12, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -644,7 +644,7 @@ BEGIN TRY
     END
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg13 NVARCHAR(255) = '   ❌ Error creating Phase1ReadOnly tables: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg13 NVARCHAR(255) = N'   ❌ Error creating Phase1ReadOnly tables: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg13, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -664,7 +664,7 @@ BEGIN TRY
     RAISERROR('   [OK] Products data inserted in Phase1ReadOnly', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg14 NVARCHAR(255) = '   ❌ Error inserting Phase1ReadOnly test data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg14 NVARCHAR(255) = N'   ❌ Error inserting Phase1ReadOnly test data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg14, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -713,7 +713,7 @@ BEGIN TRY
     END
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg15 NVARCHAR(255) = '   ❌ Error creating Phase2DML tables: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg15 NVARCHAR(255) = N'   ❌ Error creating Phase2DML tables: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg15, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -743,7 +743,7 @@ BEGIN TRY
     RAISERROR('   [OK] Products data inserted in Phase2DML', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg16 NVARCHAR(255) = '   ❌ Error inserting Phase2DML test data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg16 NVARCHAR(255) = N'   ❌ Error inserting Phase2DML test data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg16, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -793,7 +793,7 @@ BEGIN TRY
     END
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg17 NVARCHAR(255) = '   ❌ Error creating Phase3DDL tables: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg17 NVARCHAR(255) = N'   ❌ Error creating Phase3DDL tables: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg17, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -812,7 +812,7 @@ BEGIN TRY
     RAISERROR('   [OK] Products data inserted in Phase3DDL', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg18 NVARCHAR(255) = '   ❌ Error inserting Phase3DDL test data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg18 NVARCHAR(255) = N'   ❌ Error inserting Phase3DDL test data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg18, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -861,7 +861,7 @@ BEGIN TRY
     END
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg19 NVARCHAR(255) = '   ❌ Error creating ProtocolTest tables: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg19 NVARCHAR(255) = N'   ❌ Error creating ProtocolTest tables: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg19, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -891,7 +891,7 @@ BEGIN TRY
     RAISERROR('   [OK] Products data inserted in ProtocolTest', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg20 NVARCHAR(255) = '   ❌ Error inserting ProtocolTest test data: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg20 NVARCHAR(255) = N'   ❌ Error inserting ProtocolTest test data: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg20, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -968,7 +968,7 @@ BEGIN TRY
     RAISERROR('   [OK] Main database verification completed successfully', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg22 NVARCHAR(255) = '   ❌ Error during main database verification: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg22 NVARCHAR(255) = N'   ❌ Error during main database verification: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg22, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -991,7 +991,7 @@ BEGIN TRY
     RAISERROR('   [OK] Phase databases verification completed successfully', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg21 NVARCHAR(255) = '   ❌ Error during phase databases verification: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg21 NVARCHAR(255) = N'   ❌ Error during phase databases verification: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg21, 16, 1) WITH NOWAIT;
     THROW;
 END CATCH
@@ -1043,7 +1043,7 @@ BEGIN TRY
     RAISERROR('[INIT] ALL SYSTEMS READY - Database initialization script completed successfully!', 0, 1) WITH NOWAIT;
 END TRY
 BEGIN CATCH
-    DECLARE @ErrorMsg21 NVARCHAR(255) = '❌ Error creating completion marker: ' + ERROR_MESSAGE();
+    DECLARE @ErrorMsg21 NVARCHAR(255) = N'❌ Error creating completion marker: ' + ERROR_MESSAGE();
     RAISERROR(@ErrorMsg21, 16, 1) WITH NOWAIT;
     -- Don't throw here as the main initialization is complete
 END CATCH

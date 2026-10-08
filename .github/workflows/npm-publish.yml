@@ -5,10 +5,10 @@ on:
     branches: [main]
     paths:
       - 'package.json'
-  # Manual re-run without another package.json push - after a failed publish, or after a
-  # tag was created late. Safe to dispatch at any time: the "Check if this is a release
-  # version bump" step below publishes only when a tag matching package.json exists AND
-  # that version is not yet on npm, and skips otherwise.
+  # Manual retry from main without another package.json push, after a failed publish or
+  # a late tag. Dispatch with `gh workflow run npm-publish.yml --ref main`. The job
+  # admission below rejects other refs before checkout; tag/version checks still decide
+  # whether an admitted main run has anything to publish.
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,11 @@ permissions:
 jobs:
   publish:
     name: Publish to npm
+    # GitHub expression string equality ignores case. The required environment's exact-main
+    # branch restriction must reject case variants; this YAML guard is defense in depth.
+    if: ${{ github.repository == 'egarcia74/warp-sql-server-mcp' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
+    environment: npm-publish
     permissions:
       contents: read
       id-token: write # OIDC token: npm Trusted Publishing auth + provenance attestation
@@ -25,6 +29,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
         with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -116,9 +122,10 @@ jobs:
 
       # Authenticates with the job's OIDC token (npm Trusted Publishing) - there is no
       # NODE_AUTH_TOKEN / NPM_TOKEN in this job. The trusted publisher configured on
-      # npmjs.com must name this repository and this file (npm-publish.yml); see
-      # docs/operations/RELEASE-TOKEN-SETUP.md. Trusted publishing generates the provenance
-      # attestation on its own; --provenance is kept so the intent stays visible here.
+      # npmjs.com must name this repository, this file (npm-publish.yml), and the
+      # npm-publish environment. GitHub must restrict that environment to the main
+      # branch; see docs/operations/RELEASE-TOKEN-SETUP.md. Trusted publishing generates
+      # the provenance attestation on its own; --provenance keeps the intent visible.
       - name: Publish to npm
         if: steps.check.outputs.should_publish == 'true'
         run: npm publish --access public --provenance

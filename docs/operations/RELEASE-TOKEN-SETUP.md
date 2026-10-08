@@ -261,9 +261,10 @@ Create a new fine-grained token before the old one expires, update the
 
 `.github/workflows/npm-publish.yml` publishes `@egarcia74/warp-sql-server-mcp` with **npm Trusted
 Publishing**. The job requests a short-lived GitHub OIDC token (`permissions: id-token: write`) and
-npmjs.com exchanges it for a publish credential valid for that run only, because the package's
-settings name this repository and this workflow file as a trusted publisher. There is no npm token
-to store in GitHub, rotate, or watch for expiry.
+npmjs.com exchanges it for a publish credential valid for that run only when the package's
+Trusted Publisher entry matches this repository, `npm-publish.yml`, and the `npm-publish`
+environment. The workflow does not set an npm token. The exact environment binding and the
+GitHub deployment restriction must be confirmed from live settings before relying on this policy.
 
 **Why**: the 2.0.0 publish on 2026-09-11 failed because the `NPM_TOKEN` granular access token -
 90 days maximum lifetime - had expired under the release. A trusted publisher has nothing to expire.
@@ -279,6 +280,13 @@ Taken from [docs.npmjs.com/trusted-publishers](https://docs.npmjs.com/trusted-pu
   deliberately; the check is the floor, not the pin.
 - **OIDC permission**: "The critical requirement is the `id-token: write` permission, which allows
   GitHub Actions to generate OIDC tokens." The `publish` job declares it.
+- **Main-only environment**: the `publish` job requests `npm-publish`. Configure that GitHub
+  environment with selected branch/tag restrictions containing one exact **branch** `main` and
+  no tag patterns. Do not use "protected branches only"; it can admit other protected branches.
+  GitHub expression string equality ignores case, so `refs/heads/MAIN` can pass the job's YAML
+  main-ref comparison. The exact-main environment rule must reject case-variant branch refs.
+  The job-level guard is useful defense in depth, but a branch can edit its own workflow.
+  An environment-bound npm publisher must reject a branch that omits the environment.
 - **Provenance**: "When you publish using trusted publishing from GitHub Actions or GitLab CI/CD,
   npm automatically generates and publishes provenance attestations for your package. This happens
   by default—you don't need to add the `--provenance` flag to your publish command." The workflow
@@ -297,10 +305,11 @@ Taken from [docs.npmjs.com/trusted-publishers](https://docs.npmjs.com/trusted-pu
 
 ### Configure the trusted publisher on npmjs.com
 
-> **Do this BEFORE merging any change that removes `NODE_AUTH_TOKEN` from the publish step.**
-> Once the token is gone from the workflow, OIDC is the only credential the job has. If npmjs.com
-> does not yet list this repository and workflow as a trusted publisher, the next publish fails
-> with an authentication error, and the version number is spent.
+Before merging the main-only workflow, coordinate the GitHub environment and npm entry during a
+release-free window. The environment may not exist yet, and the current npm settings must be read
+before changing them. Restricting npm first can temporarily reject the old environmentless job;
+leaving an environmentless publisher active after merge leaves an alternate authorization path.
+Do not run a publish solely to test these settings.
 
 1. Sign in to npmjs.com as an owner or maintainer of the package.
 2. Open the package page (`npmjs.com/package/@egarcia74/warp-sql-server-mcp`) → **Settings**
@@ -314,49 +323,61 @@ Taken from [docs.npmjs.com/trusted-publishers](https://docs.npmjs.com/trusted-pu
    | **Organization or user** (required) | `egarcia74`                                                                                       |
    | **Repository** (required)           | `warp-sql-server-mcp`                                                                             |
    | **Workflow filename** (required)    | `npm-publish.yml` - the file name only, with the `.yml` extension, not the workflow `name:`       |
-   | **Environment name** (optional)     | leave blank - the `publish` job declares no `environment:`                                        |
+   | **Environment name** (optional)     | `npm-publish` - must match the job's `environment:` exactly                                       |
    | **Allowed actions** (optional)      | direct `npm publish` must stay allowed - the workflow runs `npm publish`, not `npm stage publish` |
 
    On the last row npm's text is: "`npm stage publish` is always allowed. Choose whether this
    trusted publisher can also publish directly with `npm publish`."
 
-4. Save. The package page's **Settings → Trusted publishing** list should now show the entry.
+4. Check every existing Trusted Publisher entry. Update or replace an environmentless entry for
+   this same workflow; retaining it alongside the bound entry preserves an alternate path. Review
+   other entries individually. Save the intended entry and read the list back. The required publisher
+   is `egarcia74` / `warp-sql-server-mcp` / `npm-publish.yml` / `npm-publish`, with direct
+   `npm publish` allowed.
 
-### First OIDC publish, then remove the token
+5. Read GitHub's `npm-publish` environment settings back: selected branches/tags mode, only the
+   exact `main` branch, no tag patterns, and the current reviewer, wait, bypass and custom rules.
+   Include case-variant branch refs such as `refs/heads/MAIN` in the external-policy acceptance
+   evidence. Read the npm entries back as well. Local fixtures or a skipped off-main run alone
+   do not prove npm will reject an off-main publish.
 
-npm's own migration order: "Set up trusted publishers first and verify they work. Then restrict
-token access... Revoke any existing automation tokens that are no longer needed."
+### Verify the next authorized release
 
-1. Merge the workflow change (step order above: publisher first, workflow second).
-2. On the next release, check the `npm-publish.yml` run: the **Verify npm version for trusted
-   publishing** step prints an npm version of 11.5.1 or higher, and **Publish to npm** succeeds.
-3. Verify the registry: `npm view @egarcia74/warp-sql-server-mcp@X.Y.Z dist.attestations` is
-   non-empty.
-4. Delete the `NPM_TOKEN` repository secret (repo → Settings → Secrets and variables → Actions).
-   No workflow reads it any more, so it is dead weight that still authenticates as you if it
-   leaks. Check for the secret binding rather than the name: `grep -rn 'secrets\.NPM_TOKEN'
-.github/` must return nothing. A bare `grep -rn NPM_TOKEN .github` still matches the
-   explanatory comments in `npm-publish.yml` and would look like a failed migration.
-5. Revoke the underlying token on npmjs.com (Account → Access Tokens).
+After the environment and npm entries are read back and the source PR is merged, use the normal
+tag-before-version-bump release sequence. On the next separately authorized release, confirm the
+`npm-publish.yml` run used the expected main event SHA, passed its tests and tree gate, and
+published the intended version. Check that exact registry version's attestation with
+`npm view @egarcia74/warp-sql-server-mcp@X.Y.Z dist.attestations`, then smoke-test a fresh
+install of that version. Do not use `npm audit signatures` from this checkout as proof of the
+published package's attestation; it audits the installed dependency tree.
+
+Token access policy and any old token's revocation are separate account decisions. The publish
+workflow has no `NODE_AUTH_TOKEN` or `NPM_TOKEN` binding, and an OIDC failure must stay visible.
 
 ### Re-running a publish
 
 `npm-publish.yml` also has a `workflow_dispatch` trigger:
 
 ```bash
-gh workflow run npm-publish.yml
+gh workflow run npm-publish.yml --ref main
 gh run watch
 ```
 
-This is safe at any time. The **Check if this is a release version bump** step publishes only when a
-`vX.Y.Z` tag matching `package.json` exists and that version is not already on npm; otherwise the
-run skips. Use it after a failed publish has been fixed, or after a tag was created late.
+The job guard rejects other branch names and tag refs before checkout, subject to GitHub's
+case-insensitive expression equality: `refs/heads/MAIN` can pass the YAML comparison. The
+environment's exact-main rule must reject that case variant. The **Check if this is a release
+version bump** step publishes only when a `vX.Y.Z` tag matching `package.json` exists and that
+version is not already on npm.
+Use it after a failed publish has been fixed, or after a tag was created late. The existing tag
+lookup uses a short revision name, and a failed `npm view` is treated as unpublished; these gates
+are not a replacement for main-only admission or an exact-tag/registry-error guarantee.
 
 ### Troubleshooting
 
-- **Authentication error at `npm publish`** - re-check the three required fields against the table
-  above; the npm docs' first advice is to "verify that the workflow filename matches exactly what you
-  configured on npmjs.com, including the `.yml` extension." Then confirm the run's
+- **Authentication error at `npm publish`** - re-check all publisher fields and the GitHub
+  environment restriction against the table above; the npm docs' first advice is to "verify
+  that the workflow filename matches exactly what you configured on npmjs.com, including the
+  `.yml` extension." Then confirm the run's
   `Verify npm version for trusted publishing` step printed 11.5.1 or higher.
 - **The workflow was renamed** - the trusted publisher is bound to the file name. Renaming
   `npm-publish.yml` requires updating the entry on npmjs.com first.
@@ -371,4 +392,4 @@ If you encounter issues:
 1. Check the [GitHub documentation on fine-grained tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-fine-grained-personal-access-token)
 2. Review workflow logs for specific error messages
 3. Verify token permissions and expiration
-4. Test with a dry run first: `workflow_dispatch` with `dry_run: true`
+4. Verify the next separately authorized release and its exact registry version
