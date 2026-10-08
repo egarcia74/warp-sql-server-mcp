@@ -82,9 +82,8 @@ describe('rendered Winston logger output', () => {
     expect(rendered).not.toContain('[object Object]');
   });
 
-  test.each([1, 2])('security formatter %i marks object values without exposing fields', index => {
-    const callbacks = captureFormatters();
-    const rendered = callbacks[index]({
+  function expectOmittedSecurityValues(formatter) {
+    const rendered = formatter({
       timestamp: { token: 'sensitive-audit-time' },
       message: { password: 'sensitive-audit-message' },
       event: 'QUERY_BLOCKED'
@@ -95,6 +94,16 @@ describe('rendered Winston logger output', () => {
     expect(rendered).not.toContain('sensitive-audit-message');
     expect(rendered).toContain('"event":"QUERY_BLOCKED"');
     expect(rendered).not.toContain('[object Object]');
+  }
+
+  test('security console formatter marks object values without exposing fields', () => {
+    const [, consoleFormatter] = captureFormatters();
+    expectOmittedSecurityValues(consoleFormatter);
+  });
+
+  test('security base formatter marks object values without exposing fields', () => {
+    const [, , baseFormatter] = captureFormatters();
+    expectOmittedSecurityValues(baseFormatter);
   });
 
   test('real development Winston output keeps SQL audit on stderr and masks connection secrets', () => {
