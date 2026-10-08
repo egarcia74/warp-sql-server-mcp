@@ -1470,7 +1470,7 @@ the tag to step 5 and the commit to step 7. The tag must exist **before** the ve
 `main`: `npm-publish.yml` has no `tags:` trigger - it fires on a push to `main` that touches
 `package.json` and then publishes only if a tag matching the new version already exists. Tagging
 after the merge means the publish fires once, finds no tag, and skips; it does not fire again on
-its own - create the tag, then re-run it with `gh workflow run npm-publish.yml`.
+its own - create the tag, then re-run it with `gh workflow run npm-publish.yml --ref main`.
 
 #### 5. Create and Push Git Tag
 
@@ -1484,8 +1484,8 @@ lands. `package.json` catches up in step 7. This mirrors `release.yml`, whose ta
 on it, releasing code that is not on `main`. **Always dispatch it from `main`.**
 
 > **The tag does not determine what gets published, so the publish verifies it.**
-> `npm-publish.yml` checks out with no `ref:`, so it packs `main` as it stands when the step 7
-> merge fires - not the tagged tree. If another PR lands on `main` between step 5 and step 7, that
+> `npm-publish.yml` checks out the admitted main event's exact SHA, so it packs the step 7
+> merge's tree - not the tagged tree. If another PR lands on `main` between step 5 and step 7, that
 > code is in the tarball but in neither the tag nor the GitHub Release. This is a property of the
 > automated path too: `release.yml` tags `main` and its version-bump PR merges later, leaving the
 > same window.
@@ -1724,23 +1724,28 @@ gh run watch <run-id>
 
 Publishing is a separate workflow, `.github/workflows/npm-publish.yml`. It is **not** triggered by
 the tag or the Release - it triggers on a push to `main` that touches `package.json`, which in
-practice means the merge of the version-bump PR above. It can also be re-run by hand with
-`gh workflow run npm-publish.yml` (`workflow_dispatch`); the two gates in the first bullet make
-that safe at any time:
+practice means the merge of the version-bump PR above. It can also be retried by hand with
+`gh workflow run npm-publish.yml --ref main` (`workflow_dispatch`). The job admits only the exact
+repository's main push or main dispatch, checks out that event SHA, and requests the `npm-publish`
+environment. The tag and npm-version gates below decide whether an admitted run publishes:
 
 - It publishes only when a tag matching the new `package.json` version already exists, and skips if
   that version is already on npm - so a `package.json` edit that is not a release bump is a no-op.
 - It runs `npm run test:unit` before publishing.
 - It authenticates with npm Trusted Publishing: the job's OIDC `id-token` is exchanged for a
   short-lived npm credential, so there is no `NPM_TOKEN` secret to rotate or to expire under a
-  release (the 2.0.0 publish failed exactly that way). The trusted publisher is configured on
-  npmjs.com - see `docs/operations/RELEASE-TOKEN-SETUP.md`. Trusted publishing needs npm 11.5.1+;
-  the workflow runs on Node 24, uses its bundled npm, and fails early if `npm --version` is below
-  that floor.
+  release (the 2.0.0 publish failed exactly that way). Before this workflow is relied upon,
+  GitHub must restrict the `npm-publish` environment to the exact `main` branch (no tag patterns),
+  and npm must bind this workflow's trusted publisher to that environment with no alternate
+  environment-unbound entry. The YAML guard alone can be removed on another branch; remote
+  settings require fresh readback. See `docs/operations/RELEASE-TOKEN-SETUP.md`. Trusted publishing
+  needs npm 11.5.1+; the workflow runs on Node 24, uses its bundled npm, and fails early if
+  `npm --version` is below that floor.
 - It publishes with `npm publish --access public --provenance`, so each tarball carries a Sigstore
   provenance attestation binding it to the workflow run and commit that built it (trusted
   publishing generates the attestation even without the flag; the flag is kept explicit). Verify
-  an install with `npm audit signatures`; the npm package page shows a Provenance badge.
+  that exact published version's `dist.attestations` field with `npm view`; the npm package page
+  shows a Provenance badge. See the command in "Verify Release" above.
 - The package is published as `@egarcia74/warp-sql-server-mcp`.
 
 If `create_version_pr=false` was used, nothing publishes to npm until a `package.json` version bump
