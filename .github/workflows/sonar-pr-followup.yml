@@ -5,6 +5,9 @@ on:
     workflows: [CI]
     types: [completed]
 
+permissions:
+  contents: read
+
 # This workflow is privileged relative to a fork PR. It never executes PR code,
 # installs PR dependencies, or restores PR-writable caches. All scanner inputs
 # are checked against GitHub's API before SONAR_TOKEN reaches one scan step.
