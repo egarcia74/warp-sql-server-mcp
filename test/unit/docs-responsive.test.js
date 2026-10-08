@@ -12,7 +12,9 @@ const pages = [
 function rule(markup, selector) {
   const styles = markup.match(/<style>([\s\S]*?)<\/style>/)?.[1];
   expect(styles).toBeDefined();
-  const declarations = styles.match(new RegExp(`\\${selector}\\s*\\{([^}]+)\\}`))?.[1];
+  const declarations = [...styles.matchAll(/([^{}]+)\{([^{}]+)\}/g)].find(
+    ([, cssSelector]) => cssSelector.trim() === selector
+  )?.[2];
   expect(declarations, `Missing ${selector} CSS rule`).toBeDefined();
   return Object.fromEntries(
     [...declarations.matchAll(/([\w-]+):\s*([^;]+);/g)].map(([, name, value]) => [
@@ -23,6 +25,11 @@ function rule(markup, selector) {
 }
 
 describe('landing page responsive layout', () => {
+  it('requires an exact CSS selector when checking responsive rules', () => {
+    const markup = '<style>article.grid { grid-template-columns: 300px; }</style>';
+    expect(() => rule(markup, '.grid')).toThrow('Missing .grid CSS rule');
+  });
+
   for (const [source, markup] of pages) {
     it(`${source} page caps grid columns to mobile content width`, () => {
       expect(rule(markup, '.grid')['grid-template-columns']).toMatch(
