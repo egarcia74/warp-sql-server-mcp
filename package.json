@@ -135,7 +135,7 @@
     "@vitest/ui": "^5.0.0",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
-    "ignore": "7.0.12",
+    "ignore": "7.0.13",
     "markdown-link-check": "^3.13.7",
     "markdown-it": "15.0.3",
     "markdownlint": "0.42.0",
