@@ -139,7 +139,7 @@
     "markdown-link-check": "^3.13.7",
     "markdown-it": "15.0.3",
     "markdownlint": "0.42.0",
-    "markdownlint-cli": "0.49.1",
+    "markdownlint-cli": "0.50.0",
     "prettier": "^3.3.3",
     "sinon": "^22.0.0",
     "tinyglobby": "0.2.17",
