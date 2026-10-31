@@ -14,6 +14,16 @@ const root = () => {
 };
 afterEach(() => roots.splice(0).forEach(directory => fs.rmSync(directory, { recursive: true })));
 
+function onDarwin(callback) {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform');
+  try {
+    Object.defineProperty(process, 'platform', { ...original, value: 'darwin' });
+    return callback();
+  } finally {
+    Object.defineProperty(process, 'platform', original);
+  }
+}
+
 function fixture(options = {}) {
   const cwd = fs.realpathSync(options.cwd ?? root());
   const dockerDir = path.join(cwd, 'test/docker');
@@ -876,6 +886,88 @@ describe('review corrections (offline)', () => {
     ).toBe(true);
   });
 
+  it('restores the exact platform descriptor after success and throw', () => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform');
+    expect(onDarwin(() => process.platform)).toBe('darwin');
+    expect(Object.getOwnPropertyDescriptor(process, 'platform')).toEqual(original);
+    expect(() =>
+      onDarwin(() => {
+        throw new Error('fixture throw');
+      })
+    ).toThrow('fixture throw');
+    expect(Object.getOwnPropertyDescriptor(process, 'platform')).toEqual(original);
+  });
+
+  it.each(['growth', 'replacement', 'nonregular', 'oversize', 'valid-large'])(
+    'binds compose reads to a validated bounded descriptor: %s',
+    async kind => {
+      const test = fixture();
+      const paths = new Map();
+      let consumed = 0;
+      let opened = 0;
+      let closed = 0;
+      let replaced = false;
+      const bound = 8 * 1024 * 1024;
+      test.settings.fs = {
+        ...test.settings.fs,
+        openSync(file, ...args) {
+          if (file === test.compose && !replaced) {
+            replaced = true;
+            if (kind === 'oversize') fs.writeFileSync(file, Buffer.alloc(bound + 1));
+            if (kind === 'valid-large') fs.writeFileSync(file, Buffer.alloc(1024 * 1024 + 1));
+          }
+          const fd = fs.openSync(file, ...args);
+          paths.set(fd, file);
+          if (file === test.compose) {
+            opened++;
+            expect(args[0] & fs.constants.O_NOFOLLOW).toBe(fs.constants.O_NOFOLLOW);
+            expect(args[0] & fs.constants.O_NONBLOCK).toBe(fs.constants.O_NONBLOCK);
+          }
+          return fd;
+        },
+        fstatSync(fd) {
+          const stat = fs.fstatSync(fd);
+          if (paths.get(fd) === test.compose && kind === 'nonregular')
+            return { ...stat, isFile: () => false };
+          if (paths.get(fd) === test.compose && kind === 'replacement' && opened === 1) {
+            fs.renameSync(test.compose, test.compose + '.old');
+            fs.writeFileSync(test.compose, 'replacement', { mode: 0o600 });
+          }
+          return stat;
+        },
+        readSync(fd, buffer, offset, length, position) {
+          if (paths.get(fd) === test.compose) {
+            if (kind === 'growth') {
+              buffer.fill(65, offset, offset + length);
+              consumed += length;
+              return length;
+            }
+            const count = fs.readSync(fd, buffer, offset, length, position);
+            consumed += count;
+            return count;
+          }
+          return fs.readSync(fd, buffer, offset, length, position);
+        },
+        closeSync(fd) {
+          if (paths.get(fd) === test.compose) closed++;
+          paths.delete(fd);
+          return fs.closeSync(fd);
+        }
+      };
+      const result = await lifecycle.runSqlLifecycle(test.settings);
+      expect(opened).toBeGreaterThan(0);
+      expect(closed).toBe(opened);
+      if (kind === 'valid-large') {
+        expect(result.code, result.reason).toBe(0);
+        expect(consumed).toBeGreaterThan(1024 * 1024);
+      } else {
+        expect(result.code).not.toBe(0);
+        expect(stages(test.calls)).not.toContain('docker:stop');
+        expect(consumed).toBe(kind === 'growth' ? bound + 1 : 0);
+      }
+    }
+  );
+
   it.each([false, true])(
     'snapshots TCP/TLS context material with verification skipped: %s',
     async skipTLSVerify => {
@@ -1001,37 +1093,40 @@ describe('review corrections (offline)', () => {
 
   it.each([false, true])(
     'rechecks ctime-only ancestor churn and rejects new ACL grants: %s',
-    grant => {
-      const parent = fs.realpathSync(root());
-      let reads = 0;
-      const injected = {
-        ...fs,
-        inspectAcl(filename) {
-          if (filename !== parent) return '';
-          reads++;
-          if (reads === 1)
-            fs.mkdirSync(path.join(parent, 'concurrent-private-child'), { mode: 0o700 });
-          return grant && reads > 1 ? ' 0: group:everyone allow delete_child\n' : '';
-        }
-      };
-      const create = () =>
-        new lifecycle.EvidenceStore({ root: path.join(parent, 'evidence'), fs: injected });
-      if (grant) expect(create).toThrow('replaceable-evidence-acl');
-      else expect(create).not.toThrow();
-      expect(reads).toBeGreaterThan(1);
-    }
+    grant =>
+      onDarwin(() => {
+        const parent = fs.realpathSync(root());
+        let reads = 0;
+        const injected = {
+          ...fs,
+          inspectAcl(filename) {
+            if (filename !== parent) return '';
+            reads++;
+            if (reads === 1)
+              fs.mkdirSync(path.join(parent, 'concurrent-private-child'), { mode: 0o700 });
+            return grant && reads > 1 ? ' 0: group:everyone allow delete_child\n' : '';
+          }
+        };
+        const create = () =>
+          new lifecycle.EvidenceStore({ root: path.join(parent, 'evidence'), fs: injected });
+        if (grant) expect(create).toThrow('replaceable-evidence-acl');
+        else expect(create).not.toThrow();
+        expect(reads).toBeGreaterThan(1);
+      })
   );
 
-  it('rejects an ancestor ACL that grants replacement access', () => {
-    const parent = root();
-    const injected = {
-      ...fs,
-      inspectAcl: filename => (filename === parent ? ' 0: group:everyone allow delete_child\n' : '')
-    };
-    expect(
-      () => new lifecycle.EvidenceStore({ root: path.join(parent, 'evidence'), fs: injected })
-    ).toThrow();
-  });
+  it('rejects an ancestor ACL that grants replacement access', () =>
+    onDarwin(() => {
+      const parent = root();
+      const injected = {
+        ...fs,
+        inspectAcl: filename =>
+          filename === parent ? ' 0: group:everyone allow delete_child\n' : ''
+      };
+      expect(
+        () => new lifecycle.EvidenceStore({ root: path.join(parent, 'evidence'), fs: injected })
+      ).toThrow();
+    }));
 
   it('rejects an evidence root beneath a replaceable ancestor', () => {
     const parent = root();

@@ -55,14 +55,41 @@ function privatePath(fs, filename, mode, aclCache = new Map()) {
   return stat;
 }
 
+function sameMetadata(left, right) {
+  return ['dev', 'ino', 'mode', 'uid', 'nlink', 'size', 'ctimeMs', 'mtimeMs'].every(
+    key => left[key] === right[key]
+  );
+}
+
+function readBounded(fs, fd, maxBytes, reason) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw failure(reason);
+  const chunks = [];
+  let total = 0;
+  while (total <= maxBytes) {
+    const buffer = Buffer.alloc(Math.min(65536, maxBytes + 1 - total));
+    const count = fs.readSync(fd, buffer, 0, buffer.length, null);
+    if (count === 0) break;
+    total += count;
+    if (total > maxBytes) throw failure(reason);
+    chunks.push(buffer.subarray(0, count));
+  }
+  return Buffer.concat(chunks, total);
+}
+
 function syncDirectory(fs, directory) {
-  const before = fs.lstatSync(directory);
-  const fd = fs.openSync(directory, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  const fd = fs.openSync(
+    directory,
+    fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
+  );
   try {
     const opened = fs.fstatSync(fd);
-    if (!opened.isDirectory() || opened.dev !== before.dev || opened.ino !== before.ino)
+    if (!opened.isDirectory()) throw failure('directory-identity-drift');
+    const before = fs.lstatSync(directory);
+    if (before.isSymbolicLink() || !sameMetadata(opened, before))
       throw failure('directory-identity-drift');
     fs.fsyncSync(fd);
+    if (!sameMetadata(opened, fs.fstatSync(fd)) || !sameMetadata(opened, fs.lstatSync(directory)))
+      throw failure('directory-identity-drift');
   } finally {
     fs.closeSync(fd);
   }
@@ -186,24 +213,30 @@ function verifyRoot(fs, proof, cache) {
   privatePath(fs, proof.canonical, 0o700, cache);
 }
 
-function readPrivate(fs, filename, cache) {
-  const before = privatePath(fs, filename, 0o600, cache);
-  const fd = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+function readPrivate(fs, filename, cache, maxBytes = 1024 * 1024) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
+    throw failure('private-state-identity-failure');
+  const fd = fs.openSync(
+    filename,
+    fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
+  );
   try {
     const opened = fs.fstatSync(fd);
-    if (before.ino !== opened.ino || before.dev !== opened.dev || opened.size > 1024 * 1024)
-      throw failure('private-state-identity-failure');
-    const bytes = fs.readFileSync(fd);
-    const after = privatePath(fs, filename, 0o600, cache);
     if (
-      before.ino !== after.ino ||
-      before.dev !== after.dev ||
-      before.size !== after.size ||
-      before.ctimeMs !== after.ctimeMs ||
-      before.mtimeMs !== after.mtimeMs
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.uid !== process.getuid?.() ||
+      (opened.mode & 0o777) !== 0o600 ||
+      opened.size > maxBytes
     )
+      throw failure('private-state-identity-failure');
+    const before = privatePath(fs, filename, 0o600, cache);
+    if (!sameMetadata(opened, before)) throw failure('private-state-identity-failure');
+    const bytes = readBounded(fs, fd, maxBytes, 'private-state-size-bound');
+    const after = privatePath(fs, filename, 0o600, cache);
+    if (!sameMetadata(opened, after) || !sameMetadata(opened, fs.fstatSync(fd)))
       throw failure('private-state-readback-drift');
-    return { bytes, identity: { sha256: hash(bytes), dev: before.dev, ino: before.ino } };
+    return { bytes, identity: { sha256: hash(bytes), dev: opened.dev, ino: opened.ino } };
   } finally {
     fs.closeSync(fd);
   }
@@ -291,28 +324,27 @@ function generatedCredential(fs, filename, cache) {
 // invoking the monolithic startup command, even when a credential already exists.
 function verifyCredentialTemplate(fs, filename, cache) {
   trustedChain(fs, path.dirname(filename), cache);
-  const before = fs.lstatSync(filename);
-  if (
-    !before.isFile() ||
-    before.nlink !== 1 ||
-    before.mode & 0o022 ||
-    ![0, process.getuid()].includes(before.uid)
-  )
-    throw failure('invalid-docker-credential-template');
-  const fd = fs.openSync(filename, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  const fd = fs.openSync(
+    filename,
+    fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
+  );
   try {
     const opened = fs.fstatSync(fd);
-    if (opened.dev !== before.dev || opened.ino !== before.ino || opened.size > 1024 * 1024)
-      throw failure('invalid-docker-credential-template');
-    const bytes = fs.readFileSync(fd);
-    const after = fs.lstatSync(filename);
     if (
-      after.dev !== before.dev ||
-      after.ino !== before.ino ||
-      after.mode !== before.mode ||
-      after.uid !== before.uid ||
-      after.ctimeMs !== before.ctimeMs ||
-      after.mtimeMs !== before.mtimeMs ||
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.mode & 0o022 ||
+      ![0, process.getuid()].includes(opened.uid) ||
+      opened.size > 1024 * 1024
+    )
+      throw failure('invalid-docker-credential-template');
+    const before = fs.lstatSync(filename);
+    if (before.isSymbolicLink() || !sameMetadata(opened, before))
+      throw failure('invalid-docker-credential-template');
+    const bytes = readBounded(fs, fd, 1024 * 1024, 'invalid-docker-credential-template');
+    if (
+      !sameMetadata(opened, fs.lstatSync(filename)) ||
+      !sameMetadata(opened, fs.fstatSync(fd)) ||
       hash(bytes) !== 'c7815ab256e230761912e5a093bb808e43f95dd1c0d566236713f726a06d0b5e'
     )
       throw failure('invalid-docker-credential-template');
@@ -770,34 +802,34 @@ export async function runSqlLifecycle({
         for (const name of ['ca.pem', 'cert.pem', 'key.pem']) {
           const source = fs.realpathSync(path.join(materialDirectory, name));
           trustedChain(fs, path.dirname(source), store.aclCache);
-          const before = fs.lstatSync(source);
-          if (
-            !before.isFile() ||
-            before.isSymbolicLink() ||
-            before.nlink !== 1 ||
-            ![0, process.getuid()].includes(before.uid) ||
-            (before.mode & 0o022) !== 0 ||
-            (name === 'key.pem' && (before.mode & 0o077) !== 0) ||
-            before.size > 1024 * 1024
-          )
-            throw failure('unsupported-context');
-          if (process.platform === 'darwin') {
-            const listing = aclListing(fs, source);
-            if (/^\s*\d+:/m.test(listing)) throw failure('unsupported-context');
-          }
-          const fd = fs.openSync(source, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+          const fd = fs.openSync(
+            source,
+            fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
+          );
           let bytes;
           try {
             const opened = fs.fstatSync(fd);
-            bytes = fs.readFileSync(fd);
-            const after = fs.lstatSync(source);
             if (
-              opened.ino !== before.ino ||
-              opened.dev !== before.dev ||
-              after.ino !== before.ino ||
-              after.dev !== before.dev ||
-              after.ctimeMs !== before.ctimeMs ||
-              after.size !== before.size
+              !opened.isFile() ||
+              opened.nlink !== 1 ||
+              ![0, process.getuid()].includes(opened.uid) ||
+              (opened.mode & 0o022) !== 0 ||
+              (name === 'key.pem' && (opened.mode & 0o077) !== 0) ||
+              opened.size > 1024 * 1024
+            )
+              throw failure('unsupported-context');
+            const before = fs.lstatSync(source);
+            if (before.isSymbolicLink() || !sameMetadata(opened, before))
+              throw failure('unsupported-context');
+            if (process.platform === 'darwin') {
+              const listing = aclListing(fs, source);
+              if (/^\s*\d+:/m.test(listing)) throw failure('unsupported-context');
+              if (!sameMetadata(opened, fs.lstatSync(source))) throw failure('unsupported-context');
+            }
+            bytes = readBounded(fs, fd, 1024 * 1024, 'unsupported-context');
+            if (
+              !sameMetadata(opened, fs.lstatSync(source)) ||
+              !sameMetadata(opened, fs.fstatSync(fd))
             )
               throw failure('unsupported-context');
           } finally {
@@ -957,9 +989,8 @@ export async function runSqlLifecycle({
       (!runtimeNetworkMatches && !detachedWhileStopped)
     )
       throw failure('ownership-verification-failed');
-    privatePath(fs, composeFile, 0o600);
-    if (fs.statSync(composeFile).size > 8 * 1024 * 1024) throw failure('compose-size-bound');
-    const composeHash = hash(fs.readFileSync(composeFile));
+    const composeHash = readPrivate(fs, composeFile, store.aclCache, 8 * 1024 * 1024).identity
+      .sha256;
     const effective = await docker(
       ['compose', '-f', composeFile, 'config', '--format', 'json'],
       preserve
