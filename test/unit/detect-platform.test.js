@@ -24,7 +24,7 @@ const dockerComposePath = fileURLToPath(new URL('../docker/docker-compose.yml', 
 const mockComposeDescriptor = 99123;
 const mockEnvDescriptor = 99124;
 
-function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
+function runDetectionForHost(hostArch, hostPlatform, dockerArch, supportsAMD64 = true) {
   const realOpenSync = fs.openSync;
   const realFstatSync = fs.fstatSync;
   const realFchmodSync = fs.fchmodSync;
@@ -71,6 +71,9 @@ function runDetectionForHost(hostArch, hostPlatform, dockerArch) {
   Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform });
   vi.mocked(execSync).mockImplementation(command => {
     if (command.includes('--format')) return `${dockerArch}\n`;
+    if (command.includes('hello-world') && !supportsAMD64) {
+      throw new Error('AMD64 emulation unavailable');
+    }
     return '';
   });
   const previousExec = vi.mocked(execFileSync).getMockImplementation();
@@ -149,6 +152,89 @@ describe('Docker platform configuration selection', () => {
       '127.0.0.1:14330:1433'
     ]);
   });
+
+  const probeCases = [
+    {
+      name: 'native AMD64',
+      arch: 'x64',
+      platform: 'linux',
+      isAppleSilicon: false,
+      supportsAMD64: true,
+      command:
+        '/opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1',
+      timing: { interval: '10s', timeout: '5s', retries: 5, start_period: '30s' }
+    },
+    {
+      name: 'Apple Silicon with Rosetta',
+      arch: 'arm64',
+      platform: 'darwin',
+      isAppleSilicon: true,
+      supportsAMD64: true,
+      command:
+        '/opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1',
+      timing: { interval: '15s', timeout: '10s', retries: 8, start_period: '45s' }
+    },
+    {
+      name: 'native ARM64 SQL Edge',
+      arch: 'arm64',
+      platform: 'linux',
+      isAppleSilicon: false,
+      supportsAMD64: false,
+      command:
+        '/opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1',
+      timing: { interval: '12s', timeout: '8s', retries: 6, start_period: '35s' }
+    },
+    {
+      name: 'unknown architecture fallback',
+      arch: 'riscv64',
+      platform: 'linux',
+      isAppleSilicon: false,
+      supportsAMD64: false,
+      command:
+        '/opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1',
+      timing: { interval: '15s', timeout: '10s', retries: 8, start_period: '45s' }
+    }
+  ];
+
+  it.each(probeCases)(
+    'uses TCP IPv4 container port 1433 for the $name readiness probe',
+    ({ arch, isAppleSilicon, supportsAMD64, command, timing }) => {
+      const selected = chooseBestConfiguration(
+        { arch, isAppleSilicon },
+        { hasDocker: true, supportsAMD64 }
+      );
+      const service = generateDockerCompose(selected, 'GeneratedAa1!').services.sqlserver;
+
+      expect(service.healthcheck).toEqual({ test: ['CMD-SHELL', command], ...timing });
+      expect(service.ports).toEqual(['127.0.0.1:14330:1433']);
+      expect(service.environment.SA_PASSWORD).toBe('GeneratedAa1!');
+      expect(service.healthcheck.test[1]).not.toContain('GeneratedAa1!');
+    }
+  );
+
+  it.skipIf(process.platform === 'win32').each(probeCases)(
+    'serializes the TCP IPv4 readiness probe and timings for $name',
+    ({ arch, platform, supportsAMD64, command, timing }) => {
+      const write = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+      runDetectionForHost(arch, platform, arch === 'x64' ? 'x86_64' : 'aarch64', supportsAMD64);
+      const yaml = write.mock.calls[1][1];
+
+      expect(yaml).toContain(
+        [
+          '    healthcheck:',
+          '      test:',
+          '        - CMD-SHELL',
+          `        - '${command}'`,
+          `      interval: ${timing.interval}`,
+          `      timeout: ${timing.timeout}`,
+          `      retries: ${timing.retries}`,
+          `      start_period: ${timing.start_period}`,
+          ''
+        ].join('\n')
+      );
+      expect(yaml).toContain('    ports:\n      - 127.0.0.1:14330:1433\n');
+    }
+  );
 
   it.skipIf(process.platform === 'win32')(
     'reuses the generated password across starts and keeps its file private',
@@ -607,7 +693,7 @@ describe('Docker platform configuration selection', () => {
           '    healthcheck:',
           '      test:',
           '        - CMD-SHELL',
-          '        - \'/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1\'',
+          '        - \'/opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1\'',
           '      interval: 10s',
           '      timeout: 5s',
           '      retries: 5',
