@@ -150,7 +150,8 @@
     "markdownlint": {
       "micromark-extension-math": {
         "katex": "0.18.2"
-      }
+      },
+      "re2js": "2.8.7"
     },
     "get-uri": {
       "basic-ftp": "6.2.1"
@@ -158,7 +159,7 @@
     "markdownlint-cli": {
       "ini": "6.0.0",
       "js-yaml": "5.4.2",
-      "markdown-it": "15.0.1",
+      "markdown-it": "15.0.3",
       "smol-toml": "1.9.0"
     }
   },
