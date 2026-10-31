@@ -1115,6 +1115,24 @@ describe('review corrections (offline)', () => {
       })
   );
 
+  it.each([
+    [' \t\n\t\r\n\u00a0\u2003\u2028\u2029\u00a0\t12: user:fixture deny read\n', true],
+    [' \t\n\r\n\u2028\u2029\u2003not an ACL entry\n12 without colon\n', false]
+  ])(
+    'preserves ACL entry detection across blank lines and Unicode whitespace: %j',
+    (listing, unsafe) =>
+      onDarwin(() => {
+        const parent = root();
+        const injected = {
+          ...fs,
+          inspectAcl: filename => (path.basename(filename) === path.basename(parent) ? listing : '')
+        };
+        const create = () => new lifecycle.EvidenceStore({ root: parent, fs: injected });
+        if (unsafe) expect(create).toThrow('unsafe-evidence-acl');
+        else expect(create).not.toThrow();
+      })
+  );
+
   it('rejects an ancestor ACL that grants replacement access', () =>
     onDarwin(() => {
       const parent = root();

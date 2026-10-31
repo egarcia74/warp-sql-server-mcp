@@ -46,7 +46,7 @@ function privatePath(fs, filename, mode, aclCache = new Map()) {
   const signature = `${stat.dev}:${stat.ino}:${stat.ctimeMs}:${stat.mode}`;
   if (process.platform === 'darwin' && aclCache.get(filename) !== signature) {
     const listing = aclListing(fs, filename);
-    if (/^\s*\d+: /m.test(listing)) throw failure('unsafe-evidence-acl');
+    if (/^[^\S\r\n\u2028\u2029]*\d+: /m.test(listing)) throw failure('unsafe-evidence-acl');
     const after = fs.lstatSync(filename);
     if (`${after.dev}:${after.ino}:${after.ctimeMs}:${after.mode}` !== signature)
       throw failure('evidence-acl-drift');
@@ -823,7 +823,8 @@ export async function runSqlLifecycle({
               throw failure('unsupported-context');
             if (process.platform === 'darwin') {
               const listing = aclListing(fs, source);
-              if (/^\s*\d+:/m.test(listing)) throw failure('unsupported-context');
+              if (/^[^\S\r\n\u2028\u2029]*\d+:/m.test(listing))
+                throw failure('unsupported-context');
               if (!sameMetadata(opened, fs.lstatSync(source))) throw failure('unsupported-context');
             }
             bytes = readBounded(fs, fd, 1024 * 1024, 'unsupported-context');
