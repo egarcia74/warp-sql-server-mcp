@@ -61,7 +61,7 @@ describe('Docker integration entrypoint', () => {
   });
 
   it('uses portable commands for Docker-only scripts', () => {
-    expect(scripts['test:integration']).toContain('node scripts/ci/run-docker-integration.mjs');
+    expect(scripts['test:integration']).toContain('node scripts/ci/sql-test-lifecycle.mjs');
     for (const name of ['docker:start', 'docker:wait', 'docker:init', 'docker:test-connection']) {
       expect(scripts[name]).not.toMatch(/\b\w+=\w+\s+(?:npm|node)\b/);
     }

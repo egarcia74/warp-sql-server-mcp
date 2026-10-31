@@ -491,7 +491,7 @@ That file list is 314 tests across 7 files.
 > testing none of the guards.
 >
 > **⚠️ `npm run test:unit -- <paths>` does not narrow the run either.** `test:unit` is
-> `vitest run test/unit`, so paths are _appended_ to the directory argument and Vitest
+> `vitest run test/unit --maxWorkers=2`, so paths are _appended_ to the directory argument and Vitest
 > runs the whole directory - all 1,281 tests. Call `npx vitest run <paths>` directly. Same
 > class of trap as `npm test`, which is a shell chain ending in the summary script, so
 > appended arguments never reach Vitest at all.
@@ -576,3 +576,25 @@ contact me"_ with no details, and the maintainer will open a private advisory an
 ---
 
 **Remember**: Security is a layered approach. This MCP's safety features are one layer in your overall database security strategy.
+
+## Time-limited dependency risk record (2026-10-28)
+
+The retained dependency update adopts the complete reviewed R2 candidate manifest
+and lockfile. The remaining UUID 8.3.2 finding is GHSA-w5hq-g745-h8pq, including
+the inherited MSAL 3.8.10 and Azure Identity 4.13.0 dependency findings. npm reports
+moderate severity; the advisory's CVSS score is 7.5. This discrepancy and the
+UUID 8.3.2 deprecation remain unresolved; the update is not a zero-vulnerability
+claim or proof that published-package consumers receive a repair.
+
+Risk owner: unassigned. Status: proposed, time-limited residual-risk handling;
+ownership and mitigation are not complete. Proposed mitigation is a separately
+reviewed compatible upstream dependency update and verification of the affected
+consumer dependency path. Reassess immediately on a new finding. The hard expiry
+is 2026-11-26T01:41:41Z; it must not be extended. Expiry or new findings require
+HOLD rather than automatic continuation.
+
+A rollback requires separate review and explicit execution authority. Its cost
+includes restoring the preserved dependency tree and exact manifest/lock bytes,
+reconciling the installed graph, and repeating the applicable normal gates and
+installed hooks. Preserved source and evidence are retained; no automatic rollback
+or cleanup is authorized by this record.
