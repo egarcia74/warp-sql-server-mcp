@@ -71,8 +71,6 @@ class SqlServerMCP {
       },
       {
         capabilities: {
-          tools: {},
-          resources: {},
           logging: {}
         },
         instructions:
@@ -80,6 +78,8 @@ class SqlServerMCP {
       }
     );
     this.server = this.mcpServer.server;
+    // Custom handlers expose static lists without high-level list-change notifications.
+    this.server.registerCapabilities({ tools: {}, resources: {} });
 
     // Initialize components with dependency injection
     this.config = serverConfig;
