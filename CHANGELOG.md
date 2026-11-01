@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A documentation diff now requires a working `DOCS_PAT`; no-diff runs succeed without it, and
   failed PR creation reports the pushed branch for manual inspection instead of deleting it.
 
+### Added
+
+- **Claude reviews ready, human-authored pull requests automatically** when opened or updated.
+  The separate review workflow skips drafts, forks, and bot events, cancels superseded runs,
+  and uses a token that can comment but cannot write repository contents. Closes #1272.
+
 ## [2.1.1] - 2026-10-03
 
 This release supersedes the v2.1.0 GitHub tag, which was not published to npm. It includes the
