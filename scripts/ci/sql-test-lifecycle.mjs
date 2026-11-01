@@ -353,6 +353,80 @@ function verifyCredentialTemplate(fs, filename, cache) {
   }
 }
 
+const MAX_SEED_BYTES = 1024 * 1024;
+const MAX_SEED_ARCHIVE_BYTES = MAX_SEED_BYTES + 65536;
+
+function runtimeNetworkAdmitted(networks, expectedName, expectedId, stopped) {
+  const attachedNames = Object.keys(networks);
+  const runtimeNetworkMatches =
+    attachedNames.length === 1 &&
+    attachedNames[0] === expectedName &&
+    (networks[expectedName]?.NetworkID === expectedId ||
+      (stopped && !networks[expectedName]?.NetworkID));
+  const detachedWhileStopped = stopped && attachedNames.length === 0;
+  return runtimeNetworkMatches || detachedWhileStopped;
+}
+
+function seedAdmission(seed, expectedSeed, platform, endpoint) {
+  if (seed?.Type !== 'bind' || seed.RW !== false) return null;
+  if (seed.Source === expectedSeed) return 'canonical';
+  if (
+    platform === 'darwin' &&
+    new URL(endpoint).protocol === 'unix:' &&
+    seed.Source === '/host_mnt' + expectedSeed
+  )
+    return 'translated';
+  return null;
+}
+
+function readHostSeed(fs, filename, cache) {
+  const ancestors = trustedChain(fs, path.dirname(filename), cache);
+  const fd = fs.openSync(
+    filename,
+    fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
+  );
+  try {
+    const opened = fs.fstatSync(fd);
+    if (
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.uid !== process.getuid() ||
+      ![0o600, 0o644].includes(opened.mode & 0o777) ||
+      opened.size === 0 ||
+      opened.size > MAX_SEED_BYTES
+    )
+      throw failure('unsafe-host-seed');
+    const before = fs.lstatSync(filename);
+    if (before.isSymbolicLink() || !sameMetadata(opened, before))
+      throw failure('host-seed-identity-drift');
+    const listing = aclListing(fs, filename);
+    if (listing.split(/[\r\n\u2028\u2029]/).some(line => /^\d+:/.test(line.trimStart())))
+      throw failure('unsafe-host-seed-acl');
+    if (!sameMetadata(opened, fs.lstatSync(filename))) throw failure('host-seed-identity-drift');
+    const bytes = readBounded(fs, fd, MAX_SEED_BYTES, 'host-seed-size-bound');
+    if (
+      bytes.length === 0 ||
+      !sameMetadata(opened, fs.fstatSync(fd)) ||
+      !sameMetadata(opened, fs.lstatSync(filename)) ||
+      JSON.stringify(ancestors) !== JSON.stringify(trustedChain(fs, path.dirname(filename), cache))
+    )
+      throw failure('host-seed-identity-drift');
+    return {
+      bytes,
+      identity: Object.fromEntries([
+        ...['dev', 'ino', 'mode', 'uid', 'nlink', 'size', 'ctimeMs', 'mtimeMs'].map(key => [
+          key,
+          opened[key]
+        ]),
+        ['sha256', hash(bytes)],
+        ['ancestors', ancestors]
+      ])
+    };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 export class EvidenceStore {
   constructor({
     root = path.join(os.homedir(), '.warp-sql-server-mcp-test-evidence'),
@@ -696,7 +770,14 @@ export async function runSqlLifecycle({
   const handlers = new Map(signals.map(signal => [signal, () => onSignal(signal)]));
   let counter = 0;
   let stoppedForCapture = false;
-  const stage = async (label, command, args, preserve = false, input) => {
+  const stage = async (
+    label,
+    command,
+    args,
+    preserve = false,
+    input = undefined,
+    maxBytes = limits.maxBytes
+  ) => {
     store.assertTrusted();
     if (lockRetained) lock.verify();
     for (const name of tlsNames) store.verify(name);
@@ -714,7 +795,7 @@ export async function runSqlLifecycle({
       spawn,
       kill,
       now,
-      maxBytes: limits.maxBytes,
+      maxBytes: Math.min(maxBytes, limits.maxBytes),
       killGraceMs: limits.killGraceMs,
       abortSignal: preserve ? undefined : controller.signal
     });
@@ -909,6 +990,85 @@ export async function runSqlLifecycle({
     }
     return binding;
   };
+  const proveDesktopSeed = async (container, preserve) => {
+    if (
+      JSON.parse(await docker(['info', '--format', '{{json .OperatingSystem}}'], preserve)) !==
+      'Docker Desktop'
+    )
+      throw failure('unproven-desktop-daemon');
+    const filename = path.join(composeDirectory, 'init-db.sql');
+    const host = readHostSeed(fs, filename, store.aclCache);
+    const identity = {
+      source: container.Mounts.find(mount => mount.Destination === '/tmp/init-db.sql').Source,
+      ...host.identity
+    };
+    if (pinned?.seed && JSON.stringify(identity) !== JSON.stringify(pinned.seed))
+      throw failure('host-seed-identity-drift');
+    const ownership = row =>
+      JSON.stringify([
+        row.Id,
+        row.Name,
+        row.Created,
+        row.Config?.Labels,
+        row.HostConfig?.NetworkMode,
+        row.HostConfig?.PortBindings,
+        row.Mounts,
+        row.NetworkSettings?.Networks,
+        row.State?.Running,
+        row.State?.Status,
+        row.State?.Pid
+      ]);
+    const before = ownership(container);
+    const label = `seed-archive-${++counter}`;
+    const copied = await stage(
+      label,
+      'docker',
+      ['cp', `${container.Id}:/tmp/init-db.sql`, '-'],
+      preserve,
+      undefined,
+      MAX_SEED_ARCHIVE_BYTES
+    );
+    if (!successful(copied)) throw failure('seed-archive-capture-failed');
+    const archivePath = path.join(store.directory, `${label}.stdout`);
+    const metadata = privatePath(fs, archivePath, 0o600, store.aclCache);
+    const archive = readPrivate(fs, archivePath, store.aclCache, MAX_SEED_ARCHIVE_BYTES);
+    const verifyArchive = () => {
+      const current = readPrivate(fs, archivePath, store.aclCache, MAX_SEED_ARCHIVE_BYTES);
+      if (
+        !sameMetadata(metadata, fs.lstatSync(archivePath)) ||
+        metadata.dev !== current.identity.dev ||
+        metadata.ino !== current.identity.ino ||
+        !current.bytes.equals(archive.bytes)
+      )
+        throw failure('seed-archive-drift');
+      store.verify(`${label}.stdout`);
+    };
+    const tar = async (args, maxBytes) => {
+      verifyArchive();
+      const name = `seed-tar-${++counter}`;
+      const result = await stage(name, '/usr/bin/tar', args, preserve, undefined, maxBytes);
+      verifyArchive();
+      if (!successful(result) || store.verify(`${name}.stderr`).bytes !== 0)
+        throw failure('seed-archive-inspection-failed');
+      return readPrivate(fs, path.join(store.directory, `${name}.stdout`), store.aclCache, maxBytes)
+        .bytes;
+    };
+    if ((await tar(['-tf', archivePath], 256)).toString('utf8') !== 'init-db.sql\n')
+      throw failure('seed-archive-membership-failed');
+    if (!/^-[^\r\n]*\n$/.test((await tar(['-tvf', archivePath], 4096)).toString('utf8')))
+      throw failure('seed-archive-type-failed');
+    const content = await tar(['-xOf', archivePath, '--', 'init-db.sql'], MAX_SEED_BYTES);
+    if (content.length === 0 || !content.equals(host.bytes)) throw failure('seed-content-mismatch');
+    const after = readHostSeed(fs, filename, store.aclCache);
+    if (JSON.stringify(after.identity) !== JSON.stringify(host.identity))
+      throw failure('host-seed-identity-drift');
+    await verifyDaemon(preserve);
+    const inspected = JSON.parse(await docker(['container', 'inspect', container.Id], preserve));
+    if (inspected.length !== 1 || ownership(inspected[0]) !== before)
+      throw failure('seed-container-identity-drift');
+    await verifyDaemon(preserve);
+    return identity;
+  };
   const inspectIdentity = async (preserve, required = true, expectStopped = false) => {
     await verifyDaemon(preserve);
     const list = await inventory(preserve);
@@ -945,16 +1105,11 @@ export async function runSqlLifecycle({
       container.State?.Status === 'exited' &&
       container.State?.Pid === 0;
     if (expectStopped && !stopped) throw failure('container-not-stopped');
-    const attachedNames = Object.keys(networks);
-    const runtimeNetworkMatches =
-      attachedNames.length === 1 &&
-      attachedNames[0] === networkName() &&
-      (networks[networkName()]?.NetworkID === network.Id ||
-        (stopped && !networks[networkName()]?.NetworkID));
-    const detachedWhileStopped = stopped && attachedNames.length === 0;
     const ports = container.HostConfig?.PortBindings ?? {};
     const data = mounts.find(mount => mount.Destination === '/var/opt/mssql');
     const seed = mounts.find(mount => mount.Destination === '/tmp/init-db.sql');
+    const expectedSeed = path.join(composeDirectory, 'init-db.sql');
+    const seedKind = seedAdmission(seed, expectedSeed, process.platform, environment.DOCKER_HOST);
     if (
       container.Id !== id ||
       container.Name !== `/${NAME}` ||
@@ -975,9 +1130,7 @@ export async function runSqlLifecycle({
       data.Name !== volumeName() ||
       data.RW !== true ||
       data.Source !== volume.Mountpoint ||
-      seed?.Type !== 'bind' ||
-      seed.RW !== false ||
-      seed.Source !== path.join(composeDirectory, 'init-db.sql') ||
+      !seedKind ||
       volume.Name !== volumeName() ||
       volume.Driver !== 'local' ||
       vl['com.docker.compose.project'] !== project ||
@@ -987,9 +1140,11 @@ export async function runSqlLifecycle({
       !/^[a-f0-9]{64}$/.test(network.Id) ||
       nl['com.docker.compose.project'] !== project ||
       nl['com.docker.compose.network'] !== 'warp-mcp-network' ||
-      (!runtimeNetworkMatches && !detachedWhileStopped)
+      !runtimeNetworkAdmitted(networks, networkName(), network.Id, stopped)
     )
       throw failure('ownership-verification-failed');
+    const seedProof =
+      seedKind === 'translated' ? await proveDesktopSeed(container, preserve) : null;
     const composeHash = readPrivate(fs, composeFile, store.aclCache, 8 * 1024 * 1024).identity
       .sha256;
     const effective = await docker(
@@ -1005,7 +1160,8 @@ export async function runSqlLifecycle({
       volume: { name: volume.Name, source: volume.Mountpoint, created: volume.CreatedAt },
       network: { name: network.Name, id: network.Id },
       composeHash,
-      effectiveHash: hash(effective)
+      effectiveHash: hash(effective),
+      ...(seedProof ? { seed: seedProof } : {})
     };
     if (pinned && JSON.stringify(identity) !== JSON.stringify(pinned))
       throw failure('pinned-identity-drift');
