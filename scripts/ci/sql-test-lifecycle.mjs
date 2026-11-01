@@ -356,6 +356,17 @@ function verifyCredentialTemplate(fs, filename, cache) {
 const MAX_SEED_BYTES = 1024 * 1024;
 const MAX_SEED_ARCHIVE_BYTES = MAX_SEED_BYTES + 65536;
 
+function runtimeNetworkAdmitted(networks, expectedName, expectedId, stopped) {
+  const attachedNames = Object.keys(networks);
+  const runtimeNetworkMatches =
+    attachedNames.length === 1 &&
+    attachedNames[0] === expectedName &&
+    (networks[expectedName]?.NetworkID === expectedId ||
+      (stopped && !networks[expectedName]?.NetworkID));
+  const detachedWhileStopped = stopped && attachedNames.length === 0;
+  return runtimeNetworkMatches || detachedWhileStopped;
+}
+
 function seedAdmission(seed, expectedSeed, platform, endpoint) {
   if (seed?.Type !== 'bind' || seed.RW !== false) return null;
   if (seed.Source === expectedSeed) return 'canonical';
@@ -1094,13 +1105,6 @@ export async function runSqlLifecycle({
       container.State?.Status === 'exited' &&
       container.State?.Pid === 0;
     if (expectStopped && !stopped) throw failure('container-not-stopped');
-    const attachedNames = Object.keys(networks);
-    const runtimeNetworkMatches =
-      attachedNames.length === 1 &&
-      attachedNames[0] === networkName() &&
-      (networks[networkName()]?.NetworkID === network.Id ||
-        (stopped && !networks[networkName()]?.NetworkID));
-    const detachedWhileStopped = stopped && attachedNames.length === 0;
     const ports = container.HostConfig?.PortBindings ?? {};
     const data = mounts.find(mount => mount.Destination === '/var/opt/mssql');
     const seed = mounts.find(mount => mount.Destination === '/tmp/init-db.sql');
@@ -1136,7 +1140,7 @@ export async function runSqlLifecycle({
       !/^[a-f0-9]{64}$/.test(network.Id) ||
       nl['com.docker.compose.project'] !== project ||
       nl['com.docker.compose.network'] !== 'warp-mcp-network' ||
-      (!runtimeNetworkMatches && !detachedWhileStopped)
+      !runtimeNetworkAdmitted(networks, networkName(), network.Id, stopped)
     )
       throw failure('ownership-verification-failed');
     const seedProof =
