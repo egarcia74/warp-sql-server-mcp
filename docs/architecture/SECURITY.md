@@ -491,7 +491,7 @@ That file list is 314 tests across 7 files.
 > testing none of the guards.
 >
 > **⚠️ `npm run test:unit -- <paths>` does not narrow the run either.** `test:unit` is
-> `vitest run test/unit`, so paths are _appended_ to the directory argument and Vitest
+> `vitest run test/unit --maxWorkers=2`, so paths are _appended_ to the directory argument and Vitest
 > runs the whole directory - all 1,281 tests. Call `npx vitest run <paths>` directly. Same
 > class of trap as `npm test`, which is a shell chain ending in the summary script, so
 > appended arguments never reach Vitest at all.

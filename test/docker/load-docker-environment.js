@@ -48,6 +48,13 @@ export function loadRequiredDockerEnvironment(
     throw new Error(`Generated Docker environment is incomplete: ${envPath}`);
   }
 
+  if (
+    !['localhost', '127.0.0.1'].includes(parsed.SQL_SERVER_HOST) ||
+    parsed.SQL_SERVER_PORT !== '14330'
+  ) {
+    throw new Error('Generated Docker environment target is invalid');
+  }
+
   Object.assign(environment, parsed);
   return parsed;
 }

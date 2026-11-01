@@ -199,7 +199,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" || exit 1'
       ]
     }
   },
@@ -219,7 +219,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1'
       ],
       interval: '15s',
       timeout: '10s',
@@ -256,7 +256,7 @@ const CONFIG_TEMPLATES = {
     healthcheck: {
       test: [
         'CMD-SHELL',
-        '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1'
+        '/opt/mssql-tools18/bin/sqlcmd -S tcp:127.0.0.1,1433 -U sa -P "$$SA_PASSWORD" -C -Q "SELECT 1" -t 10 || exit 1'
       ],
       interval: '12s',
       timeout: '8s',

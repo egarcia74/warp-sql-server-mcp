@@ -94,7 +94,7 @@ describe('Docker database readiness CLI', () => {
         fs.mkdirSync(path.join(dir, 'test', 'docker'), { recursive: true });
         fs.writeFileSync(
           path.join(dir, 'test', 'docker', '.env.docker'),
-          'MCP_TESTING_MODE=docker\nSQL_SERVER_PASSWORD=LocalPasswordAa1!2026\nSQL_SERVER_USER=sa\nSQL_SERVER_HOST=fixture-host\nSQL_SERVER_PORT=14330\n',
+          'MCP_TESTING_MODE=docker\nSQL_SERVER_PASSWORD=LocalPasswordAa1!2026\nSQL_SERVER_USER=sa\nSQL_SERVER_HOST=localhost\nSQL_SERVER_PORT=14330\n',
           { mode: 0o600 }
         );
         const result = runReadiness('check-local-password', 'ParentPasswordAa1!2026', dir, {

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { loadRequiredDockerEnvironment } from '../docker/load-docker-environment.js';
 import { ensureDockerPassword, writePrivateDockerCompose } from '../docker/detect-platform.js';
@@ -140,4 +140,69 @@ describe('required Docker environment', () => {
       }
     }
   );
+});
+
+describe('fixed Docker credential target', () => {
+  const contents = (host, port = '14330') =>
+    `MCP_TESTING_MODE=docker\nSQL_SERVER_HOST=${host}\nSQL_SERVER_PORT=${port}\nSQL_SERVER_USER=sa\nSQL_SERVER_PASSWORD=OfflineFixturePassword123!Long\n`;
+
+  it.each(['localhost', '127.0.0.1'])('accepts fresh/reused normal %s files', host => {
+    withDockerEnvironment(contents(host), envPath => {
+      const environment = { MCP_TESTING_MODE: 'docker' };
+      expect(loadRequiredDockerEnvironment(environment, envPath).SQL_SERVER_HOST).toBe(host);
+      expect(loadRequiredDockerEnvironment(environment, envPath).SQL_SERVER_HOST).toBe(host);
+    });
+  });
+
+  it.each([
+    ['192.0.2.10', '14330'],
+    ['127.0.0.1', '1433'],
+    ['localhost', '014330'],
+    ['LOCALHOST', '14330'],
+    ['::1', '14330'],
+    ['localhost', '14330extra']
+  ])('refuses a private retargeted file without assigning environment: %s:%s', (host, port) => {
+    withDockerEnvironment(contents(host, port), envPath => {
+      const environment = { MCP_TESTING_MODE: 'docker', SQL_SERVER_HOST: 'unchanged' };
+      expect(() => loadRequiredDockerEnvironment(environment, envPath)).toThrow(
+        'Generated Docker environment target is invalid'
+      );
+      expect(environment.SQL_SERVER_HOST).toBe('unchanged');
+    });
+  });
+
+  for (const script of ['wait-for-db.js', 'init-db-node.js']) {
+    it.each(['retargeted', 'changed-after-preflight'])(
+      `${script} blocks %s before any SQL connection`,
+      async kind => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warp-docker-target-'));
+        const dockerDir = path.join(dir, 'test/docker');
+        fs.mkdirSync(dockerDir, { recursive: true });
+        const envPath = path.join(dockerDir, '.env.docker');
+        fs.writeFileSync(envPath, contents('localhost'), { mode: 0o600 });
+        if (kind === 'changed-after-preflight')
+          loadRequiredDockerEnvironment({ MCP_TESTING_MODE: 'docker' }, envPath);
+        fs.writeFileSync(envPath, contents('127.0.0.1', '1433'));
+        fs.writeFileSync(path.join(dockerDir, 'init-db.sql'), 'SELECT 1;');
+        const cwd = vi.spyOn(process, 'cwd').mockReturnValue(dir);
+        vi.stubEnv('MCP_TESTING_MODE', 'docker');
+        globalThis.mockSql.connect.mockClear();
+        globalThis.mockSql.ConnectionPool.mockClear();
+        try {
+          vi.resetModules();
+          await expect(
+            script === 'wait-for-db.js'
+              ? import('../docker/wait-for-db.js')
+              : import('../docker/init-db-node.js')
+          ).rejects.toThrow('Generated Docker environment target is invalid');
+          expect(globalThis.mockSql.connect).not.toHaveBeenCalled();
+          expect(globalThis.mockSql.ConnectionPool).not.toHaveBeenCalled();
+        } finally {
+          cwd.mockRestore();
+          vi.unstubAllEnvs();
+          fs.rmSync(dir, { recursive: true, force: true });
+        }
+      }
+    );
+  }
 });

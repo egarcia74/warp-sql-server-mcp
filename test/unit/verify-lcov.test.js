@@ -29,7 +29,7 @@ afterEach(() => {
 describe('LCOV report verification', () => {
   it('keeps the developer coverage command open to Vitest options while CI verifies the report', () => {
     const { scripts } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url)));
-    expect(scripts['test:coverage']).toBe('vitest run --coverage');
+    expect(scripts['test:coverage']).toBe('vitest run --coverage --maxWorkers=2');
     expect(scripts['test:coverage:verified']).toBe(
       'npm run test:coverage && node scripts/ci/verify-lcov.mjs'
     );
