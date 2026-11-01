@@ -1214,6 +1214,15 @@ Phases express ordering, not calendar dates. See
   authorization; prior exceptions do not cover new findings.
 - Track deferred remediation and validation as separate follow-ups with acceptance criteria.
   Recording a follow-up does not authorize starting its workload.
+- At substantive closeout or a meaningful pause, review what helped, what failed and where effort
+  was wasted. Capture actionable lessons in the existing relevant lessons record; update
+  durable WARP or CONTRIBUTING guidance only when evidence warrants a reusable rule.
+  If no new lessons emerge, record a brief "no new lessons" outcome in the existing closeout
+  or handoff. Trivial tasks do not require a separate retrospective.
+  Link only non-sensitive evidence in public records and retain private logs under the
+  preservation rules above. Keep follow-ups separately scoped.
+  Material process changes follow the independent review requirements in the
+  [standing AGENTS policy](AGENTS.md#standing-plan-review-requirement).
 
 See the [2026-11-01 stabilization lessons review](docs/developer/STABILIZATION-LESSONS-20261101.md)
 for the observations behind this guidance and the remaining validation limits.
