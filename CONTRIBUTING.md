@@ -89,6 +89,8 @@ when stabilization or validation needs investigation:
 4. Index full private logs and failed attempts before cleanup; label verification states.
 5. Review final source, evidence and individual scanner findings; record unresolved gaps.
 6. Complete required checks and track deferred work separately before claiming completion.
+7. At closeout or a meaningful pause, [review and capture lessons](WARP.md#bounded-investigations-and-evidence);
+   update the relevant record/guidance or note "no new lessons" in the existing closeout/handoff.
 
 ### Code Quality Tools
 
