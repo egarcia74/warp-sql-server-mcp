@@ -18,6 +18,16 @@
 - If `WARP.md` changes during a session, re-open it to refresh context.
 - Keep answers concise; link to `WARP.md` sections by filename and heading when referencing details.
 
+## Standing Plan Review Requirement
+
+- Before implementing any plan, obtain an independent adversarial review from a subagent.
+- Review assumptions, scope, security boundaries, failure modes, tests, verification evidence,
+  and acceptance criteria. Require an explicit PASS or actionable revision requests.
+- Revise and repeat the independent review until PASS; do not begin implementation beforehand.
+- Material changes to an approved plan require renewed adversarial review before proceeding.
+- Record the review outcome and remaining constraints, and report them concisely to the user.
+- Plan approval does not authorize additional scope or replace code reviews, checks, or release gates.
+
 ## Key Commands
 
 Run these before proposing a change as finished:
