@@ -33,6 +33,9 @@ function fixture(options = {}) {
     path.join(dockerDir, 'docker-env.template')
   );
   const compose = path.join(dockerDir, 'docker-compose.yml');
+  const seedPath = path.join(dockerDir, 'init-db.sql');
+  const seedBytes = Buffer.from('SELECT 1;\n');
+  fs.writeFileSync(seedPath, seedBytes, { mode: 0o644 });
   let project = 'docker';
   let volume = 'docker_sqlserver_data';
   let network = 'docker_warp-mcp-network';
@@ -66,7 +69,7 @@ function fixture(options = {}) {
       },
       {
         Type: 'bind',
-        Source: path.join(dockerDir, 'init-db.sql'),
+        Source: options.seedSource?.(seedPath) ?? seedPath,
         Destination: '/tmp/init-db.sql',
         RW: false
       }
@@ -174,7 +177,11 @@ function fixture(options = {}) {
           }
         ]);
       else if (args[0] === 'info')
-        stdout = JSON.stringify(options.getDaemonID?.() ?? 'daemon-fixture-1');
+        stdout = JSON.stringify(
+          args[2] === '{{json .OperatingSystem}}'
+            ? (options.operatingSystem ?? 'Docker Desktop')
+            : (options.getDaemonID?.() ?? 'daemon-fixture-1')
+        );
       else if (args[0] === 'compose') stdout = JSON.stringify({ name: project });
       else if (args[0] === 'container' && args[1] === 'ls') {
         const row = {
@@ -229,11 +236,30 @@ function fixture(options = {}) {
           : 'complete docker logs\n' + (container.State.Running ? '' : 'final shutdown bytes\n');
         stderr = options.emptyLogs ? '' : 'docker log stderr\n';
         status = options.logStatus ?? 0;
+      } else if (args[0] === 'cp' && args[1] === `${id}:/tmp/init-db.sql` && args[2] === '-') {
+        stdout = options.seedArchiveOutput ?? 'offline seed archive';
+        status = options.seedCopyStatus ?? 0;
+        options.onSeedCopy?.(container, seedPath);
       } else if (args[0] === 'cp') {
         stdout = options.archiveOutput ?? 'complete engine archive fixture';
         stderr = 'cp stderr\n';
         status = options.archiveStatus ?? 0;
       } else throw new Error(`Unexpected Docker command ${args.join(' ')}`);
+    } else if (command === '/usr/bin/tar') {
+      expect(path.dirname(args[1])).toMatch(/sql-test-/);
+      if (args[0] === '-tf' && args.length === 2) stdout = options.seedNames ?? 'init-db.sql\n';
+      else if (args[0] === '-tvf' && args.length === 2)
+        stdout = options.seedListing ?? '-rw-r--r--  0 user group 10 Nov 1 00:00 init-db.sql\n';
+      else if (
+        args[0] === '-xOf' &&
+        args.length === 4 &&
+        args[2] === '--' &&
+        args[3] === 'init-db.sql'
+      )
+        stdout = options.seedContent ?? seedBytes;
+      else throw new Error(`Unexpected tar arguments ${args.join(' ')}`);
+      status = options.seedTarStatus ?? 0;
+      options.onSeedTar?.(args, container, seedPath);
     } else throw new Error(`Unexpected command ${command}`);
     fs.writeSync(spawnOptions.stdio[1], stdout);
     fs.writeSync(spawnOptions.stdio[2], stderr);
@@ -263,6 +289,195 @@ function fixture(options = {}) {
 const stages = calls =>
   calls.filter(call => call.command !== 'docker').map(call => call.args.at(-1));
 const raw = (result, name) => fs.readFileSync(path.join(result.directory, name), 'utf8');
+
+async function onPlatform(platform, callback) {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform');
+  try {
+    Object.defineProperty(process, 'platform', { ...original, value: platform });
+    return await callback();
+  } finally {
+    Object.defineProperty(process, 'platform', original);
+  }
+}
+
+const desktopFixture = (options = {}) =>
+  fixture({ seedSource: seed => '/host_mnt' + seed, ...options });
+const seedCopies = test =>
+  test.calls.filter(
+    call =>
+      call.command === 'docker' &&
+      call.args[0] === 'cp' &&
+      call.args[1].endsWith(':/tmp/init-db.sql')
+  );
+
+describe('Desktop seed mount identity (offline)', () => {
+  it('proves the exact alias while running and stopped and permits a clean reused-volume run', async () => {
+    await onPlatform('darwin', async () => {
+      const states = [];
+      const test = desktopFixture({
+        onSeedCopy: container => states.push(container.State.Running)
+      });
+      const first = await lifecycle.runSqlLifecycle(test.settings);
+      expect(first.code, first.reason).toBe(0);
+      expect(states).toContain(true);
+      expect(states).toContain(false);
+      expect(seedCopies(test).length).toBeGreaterThan(2);
+      const identity = JSON.parse(raw(first, 'result.json')).identity;
+      expect(identity.seed.source).toBe(
+        '/host_mnt' + path.join(test.settings.cwd, 'test/docker/init-db.sql')
+      );
+      expect(identity.seed.sha256).toMatch(/^[a-f0-9]{64}$/);
+      const second = await lifecycle.runSqlLifecycle(test.settings);
+      expect(second.code, second.reason).toBe(0);
+      expect(JSON.parse(raw(second, 'admission.json')).reusedVolume).toBe(true);
+      expect(first.lockRetained).toBe(false);
+      expect(second.lockRetained).toBe(false);
+    });
+  });
+
+  it.each([
+    ['linux', 'unix:///fixture/docker.sock', 'Docker Desktop', seed => '/host_mnt' + seed],
+    ['darwin', 'ssh://remote.example', 'Docker Desktop', seed => '/host_mnt' + seed],
+    ['darwin', 'tcp://remote.example:2375', 'Docker Desktop', seed => '/host_mnt' + seed],
+    ['darwin', 'unix:///fixture/docker.sock', 'Linux', seed => '/host_mnt' + seed],
+    ['darwin', 'unix:///fixture/docker.sock', '', seed => '/host_mnt' + seed],
+    ['darwin', 'unix:///fixture/docker.sock', 'Docker Desktop', seed => '/host_mnt/other' + seed],
+    ['darwin', 'unix:///fixture/docker.sock', 'Docker Desktop', seed => '/host_mnt/..' + seed],
+    [
+      'darwin',
+      'unix:///fixture/docker.sock',
+      'Docker Desktop',
+      seed => '/host_mnt' + seed + '.other'
+    ]
+  ])(
+    'rejects aliases outside the exact local Desktop route: %s %s %s',
+    async (platform, endpoint, operatingSystem, seedSource) => {
+      await onPlatform(platform, async () => {
+        const test = fixture({ endpoint, operatingSystem, seedSource });
+        const result = await lifecycle.runSqlLifecycle(test.settings);
+        expect(result.code).not.toBe(0);
+        expect(result.lockRetained).toBe(true);
+        expect(seedCopies(test)).toHaveLength(0);
+        expect(stages(test.calls)).not.toContain('scripts/ci/run-docker-integration.mjs');
+        expect(stages(test.calls)).not.toContain('docker:stop');
+      });
+    }
+  );
+
+  it.each([
+    ['wrong bytes', { seedContent: 'SELECT 2;\n' }],
+    ['empty content', { seedContent: '' }],
+    ['extra member', { seedNames: 'init-db.sql\nextra\n' }],
+    ['duplicate member', { seedNames: 'init-db.sql\ninit-db.sql\n' }],
+    ['alternate path', { seedNames: './init-db.sql\n' }],
+    ['symlink member', { seedListing: 'lrwxrwxrwx init-db.sql -> other\n' }],
+    ['hardlink member', { seedListing: 'hrw-r--r-- init-db.sql link to other\n' }],
+    ['directory member', { seedListing: 'drwxr-xr-x init-db.sql\n' }],
+    ['multiple verbose lines', { seedListing: '-rw-r--r-- init-db.sql\n-rw-r--r-- extra\n' }],
+    ['failed tar', { seedTarStatus: 2 }],
+    ['failed copy', { seedCopyStatus: 1 }],
+    ['oversized archive', { seedArchiveOutput: Buffer.alloc(1024 * 1024 + 65537) }],
+    ['oversized listing', { seedNames: 'x'.repeat(4097) }],
+    ['oversized content', { seedContent: Buffer.alloc(1024 * 1024 + 1) }]
+  ])('retains evidence and refuses cleanup for %s', async (_name, options) => {
+    await onPlatform('darwin', async () => {
+      const test = desktopFixture(options);
+      const result = await lifecycle.runSqlLifecycle(test.settings);
+      expect(seedCopies(test)).toHaveLength(1);
+      expect(result.code).not.toBe(0);
+      expect(result.lockRetained).toBe(true);
+      expect(fs.existsSync(path.join(result.directory, 'result.json'))).toBe(true);
+      expect(stages(test.calls)).not.toContain('scripts/ci/run-docker-integration.mjs');
+      expect(stages(test.calls)).not.toContain('docker:stop');
+    });
+  });
+
+  it.each(['empty', 'oversize', 'mode', 'symlink', 'hardlink', 'owner', 'acl'])(
+    'rejects an unsafe host seed before copying it: %s',
+    async kind => {
+      await onPlatform('darwin', async () => {
+        const test = desktopFixture();
+        const seed = path.join(test.settings.cwd, 'test/docker/init-db.sql');
+        if (kind === 'empty') fs.writeFileSync(seed, '');
+        if (kind === 'oversize') fs.writeFileSync(seed, Buffer.alloc(1024 * 1024 + 1));
+        if (kind === 'mode') fs.chmodSync(seed, 0o666);
+        if (kind === 'symlink') {
+          fs.renameSync(seed, seed + '.original');
+          fs.symlinkSync(seed + '.original', seed);
+        }
+        if (kind === 'hardlink') fs.linkSync(seed, seed + '.link');
+        if (kind === 'owner') {
+          const original = test.settings.fs.fstatSync;
+          test.settings.fs.fstatSync = fd => {
+            const stat = original(fd);
+            return stat.isFile() && stat.size === 10
+              ? { ...stat, uid: process.getuid() + 1 }
+              : stat;
+          };
+        }
+        if (kind === 'acl')
+          test.settings.fs.inspectAcl = filename =>
+            filename === seed ? ' 0: user:other allow write\n' : '';
+        const result = await lifecycle.runSqlLifecycle(test.settings);
+        expect(result.code).not.toBe(0);
+        expect(seedCopies(test)).toHaveLength(0);
+        expect(result.lockRetained).toBe(true);
+        expect(stages(test.calls)).not.toContain('docker:stop');
+      });
+    }
+  );
+
+  it.each(['host', 'mount', 'container', 'daemon', 'archive'])(
+    'rejects %s drift during proof before integration or cleanup',
+    async kind => {
+      await onPlatform('darwin', async () => {
+        let changed = false;
+        const test = desktopFixture({
+          getDaemonID: () => (changed && kind === 'daemon' ? 'daemon-other-2' : 'daemon-fixture-1'),
+          onSeedTar(args, container, seed) {
+            if (changed) return;
+            changed = true;
+            if (kind === 'host') fs.writeFileSync(seed, 'SELECT 2;\n');
+            if (kind === 'mount') container.Mounts[1].Source += '.other';
+            if (kind === 'container') container.Id = 'e'.repeat(64);
+            if (kind === 'archive') fs.appendFileSync(args[1], 'drift');
+          }
+        });
+        const result = await lifecycle.runSqlLifecycle(test.settings);
+        expect(changed).toBe(true);
+        expect(result.code).not.toBe(0);
+        expect(result.lockRetained).toBe(true);
+        expect(stages(test.calls)).not.toContain('scripts/ci/run-docker-integration.mjs');
+        expect(stages(test.calls)).not.toContain('docker:stop');
+      });
+    }
+  );
+
+  it('refuses cleanup when host identity drifts during a stopped-container reproof', async () => {
+    await onPlatform('darwin', async () => {
+      let changed = false;
+      const test = desktopFixture({
+        onSeedCopy(container, seed) {
+          if (!container.State.Running && !changed) {
+            changed = true;
+            fs.renameSync(seed, seed + '.old');
+            fs.writeFileSync(seed, 'SELECT 1;\n', { mode: 0o644 });
+          }
+        }
+      });
+      const result = await lifecycle.runSqlLifecycle(test.settings);
+      expect(changed).toBe(true);
+      expect(result.code).not.toBe(0);
+      expect(result.lockRetained).toBe(true);
+      expect(stages(test.calls)).not.toContain('docker:stop');
+      expect(
+        test.calls.some(
+          call => call.args[0] === 'cp' && call.args[1].endsWith(':/var/opt/mssql/log')
+        )
+      ).toBe(false);
+    });
+  });
+});
 
 describe('durable SQL lifecycle (offline)', () => {
   it('preserves complete private evidence and the pre-removal manifest before existing down', async () => {
