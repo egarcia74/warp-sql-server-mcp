@@ -356,6 +356,18 @@ function verifyCredentialTemplate(fs, filename, cache) {
 const MAX_SEED_BYTES = 1024 * 1024;
 const MAX_SEED_ARCHIVE_BYTES = MAX_SEED_BYTES + 65536;
 
+function seedAdmission(seed, expectedSeed, platform, endpoint) {
+  if (seed?.Type !== 'bind' || seed.RW !== false) return null;
+  if (seed.Source === expectedSeed) return 'canonical';
+  if (
+    platform === 'darwin' &&
+    new URL(endpoint).protocol === 'unix:' &&
+    seed.Source === '/host_mnt' + expectedSeed
+  )
+    return 'translated';
+  return null;
+}
+
 function readHostSeed(fs, filename, cache) {
   const ancestors = trustedChain(fs, path.dirname(filename), cache);
   const fd = fs.openSync(
@@ -377,7 +389,8 @@ function readHostSeed(fs, filename, cache) {
     if (before.isSymbolicLink() || !sameMetadata(opened, before))
       throw failure('host-seed-identity-drift');
     const listing = aclListing(fs, filename);
-    if (/^[^\S\r\n\u2028\u2029]*\d+:/m.test(listing)) throw failure('unsafe-host-seed-acl');
+    if (listing.split(/[\r\n\u2028\u2029]/).some(line => /^\d+:/.test(line.trimStart())))
+      throw failure('unsafe-host-seed-acl');
     if (!sameMetadata(opened, fs.lstatSync(filename))) throw failure('host-seed-identity-drift');
     const bytes = readBounded(fs, fd, MAX_SEED_BYTES, 'host-seed-size-bound');
     if (
@@ -751,7 +764,7 @@ export async function runSqlLifecycle({
     command,
     args,
     preserve = false,
-    input,
+    input = undefined,
     maxBytes = limits.maxBytes
   ) => {
     store.assertTrusted();
@@ -1092,10 +1105,7 @@ export async function runSqlLifecycle({
     const data = mounts.find(mount => mount.Destination === '/var/opt/mssql');
     const seed = mounts.find(mount => mount.Destination === '/tmp/init-db.sql');
     const expectedSeed = path.join(composeDirectory, 'init-db.sql');
-    const translatedSeed =
-      process.platform === 'darwin' &&
-      new URL(environment.DOCKER_HOST).protocol === 'unix:' &&
-      seed?.Source === '/host_mnt' + expectedSeed;
+    const seedKind = seedAdmission(seed, expectedSeed, process.platform, environment.DOCKER_HOST);
     if (
       container.Id !== id ||
       container.Name !== `/${NAME}` ||
@@ -1116,9 +1126,7 @@ export async function runSqlLifecycle({
       data.Name !== volumeName() ||
       data.RW !== true ||
       data.Source !== volume.Mountpoint ||
-      seed?.Type !== 'bind' ||
-      seed.RW !== false ||
-      (seed.Source !== expectedSeed && !translatedSeed) ||
+      !seedKind ||
       volume.Name !== volumeName() ||
       volume.Driver !== 'local' ||
       vl['com.docker.compose.project'] !== project ||
@@ -1131,7 +1139,8 @@ export async function runSqlLifecycle({
       (!runtimeNetworkMatches && !detachedWhileStopped)
     )
       throw failure('ownership-verification-failed');
-    const seedProof = translatedSeed ? await proveDesktopSeed(container, preserve) : null;
+    const seedProof =
+      seedKind === 'translated' ? await proveDesktopSeed(container, preserve) : null;
     const composeHash = readPrivate(fs, composeFile, store.aclCache, 8 * 1024 * 1024).identity
       .sha256;
     const effective = await docker(

@@ -427,6 +427,37 @@ describe('Desktop seed mount identity (offline)', () => {
     }
   );
 
+  it.each(['\r', '\n', '\u2028', '\u2029'])(
+    'rejects a numbered host-seed ACL after whitespace and line boundary %j',
+    async boundary => {
+      await onPlatform('darwin', async () => {
+        const test = desktopFixture();
+        const seed = path.join(test.settings.cwd, 'test/docker/init-db.sql');
+        test.settings.fs.inspectAcl = filename =>
+          filename === seed ? ` \t${boundary}\u00a0\u200312: user:other allow write\n` : '';
+        const result = await lifecycle.runSqlLifecycle(test.settings);
+        expect(result.reason).toBe('unsafe-host-seed-acl');
+        expect(seedCopies(test)).toHaveLength(0);
+        expect(result.lockRetained).toBe(true);
+        expect(stages(test.calls)).not.toContain('docker:stop');
+      });
+    }
+  );
+
+  it('accepts whitespace-only host-seed ACL lines and non-entry text', async () => {
+    await onPlatform('darwin', async () => {
+      const test = desktopFixture();
+      const seed = path.join(test.settings.cwd, 'test/docker/init-db.sql');
+      test.settings.fs.inspectAcl = filename =>
+        filename === seed
+          ? ' \t\r\n\u2028\u2029\u00a0\u2003not an ACL entry\n12 without colon\n'
+          : '';
+      const result = await lifecycle.runSqlLifecycle(test.settings);
+      expect(result.code, result.reason).toBe(0);
+      expect(seedCopies(test).length).toBeGreaterThan(0);
+    });
+  });
+
   it.each(['host', 'mount', 'container', 'daemon', 'archive'])(
     'rejects %s drift during proof before integration or cleanup',
     async kind => {
