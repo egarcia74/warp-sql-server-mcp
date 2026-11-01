@@ -54,6 +54,7 @@ For contributors and maintainers:
 - **[Git Push Checklist](developer/GIT-PUSH-CHECKLIST.md)** - Pre-push validation
 - **[Git Release Checklist](developer/GIT-RELEASE-CHECKLIST.md)** - Release procedure
 - **[Quality No-Compromise Case Study](developer/QUALITY-NO-COMPROMISE.md)** - Zero-tolerance quality standards
+- **[Stabilization Lessons (2026-11-01)](developer/STABILIZATION-LESSONS-20261101.md)** - Investigation, evidence and review lessons
 
 ## ⚙️ Operations
 

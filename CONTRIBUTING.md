@@ -77,6 +77,19 @@ These guides will help you understand both the technical architecture and practi
 
 ## Development Workflow
 
+### Investigation checklist
+
+Use [WARP's bounded investigation guidance](WARP.md#bounded-investigations-and-evidence)
+when stabilization or validation needs investigation:
+
+1. Define success, time/attempt limits and the exit or hold condition; separate product and
+   environment work.
+2. Obtain the required initial independent plan PASS; re-review material plan changes.
+3. Confirm publication readiness and applicable authorization while keeping hooks intact.
+4. Index full private logs and failed attempts before cleanup; label verification states.
+5. Review final source, evidence and individual scanner findings; record unresolved gaps.
+6. Complete required checks and track deferred work separately before claiming completion.
+
 ### Code Quality Tools
 
 This project uses several tools to maintain code quality:

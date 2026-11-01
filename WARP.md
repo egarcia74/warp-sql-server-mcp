@@ -1190,6 +1190,34 @@ Phases express ordering, not calendar dates. See
 
 ## Development Workflow
 
+### Bounded investigations and evidence
+
+- Before live investigation, define the success condition, time and attempt budgets, and an
+  exit or hold condition. Separate product defects from environment failures; infrastructure
+  repair does not automatically expand the product task or authorize repeated attempts.
+- Obtain initial independent adversarial plan review and explicit PASS before implementation,
+  as required by [AGENTS.md](AGENTS.md#standing-plan-review-requirement). Re-review material
+  changes to an approved plan, and review final source and actual evidence independently.
+  Reuse unchanged accepted evidence without replaying unrelated investigations.
+- Index private evidence by source revision, command, exit result and full log location before
+  cleanup. Preserve failed attempts alongside successes; cleanup still requires the applicable
+  ownership and preservation checks. Publish only non-sensitive summaries.
+- Label verification as fresh, historical, skipped or untested, and distinguish implementation
+  from offline checks and live validation. A historical pass or skipped job does not validate
+  the current source and environment; record remaining gaps explicitly.
+- Check the authorized publication route and its prerequisites early. Keep hooks intact and
+  satisfy applicable checks; alternative routes require applicable authorization. General
+  contributor advice does not override task-specific safeguards.
+- Assess scanner findings individually against source and execution context, retaining the
+  evidence and decision for each finding. Passing a severity threshold does not resolve lower
+  severity findings. External classification, suppression or exceptions require specific
+  authorization; prior exceptions do not cover new findings.
+- Track deferred remediation and validation as separate follow-ups with acceptance criteria.
+  Recording a follow-up does not authorize starting its workload.
+
+See the [2026-11-01 stabilization lessons review](docs/developer/STABILIZATION-LESSONS-20261101.md)
+for the observations behind this guidance and the remaining validation limits.
+
 ### 🏗️ **Architecture-First Development Process**
 
 **With the new modular architecture (v1.7.0+), development follows a structured approach:**
