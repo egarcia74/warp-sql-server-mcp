@@ -174,6 +174,10 @@ single-pass scanners with no regex backtracking on untrusted input:
   and server-administration statements unless the destructive-operations tier is enabled
   (read-only mode blocks them outright), and closes the multi-statement bypass in
   `GHSA-qhf4-jmhq-73c8`.
+- **Sequence consumption**: `NEXT VALUE FOR` advances SQL Server sequence state even in a
+  `SELECT`. The batch guard blocks it in read-only mode and whenever destructive operations
+  are disabled, after ignoring quoted text and comments. Use a database principal without
+  sequence `UPDATE` permission for read-only access as an independent safeguard.
 - **`where-clause-guard.js` (`findForbiddenWhereClauseSyntax`)**: Validates the
   caller-supplied WHERE clause for `get_table_data`/`export_table_csv`, requiring a
   single predicate on the requested table. It rejects batch separators, comments,
@@ -666,11 +670,11 @@ cp .env.example .env
 
 **Quick Security Levels:**
 
-| Variable                                  | Default | Impact                                                                                                                        |
-| ----------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed                                                                                                   |
-| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Blocks INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, WRITETEXT/UPDATETEXT, Service Broker RECEIVE, and administrative operations |
-| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER, GRANT/REVOKE/DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`                                    |
+| Variable                                  | Default | Impact                                                                                                                                          |
+| ----------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed                                                                                                                     |
+| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Blocks INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, WRITETEXT/UPDATETEXT, Service Broker RECEIVE, `NEXT VALUE FOR`, and administrative operations |
+| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER, GRANT/REVOKE/DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`                                                      |
 
 The destructive tier also covers `WRITETEXT`/`UPDATETEXT` and the Service Broker `RECEIVE`
 statement. Administrative operations — SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE,

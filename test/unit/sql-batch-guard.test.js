@@ -139,6 +139,44 @@ describe('findForbiddenBatchStatement', () => {
   });
 
   describe('contextual classifiers', () => {
+    it.each([
+      'SELECT NEXT VALUE FOR dbo.Seq AS n',
+      'WITH q AS (SELECT NEXT VALUE FOR dbo.Seq AS n) SELECT n FROM q',
+      'SELECT 1; SELECT NeXt\nVaLuE\tFoR [dbo].[Seq] AS n',
+      'SELECT NEXT/**/VALUE/* nested /* comment */ */FOR dbo.Seq AS n',
+      'SELECT NEXT-- comment\nVALUE FOR dbo.Seq AS n',
+      'SELECT NEXT-- comment\rVALUE FOR dbo.Seq AS n'
+    ])('blocks sequence consumption in read-only mode: %s', query => {
+      const result = findForbiddenBatchStatement(query, READ_ONLY);
+      expect(result?.queryType).toBe('non-select');
+      expect(result?.keyword).toBe('NEXT VALUE FOR');
+    });
+
+    it('gates sequence consumption on destructive operations, not schema changes', () => {
+      const query = 'SELECT NEXT VALUE FOR dbo.Seq AS n';
+      expect(findForbiddenBatchStatement(query, DENY_ALL)?.queryType).toBe('destructive');
+      expect(
+        findForbiddenBatchStatement('SELECT NEXT-- comment\rVALUE FOR dbo.Seq AS n', DENY_ALL)
+          ?.queryType
+      ).toBe('destructive');
+      expect(findForbiddenBatchStatement(query, DML_ALLOWED)).toBeNull();
+      expect(findForbiddenBatchStatement(query, DDL_ALLOWED)).toBeNull();
+    });
+
+    it.each([
+      "SELECT 'NEXT VALUE FOR' AS note",
+      "SELECT N'NEXT VALUE FOR' AS note",
+      'SELECT "NEXT VALUE FOR" AS note',
+      'SELECT [NEXT VALUE FOR] FROM dbo.Events',
+      'SELECT 1 -- NEXT VALUE FOR dbo.Seq',
+      'SELECT 1 /* outer /* NEXT VALUE FOR */ tail */',
+      'SELECT @next + @value + @for',
+      'SELECT [next], [value], [for] FROM dbo.Events',
+      'SELECT NEXT_VALUE_FOR FROM dbo.Events'
+    ])('keeps nonexecuting text or identifiers allowed: %s', query => {
+      expect(findForbiddenBatchStatement(query, READ_ONLY)).toBeNull();
+    });
+
     it('classifyInto: SELECT ... INTO is a schema change', () => {
       const result = findForbiddenBatchStatement(
         'SELECT * INTO Users_copy FROM Users',

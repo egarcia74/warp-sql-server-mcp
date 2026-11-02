@@ -64,6 +64,10 @@ Ideal for terminal-based workflows and command-line database interactions.
 | **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, WRITETEXT/UPDATETEXT, Service Broker RECEIVE, and administrative operations (SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*`, linked-server rowset functions) |
 | **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER, GRANT/REVOKE/DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`                                                                                                                                                            |
 
+`NEXT VALUE FOR` consumes sequence state, so read-only mode and the destructive-operations
+restriction block it even inside a `SELECT`. Use a SQL login without sequence `UPDATE`
+permission for read-only tools as an additional database-level boundary.
+
 Every statement in a batch is checked against these tiers — T-SQL does not require `;` between
 statements — and batches with unterminated string literals, identifiers, or comments are rejected.
 
