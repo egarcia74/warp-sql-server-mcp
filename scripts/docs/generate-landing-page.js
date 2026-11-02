@@ -179,8 +179,8 @@ ${toolListHTML}
                 <li><span class="code">SQL_SERVER_DATABASE</span> - Initial database (default: master)</li>
                 <li><span class="code">SQL_SERVER_USER</span> - SQL Server username (optional)</li>
                 <li><span class="code">SQL_SERVER_PASSWORD</span> - SQL Server password (optional)</li>
-                <li><span class="code">SQL_SERVER_ENCRYPT</span> - Enable encryption (default: false)</li>
-                <li><span class="code">SQL_SERVER_TRUST_CERT</span> - Trust server certificate (default: true)</li>
+                <li><span class="code">SQL_SERVER_ENCRYPT</span> - Enable encryption (default: true)</li>
+                <li><span class="code">SQL_SERVER_TRUST_CERT</span> - Trust server certificate (new CLI config: false; unset environment: context-aware)</li>
                 <li><span class="code">SQL_SERVER_READ_ONLY</span> - Read-only mode (default: true)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS</span> - Allow INSERT/UPDATE/DELETE (default: false)</li>
                 <li><span class="code">SQL_SERVER_ALLOW_SCHEMA_CHANGES</span> - Allow CREATE/DROP/ALTER (default: false)</li>
