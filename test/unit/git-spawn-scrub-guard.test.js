@@ -314,7 +314,7 @@ describe('the guard cannot be satisfied by shrinking what gets linted', () => {
     for (const file of [
       'test/unit/verify-publish-tree.test.js',
       'test/helpers/git.js',
-      'test/unit/fixtures/cleanup-inspector-harness.js',
+      'test/unit/fixtures/cleanup-node-harness.js',
       'test/docker/developer-stress-test.js'
     ]) {
       const config = await eslint.calculateConfigForFile(resolve(REPO_ROOT, file));

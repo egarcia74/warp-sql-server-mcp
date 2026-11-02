@@ -42,7 +42,7 @@ npm run cleanup -- --kill 12345 12346
 ps aux | grep -E "(node|vitest)" | grep -v grep
 
 # 2. Run the inspector directly (lists only)
-./scripts/cleanup-test-processes.sh
+./scripts/cleanup-test-processes.js
 
 # 3. Terminate a specific process (if needed) - prefer the inspector, which
 #    re-verifies the PID and sends TERM before escalating to KILL
@@ -62,11 +62,12 @@ Terminating is never automatic; it always takes an explicit `--kill PID`.
 
 ### Script Features
 
-The `cleanup-test-processes.sh` script:
+The `cleanup-test-processes.js` script:
 
-- ✅ **Lists, never selects**: With no arguments it prints every Vitest process with its **PID,
-  PPID, elapsed time and full command**, then exits 0. It terminates nothing. The pre-push hook
-  calls it this way, so pushing cannot kill a process.
+- ✅ **Lists, never selects**: With no arguments it prints visible Vitest processes with their
+  **PID, PPID, elapsed time and full command**, then exits 0. It terminates nothing. If the table
+  or a row cannot be read, the report warns instead of claiming the system is clean. The pre-push
+  hook calls it this way, so pushing cannot kill a process.
 - ✅ **Kills only what you name**: `npm run cleanup -- --kill <pid> [<pid>...]`. There is no
   "kill all orphans" mode, because there is no sound way to identify one — see below.
 - ✅ **Re-verifies before every signal**, but not with the same check each time. Before `TERM` a
@@ -87,28 +88,14 @@ The `cleanup-test-processes.sh` script:
 - ✅ **Graceful before forceful**: only PIDs that `TERM` actually reached, and whose identity still
   matches, can be escalated to `KILL`. A process that appears during the wait is never force-killed
   without a chance to exit.
-- ✅ **Honest per-PID outcomes**: liveness is checked with `ps`, not `kill -0`. `kill -0` fails with
-  `EPERM` for a process owned by another user, which is indistinguishable from "gone" — so that
-  case used to be silently dropped and reported as success. Each PID now reports terminated, still
-  running, or still running and unsignallable. That applies to the final probe as well, which is
-  the one place the rule had not been carried through: a failed `kill -0` there was read as "alive
-  but not ours", so a target exiting between the identity read and the probe — likeliest right at
-  the end of the post-`KILL` wait, the moment cleanup has just succeeded — was reported as an
-  unsignallable survivor. Failure of that probe is now resolved with `ps`: visible means `EPERM` on
-  a live process, invisible with `ps` answering means gone, and `ps` not answering means unknown.
-  Classification is three-valued for the same reason: a target whose command line cannot be read is
-  reported as unclassifiable and fails the run, rather than being asserted to be "not a running
-  Vitest process" — which would be a claim about a process nothing had managed to inspect. A PID
-  that has simply exited stays a benign no-op, since `ps` answering and not seeing it is real
-  evidence. Once a target has been signalled, whether it is
-  still alive is decided by its **start time**, never by its command line: a process can rewrite
-  its own `argv` (Node exposes this as `process.title`), so a `SIGTERM` handler that renames itself
-  while refusing to exit would otherwise be reported as terminated while still running. A target
-  whose start time cannot be read is **not signalled**: without it nothing downstream could
-  tell "exited" from "still there", so the run refuses and says so rather than sending a signal it
-  cannot account for. That covers a `ps` which fails outright and one which exits 0 while printing
-  nothing — a blank answer is treated as no identity, not as an identity that happens to be blank,
-  because the latter would compare equal for every PID whose lookup degraded the same way.
+- ✅ **Honest per-PID outcomes**: Node's zero-signal probe distinguishes `ESRCH` (gone) from
+  `EPERM` (present but unsignallable). A missing Linux `/proc` row or macOS `ps` row is not proof
+  of absence by itself: per-process visibility restrictions can hide a live PID. Failed reads,
+  blank identity, and an inconclusive probe remain **unknown**, not "not Vitest" or "terminated".
+  Once a target has been signalled, survival is judged by its **start time**, never by its command
+  line: a process can rewrite its own `argv` with `process.title`. The Linux reader checks a
+  consistent `stat` → `cmdline` → `stat` sequence; macOS uses command and start time from one
+  fresh `ps` row. This narrows PID-reuse races but cannot make checking and signalling atomic.
 - ✅ **Cannot abort a push**: the closing system-status display can never affect the exit status.
 - ✅ **Non-zero when a request was not carried out**: kill mode exits 1 if a named PID was left
   running, could not be signalled, had an outcome that could not be determined, or was refused as
@@ -116,10 +103,8 @@ The `cleanup-test-processes.sh` script:
   over a process listing. An outcome that cannot be determined is reported as unknown rather than
   as success — an identity that was captured at validation but cannot be re-read afterwards means
   the process may still be running, and "unreadable" is not the same as "gone". Liveness in that
-  case is established with `ps`, not `kill -0`: `kill -0` cannot distinguish "no such process" from
-  "not permitted", so another user's running process would look identical to one that exited. If
-  `ps` answers and cannot see the PID, it is gone; if `ps` cannot answer at all, the outcome is
-  reported as unknown.
+  case is established from the process identity and Node's zero-signal probe. `ESRCH` can establish
+  absence; `EPERM`, an unreadable row, or a failed probe cannot. Unknown outcomes exit 1.
 
 > **Why there is no automatic orphan mode.** `PPID == 1` means either "the parent exited and this
 > was reparented" or "a service manager started it here", and nothing in process state separates
