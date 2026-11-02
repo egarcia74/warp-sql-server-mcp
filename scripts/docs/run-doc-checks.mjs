@@ -24,11 +24,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export const CHECKS = [
   { name: 'Documentation nav reachability', script: 'check-orphan-docs.mjs' },
   { name: 'Environment variable doc sync', script: 'check-env-var-docs.mjs' },
-  { name: 'MCP tool doc sync', script: 'check-tool-docs.mjs' }
+  { name: 'MCP tool doc sync', script: 'check-tool-docs.mjs' },
+  { name: 'WARP.md MCP tool inventory sync', script: 'generate-warp-tools.mjs', args: ['--check'] }
 ];
 
-export function runCheck(script, run = spawnSync) {
-  const result = run(process.execPath, [path.join(here, script)], { stdio: 'inherit' });
+export function runCheck({ script, args = [] }, run = spawnSync) {
+  const result = run(process.execPath, [path.join(here, script), ...args], { stdio: 'inherit' });
   return result.status === 0;
 }
 
@@ -36,7 +37,7 @@ function main() {
   const failed = [];
 
   for (const check of CHECKS) {
-    if (!runCheck(check.script)) failed.push(check.name);
+    if (!runCheck(check)) failed.push(check.name);
     console.log('');
   }
 
