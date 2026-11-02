@@ -985,7 +985,7 @@ test/
 │   ├── sql-batch-guard.test.js              #  30 - Whole-batch forbidden-statement scan
 │   ├── sql-construction-guard.test.js       #  30 - Dispatch-vs-escaping static guard
 │   ├── get-server-info.test.js              #  29 - Server diagnostics tool
-│   ├── cleanup-test-processes.test.js        #  48 - Process inspector: PID guards, exit status
+│   ├── cleanup-test-processes.test.js        #  Process inspector: PID guards, exit status
 │   ├── git-spawn-scrub-guard.test.js         #  50 - Lint guard: git spawns must scrub the environment
 │   ├── run-one-test.test.js                  #  29 - Single-suite runner the Claude action is allowed to call
 │   ├── verify-publish-tree.test.js          #  40 - Published-tree verification before npm publish
@@ -1005,8 +1005,7 @@ test/
 │   ├── docker-command-utils.test.js         #   4 - Docker helper argument handling
 │   ├── dependabot-config.test.js            #   2 - Dependabot config validation
 │   ├── mcp-shared-fixtures.js               # Shared fixtures and mocks (not a suite)
-│   ├── fixtures/cleanup-inspector-harness.js # Stub install + runners for the process inspector
-│   ├── fixtures/cleanup-inspector-stubs.js  # ps/sleep/top stubs for the process inspector
+│   ├── fixtures/cleanup-node-harness.js     # Injected process and signal fixtures
 │   └── fixtures/modern-fixtures.js          # Additional shared fixtures
 ├── integration/                             # Vitest integration suites + live-DB scripts
 │   ├── error-scenarios-integration.test.js  #  15 tests - failure-path integration
@@ -1054,7 +1053,7 @@ Grouped by area; the group totals sum to 1,694:
 - **Tools and handlers** (152): `tool-registry` (59), `database-tools-handler` (64),
   `get-server-info` (29)
 - **Configuration** (24): `server-config` (24)
-- **Repository and CLI tooling** (625): `cleanup-test-processes` (48), `release-script` (146), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (43),
+- **Repository and CLI tooling**: `cleanup-test-processes`, `release-script` (146), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (43),
   `packed-window` (29), `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (8),
   `check-orphan-docs` (71), `markdown-blocks` (21), `check-env-var-docs` (103), `check-tool-docs` (11), `run-doc-checks` (3), `cli` (6), `docker-command-utils` (4), `dependabot-config` (2)
 
@@ -1370,7 +1369,7 @@ npm run cleanup
 npm run cleanup:processes
 
 # Direct script execution (also lists only)
-./scripts/cleanup-test-processes.sh
+./scripts/cleanup-test-processes.js
 
 # Terminate specific PIDs from that list
 npm run cleanup -- --kill <pid> [<pid>...]
