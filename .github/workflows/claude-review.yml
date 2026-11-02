@@ -1,0 +1,59 @@
+name: Claude Review
+
+# Keep automatic PR reviews separate from the @claude mention workflow. The
+# action checks out the PR head, so only same-repository, human-authored PRs
+# triggered by a human may reach it.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  review:
+    name: Claude Review
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.sender.type != 'Bot'
+    # Skipped draft, fork, or bot events must not cancel an active review.
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Run Claude review
+        uses: anthropics/claude-code-action@16f9f71ab9c490faf367f94dd294897edc25be33 # v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Avoid the action's default write-scoped App token. This also lets
+          # the workflow review its own PR before it reaches the default branch.
+          github_token: ${{ github.token }}
+          track_progress: true
+          prompt: |
+            Review this pull request for correctness bugs, security issues, and unnecessary
+            complexity. Reference specific files and line numbers. Do not make code changes.
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git status:*),Bash(npm ci),Bash(npm run lint),Bash(npm run format:check),Bash(npm run markdown:lint),Bash(npm run fences:check),Bash(npm run test:unit),Bash(npm run test:coverage),Bash(node scripts/ci/run-one-test.mjs:*)"
