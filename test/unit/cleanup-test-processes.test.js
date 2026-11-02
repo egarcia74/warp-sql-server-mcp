@@ -24,6 +24,30 @@ describe('cleanup inspector decisions', () => {
     expect(result.events).toEqual([]);
   });
 
+  it('treats a named zombie with an empty command as already exited', async () => {
+    const result = await run(['--kill', '4242'], {
+      table: new Map([
+        [10, row(10, 1, 'node inspector')],
+        [4242, row(4242, 1, '', 'ticks_4242', 'Z')]
+      ])
+    });
+    expect(result.status).toBe(0);
+    expect(result.events).toEqual([]);
+    expect(result.output).toMatch(/4242: already exited, not signalled/);
+  });
+
+  it('refuses a named zombie ancestor before considering its exited state', async () => {
+    const result = await run(['--kill', '4242'], {
+      table: new Map([
+        [10, row(10, 4242, 'node inspector')],
+        [4242, row(4242, 1, '', 'ticks_4242', 'Z')]
+      ])
+    });
+    expect(result.status).toBe(1);
+    expect(result.events).toEqual([]);
+    expect(result.output).toMatch(/is this script's own ancestor, skipped/);
+  });
+
   it.each([
     ['4242', '4242'],
     ['4242', '04242']

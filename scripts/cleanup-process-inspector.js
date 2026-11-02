@@ -145,6 +145,10 @@ export async function inspect({
         emit(`  ⏭️  ${pid}: not a running Vitest process, skipped`);
         continue;
       }
+      if (candidate.kind === 'present' && candidate.process.state?.startsWith('Z')) {
+        emit(`  ⏭️  ${pid}: already exited, not signalled`);
+        continue;
+      }
       if (candidate.kind !== 'present' || !candidate.process.command?.trim()) {
         emit(`  ⏭️  ${pid}: could not be classified, skipped`);
         exit = 1;
