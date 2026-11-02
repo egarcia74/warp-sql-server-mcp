@@ -44,28 +44,70 @@ export function parseLinuxStat(value) {
   return { pid, ppid, state: parts[0], startIdentity: `ticks_${ticks}`, kernelThread };
 }
 
-const DARWIN_ROW =
-  /^\s*(\d+)\s+(\d+)\s+((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d\d:\d\d:\d\d\s+\d{4})\s+(\S+)\s+((?:\d+-)?\d+:\d\d(?::\d\d)?)\s+(.+)$/;
+const DARWIN_DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+const DARWIN_MONTHS = new Set([
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec'
+]);
+const isSpace = char => char === ' ' || char === '\t' || char === '\r';
+
+function parseDarwinRow(line) {
+  let cursor = 0;
+  const token = () => {
+    while (cursor < line.length && isSpace(line[cursor])) cursor += 1;
+    const start = cursor;
+    while (cursor < line.length && !isSpace(line[cursor])) cursor += 1;
+    return line.slice(start, cursor);
+  };
+  const [pid, ppid, dayName, month, day, time, year, state, elapsed] = Array.from(
+    { length: 9 },
+    token
+  );
+  while (cursor < line.length && isSpace(line[cursor])) cursor += 1;
+  const command = line.slice(cursor);
+  if (
+    !/^\d+$/.test(pid) ||
+    !/^\d+$/.test(ppid) ||
+    !DARWIN_DAYS.has(dayName) ||
+    !DARWIN_MONTHS.has(month) ||
+    !/^\d{1,2}$/.test(day) ||
+    !/^\d{2}:\d{2}:\d{2}$/.test(time) ||
+    !/^\d{4}$/.test(year) ||
+    !state ||
+    !/^(?:\d+-)?\d+:\d{2}(?::\d{2})?$/.test(elapsed) ||
+    !command
+  )
+    throw new Error('malformed ps row');
+  return {
+    pid: Number(pid),
+    ppid: Number(ppid),
+    state,
+    elapsed,
+    command,
+    startIdentity: `lstart_${dayName}_${month}_${day}_${time}_${year}`
+  };
+}
 
 export function parseDarwinTable(value, selfPid) {
   const rows = new Map();
   for (const line of String(value)
     .split(/\r?\n/)
     .filter(line => line.trim())) {
-    const match = DARWIN_ROW.exec(line);
-    if (!match) throw new Error('malformed ps row');
-    const pid = Number(match[1]);
-    const ppid = Number(match[2]);
+    const processRow = parseDarwinRow(line);
+    const { pid, ppid } = processRow;
     if (!positive(pid) || pid === 0 || !positive(ppid) || rows.has(pid))
       throw new Error('invalid ps PID');
-    rows.set(pid, {
-      pid,
-      ppid,
-      state: match[4],
-      command: match[6],
-      startIdentity: `lstart_${match[3].replace(/\s+/g, '_')}`,
-      elapsed: match[5]
-    });
+    rows.set(pid, processRow);
   }
   if (!rows.has(selfPid)) throw new Error('ps did not report self');
   return rows;
@@ -165,14 +207,12 @@ export function createPlatformAdapter({
     if (
       last.pid !== first.pid ||
       last.ppid !== first.ppid ||
-      last.state !== first.state ||
       last.kernelThread !== first.kernelThread ||
       last.startIdentity !== first.startIdentity
     ) {
       return unknown('process changed during lookup');
     }
     if (!command.trim() && last.kernelThread) command = '[kernel thread]';
-    if (!command.trim() && !last.state.startsWith('Z')) return unknown('command unreadable');
     return { kind: 'present', process: { ...last, command, elapsed: '?' } };
   };
 
@@ -209,7 +249,11 @@ export function createPlatformAdapter({
     for (const name of names) {
       if (!/^\d+$/.test(name)) continue;
       const result = readLinux(Number(name));
-      if (result.kind === 'present') rows.push(result.process);
+      if (result.kind === 'present') {
+        rows.push(result.process);
+        if (!result.process.command.trim() && !result.process.state.startsWith('Z'))
+          uncertain = true;
+      }
       if (result.kind === 'unknown') uncertain = true;
     }
     let uptime;
@@ -222,10 +266,10 @@ export function createPlatformAdapter({
         maxBuffer: 1024,
         env: { ...process.env, LC_ALL: 'C' }
       });
-      hz = answer.status === 0 ? Number(String(answer.stdout).trim()) : NaN;
+      hz = answer.status === 0 ? Number(String(answer.stdout).trim()) : Number.NaN;
     } catch {
-      uptime = NaN;
-      hz = NaN;
+      uptime = Number.NaN;
+      hz = Number.NaN;
     }
     for (const row of rows) {
       const ticks = Number(row.startIdentity.slice('ticks_'.length));

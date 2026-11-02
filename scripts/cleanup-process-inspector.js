@@ -168,13 +168,18 @@ export async function inspect({
       emit(`🔄 Sending TERM to: ${targets.map(target => target.pid).join(' ')}`);
       for (const target of targets) {
         const current = adapter.read(target.pid);
+        if (current.kind === 'unknown') {
+          emit(`  ⏭️  ${target.pid}: identity could not be re-read, not signalled`);
+          continue;
+        }
         if (!same(current, target.identity) || !isVitest(current.process.command)) {
           emit(`  ⏭️  ${target.pid}: no longer the same Vitest process, not signalled`);
           continue;
         }
         const sent = adapter.signal(target.pid, 'SIGTERM');
         target.termReached = sent.kind === 'sent';
-        if (!target.termReached) emit(`  ⏭️  ${target.pid}: could not be signalled`);
+        if (sent.kind === 'absent') emit(`  ⏭️  ${target.pid}: TERM found no such process`);
+        else if (!target.termReached) emit(`  ⏭️  ${target.pid}: could not be signalled`);
       }
       let grace = true;
       try {
@@ -216,14 +221,26 @@ export async function inspect({
           current.kind === 'absent' ||
           (current.kind === 'present' && current.process.startIdentity !== target.identity)
         ) {
-          emit(`  ✅ ${target.pid}: terminated`);
+          emit(
+            target.termReached
+              ? `  ✅ ${target.pid}: no longer the signalled process`
+              : `  ⏭️  ${target.pid}: selected process gone or changed, not signalled`
+          );
         } else if (current.kind === 'present' && current.process.state.startsWith('Z')) {
-          emit(`  ✅ ${target.pid}: terminated (exited; its parent has not reaped it yet)`);
+          emit(
+            target.termReached
+              ? `  ✅ ${target.pid}: exited; its parent has not reaped it yet`
+              : `  ⏭️  ${target.pid}: already exited, not signalled`
+          );
         } else if (current.kind === 'present') {
           const probe = adapter.probe(target.pid);
-          if (probe.kind === 'absent' && adapter.read(target.pid).kind === 'absent')
-            emit(`  ✅ ${target.pid}: terminated`);
-          else {
+          if (probe.kind === 'absent' && adapter.read(target.pid).kind === 'absent') {
+            emit(
+              target.termReached
+                ? `  ✅ ${target.pid}: no longer the signalled process`
+                : `  ⏭️  ${target.pid}: selected process gone, not signalled`
+            );
+          } else {
             emit(
               `  ⚠️  ${target.pid}: still running${probe.signalable === false ? ' and cannot be signalled' : ''}`
             );

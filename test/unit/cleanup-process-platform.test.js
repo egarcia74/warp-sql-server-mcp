@@ -91,6 +91,23 @@ describe('process inspection adapters', () => {
     expect(adapter.read(4242)).toMatchObject({ kind: 'unknown' });
   });
 
+  it('keeps a stable Linux identity when scheduler state changes during lookup', () => {
+    let reads = 0;
+    const adapter = createPlatformAdapter({
+      platform: 'linux',
+      selfPid: 10,
+      readFile: path => {
+        if (path === '/proc/self/stat') return stat(10);
+        if (path.endsWith('/stat')) return stat(4242, 1, 123, reads++ ? 'R' : 'S');
+        return 'node\0vitest\0';
+      }
+    });
+    expect(adapter.read(4242)).toMatchObject({
+      kind: 'present',
+      process: { state: 'R', startIdentity: 'ticks_123', command: 'node vitest' }
+    });
+  });
+
   it('does not combine a changed kernel flag with the old command', () => {
     let reads = 0;
     const adapter = createPlatformAdapter({
@@ -152,14 +169,37 @@ describe('process inspection adapters', () => {
     expect(result.rows.find(value => value.pid === 4242).command).toBe('[kernel thread]');
   });
 
-  it('keeps a blank-command user process unknown', () => {
+  it('preserves a blank-command user process identity for post-TERM checks', () => {
     const adapter = createPlatformAdapter({
       platform: 'linux',
       selfPid: 10,
       readFile: path =>
         path.endsWith('/cmdline') ? '' : stat(path === '/proc/self/stat' ? 10 : 4242)
     });
-    expect(adapter.read(4242)).toMatchObject({ kind: 'unknown' });
+    expect(adapter.read(4242)).toMatchObject({
+      kind: 'present',
+      process: { command: '', startIdentity: 'ticks_123', state: 'S' }
+    });
+  });
+
+  it('marks a blank-command live user process uncertain in listings', () => {
+    const adapter = createPlatformAdapter({
+      platform: 'linux',
+      selfPid: 10,
+      readDir: () => ['10', '4242'],
+      readFile: path => {
+        if (path === '/proc/uptime') return '423.00 10.00';
+        if (path.endsWith('/stat')) return stat(path === '/proc/4242/stat' ? 4242 : 10);
+        return path === '/proc/4242/cmdline' ? '' : 'node\0inspector\0';
+      },
+      spawn: () => ({ status: 0, stdout: '100\n' })
+    });
+    const listed = adapter.list();
+    expect(listed.uncertain).toBe(true);
+    expect(listed.rows.find(value => value.pid === 4242)).toMatchObject({
+      command: '',
+      startIdentity: 'ticks_123'
+    });
   });
 
   it('bounds getconf and uses an unknown elapsed value if it times out', () => {
@@ -229,6 +269,28 @@ describe('process inspection adapters', () => {
 
   it('rejects malformed or locale-variant macOS start time', () => {
     expect(() => parseDarwinTable('10 1 Lun Nov 2 09:00:00 2026 S node inspector', 10)).toThrow();
+  });
+
+  it('keeps a long macOS command on its own row', () => {
+    const command = `node /repo/vitest ${'x'.repeat(100_000)}`;
+    const sample =
+      '10 1 Mon Nov 2 09:00:00 2026 S 01:00 node inspector\n' +
+      `4242 1 Mon Nov 2 10:00:00 2026 R 05:00 ${command}\n`;
+    expect(parseDarwinTable(sample, 10).get(4242).command).toBe(command);
+  });
+
+  it('rejects a long malformed macOS row without inventing a process', () => {
+    const sample =
+      '10 1 Mon Nov 2 09:00:00 2026 S 01:00 node inspector\n' +
+      `4242 1 Mon Nov 2 10:00:00 2026 ${' '.repeat(100_000)}missing fields\n`;
+    expect(() => parseDarwinTable(sample, 10)).toThrow('malformed ps row');
+  });
+
+  it('rejects duplicate macOS PIDs even when both rows look valid', () => {
+    const sample =
+      '10 1 Mon Nov 2 09:00:00 2026 S 01:00 node inspector\n' +
+      '10 1 Mon Nov 2 10:00:00 2026 S 00:01 node inspector\n';
+    expect(() => parseDarwinTable(sample, 10)).toThrow('invalid ps PID');
   });
 
   it('maps EPERM and ESRCH separately for liveness probes', () => {

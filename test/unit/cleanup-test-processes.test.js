@@ -97,6 +97,65 @@ describe('cleanup inspector decisions', () => {
     expect(result.status).toBe(1);
   });
 
+  it('escalates a target with a blank command after TERM using fresh identity', async () => {
+    let reads = 0;
+    const result = await run(['--kill', '4242'], {
+      read: pid => {
+        if (pid === 10) return { kind: 'present', process: row(10, 1, 'node inspector') };
+        return { kind: 'present', process: row(pid, 1, reads++ >= 3 ? '' : undefined) };
+      }
+    });
+    expect(result.events).toEqual([
+      [4242, 'SIGTERM'],
+      [4242, 'SIGKILL']
+    ]);
+  });
+
+  it('does not send TERM if the command becomes blank before TERM', async () => {
+    let reads = 0;
+    const result = await run(['--kill', '4242'], {
+      read: pid => {
+        if (pid === 10) return { kind: 'present', process: row(10, 1, 'node inspector') };
+        return { kind: 'present', process: row(pid, 1, reads++ >= 2 ? '' : undefined) };
+      }
+    });
+    expect(result.events).toEqual([]);
+    expect(result.status).toBe(1);
+  });
+
+  it('does not KILL a blank-command replacement after TERM', async () => {
+    let reads = 0;
+    const result = await run(['--kill', '4242'], {
+      read: pid => {
+        if (pid === 10) return { kind: 'present', process: row(10, 1, 'node inspector') };
+        return {
+          kind: 'present',
+          process: row(
+            pid,
+            1,
+            reads >= 3 ? '' : undefined,
+            reads++ >= 3 ? 'ticks_new' : 'ticks_old'
+          )
+        };
+      }
+    });
+    expect(result.events).toEqual([[4242, 'SIGTERM']]);
+  });
+
+  it('does not KILL a blank-command target when grace wait fails', async () => {
+    let reads = 0;
+    const result = await run(['--kill', '4242'], {
+      read: pid => {
+        if (pid === 10) return { kind: 'present', process: row(10, 1, 'node inspector') };
+        return { kind: 'present', process: row(pid, 1, reads++ >= 3 ? '' : undefined) };
+      },
+      wait: async () => {
+        throw new Error('wait failed');
+      }
+    });
+    expect(result.events).toEqual([[4242, 'SIGTERM']]);
+  });
+
   it('does not escalate when TERM was denied', async () => {
     const result = await run(['--kill', '4242'], { signal: () => ({ kind: 'denied' }) });
     expect(result.status).toBe(1);

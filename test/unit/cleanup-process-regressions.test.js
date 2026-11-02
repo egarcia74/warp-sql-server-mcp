@@ -187,6 +187,48 @@ describe('ported ancestry and outcome regressions', () => {
     expect(result.status).toBe(0);
   });
 
+  it('reports a target that vanished before TERM without claiming it was terminated', async () => {
+    let reads = 0;
+    const result = await run(['--kill', '4242'], {
+      read: pid => (pid === 10 ? base(pid) : ++reads >= 3 ? { kind: 'absent' } : base(pid))
+    });
+    expect(result.events).toEqual([]);
+    expect(result.output).toMatch(/not signalled/);
+    expect(result.output).not.toMatch(/4242: terminated/);
+  });
+
+  it('reports ESRCH at TERM without claiming the target exited', async () => {
+    const result = await run(['--kill', '4242'], {
+      signal: () => ({ kind: 'absent' }),
+      read: pid => (pid === 10 ? base(pid) : base(pid))
+    });
+    expect(result.events).toEqual([[4242, 'SIGTERM']]);
+    expect(result.output).toMatch(/TERM found no such process/);
+    expect(result.output).not.toMatch(/exited before TERM/);
+    expect(result.output).not.toMatch(/could not be signalled/);
+  });
+
+  it('does not claim termination when TERM was denied before final confirmed absence', async () => {
+    let reads = 0;
+    const result = await run(['--kill', '4242'], {
+      signal: () => ({ kind: 'denied' }),
+      read: pid => (pid === 10 ? base(pid) : ++reads >= 5 ? { kind: 'absent' } : base(pid)),
+      probe: () => ({ kind: 'absent' })
+    });
+    expect(result.events).toEqual([[4242, 'SIGTERM']]);
+    expect(result.output).toMatch(/not signalled/);
+    expect(result.output).not.toMatch(/4242: terminated/);
+  });
+
+  it('names an unknown pre-TERM identity read as unknown', async () => {
+    let reads = 0;
+    const result = await run(['--kill', '4242'], {
+      read: pid => (pid === 10 ? base(pid) : ++reads >= 3 ? { kind: 'unknown' } : base(pid))
+    });
+    expect(result.events).toEqual([]);
+    expect(result.output).toMatch(/identity could not be re-read, not signalled/);
+  });
+
   it('does not call EPERM a terminated target', async () => {
     const result = await run(['--kill', '4242'], {
       probe: () => ({ kind: 'present', signalable: false })
