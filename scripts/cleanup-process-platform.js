@@ -35,7 +35,7 @@ export function parseLinuxStat(value) {
     !positive(ppid) ||
     !/^\d+$/.test(flags ?? '') ||
     !/^\d+$/.test(ticks ?? '') ||
-    !/^[A-Z]$/.test(parts[0] ?? '')
+    !/^[A-Za-z]$/.test(parts[0] ?? '')
   ) {
     throw new Error('malformed stat fields');
   }

@@ -22,6 +22,15 @@ describe('process inspection adapters', () => {
     });
   });
 
+  it('accepts a lowercase Linux scheduler state without changing process identity', () => {
+    expect(parseLinuxStat(stat(4242, 1, 123, 't'))).toMatchObject({
+      pid: 4242,
+      ppid: 1,
+      state: 't',
+      startIdentity: 'ticks_123'
+    });
+  });
+
   it('returns unknown when the PID changes between Linux stat and cmdline reads', () => {
     let statReads = 0;
     const readFile = vi.fn(path => {

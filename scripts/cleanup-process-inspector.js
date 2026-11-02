@@ -123,12 +123,18 @@ export async function inspect({
       return 3;
     }
     const targets = [];
+    const seenPids = new Set();
     for (const raw of args.slice(1)) {
       const pid = canonicalPid(raw);
       if (pid === null) {
         emit(`  ⏭️  ${raw}: not a PID, skipped`);
         continue;
       }
+      if (seenPids.has(pid)) {
+        emit(`  ⏭️  ${pid}: duplicate PID, skipped`);
+        continue;
+      }
+      seenPids.add(pid);
       if (ancestry.ids.has(pid)) {
         emit(`  ⏭️  ${pid}: is this script's own ancestor, skipped`);
         exit = 1;

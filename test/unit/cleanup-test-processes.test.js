@@ -24,6 +24,30 @@ describe('cleanup inspector decisions', () => {
     expect(result.events).toEqual([]);
   });
 
+  it.each([
+    ['4242', '4242'],
+    ['4242', '04242']
+  ])('signals canonical PID %s and duplicate %s only once', async (...pids) => {
+    const result = await run(['--kill', ...pids]);
+    expect(result.events).toEqual([
+      [4242, 'SIGTERM'],
+      [4242, 'SIGKILL']
+    ]);
+    expect(result.output.match(/4242: still running/g)).toHaveLength(1);
+  });
+
+  it('does not reclassify a duplicate PID after the first unknown read', async () => {
+    const result = await run(['--kill', '4242', '04242'], {
+      read: pid =>
+        pid === 10
+          ? { kind: 'present', process: row(10, 1, 'node inspector') }
+          : { kind: 'unknown' }
+    });
+    expect(result.status).toBe(1);
+    expect(result.events).toEqual([]);
+    expect(result.output.match(/could not be classified/g)).toHaveLength(1);
+  });
+
   it('refuses all signalling if self ancestry is incomplete', async () => {
     const result = await run(['--kill', '4242'], {
       read: pid => (pid === 10 ? { kind: 'unknown' } : { kind: 'present', process: row(pid) })
