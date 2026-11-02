@@ -12,15 +12,20 @@ describe('every documentation check runs, even after one fails', () => {
   it('runs all checks regardless of earlier failures', () => {
     const run = vi.fn().mockReturnValue({ status: 1 });
 
-    for (const check of CHECKS) runCheck(check.script, run);
+    for (const check of CHECKS) runCheck(check, run);
 
     expect(run).toHaveBeenCalledTimes(CHECKS.length);
+    expect(run).toHaveBeenCalledWith(
+      process.execPath,
+      [join(import.meta.dirname, '..', '..', 'scripts/docs/generate-warp-tools.mjs'), '--check'],
+      { stdio: 'inherit' }
+    );
   });
 
   it('reports a non-zero exit as a failure and zero as a pass', () => {
-    expect(runCheck('x.mjs', () => ({ status: 0 }))).toBe(true);
-    expect(runCheck('x.mjs', () => ({ status: 1 }))).toBe(false);
-    expect(runCheck('x.mjs', () => ({ status: null }))).toBe(false);
+    expect(runCheck({ script: 'x.mjs' }, () => ({ status: 0 }))).toBe(true);
+    expect(runCheck({ script: 'x.mjs' }, () => ({ status: 1 }))).toBe(false);
+    expect(runCheck({ script: 'x.mjs' }, () => ({ status: null }))).toBe(false);
   });
 
   it('covers each check script that exists, and nothing that does not', () => {
@@ -38,6 +43,9 @@ describe('every documentation check runs, even after one fails', () => {
       'check-env-var-docs.mjs',
       'check-tool-docs.mjs',
       'generate-warp-tools.mjs'
+    ]);
+    expect(CHECKS.find(check => check.script === 'generate-warp-tools.mjs').args).toEqual([
+      '--check'
     ]);
     for (const check of CHECKS) {
       expect(() => readFileSync(join(repoRoot, 'scripts/docs', check.script))).not.toThrow();

@@ -80,12 +80,12 @@ export function runToolInventory({ mode, filePath, tools = getAllTools() }) {
 }
 
 function main() {
-  const mode =
-    process.argv.length === 2
-      ? 'write'
-      : process.argv.length === 3 && process.argv[2] === '--check'
-        ? 'check'
-        : null;
+  let mode = null;
+  if (process.argv.length === 2) {
+    mode = 'write';
+  } else if (process.argv.length === 3 && process.argv[2] === '--check') {
+    mode = 'check';
+  }
   if (mode === null) {
     console.error('Usage: node scripts/docs/generate-warp-tools.mjs [--check]');
     process.exitCode = 2;
