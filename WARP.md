@@ -44,37 +44,44 @@ live-database). Covers all security phases with **100% success rates**.
 
 ### MCP Tools Available
 
-#### Database Operations
+<!-- BEGIN GENERATED MCP TOOLS -->
 
-1. **execute_query**: Execute arbitrary SQL queries
-2. **list_databases**: List all user databases (excludes system databases)
-3. **list_tables**: List tables in a specific database/schema
-4. **describe_table**: Get detailed table schema information
-5. **get_table_data**: Retrieve sample data with filtering/limiting
-6. **explain_query**: Analyze query performance with execution plans
-7. **list_foreign_keys**: Discover foreign key relationships
-8. **export_table_csv**: Export table data in CSV format with automatic streaming for large datasets
+- [`execute_query`](docs/tools.html#execute_query)
+- [`list_databases`](docs/tools.html#list_databases)
+- [`list_tables`](docs/tools.html#list_tables)
+- [`describe_table`](docs/tools.html#describe_table)
+- [`list_foreign_keys`](docs/tools.html#list_foreign_keys)
+- [`get_table_data`](docs/tools.html#get_table_data)
+- [`export_table_csv`](docs/tools.html#export_table_csv)
+- [`get_performance_stats`](docs/tools.html#get_performance_stats)
+- [`get_query_performance`](docs/tools.html#get_query_performance)
+- [`get_connection_health`](docs/tools.html#get_connection_health)
+- [`explain_query`](docs/tools.html#explain_query)
+- [`analyze_query_performance`](docs/tools.html#analyze_query_performance)
+- [`get_index_recommendations`](docs/tools.html#get_index_recommendations)
+- [`detect_query_bottlenecks`](docs/tools.html#detect_query_bottlenecks)
+- [`get_optimization_insights`](docs/tools.html#get_optimization_insights)
+- [`get_server_info`](docs/tools.html#get_server_info)
 
-#### Performance Monitoring
+<!-- END GENERATED MCP TOOLS -->
 
-1. **get_performance_stats**: Get comprehensive server performance statistics and health metrics (param: `timeframe` — `recent` = last 5 min, `session`/`all` = since startup)
-2. **get_query_performance**: Get detailed query performance breakdown by tool (params: `limit`, `tool_filter` — restrict to one MCP tool, `slow_only` — only queries over the slow-query threshold)
-3. **get_connection_health**: Monitor SQL Server connection pool health and diagnostics
+#### Usage notes
 
-#### Query Optimization (NEW)
-
-1. **get_index_recommendations**: Recommend missing indexes from `sys.dm_db_missing_index_*` DMVs (params: `database`, `schema` — restrict to one schema, `limit`, `impact_threshold`)
-2. **analyze_query_performance**: Static lexical/heuristic analysis of a supplied query — query-type
-   classification, complexity scoring, anti-pattern warnings and optimization suggestions, combined with
-   operator/access-method extraction from execution-plan data. It is keyword- and pattern-based; there is
-   no AST or SQL parser behind it
-3. **detect_query_bottlenecks**: Identify and categorize expensive queries from `sys.dm_exec_query_stats` (params: `database`, `limit`, `severity_filter`)
-4. **get_optimization_insights**: Aggregate health summary (missing-index + expensive-query counts) with a prioritized roadmap
-   (`analysis_period` is accepted but reserved/not applied; the response's `analysisPeriod` field echoes it with `applied: false`)
-
-#### Server Diagnostics (NEW)
-
-1. **get_server_info**: Get comprehensive server diagnostics including configuration, runtime stats, and logging status
+- `list_databases` lists user databases; it excludes `master`, `tempdb`, `model`, and `msdb`.
+- `export_table_csv` automatically streams large exports.
+- `get_performance_stats` accepts `timeframe`: `recent` covers the last five minutes;
+  `session` and `all` cover activity since startup.
+- `get_query_performance` accepts `limit`, `tool_filter` to select one MCP tool, and `slow_only`
+  to include only queries over the configured slow-query threshold.
+- `get_index_recommendations` reads `sys.dm_db_missing_index_*` DMVs and accepts `database`,
+  `schema`, `limit`, and `impact_threshold` filters.
+- `analyze_query_performance` uses lexical heuristics for query classification, complexity scores,
+  anti-pattern warnings, and suggestions, plus operator and access-method data from execution plans.
+  It does not use an AST or SQL parser.
+- `detect_query_bottlenecks` reads `sys.dm_exec_query_stats` and accepts `database`, `limit`, and
+  `severity_filter` filters.
+- `get_optimization_insights` combines missing-index and expensive-query counts into a prioritized
+  roadmap. It accepts `analysis_period` but does not apply it; `analysisPeriod.applied` is `false`.
 
 ### Authentication Methods
 
@@ -850,6 +857,8 @@ documentation perfectly synchronized with the codebase:
   tables, constraints, required/optional field indicators, and example usages
 - **`generate-landing-page.js`**: Generates a dynamic landing page listing all MCP tools
   with tool counts and consistent styling
+- **`generate-warp-tools.mjs`**: Rebuilds the marked tool inventory above from the live registry;
+  `--check` reports drift without writing. The adjacent usage notes remain manually maintained
 
 #### Live Documentation Sites
 
@@ -861,7 +870,8 @@ documentation perfectly synchronized with the codebase:
 Documentation is automatically updated:
 
 - **On every push**: GitHub Actions extracts tool definitions and regenerates HTML
-- **Zero drift**: Documentation stays perfectly synchronized with code changes
+- **Drift checks**: Required CI compares generated tool data and this file's marked inventory
+  with the registry. Other explanatory prose remains manually reviewed
 - **Automated deployment**: Generated docs are published to GitHub Pages automatically
 
 #### For Contributors
@@ -869,14 +879,11 @@ Documentation is automatically updated:
 To update documentation locally:
 
 ```bash
-# Extract tool definitions from source code
-node scripts/docs/extract-docs.js
+# Regenerate tool data, HTML pages, and the marked inventory above
+npm run docs:build
 
-# Generate comprehensive tools documentation
-node scripts/docs/generate-tools-html.js
-
-# Generate landing page with tool listing
-node scripts/docs/generate-landing-page.js
+# Check all documentation drift without writing
+npm run docs:check
 ```
 
 Generated files:
@@ -884,6 +891,7 @@ Generated files:
 - `docs-data/tools.json`: Extracted tool definitions
 - `docs/index.html`: Landing page
 - `docs/tools.html`: Detailed API documentation
+- `WARP.md` MCP Tools Available inventory: Only the marked list; usage notes are manual
 
 ## Testing Architecture
 

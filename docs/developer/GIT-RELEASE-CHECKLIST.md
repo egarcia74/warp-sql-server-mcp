@@ -18,7 +18,8 @@
 
 - [ ] Full pipeline: `npm run ci`
 - [ ] Security audit: `npm run security:audit`
-- [ ] Docs regenerated if needed: `npm run docs:build`
+- [ ] Docs regenerated if needed: `npm run docs:build` (including the marked `WARP.md` tool list);
+      review adjacent manual usage notes separately
 
 ## 🧮 Choose Release Type
 

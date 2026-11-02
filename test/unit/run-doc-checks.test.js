@@ -9,7 +9,7 @@ import { CHECKS, runCheck } from '../../scripts/docs/run-doc-checks.mjs';
 // would fix the orphan drift, push, and only then learn about the tool drift, paying a second
 // CI round trip for information the first run already had.
 describe('every documentation check runs, even after one fails', () => {
-  it('runs all three checks regardless of earlier failures', () => {
+  it('runs all checks regardless of earlier failures', () => {
     const run = vi.fn().mockReturnValue({ status: 1 });
 
     for (const check of CHECKS) runCheck(check.script, run);
@@ -28,10 +28,16 @@ describe('every documentation check runs, even after one fails', () => {
     const scripts = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).scripts;
 
     expect(scripts['docs:check']).toBe('node scripts/docs/run-doc-checks.mjs');
+    expect(scripts['docs:check:warp-tools']).toBe(
+      'node scripts/docs/generate-warp-tools.mjs --check'
+    );
+    expect(scripts['docs:generate-warp-tools']).toBe('node scripts/docs/generate-warp-tools.mjs');
+    expect(scripts['docs:build']).toContain('npm run docs:generate-warp-tools');
     expect(CHECKS.map(check => check.script)).toEqual([
       'check-orphan-docs.mjs',
       'check-env-var-docs.mjs',
-      'check-tool-docs.mjs'
+      'check-tool-docs.mjs',
+      'generate-warp-tools.mjs'
     ]);
     for (const check of CHECKS) {
       expect(() => readFileSync(join(repoRoot, 'scripts/docs', check.script))).not.toThrow();
