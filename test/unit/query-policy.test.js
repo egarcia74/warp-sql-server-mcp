@@ -54,6 +54,25 @@ const DDL_ALLOWED = {
   allowSchemaChanges: true
 };
 
+describe('sequence consumption safety', () => {
+  const query = 'SELECT NEXT VALUE FOR dbo.Seq AS n';
+
+  it('rejects a SELECT that advances a sequence in read-only and DML-disabled modes', () => {
+    expect(validateQuery(query, READ_ONLY, securityConfig).allowed).toBe(false);
+    expect(
+      validateQuery(
+        query,
+        { readOnlyMode: false, allowDestructiveOperations: false, allowSchemaChanges: true },
+        securityConfig
+      ).allowed
+    ).toBe(false);
+  });
+
+  it('permits sequence consumption when destructive operations are explicitly enabled', () => {
+    expect(validateQuery(query, DML_ALLOWED, securityConfig).allowed).toBe(true);
+  });
+});
+
 describe('getSingleQueryType', () => {
   it.each([
     ['a space', 'WITH c AS (SELECT 1) SELECT * FROM c', 'select'],

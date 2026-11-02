@@ -621,6 +621,111 @@ describe('SqlServerMCP Index', () => {
     });
   });
 
+  describe('sequence consumption is blocked before SQL dispatch', () => {
+    const sequence = 'SELECT NEXT VALUE FOR dbo.Seq AS n';
+
+    it('blocks direct executeQuery before connecting', async () => {
+      try {
+        await server.executeQuery(sequence);
+        expect.fail('sequence query should have been blocked');
+      } catch (error) {
+        expect(error.message).to.match(/blocked by safety policy/i);
+        expect(server.connectionManager.connect.called).to.equal(false);
+      }
+    });
+
+    for (const includeActualPlan of [false, true]) {
+      it(`blocks MCP explain_query with include_actual_plan=${includeActualPlan}`, async () => {
+        try {
+          await server.handleCallToolRequest({
+            params: {
+              name: 'explain_query',
+              arguments: { query: sequence, include_actual_plan: includeActualPlan }
+            }
+          });
+          expect.fail('sequence query should have been blocked');
+        } catch (error) {
+          expect(error).to.be.instanceOf(McpError);
+          expect(error.message).to.match(/blocked by safety policy/i);
+          expect(server.databaseTools.explainQuery.called).to.equal(false);
+        }
+      });
+    }
+
+    it('blocks MCP execute_query before connecting', async () => {
+      try {
+        await server.handleCallToolRequest({
+          params: { name: 'execute_query', arguments: { query: sequence } }
+        });
+        expect.fail('sequence query should have been blocked');
+      } catch (error) {
+        expect(error).to.be.instanceOf(McpError);
+        expect(error.message).to.match(/blocked by safety policy/i);
+        expect(server.connectionManager.connect.called).to.equal(false);
+      }
+    });
+
+    it('blocks the exported explainQuery method before handler dispatch', async () => {
+      try {
+        await server.explainQuery(sequence, null, true);
+        expect.fail('sequence query should have been blocked');
+      } catch (error) {
+        expect(error).to.be.instanceOf(McpError);
+        expect(error.message).to.match(/blocked by safety policy/i);
+        expect(server.databaseTools.explainQuery.called).to.equal(false);
+      }
+    });
+
+    it('blocks sequence expressions in MCP table WHERE clauses', async () => {
+      for (const name of ['get_table_data', 'export_table_csv']) {
+        try {
+          await server.handleCallToolRequest({
+            params: {
+              name,
+              arguments: { table_name: 'Users', where: 'id = NEXT VALUE FOR dbo.Seq' }
+            }
+          });
+          expect.fail('sequence expression should have been blocked');
+        } catch (error) {
+          expect(error).to.be.instanceOf(McpError);
+          expect(error.message).to.match(/blocked by safety policy/i);
+        }
+      }
+      expect(server.databaseTools.getTableData.called).to.equal(false);
+      expect(server.databaseTools.exportTableCsv.called).to.equal(false);
+    });
+
+    it('validates WHERE clauses through both exported table methods', async () => {
+      for (const call of [
+        () => server.getTableData('Users', null, 'dbo', 10, 0, 'id = NEXT VALUE FOR dbo.Seq'),
+        () => server.exportTableCsv('Users', null, 'dbo', 10, 'id = NEXT VALUE FOR dbo.Seq')
+      ]) {
+        try {
+          await call();
+          expect.fail('sequence expression should have been blocked');
+        } catch (error) {
+          expect(error).to.be.instanceOf(McpError);
+          expect(error.message).to.match(/blocked by safety policy/i);
+        }
+      }
+      expect(server.databaseTools.getTableData.called).to.equal(false);
+      expect(server.databaseTools.exportTableCsv.called).to.equal(false);
+    });
+
+    it('keeps legitimate exported calls working', async () => {
+      server.databaseTools.explainQuery.resolves('plan');
+      server.databaseTools.getTableData.resolves('rows');
+      server.databaseTools.exportTableCsv.resolves('csv');
+      expect((await server.explainQuery('SELECT 1')).content).to.equal('plan');
+      expect((await server.getTableData('Users', null, 'dbo', 10, 0, 'id = 1')).content).to.equal(
+        'rows'
+      );
+      expect((await server.exportTableCsv('Users', null, 'dbo', 10, 'id = 1')).content).to.equal(
+        'csv'
+      );
+    });
+  });
+
   describe('executeQuery database switching (GHSA-p8gx-89fp-x73j)', () => {
     it('bracket-escapes the database argument in the emitted USE statement', async () => {
       const request = { query: sinon.stub().resolves({ recordset: [], rowsAffected: [0] }) };

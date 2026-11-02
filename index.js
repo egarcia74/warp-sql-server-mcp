@@ -522,6 +522,7 @@ class SqlServerMCP {
   }
 
   async getTableData(...args) {
+    this.validateWhereClause(args[5], args[0], args[2], 'get_table_data');
     try {
       return {
         content: await this.databaseTools.getTableData(...args)
@@ -532,6 +533,7 @@ class SqlServerMCP {
   }
 
   async exportTableCsv(...args) {
+    this.validateWhereClause(args[4], args[0], args[2], 'export_table_csv');
     try {
       return { content: await this.databaseTools.exportTableCsv(...args) };
     } catch (error) {
@@ -540,6 +542,15 @@ class SqlServerMCP {
   }
 
   async explainQuery(...args) {
+    // This exported method can be called without the MCP dispatcher, whose
+    // explain_query branch already validates before the actual-plan path.
+    const validation = this.validateQuery(args[0]);
+    if (!validation.allowed) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Query blocked by safety policy: ${validation.reason}`
+      );
+    }
     try {
       return { content: await this.databaseTools.explainQuery(...args) };
     } catch (error) {

@@ -156,6 +156,11 @@ as destructive, so it is rejected in read-only mode or when destructive operatio
 permitted only once destructive operations are enabled. With all three tiers open (full development
 mode) the whole-batch guard is bypassed entirely.
 
+`NEXT VALUE FOR` also changes sequence state within a `SELECT`; it is blocked in read-only mode
+or when destructive operations are disabled. The MCP dispatcher and exported `SqlServerMCP`
+methods validate caller SQL before an execution handler receives it. A read-only SQL principal
+should have no sequence `UPDATE` permission, so database privileges remain an independent guard.
+
 ### WHERE Clause Validation (`get_table_data` / `export_table_csv`)
 
 The optional `where` parameter of `get_table_data` and `export_table_csv` is concatenated into
