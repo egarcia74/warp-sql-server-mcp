@@ -654,7 +654,8 @@ cp .env.example .env
 **SSL/TLS Settings:**
 
 - `SQL_SERVER_ENCRYPT` - Enable SSL encryption (default: `true`)
-- `SQL_SERVER_TRUST_CERT` - Context-aware SSL certificate trust (auto-detects dev/prod environments)
+- `SQL_SERVER_TRUST_CERT` - New CLI configs explicitly verify certificates (`false`); direct
+  environment-only starts use context-aware trust when this variable is unset
 
 **Connection Pool:**
 
@@ -713,6 +714,12 @@ warp-sql-server-mcp init
 # File location: ~/.warp-sql-server-mcp.json
 ```
 
+New CLI configs set `SQL_SERVER_ENCRYPT=true` and `SQL_SERVER_TRUST_CERT=false`. If a local,
+isolated SQL Server uses a self-signed certificate, explicitly set only
+`SQL_SERVER_TRUST_CERT=true` for that connection. `init` never overwrites an existing file:
+review older configs for `SQL_SERVER_ENCRYPT=false` or `SQL_SERVER_TRUST_CERT=true` before
+connecting remotely. An inherited environment variable overrides the saved value.
+
 #### **Configure Warp MCP Settings**
 
 1. **Open Warp Settings**: `Cmd+,` → **MCP** tab
@@ -770,7 +777,7 @@ In Warp's MCP settings, you must provide ALL environment variables:
   "SQL_SERVER_DATABASE": "master",
   "SQL_SERVER_USER": "your_username",
   "SQL_SERVER_PASSWORD": "your_password",
-  "SQL_SERVER_ENCRYPT": "false",
+  "SQL_SERVER_ENCRYPT": "true",
   "SQL_SERVER_TRUST_CERT": "true",
   "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
   "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
@@ -791,7 +798,7 @@ In Warp's MCP settings, you must provide ALL environment variables:
   "SQL_SERVER_DATABASE": "master",
   "SQL_SERVER_USER": "your_username",
   "SQL_SERVER_PASSWORD": "your_password",
-  "SQL_SERVER_ENCRYPT": "false",
+  "SQL_SERVER_ENCRYPT": "true",
   "SQL_SERVER_TRUST_CERT": "true",
   "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
   "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",

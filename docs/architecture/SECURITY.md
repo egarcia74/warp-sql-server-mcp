@@ -330,9 +330,9 @@ SQL_SERVER_READ_ONLY=false
 SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS=true
 SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
 
-# RELAXED SETTINGS FOR DEVELOPMENT
-SQL_SERVER_ENCRYPT=false
-# SQL_SERVER_TRUST_CERT=true  # Usually not needed - auto-detects development environment
+# LOCAL SELF-SIGNED CERTIFICATE EXCEPTION (isolated development only)
+SQL_SERVER_ENCRYPT=true
+SQL_SERVER_TRUST_CERT=true
 ```
 
 ### Security Checklist
@@ -341,7 +341,7 @@ Before deploying to production:
 
 - [ ] **Verify Read-Only Mode**: Confirm `SQL_SERVER_READ_ONLY=true`
 - [ ] **Test Security Enforcement**: Verify DML/DDL operations are blocked
-- [ ] **Enable Encryption**: Set `SQL_SERVER_ENCRYPT=true` for remote connections
+- [ ] **Enable Encryption**: Keep `SQL_SERVER_ENCRYPT=true` for all connections
 - [ ] **Validate Certificates**: Set `SQL_SERVER_TRUST_CERT=false` for production (see SSL Certificate Trust section)
 - [ ] **Configure Timeouts**: Set appropriate timeout values for your environment
 - [ ] **Review Connection Limits**: Configure connection pool settings

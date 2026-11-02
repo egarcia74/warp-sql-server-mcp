@@ -100,7 +100,8 @@ The SQL Server MCP uses environment variables for all configuration. This approa
 
 ### `SQL_SERVER_TRUST_CERT`
 
-- **Default**: **Context-Aware** (see below)
+- **Default**: New CLI-generated JSON explicitly sets `false`. Direct environment-only starts
+  use the context-aware default below when this variable is unset.
 - **Description**: Whether to trust the SQL Server's SSL certificate
 - **Context-Aware Behavior**:
   - **Development environments**: `true` (localhost/127.0.0.1 always; private IPs/.local only with NODE_ENV=development/test)
@@ -456,7 +457,9 @@ Environment variables are processed in this order:
 
 ### Development
 
-- Use context-aware SSL defaults (don't set `SQL_SERVER_TRUST_CERT`)
+- Keep `SQL_SERVER_ENCRYPT=true`. For an isolated local server with a self-signed certificate,
+  explicitly set `SQL_SERVER_TRUST_CERT=true` or install a trusted test certificate. Avoid
+  relying on context detection for a remote development server.
 - Enable appropriate security level for your needs
 - Use `SQL_SERVER_DEBUG=true` for troubleshooting
 
@@ -488,7 +491,9 @@ Environment variables are processed in this order:
 
 - Check `SQL_SERVER_HOST`, `SQL_SERVER_PORT`, and `SQL_SERVER_DATABASE`
 - Verify credentials with `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`
-- Try `SQL_SERVER_TRUST_CERT=true` for SSL certificate issues
+- Check the server certificate and trust chain for TLS failures. Set
+  `SQL_SERVER_TRUST_CERT=true` only for an isolated local server with a self-signed certificate;
+  keep encryption enabled
 - Increase `SQL_SERVER_CONNECT_TIMEOUT_MS` for slow networks
 
 ### Permission Issues
