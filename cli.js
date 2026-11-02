@@ -17,8 +17,8 @@ const EXAMPLE_CONFIG = {
   SQL_SERVER_DATABASE: 'master',
   SQL_SERVER_USER: 'your_username',
   SQL_SERVER_PASSWORD: 'your_password',
-  SQL_SERVER_ENCRYPT: 'false',
-  SQL_SERVER_TRUST_CERT: 'true',
+  SQL_SERVER_ENCRYPT: 'true',
+  SQL_SERVER_TRUST_CERT: 'false',
   SQL_SERVER_READ_ONLY: 'true',
   SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS: 'false',
   SQL_SERVER_ALLOW_SCHEMA_CHANGES: 'false',
@@ -84,6 +84,9 @@ function initConfig() {
     console.log('\n📝 Next steps:');
     console.log('1. Edit the configuration file with your SQL Server details');
     console.log('2. Run: warp-sql-server-mcp start');
+    console.log(
+      'For an isolated local server with a self-signed certificate, explicitly set SQL_SERVER_TRUST_CERT to true while keeping SQL_SERVER_ENCRYPT true.'
+    );
     console.log('\n⚠️  Security Note: The config file contains your database credentials.');
     console.log('   File permissions set to 600 (owner read/write only).');
   } catch (error) {
