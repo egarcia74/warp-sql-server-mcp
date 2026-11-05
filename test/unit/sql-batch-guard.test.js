@@ -298,12 +298,11 @@ describe('findForbiddenBatchStatement', () => {
       expect(result.reason).toMatch(/Destructive operations/);
     });
 
-    it('classifyReceive: RECEIVE used as an ordinary identifier is allowed', () => {
-      expect(findForbiddenBatchStatement('SELECT Receive FROM dbo.Config', READ_ONLY)).toBeNull();
-      // Mid-batch RECEIVE with a column list and no preceding WAITFOR is
-      // lexically a SELECT of a column named "receive" — deliberately allowed.
+    it('classifyReceive: bracketed RECEIVE identifiers remain allowed', () => {
+      expect(findForbiddenBatchStatement('SELECT [Receive] FROM dbo.Config', READ_ONLY)).toBeNull();
+      // Bracket quoting removes ambiguity with Service Broker statements.
       expect(
-        findForbiddenBatchStatement('SELECT receive, col2 FROM dbo.Queue', READ_ONLY)
+        findForbiddenBatchStatement('SELECT [receive], col2 FROM dbo.Queue', READ_ONLY)
       ).toBeNull();
     });
   });
