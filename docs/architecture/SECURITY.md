@@ -73,6 +73,7 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false
 - ✅ INSERT/UPDATE/DELETE operations
 - ✅ Data import/export operations
 - ❌ Schema modifications blocked
+- ❌ Arbitrary procedure/dynamic SQL and provider-based remote execution blocked
 
 **Use Cases:** Data migration, ETL processes, application development, testing with real data
 
@@ -153,7 +154,7 @@ every statement in the batch is checked — T-SQL does not require `;` between s
 tier restriction is in force, a batch must also open with a recognised T-SQL statement keyword: an
 unrecognised leading statement (for example a bare procedure call invoked without `EXEC`) is treated
 as destructive, so it is rejected in read-only mode or when destructive operations are disabled, and
-permitted only once destructive operations are enabled. With all three tiers open (full development
+permitted only when both destructive operations and schema changes are enabled. With all three tiers open (full development
 mode) the whole-batch guard is bypassed entirely.
 
 `NEXT VALUE FOR` also changes sequence state within a `SELECT`; it is blocked in read-only mode
@@ -581,3 +582,14 @@ contact me"_ with no details, and the maintainer will open a private advisory an
 ---
 
 **Remember**: Security is a layered approach. This MCP's safety features are one layer in your overall database security strategy.
+
+### Security scan remediation compatibility
+
+EXEC/EXECUTE, bare procedure calls, system procedures and provider-based remote SQL
+require full-development mode because their effects can include schema changes.
+The bulk-file OPENROWSET exception retains its existing policy.
+Restricted queries must bracket identifiers named Receive (`[Receive]`). WHERE filters
+must also bracket Conversation (`[Conversation]`); queue and conversation mutations
+cannot be embedded in a single predicate, even in full-development mode.
+Both guards recognize escaped closing brackets (`]]`). Missing-index suggestions quote
+all catalog-derived names and reject malformed catalog column lists.
