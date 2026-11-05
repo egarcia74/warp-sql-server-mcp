@@ -34,6 +34,12 @@
     },
     {
       "pattern": "^#.*"
+    },
+    {
+      "pattern": "^https://github\\.com/egarcia74/warp-sql-server-mcp/compare/v2\\.1\\.2\\.\\.\\.HEAD$"
+    },
+    {
+      "pattern": "^https://github\\.com/egarcia74/warp-sql-server-mcp/compare/v2\\.1\\.1\\.\\.\\.v2\\.1\\.2$"
     }
   ],
   "replacementPatterns": [
