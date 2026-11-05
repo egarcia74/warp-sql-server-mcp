@@ -64,6 +64,10 @@ Ideal for terminal-based workflows and command-line database interactions.
 | **⚠️ Destructive Operations** | `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Controls INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, WRITETEXT/UPDATETEXT, Service Broker RECEIVE, and administrative operations (SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE, CHECKPOINT, SETUSER, `xp_*`/`sp_*`, linked-server rowset functions) |
 | **🚨 Schema Changes**         | `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Controls CREATE/DROP/ALTER, GRANT/REVOKE/DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`                                                                                                                                                            |
 
+`NEXT VALUE FOR` consumes sequence state, so read-only mode and the destructive-operations
+restriction block it even inside a `SELECT`. Use a SQL login without sequence `UPDATE`
+permission for read-only tools as an additional database-level boundary.
+
 Every statement in a batch is checked against these tiers — T-SQL does not require `;` between
 statements — and batches with unterminated string literals, identifiers, or comments are rejected.
 
@@ -115,6 +119,12 @@ warp-sql-server-mcp init
 # Edit config file with your SQL Server details
 # Config file location: ~/.warp-sql-server-mcp.json
 ```
+
+New CLI configs enable encryption and verify the server certificate. For an isolated local SQL
+Server with a self-signed certificate, keep `SQL_SERVER_ENCRYPT=true` and explicitly set
+`SQL_SERVER_TRUST_CERT=true` in that config. Existing config files are not overwritten by `init`;
+review any earlier file containing `SQL_SERVER_ENCRYPT=false` or `SQL_SERVER_TRUST_CERT=true`
+before using it for a remote server.
 
 **Benefits:**
 
@@ -289,7 +299,8 @@ Show me 50 rows from the Products table where Price > 100
 
 **Configuration Issues:**
 
-- Set `SQL_SERVER_ENCRYPT=false` for local development
+- Keep `SQL_SERVER_ENCRYPT=true`; for an isolated local server with a self-signed certificate,
+  explicitly set `SQL_SERVER_TRUST_CERT=true` or install a trusted test certificate
 - MCP servers require explicit environment variables (`.env` files are not loaded automatically)
 - Check MCP server logs: `npm run logs` or `npm run logs:tail` for real-time monitoring
 - View audit logs for security-related issues: `npm run logs:audit`
@@ -305,7 +316,7 @@ Show me 50 rows from the Products table where Price > 100
 **macOS/Linux:**
 
 - Remote SQL Server connections often require SQL Server Authentication
-- May need `SQL_SERVER_ENCRYPT=true` for remote connections
+- Keep `SQL_SERVER_ENCRYPT=true` and `SQL_SERVER_TRUST_CERT=false` for remote connections
 - Test connectivity: `nc -zv localhost 1433` or `nmap -p 1433 localhost`
 
 ---

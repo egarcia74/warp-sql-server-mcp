@@ -33,6 +33,32 @@ const DENY_ALL = {
   allowSchemaChanges: false
 };
 
+// Meter logical character inspections rather than elapsed time: CI runner
+// speed varies, but repeatedly searching a remaining SQL suffix is quadratic
+// on a dense set of comments regardless of the machine.
+function meteredSql(text) {
+  let inspected = 0;
+  return {
+    length: text.length,
+    charAt(i) {
+      inspected++;
+      return text.charAt(i);
+    },
+    substring(start, end) {
+      inspected += Math.max(0, Math.min(end ?? text.length, text.length) - start);
+      return text.substring(start, end);
+    },
+    indexOf(needle, start = 0) {
+      const found = text.indexOf(needle, start);
+      inspected += found === -1 ? text.length - start : found - start + needle.length;
+      return found;
+    },
+    get inspected() {
+      return inspected;
+    }
+  };
+}
+
 describe('stripSqlLiteralsAndComments', () => {
   it('replaces string literals with an empty placeholder', () => {
     expect(stripSqlLiteralsAndComments("SELECT 'DELETE FROM x'")).toBe("SELECT ''");
@@ -52,6 +78,33 @@ describe('stripSqlLiteralsAndComments', () => {
 
   it('strips line comments to a space', () => {
     expect(stripSqlLiteralsAndComments('SELECT 1 -- DROP TABLE Users')).toBe('SELECT 1  ');
+  });
+
+  it.each([
+    ['LF', '\n', 'SELECT NEXT VALUE'],
+    ['CR', '\r', 'SELECT NEXT VALUE'],
+    ['CRLF', '\r\n', 'SELECT NEXT \nVALUE']
+  ])('ends a line comment at %s without changing its lexical output', (_name, ending, expected) => {
+    expect(stripSqlLiteralsAndComments(`SELECT NEXT-- comment${ending}VALUE`)).toBe(expected);
+  });
+
+  it('preserves EOF and mixed line-ending behavior', () => {
+    expect(stripSqlLiteralsAndComments('SELECT 1-- comment')).toBe('SELECT 1 ');
+    expect(stripSqlLiteralsAndComments('SELECT NEXT-- a\rVALUE-- b\nFOR')).toBe(
+      'SELECT NEXT VALUE FOR'
+    );
+  });
+
+  it.each([
+    ['LF', '\n'],
+    ['CR', '\r']
+  ])('scans many %s line comments with linear character inspections', (_name, ending) => {
+    const query = `SELECT 1${ending}${`--x${ending}`.repeat(20_000)}SELECT NEXT VALUE FOR dbo.Seq AS n`;
+    const metered = meteredSql(query);
+    const lexical = stripSqlLiteralsAndComments(metered);
+
+    expect(lexical.endsWith('SELECT NEXT VALUE FOR dbo.Seq AS n')).toBe(true);
+    expect(metered.inspected).toBeLessThan(query.length * 8);
   });
 
   it('strips block comments, including nested ones', () => {
@@ -139,6 +192,54 @@ describe('findForbiddenBatchStatement', () => {
   });
 
   describe('contextual classifiers', () => {
+    it.each([
+      'SELECT NEXT VALUE FOR dbo.Seq AS n',
+      'WITH q AS (SELECT NEXT VALUE FOR dbo.Seq AS n) SELECT n FROM q',
+      'SELECT 1; SELECT NeXt\nVaLuE\tFoR [dbo].[Seq] AS n',
+      'SELECT NEXT/**/VALUE/* nested /* comment */ */FOR dbo.Seq AS n',
+      'SELECT NEXT-- comment\nVALUE FOR dbo.Seq AS n',
+      'SELECT NEXT-- comment\rVALUE FOR dbo.Seq AS n',
+      'SELECT NEXT-- comment\r\nVALUE FOR dbo.Seq AS n',
+      'SELECT NEXT-- a\rVALUE-- b\nFOR dbo.Seq AS n'
+    ])('blocks sequence consumption in read-only mode: %s', query => {
+      const result = findForbiddenBatchStatement(query, READ_ONLY);
+      expect(result?.queryType).toBe('non-select');
+      expect(result?.keyword).toBe('NEXT VALUE FOR');
+    });
+
+    it('gates sequence consumption on destructive operations, not schema changes', () => {
+      const query = 'SELECT NEXT VALUE FOR dbo.Seq AS n';
+      expect(findForbiddenBatchStatement(query, DENY_ALL)?.queryType).toBe('destructive');
+      expect(
+        findForbiddenBatchStatement('SELECT NEXT-- comment\rVALUE FOR dbo.Seq AS n', DENY_ALL)
+          ?.queryType
+      ).toBe('destructive');
+      expect(findForbiddenBatchStatement(query, DML_ALLOWED)).toBeNull();
+      expect(findForbiddenBatchStatement(query, DDL_ALLOWED)).toBeNull();
+    });
+
+    it.each(['\n', '\r', '\r\n'])('does not hide DELETE after a %j line comment', ending => {
+      const result = findForbiddenBatchStatement(
+        `SELECT 1-- comment${ending}DELETE FROM Users`,
+        READ_ONLY
+      );
+      expect(result?.keyword).toBe('DELETE');
+    });
+
+    it.each([
+      "SELECT 'NEXT VALUE FOR' AS note",
+      "SELECT N'NEXT VALUE FOR' AS note",
+      'SELECT "NEXT VALUE FOR" AS note',
+      'SELECT [NEXT VALUE FOR] FROM dbo.Events',
+      'SELECT 1 -- NEXT VALUE FOR dbo.Seq',
+      'SELECT 1 /* outer /* NEXT VALUE FOR */ tail */',
+      'SELECT @next + @value + @for',
+      'SELECT [next], [value], [for] FROM dbo.Events',
+      'SELECT NEXT_VALUE_FOR FROM dbo.Events'
+    ])('keeps nonexecuting text or identifiers allowed: %s', query => {
+      expect(findForbiddenBatchStatement(query, READ_ONLY)).toBeNull();
+    });
+
     it('classifyInto: SELECT ... INTO is a schema change', () => {
       const result = findForbiddenBatchStatement(
         'SELECT * INTO Users_copy FROM Users',
@@ -197,12 +298,11 @@ describe('findForbiddenBatchStatement', () => {
       expect(result.reason).toMatch(/Destructive operations/);
     });
 
-    it('classifyReceive: RECEIVE used as an ordinary identifier is allowed', () => {
-      expect(findForbiddenBatchStatement('SELECT Receive FROM dbo.Config', READ_ONLY)).toBeNull();
-      // Mid-batch RECEIVE with a column list and no preceding WAITFOR is
-      // lexically a SELECT of a column named "receive" — deliberately allowed.
+    it('classifyReceive: bracketed RECEIVE identifiers remain allowed', () => {
+      expect(findForbiddenBatchStatement('SELECT [Receive] FROM dbo.Config', READ_ONLY)).toBeNull();
+      // Bracket quoting removes ambiguity with Service Broker statements.
       expect(
-        findForbiddenBatchStatement('SELECT receive, col2 FROM dbo.Queue', READ_ONLY)
+        findForbiddenBatchStatement('SELECT [receive], col2 FROM dbo.Queue', READ_ONLY)
       ).toBeNull();
     });
   });

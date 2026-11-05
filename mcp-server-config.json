@@ -12,8 +12,8 @@
       "SQL_SERVER_DOMAIN": "",
 
       "_comment_security": "=== Security & Encryption ===",
-      "SQL_SERVER_ENCRYPT": "false",
-      "SQL_SERVER_TRUST_CERT": "true",
+      "SQL_SERVER_ENCRYPT": "true",
+      "SQL_SERVER_TRUST_CERT": "false",
 
       "_comment_safety": "=== Three-Tier Safety System (v1.3.0+) ===",
       "SQL_SERVER_READ_ONLY": "true",
