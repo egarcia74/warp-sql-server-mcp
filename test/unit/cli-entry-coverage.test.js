@@ -113,6 +113,8 @@ describe('shipped CLI entry point under in-process coverage', { concurrent: fals
     const config = JSON.parse(readFileSync(configFile, 'utf8'));
     expect(config.SQL_SERVER_READ_ONLY).toBe('true');
     expect(config.SQL_SERVER_PASSWORD).toBe('your_password');
+    expect(config.SQL_SERVER_ENCRYPT).toBe('true');
+    expect(config.SQL_SERVER_TRUST_CERT).toBe('false');
 
     writeFileSync(configFile, '{"SQL_SERVER_HOST":"preserved"}', { mode: 0o600 });
     await runCli('init');
@@ -157,6 +159,42 @@ describe('shipped CLI entry point under in-process coverage', { concurrent: fals
     writeFileSync(configFile, JSON.stringify({ SQL_SERVER_HOST: 'from-config' }));
     await runCli('start');
     expect(process.env.SQL_SERVER_HOST).toBe('from-environment');
+    expectNoProtocolStdout();
+  });
+
+  it('passes generated TLS settings to a remote child even in development mode', async () => {
+    process.env.NODE_ENV = 'development';
+    await runCli('init');
+    const config = JSON.parse(readFileSync(configFile, 'utf8'));
+    config.SQL_SERVER_HOST = 'sql.example.test';
+    writeFileSync(configFile, JSON.stringify(config));
+
+    stdout.mockClear();
+    await runCli('start');
+    const childEnv = spawnMock.mock.calls[0][2].env;
+    expect(childEnv.SQL_SERVER_ENCRYPT).toBe('true');
+    expect(childEnv.SQL_SERVER_TRUST_CERT).toBe('false');
+    expectNoProtocolStdout();
+  });
+
+  it('preserves existing TLS settings and honors explicit environment overrides', async () => {
+    writeFileSync(
+      configFile,
+      JSON.stringify({ SQL_SERVER_ENCRYPT: 'false', SQL_SERVER_TRUST_CERT: 'true' }),
+      { mode: 0o600 }
+    );
+    const saved = readFileSync(configFile, 'utf8');
+    await runCli('init');
+    expect(readFileSync(configFile, 'utf8')).toBe(saved);
+
+    process.env.SQL_SERVER_ENCRYPT = 'true';
+    process.env.SQL_SERVER_TRUST_CERT = 'false';
+    stdout.mockClear();
+    await runCli('start');
+    const childEnv = spawnMock.mock.calls[0][2].env;
+    expect(childEnv.SQL_SERVER_ENCRYPT).toBe('true');
+    expect(childEnv.SQL_SERVER_TRUST_CERT).toBe('false');
+    expect(readFileSync(configFile, 'utf8')).toBe(saved);
     expectNoProtocolStdout();
   });
 

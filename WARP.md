@@ -171,9 +171,22 @@ single-pass scanners with no regex backtracking on untrusted input:
   require `;` between statements), and requires the batch to open with a recognised
   T-SQL statement keyword. It **fails closed** on an unterminated literal, identifier or
   block comment. This blocks `xp_*`/`sp_*` procedures, `openrowset`/`openquery`/`opendatasource`
-  and server-administration statements unless the destructive-operations tier is enabled
-  (read-only mode blocks them outright), and closes the multi-statement bypass in
+  unless both data and schema changes are enabled. Server-administration statements
+  require the destructive-operations tier (read-only mode blocks them outright), and closes the multi-statement bypass in
   `GHSA-qhf4-jmhq-73c8`.
+- **Procedure execution**: EXEC/EXECUTE, bare procedure calls and provider-based remote
+  execution require all safety restrictions to be disabled, since their effects cannot
+  be inferred from the outer statement. `OPENROWSET(BULK ...)` retains its file-read policy.
+- **Service Broker**: RECEIVE and conversation-changing statements require data modification
+  permission. In restricted queries, quote columns named Receive as `[Receive]`.
+  WHERE filters always reject unquoted RECEIVE and CONVERSATION; bracket these identifiers.
+- **Bracket identifiers**: Both lexical guards honor SQL Server's doubled `]]` escape.
+  Generated missing-index recommendations decode DMV lists and bracket-quote every identifier,
+  including index names and key/included columns; malformed lists are rejected.
+- **Sequence consumption**: `NEXT VALUE FOR` advances SQL Server sequence state even in a
+  `SELECT`. The batch guard blocks it in read-only mode and whenever destructive operations
+  are disabled, after ignoring quoted text and comments. Use a database principal without
+  sequence `UPDATE` permission for read-only access as an independent safeguard.
 - **`where-clause-guard.js` (`findForbiddenWhereClauseSyntax`)**: Validates the
   caller-supplied WHERE clause for `get_table_data`/`export_table_csv`, requiring a
   single predicate on the requested table. It rejects batch separators, comments,
@@ -650,7 +663,8 @@ cp .env.example .env
 **SSL/TLS Settings:**
 
 - `SQL_SERVER_ENCRYPT` - Enable SSL encryption (default: `true`)
-- `SQL_SERVER_TRUST_CERT` - Context-aware SSL certificate trust (auto-detects dev/prod environments)
+- `SQL_SERVER_TRUST_CERT` - New CLI configs explicitly verify certificates (`false`); direct
+  environment-only starts use context-aware trust when this variable is unset
 
 **Connection Pool:**
 
@@ -666,11 +680,11 @@ cp .env.example .env
 
 **Quick Security Levels:**
 
-| Variable                                  | Default | Impact                                                                                                                        |
-| ----------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed                                                                                                   |
-| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Blocks INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, WRITETEXT/UPDATETEXT, Service Broker RECEIVE, and administrative operations |
-| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER, GRANT/REVOKE/DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`                                    |
+| Variable                                  | Default | Impact                                                                                                                                          |
+| ----------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SQL_SERVER_READ_ONLY`                    | `true`  | Only SELECT queries allowed                                                                                                                     |
+| `SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS` | `false` | Blocks INSERT/UPDATE/DELETE/MERGE/TRUNCATE, EXEC, WRITETEXT/UPDATETEXT, Service Broker RECEIVE, `NEXT VALUE FOR`, and administrative operations |
+| `SQL_SERVER_ALLOW_SCHEMA_CHANGES`         | `false` | Blocks CREATE/DROP/ALTER, GRANT/REVOKE/DENY, ENABLE/DISABLE TRIGGER, and `SELECT ... INTO`                                                      |
 
 The destructive tier also covers `WRITETEXT`/`UPDATETEXT` and the Service Broker `RECEIVE`
 statement. Administrative operations — SHUTDOWN, KILL, BACKUP/RESTORE, DBCC, RECONFIGURE,
@@ -708,6 +722,12 @@ warp-sql-server-mcp init
 # Edit the config file with your SQL Server details
 # File location: ~/.warp-sql-server-mcp.json
 ```
+
+New CLI configs set `SQL_SERVER_ENCRYPT=true` and `SQL_SERVER_TRUST_CERT=false`. If a local,
+isolated SQL Server uses a self-signed certificate, explicitly set only
+`SQL_SERVER_TRUST_CERT=true` for that connection. `init` never overwrites an existing file:
+review older configs for `SQL_SERVER_ENCRYPT=false` or `SQL_SERVER_TRUST_CERT=true` before
+connecting remotely. An inherited environment variable overrides the saved value.
 
 #### **Configure Warp MCP Settings**
 
@@ -766,7 +786,7 @@ In Warp's MCP settings, you must provide ALL environment variables:
   "SQL_SERVER_DATABASE": "master",
   "SQL_SERVER_USER": "your_username",
   "SQL_SERVER_PASSWORD": "your_password",
-  "SQL_SERVER_ENCRYPT": "false",
+  "SQL_SERVER_ENCRYPT": "true",
   "SQL_SERVER_TRUST_CERT": "true",
   "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
   "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
@@ -787,7 +807,7 @@ In Warp's MCP settings, you must provide ALL environment variables:
   "SQL_SERVER_DATABASE": "master",
   "SQL_SERVER_USER": "your_username",
   "SQL_SERVER_PASSWORD": "your_password",
-  "SQL_SERVER_ENCRYPT": "false",
+  "SQL_SERVER_ENCRYPT": "true",
   "SQL_SERVER_TRUST_CERT": "true",
   "SQL_SERVER_CONNECT_TIMEOUT_MS": "10000",
   "SQL_SERVER_REQUEST_TIMEOUT_MS": "30000",
@@ -985,7 +1005,7 @@ test/
 │   ├── sql-batch-guard.test.js              #  30 - Whole-batch forbidden-statement scan
 │   ├── sql-construction-guard.test.js       #  30 - Dispatch-vs-escaping static guard
 │   ├── get-server-info.test.js              #  29 - Server diagnostics tool
-│   ├── cleanup-test-processes.test.js        #  48 - Process inspector: PID guards, exit status
+│   ├── cleanup-test-processes.test.js        #  Process inspector: PID guards, exit status
 │   ├── git-spawn-scrub-guard.test.js         #  50 - Lint guard: git spawns must scrub the environment
 │   ├── run-one-test.test.js                  #  29 - Single-suite runner the Claude action is allowed to call
 │   ├── verify-publish-tree.test.js          #  40 - Published-tree verification before npm publish
@@ -1005,8 +1025,7 @@ test/
 │   ├── docker-command-utils.test.js         #   4 - Docker helper argument handling
 │   ├── dependabot-config.test.js            #   2 - Dependabot config validation
 │   ├── mcp-shared-fixtures.js               # Shared fixtures and mocks (not a suite)
-│   ├── fixtures/cleanup-inspector-harness.js # Stub install + runners for the process inspector
-│   ├── fixtures/cleanup-inspector-stubs.js  # ps/sleep/top stubs for the process inspector
+│   ├── fixtures/cleanup-node-harness.js     # Injected process and signal fixtures
 │   └── fixtures/modern-fixtures.js          # Additional shared fixtures
 ├── integration/                             # Vitest integration suites + live-DB scripts
 │   ├── error-scenarios-integration.test.js  #  15 tests - failure-path integration
@@ -1054,7 +1073,7 @@ Grouped by area; the group totals sum to 1,694:
 - **Tools and handlers** (152): `tool-registry` (59), `database-tools-handler` (64),
   `get-server-info` (29)
 - **Configuration** (24): `server-config` (24)
-- **Repository and CLI tooling** (625): `cleanup-test-processes` (48), `release-script` (146), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (43),
+- **Repository and CLI tooling**: `cleanup-test-processes`, `release-script` (146), `git-spawn-scrub-guard` (50), `run-one-test` (29), `verify-publish-tree` (43),
   `packed-window` (29), `classify-dependabot-pr` (32), `docs-html-writer` (10), `check-fenced-blocks` (9), `link-checker` (8),
   `check-orphan-docs` (71), `markdown-blocks` (21), `check-env-var-docs` (103), `check-tool-docs` (11), `run-doc-checks` (3), `cli` (6), `docker-command-utils` (4), `dependabot-config` (2)
 
@@ -1370,7 +1389,7 @@ npm run cleanup
 npm run cleanup:processes
 
 # Direct script execution (also lists only)
-./scripts/cleanup-test-processes.sh
+./scripts/cleanup-test-processes.js
 
 # Terminate specific PIDs from that list
 npm run cleanup -- --kill <pid> [<pid>...]

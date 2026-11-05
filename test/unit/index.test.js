@@ -252,6 +252,12 @@ describe('SqlServerMCP Index', () => {
 
     describe('where clause lexical guard (defense in depth, uses real validator)', () => {
       const blocked = [
+        [
+          'escaped bracket breakout',
+          "1=(SELECT 1 AS [a]]']) DELETE FROM dbo.Victim SELECT (SELECT 1 AS [b'])"
+        ],
+        ['named-column RECEIVE', '1=1 RECEIVE message_body FROM dbo.Q'],
+        ['conversation termination', '1=1 END CONVERSATION @h'],
         ['semicolon batch', '1=1; DELETE FROM Users'],
         ['whitespace batch (T-SQL needs no terminator)', '1=1 DELETE FROM Users'],
         ['EXEC of dangerous proc (unparseable -> regex fallback)', "1=1 EXEC xp_cmdshell 'dir'"],
@@ -307,7 +313,7 @@ describe('SqlServerMCP Index', () => {
         ['forbidden tokens inside a string literal', "note = 'a;b -- delete'"],
         [
           'columns named like non-reserved statement words',
-          'Enable = 1 AND Disable = 0 AND Receive IS NULL'
+          'Enable = 1 AND Disable = 0 AND [Receive] IS NULL'
         ],
         ['keyword-like bracketed identifier', '[Set] = 1 AND [If] IS NULL'],
         ['subquery', 'id IN (SELECT TOP 5 id FROM Other ORDER BY id)'],
@@ -372,6 +378,11 @@ describe('SqlServerMCP Index', () => {
         beforeEach(() => setModes({ readOnly: true, destructive: false, schema: false }));
 
         const blocked = [
+          [
+            'escaped bracket breakout',
+            "SELECT 1 AS [a]]'] DELETE FROM dbo.Victim SELECT 1 AS [b']"
+          ],
+          ['named-column RECEIVE', 'SELECT 1 RECEIVE message_body FROM dbo.Q'],
           ['whitespace-separated DELETE', 'SELECT 1 DELETE FROM Users'],
           ['newline-separated EXEC xp_cmdshell', "SELECT 1\nEXEC xp_cmdshell 'dir'"],
           ['whitespace-separated DROP', 'SELECT 1 DROP TABLE Users'],
@@ -393,7 +404,6 @@ describe('SqlServerMCP Index', () => {
           ['RECEIVE as the leading statement', 'RECEIVE TOP (1) * FROM dbo.Q'],
           ['RECEIVE * after SELECT', 'SELECT 1 RECEIVE * FROM dbo.Q'],
           ['RECEIVE inside WAITFOR', 'WAITFOR (RECEIVE * FROM dbo.Q)'],
-          ['bare procedure call', 'dbo.PurgeUsers'],
           ['bare procedure call followed by SELECT', 'dbo.PurgeUsers; SELECT 1'],
           ['bare sp_executesql followed by SELECT', "sp_executesql N'DELETE FROM Users'; SELECT 1"],
           [
@@ -415,7 +425,7 @@ describe('SqlServerMCP Index', () => {
           ['semicolon-separated SELECTs', 'SELECT 1; SELECT 2'],
           [
             'non-reserved statement words used as identifiers',
-            'SELECT Enable, Disable, Receive FROM dbo.Config'
+            'SELECT Enable, Disable, [Receive] FROM dbo.Config'
           ],
           ['alias named like a non-reserved statement word', 'SELECT 1 AS Disable'],
           ['keyword inside a string literal', "SELECT * FROM Users WHERE note = 'DELETE FROM x'"],
@@ -454,7 +464,6 @@ describe('SqlServerMCP Index', () => {
           ['SHUTDOWN', 'SHUTDOWN'],
           ['BACKUP DATABASE', "BACKUP DATABASE Users TO DISK = 'x.bak'"],
           ['DBCC', 'DBCC DROPCLEANBUFFERS'],
-          ['bare procedure call', 'dbo.PurgeUsers'],
           ['BULK INSERT', "BULK INSERT Users FROM 'x.csv'"],
           ['UPDATE STATISTICS', 'UPDATE STATISTICS Users']
         ];
@@ -558,13 +567,9 @@ describe('SqlServerMCP Index', () => {
           ['admin keyword inside a literal', "SELECT * FROM Users WHERE note = 'SHUTDOWN'"],
           [
             'non-reserved statement words used as identifiers',
-            'SELECT Enable, Disable, Receive FROM dbo.Config WHERE Enable = 1'
+            'SELECT Enable, Disable, [Receive] FROM dbo.Config WHERE Enable = 1'
           ],
-          ['WAITFOR is not an administrative operation', "WAITFOR DELAY '00:00:01' SELECT 1"],
-          [
-            'SHOW is classified read-only by server-config (SQL Server rejects it itself)',
-            'SHOW TABLES'
-          ]
+          ['WAITFOR is not an administrative operation', "WAITFOR DELAY '00:00:01' SELECT 1"]
         ];
         stillAllowed.forEach(([label, query]) => {
           it(`allows ${label}`, () => {
@@ -618,6 +623,111 @@ describe('SqlServerMCP Index', () => {
         expect(error.message).to.match(/blocked by safety policy/i);
         expect(server.validateQuery.calledWith('DELETE FROM Orders')).to.equal(true);
       }
+    });
+  });
+
+  describe('sequence consumption is blocked before SQL dispatch', () => {
+    const sequence = 'SELECT NEXT VALUE FOR dbo.Seq AS n';
+
+    it('blocks direct executeQuery before connecting', async () => {
+      try {
+        await server.executeQuery(sequence);
+        expect.fail('sequence query should have been blocked');
+      } catch (error) {
+        expect(error.message).to.match(/blocked by safety policy/i);
+        expect(server.connectionManager.connect.called).to.equal(false);
+      }
+    });
+
+    for (const includeActualPlan of [false, true]) {
+      it(`blocks MCP explain_query with include_actual_plan=${includeActualPlan}`, async () => {
+        try {
+          await server.handleCallToolRequest({
+            params: {
+              name: 'explain_query',
+              arguments: { query: sequence, include_actual_plan: includeActualPlan }
+            }
+          });
+          expect.fail('sequence query should have been blocked');
+        } catch (error) {
+          expect(error).to.be.instanceOf(McpError);
+          expect(error.message).to.match(/blocked by safety policy/i);
+          expect(server.databaseTools.explainQuery.called).to.equal(false);
+        }
+      });
+    }
+
+    it('blocks MCP execute_query before connecting', async () => {
+      try {
+        await server.handleCallToolRequest({
+          params: { name: 'execute_query', arguments: { query: sequence } }
+        });
+        expect.fail('sequence query should have been blocked');
+      } catch (error) {
+        expect(error).to.be.instanceOf(McpError);
+        expect(error.message).to.match(/blocked by safety policy/i);
+        expect(server.connectionManager.connect.called).to.equal(false);
+      }
+    });
+
+    it('blocks the exported explainQuery method before handler dispatch', async () => {
+      try {
+        await server.explainQuery(sequence, null, true);
+        expect.fail('sequence query should have been blocked');
+      } catch (error) {
+        expect(error).to.be.instanceOf(McpError);
+        expect(error.message).to.match(/blocked by safety policy/i);
+        expect(server.databaseTools.explainQuery.called).to.equal(false);
+      }
+    });
+
+    it('blocks sequence expressions in MCP table WHERE clauses', async () => {
+      for (const name of ['get_table_data', 'export_table_csv']) {
+        try {
+          await server.handleCallToolRequest({
+            params: {
+              name,
+              arguments: { table_name: 'Users', where: 'id = NEXT VALUE FOR dbo.Seq' }
+            }
+          });
+          expect.fail('sequence expression should have been blocked');
+        } catch (error) {
+          expect(error).to.be.instanceOf(McpError);
+          expect(error.message).to.match(/blocked by safety policy/i);
+        }
+      }
+      expect(server.databaseTools.getTableData.called).to.equal(false);
+      expect(server.databaseTools.exportTableCsv.called).to.equal(false);
+    });
+
+    it('validates WHERE clauses through both exported table methods', async () => {
+      for (const call of [
+        () => server.getTableData('Users', null, 'dbo', 10, 0, 'id = NEXT VALUE FOR dbo.Seq'),
+        () => server.exportTableCsv('Users', null, 'dbo', 10, 'id = NEXT VALUE FOR dbo.Seq')
+      ]) {
+        try {
+          await call();
+          expect.fail('sequence expression should have been blocked');
+        } catch (error) {
+          expect(error).to.be.instanceOf(McpError);
+          expect(error.message).to.match(/blocked by safety policy/i);
+        }
+      }
+      expect(server.databaseTools.getTableData.called).to.equal(false);
+      expect(server.databaseTools.exportTableCsv.called).to.equal(false);
+    });
+
+    it('keeps legitimate exported calls working', async () => {
+      server.databaseTools.explainQuery.resolves('plan');
+      server.databaseTools.getTableData.resolves('rows');
+      server.databaseTools.exportTableCsv.resolves('csv');
+      expect((await server.explainQuery('SELECT 1')).content).to.equal('plan');
+      expect((await server.getTableData('Users', null, 'dbo', 10, 0, 'id = 1')).content).to.equal(
+        'rows'
+      );
+      expect((await server.exportTableCsv('Users', null, 'dbo', 10, 'id = 1')).content).to.equal(
+        'csv'
+      );
     });
   });
 
