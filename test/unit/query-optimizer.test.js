@@ -555,7 +555,7 @@ describe('QueryOptimizer', () => {
       // sales.Orders, not dbo.Orders; index name carries the schema too.
       expect(suggestion).toContain('ON [sales].[Orders]');
       expect(suggestion).toContain('IX_sales_Orders_missing');
-      expect(suggestion).toContain('INCLUDE (OrderStatus)');
+      expect(suggestion).toContain('INCLUDE ([OrderStatus])');
       expect(suggestion).not.toContain('ON [Orders]');
     });
 
@@ -628,8 +628,8 @@ describe('QueryOptimizer', () => {
 
       expect(rec.columns).toEqual(['A', 'B', 'C']);
       expect(rec.includedColumns).toEqual(['D']);
-      expect(rec.suggestion).toContain('(A, B, C)');
-      expect(rec.suggestion).toContain('INCLUDE (D)');
+      expect(rec.suggestion).toContain('([A], [B], [C])');
+      expect(rec.suggestion).toContain('INCLUDE ([D])');
     });
 
     test('omits INCLUDE when there are no included columns', async () => {

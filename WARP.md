@@ -171,9 +171,18 @@ single-pass scanners with no regex backtracking on untrusted input:
   require `;` between statements), and requires the batch to open with a recognised
   T-SQL statement keyword. It **fails closed** on an unterminated literal, identifier or
   block comment. This blocks `xp_*`/`sp_*` procedures, `openrowset`/`openquery`/`opendatasource`
-  and server-administration statements unless the destructive-operations tier is enabled
-  (read-only mode blocks them outright), and closes the multi-statement bypass in
+  unless both data and schema changes are enabled. Server-administration statements
+  require the destructive-operations tier (read-only mode blocks them outright), and closes the multi-statement bypass in
   `GHSA-qhf4-jmhq-73c8`.
+- **Procedure execution**: EXEC/EXECUTE, bare procedure calls and provider-based remote
+  execution require all safety restrictions to be disabled, since their effects cannot
+  be inferred from the outer statement. `OPENROWSET(BULK ...)` retains its file-read policy.
+- **Service Broker**: RECEIVE and conversation-changing statements require data modification
+  permission. In restricted queries, quote columns named Receive as `[Receive]`.
+  WHERE filters always reject unquoted RECEIVE and CONVERSATION; bracket these identifiers.
+- **Bracket identifiers**: Both lexical guards honor SQL Server's doubled `]]` escape.
+  Generated missing-index recommendations decode DMV lists and bracket-quote every identifier,
+  including index names and key/included columns; malformed lists are rejected.
 - **Sequence consumption**: `NEXT VALUE FOR` advances SQL Server sequence state even in a
   `SELECT`. The batch guard blocks it in read-only mode and whenever destructive operations
   are disabled, after ignoring quoted text and comments. Use a database principal without

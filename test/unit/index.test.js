@@ -252,6 +252,12 @@ describe('SqlServerMCP Index', () => {
 
     describe('where clause lexical guard (defense in depth, uses real validator)', () => {
       const blocked = [
+        [
+          'escaped bracket breakout',
+          "1=(SELECT 1 AS [a]]']) DELETE FROM dbo.Victim SELECT (SELECT 1 AS [b'])"
+        ],
+        ['named-column RECEIVE', '1=1 RECEIVE message_body FROM dbo.Q'],
+        ['conversation termination', '1=1 END CONVERSATION @h'],
         ['semicolon batch', '1=1; DELETE FROM Users'],
         ['whitespace batch (T-SQL needs no terminator)', '1=1 DELETE FROM Users'],
         ['EXEC of dangerous proc (unparseable -> regex fallback)', "1=1 EXEC xp_cmdshell 'dir'"],
@@ -307,7 +313,7 @@ describe('SqlServerMCP Index', () => {
         ['forbidden tokens inside a string literal', "note = 'a;b -- delete'"],
         [
           'columns named like non-reserved statement words',
-          'Enable = 1 AND Disable = 0 AND Receive IS NULL'
+          'Enable = 1 AND Disable = 0 AND [Receive] IS NULL'
         ],
         ['keyword-like bracketed identifier', '[Set] = 1 AND [If] IS NULL'],
         ['subquery', 'id IN (SELECT TOP 5 id FROM Other ORDER BY id)'],
@@ -372,6 +378,11 @@ describe('SqlServerMCP Index', () => {
         beforeEach(() => setModes({ readOnly: true, destructive: false, schema: false }));
 
         const blocked = [
+          [
+            'escaped bracket breakout',
+            "SELECT 1 AS [a]]'] DELETE FROM dbo.Victim SELECT 1 AS [b']"
+          ],
+          ['named-column RECEIVE', 'SELECT 1 RECEIVE message_body FROM dbo.Q'],
           ['whitespace-separated DELETE', 'SELECT 1 DELETE FROM Users'],
           ['newline-separated EXEC xp_cmdshell', "SELECT 1\nEXEC xp_cmdshell 'dir'"],
           ['whitespace-separated DROP', 'SELECT 1 DROP TABLE Users'],
@@ -393,7 +404,6 @@ describe('SqlServerMCP Index', () => {
           ['RECEIVE as the leading statement', 'RECEIVE TOP (1) * FROM dbo.Q'],
           ['RECEIVE * after SELECT', 'SELECT 1 RECEIVE * FROM dbo.Q'],
           ['RECEIVE inside WAITFOR', 'WAITFOR (RECEIVE * FROM dbo.Q)'],
-          ['bare procedure call', 'dbo.PurgeUsers'],
           ['bare procedure call followed by SELECT', 'dbo.PurgeUsers; SELECT 1'],
           ['bare sp_executesql followed by SELECT', "sp_executesql N'DELETE FROM Users'; SELECT 1"],
           [
@@ -415,7 +425,7 @@ describe('SqlServerMCP Index', () => {
           ['semicolon-separated SELECTs', 'SELECT 1; SELECT 2'],
           [
             'non-reserved statement words used as identifiers',
-            'SELECT Enable, Disable, Receive FROM dbo.Config'
+            'SELECT Enable, Disable, [Receive] FROM dbo.Config'
           ],
           ['alias named like a non-reserved statement word', 'SELECT 1 AS Disable'],
           ['keyword inside a string literal', "SELECT * FROM Users WHERE note = 'DELETE FROM x'"],
@@ -454,7 +464,6 @@ describe('SqlServerMCP Index', () => {
           ['SHUTDOWN', 'SHUTDOWN'],
           ['BACKUP DATABASE', "BACKUP DATABASE Users TO DISK = 'x.bak'"],
           ['DBCC', 'DBCC DROPCLEANBUFFERS'],
-          ['bare procedure call', 'dbo.PurgeUsers'],
           ['BULK INSERT', "BULK INSERT Users FROM 'x.csv'"],
           ['UPDATE STATISTICS', 'UPDATE STATISTICS Users']
         ];
@@ -558,13 +567,9 @@ describe('SqlServerMCP Index', () => {
           ['admin keyword inside a literal', "SELECT * FROM Users WHERE note = 'SHUTDOWN'"],
           [
             'non-reserved statement words used as identifiers',
-            'SELECT Enable, Disable, Receive FROM dbo.Config WHERE Enable = 1'
+            'SELECT Enable, Disable, [Receive] FROM dbo.Config WHERE Enable = 1'
           ],
-          ['WAITFOR is not an administrative operation', "WAITFOR DELAY '00:00:01' SELECT 1"],
-          [
-            'SHOW is classified read-only by server-config (SQL Server rejects it itself)',
-            'SHOW TABLES'
-          ]
+          ['WAITFOR is not an administrative operation', "WAITFOR DELAY '00:00:01' SELECT 1"]
         ];
         stillAllowed.forEach(([label, query]) => {
           it(`allows ${label}`, () => {
