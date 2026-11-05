@@ -7,8 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-11-05
+
+This patch release includes the SQL safety fixes in #1542, #1543, and #1547, together with
+MCP compatibility, test reliability, and dependency updates since v2.1.1.
+
 ### Security
 
+- **Generated SQL Server configurations now keep TLS encryption and certificate validation on by
+  default.** New CLI configuration and documentation distinguish local self-signed servers from
+  remote servers, where trusting an unverified certificate requires an explicit choice. See #1542.
+- **Restricted SQL modes block sequence consumption through `NEXT VALUE FOR`, including inside a
+  `SELECT`.** Read-only and destructive-operation checks now treat this expression as state
+  changing, with regression coverage for the SQL batch guard. See #1543.
+- **SQL guards close statement and identifier parsing bypasses.** Broker operations, provider
+  execution, bare procedure calls, and escaped bracket identifiers receive the intended policy
+  checks; generated index recommendations quote SQL identifiers. See #1547.
+- **Dependency and tooling advisories were addressed**, including Markdown lint, KaTeX, and
+  shared high-severity audit blockers. See #1404, #1436, #1518, and #1529.
 - **Automated documentation updates now isolate generation from writing.** The main-only generator
   runs npm and documentation scripts without a write token; a separate read-only job validates the
   same-run artifact before its final step receives `DOCS_PAT` to commit, push, and open the PR.
@@ -20,6 +36,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Claude reviews ready, human-authored pull requests automatically** when opened or updated.
   The separate review workflow skips drafts, forks, and bot events, cancels superseded runs,
   and uses a token that can comment but cannot write repository contents. Closes #1272.
+
+### Fixed
+
+- **MCP server startup retains its static capabilities with the updated SDK.** The server uses
+  the supported SDK wrapper and preserves its advertised capabilities. See #1440 and #1519.
+- **Logger formatting avoids implicit object stringification**, keeping rendered output useful
+  without changing the MCP protocol stream. See #1441.
+- **The documentation landing page fits narrow screens** without horizontal overflow. See #1438.
+- **SQL Server test setup and cleanup are more reliable.** The Docker test lifecycle verifies
+  translated seed mounts, and the process inspector now runs in Node across supported platforms.
+  See #1520, #1526, and #1531.
+
+### Changed
+
+- **npm publishing is restricted to the main branch and checks the packed tree against the release
+  tag immediately before publish.** The publish workflow uses GitHub OIDC trusted publishing and
+  provenance, with the `npm-publish` environment required. See #1449.
+- **Runtime and development dependencies and GitHub Actions were updated** throughout this release
+  window. See the full comparison for individual updates.
 
 ## [2.1.1] - 2026-10-03
 
@@ -1546,6 +1581,7 @@ This release represents a significant architectural evolution with enterprise-gr
   - Improved navigation for new users
   - Better documentation discoverability
 
-[Unreleased]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.0.1...v2.1.1
 [2.0.1]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.0.0...v2.0.1
