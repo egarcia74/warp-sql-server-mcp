@@ -69,6 +69,9 @@ describe('scan security boundaries', () => {
     'SELECTβ',
     'enable.UnsafeRoutine',
     'disable . UnsafeRoutine',
+    'select . [Proc]',
+    'select..Proc',
+    'select . /* comment */ [Proc]',
     'show',
     'describe',
     'explain'
@@ -87,6 +90,15 @@ describe('scan security boundaries', () => {
   ])('preserves compact query %s', sql => {
     expect(guard(sql, ro)).toBeNull();
   });
+  test.each(['SELECT .5 AS fraction', 'SELECT .5 * Amount FROM dbo.Payments', 'SELECT.5'])(
+    'preserves leading decimal expressions: %s',
+    sql => {
+      expect(guard(sql, ro)).toBeNull();
+      expect(guard(sql, dml)).toBeNull();
+      expect(guard(`${sql}; DELETE FROM dbo.Payments`, ro)).not.toBeNull();
+      expect(guard(`${sql}; EXEC dbo.UnsafeRoutine`, dml)).not.toBeNull();
+    }
+  );
   test('preserves normal reads and DML', () => {
     expect(guard('SELECT [Receive], [Send], [Conversation] FROM dbo.T', ro)).toBeNull();
     expect(where('[Receive] = 1 AND [Conversation] IS NULL')).toBeNull();
