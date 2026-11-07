@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Guided `config edit` with explicit Save/Cancel, hidden password actions, source-aware review,
+  safety acknowledgments and conflict-aware atomic file publication. See #1559.
+- Noninteractive `config validate` with strict local checks and an isolated, bounded fixed
+  read-only SQL probe, private error classification and required connection cleanup.
+
 ## [2.1.2] - 2026-11-05
 
 This patch release includes the SQL safety fixes in #1542, #1543, and #1547, together with

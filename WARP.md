@@ -130,6 +130,20 @@ lib/
   - Redacted logging for sensitive data
   - Configuration summary and health validation
 
+##### **Configuration CLI**
+
+- `config edit` lazily loads a guided prompt adapter; draft, inherited and effective values remain separate.
+- `config validate` performs strict stored/effective checks and a fixed `SELECT 1` probe in a private child,
+  with a 60-second total deadline, 2-second graceful shutdown and 1-second termination confirmation.
+- Shared `lib/config/environment.js` preserves CLI home-file overlay and installed dotenv options,
+  selected from the candidate environment with exact assignment provenance and quiet output.
+- `config-store.js` checks private-home/target identity, holds an exclusive sibling lock and atomically
+  publishes; after publication, cleanup failures are warnings, never a false rollback claim.
+- ConnectionManager cancellation and strict close are opt-in; existing server calls keep their behavior.
+- See [Guided Configuration](docs/user/CONFIGURATION-CLI.md) for exact semantics, platform evidence,
+  plaintext credentials, legacy NTLM limits, warnings and exit statuses. Native Windows/Linux terminals
+  and Windows ACLs are not established by simulated environment tests.
+
 ##### **Database Layer**
 
 - **`lib/database/connection-manager.js`**: Extracted database connection handling
@@ -751,8 +765,9 @@ connecting remotely. An inherited environment variable overrides the saved value
 ### **Method 2: Manual Environment Variables (Advanced)**
 
 **⚠️ NOTE**: Client environment inheritance and working directories vary. The CLI first fills
-missing or empty environment values from its home JSON config, then the server loads a working-directory
-`.env` without overriding existing variables. Use complete explicit client settings or the home config,
+missing or empty environment values from its home JSON config, then the server loads the selected
+dotenv source (normally working-directory `.env`) without overriding existing values by default.
+Explicit `DOTENV_OVERRIDE=true` allows replacement. Use complete explicit client settings or the home config,
 not an assumed working directory. See [configuration precedence](docs/reference/ENV-VARS.md#environment-variable-precedence).
 
 #### **Required MCP Configuration**
