@@ -9,7 +9,7 @@ import {
   ListResourcesRequestSchema,
   McpError
 } from '@modelcontextprotocol/sdk/types.js';
-import dotenv from 'dotenv';
+import { loadDotenvQuiet } from './lib/config/environment.js';
 
 // Import our new modular components
 import { getAllTools } from './lib/tools/tool-registry.js';
@@ -44,22 +44,7 @@ const VERSION = packageJson.version;
 // is the JSON-RPC channel - for every client, not just the ones that announce themselves.
 // Nothing that is not a protocol frame may be written to it, so dotenv's banner is
 // swallowed unconditionally rather than on a guess about who spawned us.
-{
-  const originalConsoleLog = console.log;
-  const originalConsoleWarn = console.warn;
-
-  // Temporarily suppress console output during dotenv loading
-  console.log = () => {};
-  console.warn = () => {};
-
-  try {
-    dotenv.config({ debug: false });
-  } finally {
-    // Restore console methods
-    console.log = originalConsoleLog;
-    console.warn = originalConsoleWarn;
-  }
-}
+Object.assign(process.env, loadDotenvQuiet({ environment: process.env }).environment);
 
 class SqlServerMCP {
   constructor() {

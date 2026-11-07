@@ -4,13 +4,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { applyFileEnvironment, getConfigPath } from './lib/config/environment.js';
+import { projectSavedConfig } from './lib/cli/saved-config-display.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const CONFIG_FILE = path.join(
-  process.env.HOME || process.env.USERPROFILE,
-  '.warp-sql-server-mcp.json'
-);
+let CONFIG_FILE, configPathError;
+try {
+  CONFIG_FILE = getConfigPath(process.env);
+} catch (error) {
+  configPathError = error?.code === 'missing-home' ? 'missing-home' : 'unavailable';
+}
+const CONFIG_LOCATION =
+  CONFIG_FILE ??
+  (configPathError === 'missing-home'
+    ? 'unavailable (HOME or USERPROFILE not set)'
+    : 'unavailable');
+const CONFIG_LOCATION_ERROR =
+  configPathError === 'missing-home'
+    ? 'HOME or USERPROFILE is required to locate the configuration file.'
+    : 'Configuration file location is unavailable.';
 const EXAMPLE_CONFIG = {
   SQL_SERVER_HOST: 'localhost',
   SQL_SERVER_PORT: '1433',
@@ -39,7 +52,9 @@ Usage:
 Commands:
   start              Start the MCP server
   init               Initialize configuration file
-  config             Show current configuration
+  config             Show saved configuration
+  config edit        Edit configuration in a guided menu (interactive terminal)
+  config validate    Run a bounded, read-only connection probe without saving
   version, --version, -v   Show the installed version
   help, --help, -h   Show this help message
 
@@ -49,10 +64,13 @@ Examples:
   warp-sql-server-mcp start      # Start the MCP server
 
 Configuration:
-  Config file location: ${CONFIG_FILE}
+  Config file location: ${CONFIG_LOCATION}
   
-  After running 'init', edit the config file with your SQL Server details.
-  The server will use environment variables first, then fall back to config file.
+  Use 'config edit' to review and explicitly Save your SQL Server details.
+  'config validate' runs SELECT 1 without saving or starting MCP (60s + up to 3s shutdown).
+  New-command statuses: 0 saved/valid, 1 probe/runtime/cleanup, 2 local/usage, 130 cancel, 143 SIGTERM.
+  Passwords saved in JSON are plaintext; environment credentials remain available.
+  The home file fills missing/empty environment values; dotenv overrides only when explicitly enabled.
 `);
 }
 
@@ -69,6 +87,11 @@ function showVersion() {
 }
 
 function initConfig() {
+  if (configPathError) {
+    console.error('❌ ' + CONFIG_LOCATION_ERROR);
+    process.exit(1);
+    return;
+  }
   // Security: Use O_CREAT | O_EXCL flags to atomically create file and fail if it exists
   // This prevents TOCTOU (Time-of-Check Time-of-Use) race conditions where another
   // process could create the file between our existence check and write operation
@@ -103,6 +126,10 @@ function initConfig() {
 }
 
 function showConfig() {
+  if (configPathError) {
+    console.log('❌ ' + CONFIG_LOCATION_ERROR);
+    return;
+  }
   if (!fs.existsSync(CONFIG_FILE)) {
     console.log(`❌ Configuration file not found at: ${CONFIG_FILE}`);
     console.log('Run: warp-sql-server-mcp init');
@@ -111,16 +138,12 @@ function showConfig() {
 
   try {
     const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    const displayConfig = projectSavedConfig(config);
     console.log(`Configuration file: ${CONFIG_FILE}`);
     console.log('Current settings:');
-    // Mask sensitive values
-    const displayConfig = { ...config };
-    if (displayConfig.SQL_SERVER_PASSWORD) {
-      displayConfig.SQL_SERVER_PASSWORD = '***MASKED***';
-    }
     console.log(JSON.stringify(displayConfig, null, 2));
-  } catch (error) {
-    console.error(`❌ Failed to read configuration file: ${error.message}`);
+  } catch {
+    console.error('❌ Failed to read configuration file: invalid or unreadable JSON');
     process.exit(1);
   }
 }
@@ -134,8 +157,12 @@ function showConfig() {
 // `init`, `config`, `version` and `help` commands never spawn the server and keep their
 // `console.log`.)
 function loadConfigToEnv() {
-  if (!fs.existsSync(CONFIG_FILE)) {
-    console.error(`⚠️  No configuration file found at: ${CONFIG_FILE}`);
+  if (configPathError || !fs.existsSync(CONFIG_FILE)) {
+    console.error(
+      configPathError
+        ? '⚠️  ' + CONFIG_LOCATION_ERROR
+        : `⚠️  No configuration file found at: ${CONFIG_FILE}`
+    );
     console.error(
       'Using environment variables only. Run "warp-sql-server-mcp init" to create a config file.'
     );
@@ -145,14 +172,10 @@ function loadConfigToEnv() {
   try {
     const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
     // Set environment variables from config (don't override existing env vars)
-    for (const [key, value] of Object.entries(config)) {
-      if (!process.env[key]) {
-        process.env[key] = value;
-      }
-    }
+    Object.assign(process.env, applyFileEnvironment(process.env, config));
     console.error(`✅ Configuration loaded from: ${CONFIG_FILE}`);
-  } catch (error) {
-    console.error(`❌ Failed to load configuration file: ${error.message}`);
+  } catch {
+    console.error('❌ Failed to load configuration file: invalid or unreadable JSON');
     process.exit(1);
   }
 }
@@ -204,7 +227,43 @@ switch (command) {
     initConfig();
     break;
   case 'config':
-    showConfig();
+    if (process.argv.length === 3) {
+      showConfig();
+      break;
+    }
+    if (process.argv.length !== 4 || !['edit', 'validate'].includes(process.argv[3])) {
+      console.error('Usage: config edit | config validate. No additional arguments are accepted.');
+      process.exitCode = 2;
+      break;
+    }
+    {
+      const controller = new globalThis.AbortController();
+      const interrupt = () => {
+        if (controller.signal.aborted)
+          controller.signal.dispatchEvent(new globalThis.Event('abort'));
+        else controller.abort('SIGINT');
+      };
+      const terminate = () => controller.abort('SIGTERM');
+      process.on('SIGINT', interrupt);
+      process.on('SIGTERM', terminate);
+      try {
+        const subcommand = process.argv[3];
+        const module = await import(
+          subcommand === 'validate'
+            ? './lib/cli/config-validation.js'
+            : './lib/cli/config-editor.js'
+        );
+        process.exitCode = await (
+          subcommand === 'validate' ? module.validateConfigCommand : module.editConfigCommand
+        )({ signal: controller.signal });
+      } catch {
+        console.error('Configuration command failed.');
+        process.exitCode = 2;
+      } finally {
+        process.removeListener('SIGINT', interrupt);
+        process.removeListener('SIGTERM', terminate);
+      }
+    }
     break;
   case 'version':
   case '--version':

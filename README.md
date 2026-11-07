@@ -24,11 +24,13 @@ Install Node.js **22.12+** and the scoped package on the machine that runs your 
 ```bash
 npm install -g @egarcia74/warp-sql-server-mcp
 warp-sql-server-mcp --version
-warp-sql-server-mcp init
+warp-sql-server-mcp config edit
+warp-sql-server-mcp config validate
 ```
 
-Edit `~/.warp-sql-server-mcp.json` locally with your approved SQL host, database and least-privilege
-SQL authentication credentials. On native Windows, the usual location is
+Use the guided editor for your approved SQL host, database and least-privilege SQL authentication
+credentials. Review effective overrides, then explicitly Save. Validation is separate and never saves.
+You can also edit `~/.warp-sql-server-mcp.json` locally; `init` retains its create-once template behavior. On native Windows, the usual location is
 `%USERPROFILE%\.warp-sql-server-mcp.json`; an explicitly set `HOME` takes precedence.
 
 New configurations enable TLS and certificate validation, with read-only mode on and destructive
@@ -38,7 +40,8 @@ separately. Never commit it or put passwords in shell commands or chat.
 
 Use the scoped package `@egarcia74/warp-sql-server-mcp`. The deprecated unscoped package stopped at
 1.7.10 and lacks later security fixes. See the [complete setup guide](docs/user/MCP-CLIENT-SETUP.md)
-for the configuration template, version pinning and certificate guidance.
+for client setup, or the [configuration CLI guide](docs/user/CONFIGURATION-CLI.md) for menus, precedence,
+plaintext storage, cancellation and validation limits.
 
 ### Choose your client
 
@@ -390,7 +393,7 @@ Show me 50 rows from the Products table where Price > 100
 
 - Keep `SQL_SERVER_ENCRYPT=true`; for an isolated local server with a self-signed certificate,
   explicitly set `SQL_SERVER_TRUST_CERT=true` or install a trusted test certificate
-- Nonempty environment values override the home config; working-directory `.env` can fill absent values. See [configuration precedence](docs/reference/ENV-VARS.md#environment-variable-precedence)
+- Nonempty environment values override the home config; dotenv normally fills absent values, but explicit `DOTENV_OVERRIDE=true` permits replacement. See [configuration precedence](docs/reference/ENV-VARS.md#environment-variable-precedence)
 - Read your client's captured MCP stderr. Global npm installs do not include repository `npm run logs*` scripts
 - For explicit log files and other failures, see [client troubleshooting](docs/user/MCP-CLIENT-SETUP.md#troubleshooting)
 

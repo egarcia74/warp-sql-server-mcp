@@ -281,4 +281,104 @@ describe('shipped CLI entry point under in-process coverage', { concurrent: fals
     expect(output(stderr)).toContain('Shutting down server');
     expectNoProtocolStdout();
   });
+  function mockConfigurationFs() {
+    const calls = {};
+    vi.doMock('node:fs', async importOriginal => {
+      const actual = await importOriginal();
+      const mocked = { ...actual.default };
+      for (const name of ['existsSync', 'readFileSync', 'openSync']) {
+        calls[name] = vi.fn((...args) => actual.default[name](...args));
+        mocked[name] = calls[name];
+      }
+      return { ...actual, default: mocked };
+    });
+    return calls;
+  }
+  it.each(
+    ['absent', 'empty'].flatMap(mode =>
+      [[], ['help'], ['version'], ['init'], ['config'], ['start']].map(args => ({ mode, args }))
+    )
+  )('diagnoses $mode home variables compatibly for $args', async ({ mode, args }) => {
+    if (mode === 'empty') {
+      process.env.HOME = '';
+      process.env.USERPROFILE = '';
+    } else {
+      delete process.env.HOME;
+      delete process.env.USERPROFILE;
+    }
+    const before = { ...process.env };
+    const calls = mockConfigurationFs();
+    if (args[0] === 'init') {
+      await expect(runCli(...args)).rejects.toBe(exitSentinel);
+      expect(exitMock).toHaveBeenCalledWith(1);
+    } else {
+      await runCli(...args);
+      expect(exitMock).not.toHaveBeenCalled();
+    }
+    const human = output(stdout) + output(stderr);
+    expect(human).not.toContain('undefined');
+    if (!args.length || args[0] === 'help')
+      expect(output(stdout)).toContain('unavailable (HOME or USERPROFILE not set)');
+    else if (args[0] !== 'version')
+      expect(human).toContain('HOME or USERPROFILE is required to locate the configuration file.');
+    expect(calls.existsSync).not.toHaveBeenCalled();
+    expect(calls.openSync).not.toHaveBeenCalled();
+    if (args[0] !== 'version') expect(calls.readFileSync).not.toHaveBeenCalled();
+    else expect(calls.readFileSync.mock.calls.every(([p]) => p !== undefined)).toBe(true);
+    expect(process.env).toEqual(before);
+    if (args[0] === 'start') {
+      expect(spawnMock).toHaveBeenCalledWith(process.execPath, [resolve(cliPath, '../index.js')], {
+        stdio: 'inherit',
+        env: process.env
+      });
+      expect(output(stderr)).toContain('Using environment variables only.');
+      expectNoProtocolStdout();
+    } else expect(spawnMock).not.toHaveBeenCalled();
+  });
+  it.each(['absent', 'empty', 'preferred'])(
+    'preserves home/profile path precedence: %s',
+    async mode => {
+      if (mode === 'absent') delete process.env.HOME;
+      else process.env.HOME = mode === 'empty' ? '' : home;
+      process.env.USERPROFILE = mode === 'preferred' ? join(home, 'unused-profile') : home;
+      await runCli('help');
+      expect(output(stdout)).toContain(`Config file location: ${configFile}`);
+      await runCli('init');
+      expect(statSync(configFile).mode & 0o777).toBe(0o600);
+    }
+  );
+  it.each(['help', 'init', 'config', 'start'])(
+    'sanitizes an unexpected path-resolution failure for %s',
+    async command => {
+      vi.doMock('../../lib/config/environment.js', async importOriginal => {
+        const actual = await importOriginal();
+        return {
+          ...actual,
+          getConfigPath: () => {
+            throw new Error('synthetic-path-secret');
+          }
+        };
+      });
+      try {
+        const calls = mockConfigurationFs();
+        if (command === 'init') await expect(runCli(command)).rejects.toBe(exitSentinel);
+        else await runCli(command);
+        const human = output(stdout) + output(stderr);
+        expect(human).not.toContain('synthetic-path-secret');
+        expect(human).not.toContain('undefined');
+        expect(human).not.toContain('HOME or USERPROFILE');
+        expect(human).toContain(
+          command === 'help'
+            ? 'Config file location: unavailable'
+            : 'Configuration file location is unavailable.'
+        );
+        expect(calls.existsSync).not.toHaveBeenCalled();
+        expect(calls.openSync).not.toHaveBeenCalled();
+        expect(calls.readFileSync).not.toHaveBeenCalled();
+        if (command === 'start') expectNoProtocolStdout();
+      } finally {
+        vi.doUnmock('../../lib/config/environment.js');
+      }
+    }
+  );
 });

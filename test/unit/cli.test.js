@@ -269,3 +269,147 @@ describe('CLI Security Tests', () => {
     }, 15000);
   });
 });
+
+describe('CLI missing-home subprocess compatibility', () => {
+  let directory;
+  beforeEach(() => {
+    directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-no-home-'));
+  });
+  afterEach(() => fs.rmSync(directory, { recursive: true, force: true }));
+  function environment(mode) {
+    const env = { PATH: process.env.PATH, NODE_ENV: 'test' };
+    if (mode === 'empty') Object.assign(env, { HOME: '', USERPROFILE: '' });
+    return env;
+  }
+  function invoke(args, mode) {
+    return new Promise((resolve, reject) => {
+      const proc = spawn(process.execPath, [CLI_PATH, ...args], {
+        cwd: directory,
+        env: environment(mode),
+        stdio: 'pipe'
+      });
+      let stdout = '',
+        stderr = '';
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL');
+        reject(new Error('CLI timeout'));
+      }, 8000);
+      proc.stdout.on('data', data => (stdout += data.toString()));
+      proc.stderr.on('data', data => (stderr += data.toString()));
+      proc.on('error', reject);
+      proc.on('close', code => {
+        clearTimeout(timer);
+        resolve({ code, stdout, stderr });
+      });
+    });
+  }
+  test.each(['absent', 'empty'])(
+    'preserves real legacy command statuses without %s home variables',
+    async mode => {
+      for (const [args, status] of [
+        [[], 0],
+        [['help'], 0],
+        [['version'], 0],
+        [['init'], 1],
+        [['config'], 0],
+        [['config', 'validate'], 2]
+      ]) {
+        const result = await invoke(args, mode);
+        expect(result.code).toBe(status);
+        expect(result.stdout + result.stderr).not.toContain('undefined');
+        if (args[0] === 'init' || args[0] === 'config')
+          expect(result.stdout + result.stderr).toContain('HOME or USERPROFILE is required');
+        if (!args.length || args[0] === 'help')
+          expect(result.stdout).toContain('unavailable (HOME or USERPROFILE not set)');
+        expect(fs.readdirSync(directory)).toEqual([]);
+      }
+    }
+  );
+  function jsonRpcLineReader(onMessage) {
+    let pending = '';
+    return {
+      write(chunk) {
+        pending += chunk;
+        let end;
+        while ((end = pending.indexOf('\n')) !== -1) {
+          const line = pending.slice(0, end);
+          pending = pending.slice(end + 1);
+          onMessage(JSON.parse(line));
+        }
+      },
+      finish() {
+        if (pending) throw new Error('incomplete protocol line');
+      }
+    };
+  }
+  test('buffers split protocol lines, rejects malformed complete lines and incomplete final framing', () => {
+    const messages = [];
+    const reader = jsonRpcLineReader(message => messages.push(message));
+    expect(() => reader.write('{"id":')).not.toThrow();
+    expect(messages).toEqual([]);
+    reader.write('1}\n{"id":');
+    expect(messages).toEqual([{ id: 1 }]);
+    expect(() => reader.finish()).toThrow('incomplete protocol line');
+    reader.write('2}\n');
+    expect(messages).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(() => reader.finish()).not.toThrow();
+    expect(() => jsonRpcLineReader(() => {}).write('not-json\n')).toThrow();
+  });
+  test('keeps missing-home environment-only start stdout as JSON-RPC with no SQL query', async () => {
+    const proc = spawn(process.execPath, [CLI_PATH, 'start'], {
+      cwd: directory,
+      env: environment('absent'),
+      stdio: 'pipe'
+    });
+    let stderr = '',
+      protocolError,
+      reader;
+    const messages = [];
+    proc.stdout.setEncoding('utf8');
+    const initialized = new Promise((resolve, reject) => {
+      reader = jsonRpcLineReader(message => {
+        messages.push(message);
+        if (message.id === 1) resolve();
+      });
+      proc.stdout.on('data', chunk => {
+        try {
+          reader.write(chunk);
+        } catch (error) {
+          protocolError = error;
+          reject(error);
+        }
+      });
+      proc.stderr.on('data', data => (stderr += data.toString()));
+      proc.on('error', reject);
+      proc.on('exit', () => reject(new Error('server exited before initialize')));
+    });
+    const closed = new Promise(resolve => proc.on('close', resolve));
+    const timer = setTimeout(() => proc.kill('SIGTERM'), 8000);
+    try {
+      proc.stdin.write(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'missing-home-test', version: '1.0' }
+          }
+        }) + '\n'
+      );
+      await initialized;
+      expect(stderr).toContain('HOME or USERPROFILE is required to locate the configuration file.');
+      expect(stderr).toContain('Using environment variables only.');
+      expect(stderr).not.toContain('undefined');
+    } finally {
+      clearTimeout(timer);
+      proc.kill('SIGTERM');
+      await closed;
+    }
+    expect(protocolError).toBeUndefined();
+    expect(() => reader.finish()).not.toThrow();
+    expect(messages.find(m => m.id === 1).result.serverInfo).toBeDefined();
+    expect(fs.readdirSync(directory)).toEqual([]);
+  }, 12000);
+});

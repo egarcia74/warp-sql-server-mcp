@@ -29,7 +29,7 @@
     "test:integration:run": "npm run test:integration:manual && npm run test:integration:protocol && npm run test:integration:performance",
     "test:integration:manual": "node test/integration/manual/phase1-readonly-security.test.js && node test/integration/manual/phase2-dml-operations.test.js && node test/integration/manual/phase3-ddl-operations.test.js",
     "test:integration:manual:docker": "node scripts/ci/run-docker-integration.mjs test:integration:manual",
-    "test:integration:protocol": "node test/protocol/mcp-server-startup-test.js",
+    "test:integration:protocol": "node test/protocol/mcp-server-startup-test.js && node test/protocol/config-validation-test.js",
     "test:integration:protocol:docker": "node scripts/ci/run-docker-integration.mjs test:integration:protocol",
     "test:integration:performance": "node test/manual/improved-performance-test.js",
     "test:integration:performance:docker": "node scripts/ci/run-docker-integration.mjs test:integration:performance",
@@ -121,6 +121,7 @@
     "url": "https://github.com/egarcia74/warp-sql-server-mcp/issues"
   },
   "dependencies": {
+    "@inquirer/prompts": "7.10.1",
     "@modelcontextprotocol/sdk": "^1.17.5",
     "dotenv": "^18.0.4",
     "mssql": "^11.0.1",

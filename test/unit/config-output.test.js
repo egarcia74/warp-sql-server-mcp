@@ -1,0 +1,102 @@
+import { expect, it } from 'vitest';
+import { createConfigOutput } from '../../lib/cli/config-output.js';
+it('redacts secrets in every field and strips terminal controls', () => {
+  let text = '';
+  const stream = {
+    write: s => {
+      text += s;
+    }
+  };
+  const out = createConfigOutput({ stdout: stream, stderr: stream, secrets: ['test-secret-1559'] });
+  out.line('host test-secret-1559\u001b]0;title\u0007\u001b[31mRED\nnext');
+  out.field('SQL_SERVER_PASSWORD', 'test-secret-1559', 'file');
+  out.error(new Error('test-secret-1559\u001b[31m'));
+  out.review(
+    {
+      SQL_SERVER_HOST: 'test-secret-1559',
+      SQL_SERVER_PASSWORD: 'test-secret-1559',
+      UNKNOWN: 'never-display'
+    },
+    { environment: {}, sources: {} }
+  );
+  expect(text).not.toContain('test-secret-1559');
+  expect([...text].some(c => (c.charCodeAt(0) < 32 && c !== '\n') || c.charCodeAt(0) === 127)).toBe(
+    false
+  );
+  expect(text).not.toContain('never-display');
+  expect(text).toContain('********');
+});
+it('shows contextual certificate trust and runtime defaults separately from explicitly empty sources', () => {
+  let text = '';
+  const out = createConfigOutput({
+    stdout: { write: s => (text += s) },
+    stderr: { write: s => (text += s) }
+  });
+  out.review(
+    {},
+    {
+      environment: { SQL_SERVER_HOST: '', NODE_ENV: 'production' },
+      sources: { SQL_SERVER_HOST: 'inherited' }
+    }
+  );
+  expect(text.includes('SQL_SERVER_TRUST_CERT: true [contextual default]')).toBe(true);
+  expect(
+    text.includes('SQL_SERVER_HOST: localhost [inherited; explicit empty uses runtime default]')
+  ).toBe(true);
+});
+it.each(['\u001b[31m', '\u001b]0;title\u0007', '\u0001', '\u0080', '\u202e', '\u2066'])(
+  'does not reconstruct a known password after removing controls %#',
+  control => {
+    const out = createConfigOutput({ secrets: ['review-secret-1559'] });
+    expect(out.safe(`review-${control}secret-1559`)).toBe('********');
+  }
+);
+it('redacts both raw and sanitized known-password forms without changing stored bytes', () => {
+  const secret = 'review-\u001b[31msecret-1559';
+  const out = createConfigOutput({ secrets: [secret] });
+  expect(out.safe('review-secret-1559')).toBe('********');
+  expect(out.safe(secret)).toBe('********');
+  const draft = {
+    SQL_SERVER_PASSWORD: secret,
+    SQL_SERVER_HOST: secret,
+    unknown: { ordinary: 'preserved' }
+  };
+  const bytes = JSON.stringify(draft);
+  out.review(draft, { environment: {}, sources: {} });
+  expect(JSON.stringify(draft)).toBe(bytes);
+});
+
+it('preserves non-BMP text while removing terminal and bidi controls', () => {
+  const output = createConfigOutput();
+  expect(output.safe('😀\u001b[31m🚀\u0001\u0080\u202e\u2066')).toBe('😀🚀');
+});
+it('renders only the fixed failed-save cleanup warning once, without Saved or raw metadata', () => {
+  let text = '';
+  const out = createConfigOutput({
+    stderr: { write: s => (text += s) },
+    secrets: ['editor']
+  });
+  out.error({
+    code: 'file-error',
+    message: 'credential-lock-1561\u001b[31m',
+    path: '/private/credential-lock-1561',
+    field: 'credential-lock-1561',
+    warningCodes: [
+      'lock-cleanup-uncertain',
+      'lock-cleanup-uncertain',
+      'credential-lock-1561',
+      'lock-cleanup'
+    ]
+  });
+  expect(text).toContain('Cannot access or save');
+  expect(text.match(/Lock cleanup could not be confirmed/g)).toHaveLength(1);
+  expect(text).toContain('Confirm no ******** is running');
+  expect(text).toContain('sibling lock directory');
+  expect(text).not.toContain('Saved');
+  expect(text).not.toContain('credential-lock-1561');
+  expect(text).not.toContain('/private');
+  expect(text).not.toContain('\u001b');
+  text = '';
+  out.error({ code: 'conflict', warningCodes: ['lock-cleanup', 'credential-lock-1561'] });
+  expect(text).toBe('Configuration changed since opening. Reload or cancel.\n');
+});
