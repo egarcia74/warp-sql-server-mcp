@@ -632,3 +632,215 @@ it('keeps editing after failed Save and reports uncertain lock cleanup without c
     remove.mockRestore();
   }
 });
+const transactionDraft = () => ({
+  SQL_SERVER_HOST: 'old',
+  SQL_SERVER_USER: 'u',
+  SQL_SERVER_PASSWORD: 'old-transaction-secret',
+  SQL_SERVER_ENCRYPT: 'true',
+  SQL_SERVER_TRUST_CERT: 'false',
+  SQL_SERVER_READ_ONLY: 'true',
+  unknown: { preserved: [1, null, true] }
+});
+const transactionProbe = () =>
+  vi.fn().mockResolvedValue({
+    version: 1,
+    status: 'success',
+    category: 'ok',
+    stage: 'finished',
+    elapsedMs: 1,
+    attempts: 1,
+    cleanup: 'complete'
+  });
+function captureReviews(renderer) {
+  const reviews = [];
+  const review = renderer.review;
+  renderer.review = (draft, resolved) => {
+    reviews.push(JSON.parse(JSON.stringify(draft)));
+    return review(draft, resolved);
+  };
+  return reviews;
+}
+it('rolls back a downgrade when acknowledgement throws and safely saves the unchanged validated draft', async () => {
+  const original = transactionDraft();
+  await fs.writeFile(file, JSON.stringify(original));
+  const prompts = scripted([
+    'validate',
+    true,
+    'tls',
+    'SQL_SERVER_ENCRYPT',
+    'set',
+    'false',
+    'back',
+    'review',
+    'save',
+    true
+  ]);
+  const confirm = prompts.confirm;
+  let rejected = false;
+  prompts.confirm = options => {
+    if (options.message === 'Acknowledge these effective security warnings?') {
+      if (!rejected) {
+        rejected = true;
+        throw new Error('synthetic-transaction-secret');
+      }
+      return true;
+    }
+    return confirm(options);
+  };
+  const renderer = output();
+  const reviews = captureReviews(renderer);
+  const validateImpl = transactionProbe();
+  expect(await run([], { prompts, output: renderer, validateImpl })).toBe(0);
+  expect(rejected).toBe(true);
+  expect(validateImpl).toHaveBeenCalledTimes(1);
+  expect(reviews.at(-1)).toEqual(original);
+  expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual(original);
+  expect(text).toContain('Last validation: current draft');
+  expect(text).not.toContain('Draft updated.');
+  expect(text).not.toContain('synthetic-transaction-secret');
+  expect(text).toContain('The operation failed.');
+});
+it.each(['set', 'remove', 'password'])(
+  'restores the %s proposal after a real post-mutation dotenv resolution failure',
+  async mutation => {
+    const original = transactionDraft();
+    const bytes = JSON.stringify(original);
+    await fs.writeFile(file, bytes);
+    const dotenv = path.join(cwd, '.env');
+    await fs.writeFile(dotenv, '');
+    const candidate = 'rejected-candidate-secret-1561';
+    const breakSource = async () => {
+      await fs.unlink(dotenv);
+      await fs.mkdir(dotenv);
+      return mutation === 'remove' ? true : mutation === 'password' ? candidate : 'new';
+    };
+    const renderer = output();
+    const reviews = captureReviews(renderer);
+    const repair = async () => {
+      await fs.rmdir(dotenv);
+      await fs.writeFile(dotenv, '');
+      if (mutation === 'password') renderer.line(candidate);
+      return 'back';
+    };
+    const prompts = scripted([
+      'validate',
+      true,
+      mutation === 'set' ? 'connection' : 'authentication',
+      mutation === 'set' ? 'SQL_SERVER_HOST' : 'SQL_SERVER_PASSWORD',
+      mutation === 'password' ? 'replace' : mutation,
+      breakSource,
+      repair,
+      'review',
+      'cancel',
+      true
+    ]);
+    const validateImpl = transactionProbe();
+    expect(await run([], { prompts, output: renderer, validateImpl })).toBe(130);
+    expect(reviews.at(-1)).toEqual(original);
+    expect(text).toContain('Last validation: current draft');
+    expect(text).not.toContain('Draft updated.');
+    expect(text).toContain('The selected dotenv source or encoding cannot be read.');
+    expect(text).not.toContain(candidate);
+    if (mutation === 'password') expect(text).toContain('********');
+    expect(validateImpl).toHaveBeenCalledTimes(1);
+    expect(await fs.readFile(file, 'utf8')).toBe(bytes);
+  }
+);
+it.each([false, true])('commits generation only for an acknowledged proposal: %s', async accept => {
+  const original = transactionDraft();
+  const bytes = JSON.stringify(original);
+  await fs.writeFile(file, bytes);
+  const prompts = scripted([
+    'validate',
+    true,
+    'tls',
+    'SQL_SERVER_ENCRYPT',
+    'set',
+    'false',
+    'back',
+    'review',
+    'cancel',
+    true
+  ]);
+  const confirm = prompts.confirm;
+  prompts.confirm = options =>
+    options.message === 'Acknowledge these effective security warnings?'
+      ? accept
+      : confirm(options);
+  const renderer = output();
+  const reviews = captureReviews(renderer);
+  expect(await run([], { prompts, output: renderer, validateImpl: transactionProbe() })).toBe(130);
+  expect(reviews.at(-1).SQL_SERVER_ENCRYPT).toBe(accept ? 'false' : 'true');
+  expect(text).toContain('Last validation: ' + (accept ? 'stale' : 'current draft'));
+  expect(text.match(/Draft updated\./g) || []).toHaveLength(accept ? 1 : 0);
+  expect(await fs.readFile(file, 'utf8')).toBe(bytes);
+});
+it.each(['SIGINT', 'SIGTERM', 'ExitPromptError'])(
+  'does not accept a field proposal when acknowledgement ends with %s',
+  async reason => {
+    const bytes = JSON.stringify(transactionDraft());
+    await fs.writeFile(file, bytes);
+    const controller = new globalThis.AbortController();
+    const prompts = scripted(['tls', 'SQL_SERVER_ENCRYPT', 'set', 'false']);
+    prompts.confirm = () => {
+      if (reason === 'ExitPromptError')
+        throw Object.assign(new Error('synthetic-transaction-secret'), { name: reason });
+      controller.abort(reason);
+      return true;
+    };
+    prompts.dispose = vi.fn();
+    const validateImpl = transactionProbe();
+    expect(await run([], { prompts, signal: controller.signal, validateImpl })).toBe(
+      reason === 'SIGTERM' ? 143 : 130
+    );
+    expect(text).not.toContain('Draft updated.');
+    expect(text).not.toContain('synthetic-transaction-secret');
+    expect(validateImpl).not.toHaveBeenCalled();
+    expect(prompts.dispose).toHaveBeenCalledTimes(1);
+    expect(await fs.readFile(file, 'utf8')).toBe(bytes);
+  }
+);
+it('keeps an accepted draft and stale generation if final success presentation fails', async () => {
+  const original = transactionDraft();
+  await fs.writeFile(file, JSON.stringify(original));
+  const renderer = output();
+  const line = renderer.line;
+  renderer.line = value => {
+    if (value.startsWith('Draft updated.')) throw new Error('synthetic-transaction-secret');
+    return line(value);
+  };
+  const reviews = captureReviews(renderer);
+  const validateImpl = transactionProbe();
+  expect(
+    await run(
+      [
+        'validate',
+        true,
+        'connection',
+        'SQL_SERVER_HOST',
+        'set',
+        'new',
+        'back',
+        'review',
+        'save',
+        true
+      ],
+      { output: renderer, validateImpl }
+    )
+  ).toBe(0);
+  expect(reviews.at(-1).SQL_SERVER_HOST).toBe('new');
+  expect(JSON.parse(await fs.readFile(file, 'utf8')).SQL_SERVER_HOST).toBe('new');
+  expect(text).toContain('Last validation: stale');
+  expect(text).not.toContain('synthetic-transaction-secret');
+  expect(validateImpl).toHaveBeenCalledTimes(1);
+});
+it('reports missing home through the actual editor path with injected interactive prompts', async () => {
+  const prompts = scripted([]);
+  prompts.dispose = vi.fn();
+  expect(
+    await run([], { inherited: {}, prompts, input: { isTTY: true }, terminal: { isTTY: true } })
+  ).toBe(2);
+  expect(text).toContain('HOME or USERPROFILE is required.');
+  expect(text).not.toContain('interactive stdin');
+  expect(prompts.dispose).toHaveBeenCalledTimes(1);
+});

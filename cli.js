@@ -9,12 +9,21 @@ import { projectSavedConfig } from './lib/cli/saved-config-display.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-let CONFIG_FILE;
+let CONFIG_FILE, configPathError;
 try {
   CONFIG_FILE = getConfigPath(process.env);
-} catch {
-  CONFIG_FILE = undefined;
+} catch (error) {
+  configPathError = error?.code === 'missing-home' ? 'missing-home' : 'unavailable';
 }
+const CONFIG_LOCATION =
+  CONFIG_FILE ??
+  (configPathError === 'missing-home'
+    ? 'unavailable (HOME or USERPROFILE not set)'
+    : 'unavailable');
+const CONFIG_LOCATION_ERROR =
+  configPathError === 'missing-home'
+    ? 'HOME or USERPROFILE is required to locate the configuration file.'
+    : 'Configuration file location is unavailable.';
 const EXAMPLE_CONFIG = {
   SQL_SERVER_HOST: 'localhost',
   SQL_SERVER_PORT: '1433',
@@ -55,7 +64,7 @@ Examples:
   warp-sql-server-mcp start      # Start the MCP server
 
 Configuration:
-  Config file location: ${CONFIG_FILE}
+  Config file location: ${CONFIG_LOCATION}
   
   Use 'config edit' to review and explicitly Save your SQL Server details.
   'config validate' runs SELECT 1 without saving or starting MCP (60s + up to 3s shutdown).
@@ -78,6 +87,11 @@ function showVersion() {
 }
 
 function initConfig() {
+  if (configPathError) {
+    console.error('❌ ' + CONFIG_LOCATION_ERROR);
+    process.exit(1);
+    return;
+  }
   // Security: Use O_CREAT | O_EXCL flags to atomically create file and fail if it exists
   // This prevents TOCTOU (Time-of-Check Time-of-Use) race conditions where another
   // process could create the file between our existence check and write operation
@@ -112,6 +126,10 @@ function initConfig() {
 }
 
 function showConfig() {
+  if (configPathError) {
+    console.log('❌ ' + CONFIG_LOCATION_ERROR);
+    return;
+  }
   if (!fs.existsSync(CONFIG_FILE)) {
     console.log(`❌ Configuration file not found at: ${CONFIG_FILE}`);
     console.log('Run: warp-sql-server-mcp init');
@@ -139,8 +157,12 @@ function showConfig() {
 // `init`, `config`, `version` and `help` commands never spawn the server and keep their
 // `console.log`.)
 function loadConfigToEnv() {
-  if (!fs.existsSync(CONFIG_FILE)) {
-    console.error(`⚠️  No configuration file found at: ${CONFIG_FILE}`);
+  if (configPathError || !fs.existsSync(CONFIG_FILE)) {
+    console.error(
+      configPathError
+        ? '⚠️  ' + CONFIG_LOCATION_ERROR
+        : `⚠️  No configuration file found at: ${CONFIG_FILE}`
+    );
     console.error(
       'Using environment variables only. Run "warp-sql-server-mcp init" to create a config file.'
     );

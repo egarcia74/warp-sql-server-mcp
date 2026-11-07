@@ -27,6 +27,12 @@ empty values and escaped controls are preserved. This display never resolves dot
 values or changes the saved file. `start`, help and version commands retain their existing roles.
 Use `start` when registering this server in an MCP client.
 
+Without a nonempty `HOME` or `USERPROFILE`, help shows an unavailable file location and version
+still works. `init` exits `1` without creating a file; bare `config` reports the missing location
+with its legacy status `0`. `start` warns on stderr and continues with environment-only settings.
+Guided commands retain local-error status `2`; editing still requires an interactive terminal.
+No configuration path is substituted from the working directory.
+
 ## Saved and effective values
 
 The destination is `.warp-sql-server-mcp.json` under `HOME`, falling back to `USERPROFILE`.
