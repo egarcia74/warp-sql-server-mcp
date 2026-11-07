@@ -8,9 +8,10 @@
 
 ## Overview
 
-The SQL Server MCP uses environment variables for all configuration. This approach provides:
+The SQL Server MCP resolves its settings through environment variables. The CLI can also populate
+them from a local JSON file; see [Native MCP Client Setup](../user/MCP-CLIENT-SETUP.md). This provides:
 
-- **Secure credential management**: Sensitive data stays out of configuration files
+- **Flexible credential management**: Inject secrets from the environment or use a protected local config
 - **Environment-specific settings**: Different configurations for development, testing, and production
 - **Docker and container compatibility**: Standard environment variable approach
 - **Zero-config defaults**: Sensible defaults for most common use cases
@@ -446,12 +447,27 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=true
 
 ## Environment Variable Precedence
 
-Environment variables are processed in this order:
+For `warp-sql-server-mcp start` (or `node /absolute/path/to/cli.js start`):
 
-1. **Explicit environment variables** (highest priority)
-2. **Configuration files** (if supported)
-3. **Context-aware defaults** (for SSL certificates only)
-4. **Built-in defaults** (lowest priority)
+1. The CLI reads `$HOME/.warp-sql-server-mcp.json`, falling back to `USERPROFILE` only when
+   `HOME` is absent or empty. A missing file is allowed; malformed JSON stops startup.
+2. Each saved value fills an environment variable that is missing **or empty**. A nonempty
+   inherited/client environment variable wins over the saved value.
+   **Warning:** Empty environment values do not clear saved credentials. The CLI can fill them from
+   the home config, so partial overrides can connect to an unintended database.
+3. The server loads `.env` from its **working directory**, without overriding existing variables.
+4. The server applies built-in defaults, including context-aware certificate trust unless
+   `SQL_SERVER_TRUST_CERT` is the exact lowercase string `true` or `false`. Use those exact values;
+   empty or misspelled values also trigger detection. New CLI configs explicitly set `false`.
+
+Launching `node index.js` directly skips the CLI home-config step. It still loads the working
+directory's `.env`. There is no CLI `--config` option; a server name in your MCP client does not
+select a different database profile.
+
+Use one complete connection configuration per server. Passing empty values is not a reliable way
+to clear saved credentials, and mixing partial client overrides with a home config can connect to
+an unintended database. Do not rely on a GUI client's working directory or shell environment;
+see the [environment injection guidance](../user/MCP-CLIENT-SETUP.md#alternative-environment-injection).
 
 ## Best Practices
 
@@ -479,7 +495,8 @@ Environment variables are processed in this order:
 
 ### Security
 
-- Never hardcode credentials in configuration files
+- Never commit credentials or store them in shared project configuration. The CLI home file is
+  plaintext, not a secret store; protect local permissions or inject credentials from a secret store
 - Use strong, unique passwords
 - Regularly rotate database credentials
 - Audit security settings before production deployment

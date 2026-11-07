@@ -12,37 +12,167 @@ Connect AI assistants to your SQL Server databases with enterprise-grade securit
 
 ---
 
-## 🚀 Quick Start - Choose Your AI Assistant
+## 🚀 Quick Start
 
-**New to this project?** Get up and running in under 5 minutes!
+This package runs a **local stdio MCP server**. Configure SQL Server access once, then register it
+with your client below. It does not provide an HTTP URL for hosted chat connectors.
 
-### **🤖 GitHub Copilot in VS Code** (⭐ Most Popular)
+### Install and configure once
 
-Perfect for developers who want AI-powered SQL assistance directly in their IDE.
+Install Node.js **22.12+** and the scoped package on the machine that runs your MCP client:
 
-**[→ 5-Minute VS Code Setup Guide](docs/user/QUICKSTART-VSCODE.md)**
+```bash
+npm install -g @egarcia74/warp-sql-server-mcp
+warp-sql-server-mcp --version
+warp-sql-server-mcp init
+```
 
-- ✅ **GitHub Copilot** can query your databases directly
-- ✅ **Context-aware suggestions** based on your actual schema
-- ✅ **Natural language** to SQL query generation
-- ✅ **Real-time insights** while coding
+Edit `~/.warp-sql-server-mcp.json` locally with your approved SQL host, database and least-privilege
+SQL authentication credentials. On native Windows, the usual location is
+`%USERPROFILE%\.warp-sql-server-mcp.json`; an explicitly set `HOME` takes precedence.
 
-### **💬 Warp Terminal**
+New configurations enable TLS and certificate validation, with read-only mode on and destructive
+operations/schema changes off. Keep those defaults. Existing files are **not overwritten** by `init`.
+The file stores credentials in **plaintext**, with POSIX mode `0600` requested; review Windows ACLs
+separately. Never commit it or put passwords in shell commands or chat.
 
-Ideal for terminal-based workflows and command-line database interactions.
+Use the scoped package `@egarcia74/warp-sql-server-mcp`. The deprecated unscoped package stopped at
+1.7.10 and lacks later security fixes. See the [complete setup guide](docs/user/MCP-CLIENT-SETUP.md)
+for the configuration template, version pinning and certificate guidance.
 
-**[→ 5-Minute Warp Setup Guide](docs/user/QUICKSTART.md)**
+### Choose your client
 
-- ✅ **AI-powered terminal** with SQL Server integration
-- ✅ **Natural language** database queries
-- ✅ **Fast iteration** for analysis and debugging
-- ✅ **Cross-platform** terminal experience
+| Client                    | Native setup                              | Detailed guide                                                               |
+| ------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| Codex                     | [CLI](#codex)                             | [TOML, scope and verification](docs/user/MCP-CLIENT-SETUP.md#codex)          |
+| Claude Code               | [CLI](#claude-code)                       | [User/project scope](docs/user/MCP-CLIENT-SETUP.md#claude-code)              |
+| Claude Desktop            | [JSON](#claude-desktop)                   | [Config locations](docs/user/MCP-CLIENT-SETUP.md#claude-desktop)             |
+| Cursor                    | [JSON](#cursor)                           | [User/project configuration](docs/user/MCP-CLIENT-SETUP.md#cursor)           |
+| Gemini CLI                | [CLI](#gemini-cli)                        | [Scope and secret handling](docs/user/MCP-CLIENT-SETUP.md#gemini-cli)        |
+| GitHub Copilot CLI        | [Interactive setup](#github-copilot-cli)  | [JSON and version caveats](docs/user/MCP-CLIENT-SETUP.md#github-copilot-cli) |
+| OpenCode                  | [JSON](#opencode)                         | [Configuration and verification](docs/user/MCP-CLIENT-SETUP.md#opencode)     |
+| Warp                      | [MCP settings](#warp)                     | [Warp quickstart](docs/user/QUICKSTART.md)                                   |
+| GitHub Copilot in VS Code | [MCP command](#github-copilot-in-vs-code) | [VS Code quickstart](docs/user/QUICKSTART-VSCODE.md)                         |
 
-### **🔧 Advanced Integration**
+The commands below assume macOS/Linux and an executable on the client's PATH. For **Windows or GUI
+PATH problems**, use the [absolute Node and cli.js recipe](docs/user/MCP-CLIENT-SETUP.md#windows-and-gui-launchers).
+Merge JSON entries with existing configuration, preserving other servers. Enabling a server makes
+its tools available under that client's permission policy; retain its trust and approval controls.
 
-**[Complete VS Code Integration Guide →](docs/user/VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
+#### Codex
 
-> **Using another AI assistant?** This MCP server works with any MCP-compatible system.
+```bash
+codex mcp add sql-server -- warp-sql-server-mcp start
+codex mcp list
+```
+
+Inspect `/mcp` in a new session. User configuration lives in `~/.codex/config.toml`.
+
+#### Claude Code
+
+```bash
+claude mcp add --transport stdio --scope user sql-server -- warp-sql-server-mcp start
+claude mcp get sql-server
+```
+
+This explicitly selects cross-project user scope. Inspect `/mcp` in a new session.
+
+#### Claude Desktop
+
+Open **Settings → Developer → Edit Config**, merge this entry, then fully quit and reopen:
+
+```json
+{
+  "mcpServers": {
+    "sql-server": {
+      "command": "warp-sql-server-mcp",
+      "args": ["start"]
+    }
+  }
+}
+```
+
+#### Cursor
+
+Add to `~/.cursor/mcp.json` for user scope, or `.cursor/mcp.json` for the project, then enable the server:
+
+```json
+{
+  "mcpServers": {
+    "sql-server": {
+      "type": "stdio",
+      "command": "warp-sql-server-mcp",
+      "args": ["start"]
+    }
+  }
+}
+```
+
+#### Gemini CLI
+
+```bash
+gemini mcp add --scope user --transport stdio sql-server warp-sql-server-mcp start
+gemini mcp list
+```
+
+This explicitly selects user scope instead of the project default. Inspect `/mcp`; do not add `--trust`.
+
+#### GitHub Copilot CLI
+
+Enter **`/mcp add`** in an interactive session. Choose local/stdio, name `sql-server`, command
+`warp-sql-server-mcp start`, and set `HOME` in the server environment to the actual directory
+containing your saved config. Select the needed tools, including `get_server_info` and `execute_query`
+for verification. Inspect **`/mcp show sql-server`**. These interactive commands are documented in
+older CLI help too; newer noninteractive `copilot mcp` subcommands are version-dependent.
+
+#### OpenCode
+
+Merge into user `~/.config/opencode/opencode.json` or project `opencode.json`:
+
+```json
+{
+  "mcp": {
+    "sql-server": {
+      "type": "local",
+      "command": ["warp-sql-server-mcp", "start"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Start a new session and inspect `opencode mcp list`.
+
+#### Warp
+
+In **Settings → MCP**, add name `sql-server`, command `warp-sql-server-mcp`, arguments `["start"]`.
+Start/enable the server and inspect its available tools.
+
+#### GitHub Copilot in VS Code
+
+Run **MCP: Add Server → Command (stdio)**, enter command `warp-sql-server-mcp`, argument `start`,
+and name `sql-server`. Choose user/global or workspace scope. Workspace configuration belongs in
+`.vscode/mcp.json` under **`servers`**, not `mcpServers`. Start the entry, select Copilot Agent mode
+and enable the needed tools.
+
+### Verify the connection
+
+Use an approved non-production database for initial setup.
+
+First ask your client to call `get_server_info`. Confirm the intended host/database, TLS settings,
+and read-only `true`, destructive `false`, schema changes `false`. Then ask it to call
+`execute_query` in your approved database with:
+
+```sql
+SELECT 1 AS mcp_ok
+```
+
+A returned row proves SQL access; an MCP “connected” indicator alone does not. Startup establishes
+stdio, while a database operation opens the SQL connection. Read-only results can still contain
+sensitive information, so follow your organization's AI/data policies.
+
+These are documented recipes, not a claim that every client/OS combination was tested. See
+[verification status and version caveats](docs/user/MCP-CLIENT-SETUP.md#compatibility-and-maintenance).
 
 ---
 
@@ -85,62 +215,20 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 
 > **📖 Complete Reference**: See **[docs/reference/ENV-VARS.md](docs/reference/ENV-VARS.md)** for comprehensive documentation of all environment variables, defaults, and context-aware behavior.
 
-| Variable                | Required     | Default         | Description              |
-| ----------------------- | ------------ | --------------- | ------------------------ |
-| `SQL_SERVER_HOST`       | No           | `localhost`     | SQL Server hostname      |
-| `SQL_SERVER_PORT`       | No           | `1433`          | SQL Server port          |
-| `SQL_SERVER_DATABASE`   | No           | `master`        | Initial database         |
-| `SQL_SERVER_USER`       | For SQL Auth | -               | Database username        |
-| `SQL_SERVER_PASSWORD`   | For SQL Auth | -               | Database password        |
-| `SQL_SERVER_ENCRYPT`    | No           | `true`          | Enable SSL/TLS           |
-| `SQL_SERVER_TRUST_CERT` | No           | _context-aware_ | Trust server certificate |
+| Variable                | Required     | Default                              | Description              |
+| ----------------------- | ------------ | ------------------------------------ | ------------------------ |
+| `SQL_SERVER_HOST`       | No           | `localhost`                          | SQL Server hostname      |
+| `SQL_SERVER_PORT`       | No           | `1433`                               | SQL Server port          |
+| `SQL_SERVER_DATABASE`   | No           | `master`                             | Initial database         |
+| `SQL_SERVER_USER`       | For SQL Auth | -                                    | Database username        |
+| `SQL_SERVER_PASSWORD`   | For SQL Auth | -                                    | Database password        |
+| `SQL_SERVER_ENCRYPT`    | No           | `true`                               | Enable SSL/TLS           |
+| `SQL_SERVER_TRUST_CERT` | No           | _context-aware_; CLI `init`: `false` | Trust server certificate |
 
-> **💡 Authentication**: For Windows Authentication, leave `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD` empty.
-> **💡 SSL Certificates**: `SQL_SERVER_TRUST_CERT` automatically adapts to your environment (trusts in development, requires valid certificates in production).
-
----
-
-## 🛠️ Installation & Configuration
-
-> Note: As of v1.7.11 the package is published under the scoped name
-> `@egarcia74/warp-sql-server-mcp`. The previous unscoped package `warp-sql-server-mcp` is
-> deprecated: it was last published at 1.7.10 and predates the security fixes in 1.7.16-1.7.18,
-> so installing it is not supported. Use the scoped name.
-
-### ⭐ **Recommended: Global npm Installation**
-
-```bash
-# Install globally via npm (easiest method)
-npm install -g @egarcia74/warp-sql-server-mcp
-
-# Initialize configuration
-warp-sql-server-mcp init
-
-# Edit config file with your SQL Server details
-# Config file location: ~/.warp-sql-server-mcp.json
-```
-
-New CLI configs enable encryption and verify the server certificate. For an isolated local SQL
-Server with a self-signed certificate, keep `SQL_SERVER_ENCRYPT=true` and explicitly set
-`SQL_SERVER_TRUST_CERT=true` in that config. Existing config files are not overwritten by `init`;
-review any earlier file containing `SQL_SERVER_ENCRYPT=false` or `SQL_SERVER_TRUST_CERT=true`
-before using it for a remote server.
-
-**Benefits:**
-
-- ✅ No manual path configuration
-- ✅ Secure credential storage with file permissions (600)
-- ✅ Easy configuration updates without touching AI assistant settings
-- ✅ Password masking and validation
-
-### Alternative: Manual Installation
-
-```bash
-# Clone and install manually
-git clone https://github.com/egarcia74/warp-sql-server-mcp.git
-cd warp-sql-server-mcp
-npm install
-```
+> **💡 Authentication**: The cross-platform quickstart uses SQL authentication. The implementation has an NTLM branch, but integrated Windows sign-on must be validated separately for your environment.
+> **💡 SSL Certificates**: New CLI configs explicitly set `SQL_SERVER_TRUST_CERT=false`.
+> Direct environment-only starts use context-aware defaults unless it is exactly `true` or `false`.
+> Set an explicit lowercase value for predictable behavior.
 
 ---
 
@@ -186,6 +274,7 @@ npm install
 
 ### **Setup Guides**
 
+- **[Native MCP Client Setup](docs/user/MCP-CLIENT-SETUP.md)** - Nine client recipes, Windows/PATH guidance, credential handling and verification
 - **[VS Code Integration Guide](docs/user/VSCODE-INTEGRATION-GUIDE.md)** - Advanced workflows and configuration
 
 ### **Developer Resources**
@@ -264,10 +353,10 @@ Once configured, you can use natural language with your AI assistant:
 ### **VS Code + GitHub Copilot**
 
 ```text
-@sql-server List all databases
-@sql-server Show me tables in the AdventureWorks database
-@sql-server Generate a query to find the top 10 customers by sales
-@sql-server Analyze the performance of this query: SELECT * FROM Orders WHERE OrderDate > '2023-01-01'
+List all databases on the SQL Server
+Show me tables in the AdventureWorks database
+Generate a query to find the top 10 customers by sales
+Analyze the performance of this query: SELECT * FROM Orders WHERE OrderDate > '2023-01-01'
 ```
 
 ### **Warp Terminal**
@@ -294,16 +383,16 @@ Show me 50 rows from the Products table where Price > 100
 **Authentication Issues:**
 
 - For SQL Server Auth: Verify `SQL_SERVER_USER` and `SQL_SERVER_PASSWORD`
-- For Windows Auth: Leave user/password empty, optionally set `SQL_SERVER_DOMAIN`
+- Integrated authentication needs separate validation; use approved SQL authentication for the cross-platform quickstart
 - Ensure the connecting user has appropriate database permissions
 
 **Configuration Issues:**
 
 - Keep `SQL_SERVER_ENCRYPT=true`; for an isolated local server with a self-signed certificate,
   explicitly set `SQL_SERVER_TRUST_CERT=true` or install a trusted test certificate
-- MCP servers require explicit environment variables (`.env` files are not loaded automatically)
-- Check MCP server logs: `npm run logs` or `npm run logs:tail` for real-time monitoring
-- View audit logs for security-related issues: `npm run logs:audit`
+- Nonempty environment values override the home config; working-directory `.env` can fill absent values. See [configuration precedence](docs/reference/ENV-VARS.md#environment-variable-precedence)
+- Read your client's captured MCP stderr. Global npm installs do not include repository `npm run logs*` scripts
+- For explicit log files and other failures, see [client troubleshooting](docs/user/MCP-CLIENT-SETUP.md#troubleshooting)
 
 ### **Platform-Specific**
 
@@ -311,7 +400,7 @@ Show me 50 rows from the Products table where Price > 100
 
 - Enable TCP/IP in SQL Server Configuration Manager
 - Start SQL Server Browser service for named instances
-- Windows Authentication works seamlessly with domain accounts
+- Use the [native Windows launcher recipe](docs/user/MCP-CLIENT-SETUP.md#windows-and-gui-launchers); do not assume integrated authentication works without a separate test
 
 **macOS/Linux:**
 
