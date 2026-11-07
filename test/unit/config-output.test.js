@@ -70,3 +70,33 @@ it('preserves non-BMP text while removing terminal and bidi controls', () => {
   const output = createConfigOutput();
   expect(output.safe('😀\u001b[31m🚀\u0001\u0080\u202e\u2066')).toBe('😀🚀');
 });
+it('renders only the fixed failed-save cleanup warning once, without Saved or raw metadata', () => {
+  let text = '';
+  const out = createConfigOutput({
+    stderr: { write: s => (text += s) },
+    secrets: ['editor']
+  });
+  out.error({
+    code: 'file-error',
+    message: 'credential-lock-1561\u001b[31m',
+    path: '/private/credential-lock-1561',
+    field: 'credential-lock-1561',
+    warningCodes: [
+      'lock-cleanup-uncertain',
+      'lock-cleanup-uncertain',
+      'credential-lock-1561',
+      'lock-cleanup'
+    ]
+  });
+  expect(text).toContain('Cannot access or save');
+  expect(text.match(/Lock cleanup could not be confirmed/g)).toHaveLength(1);
+  expect(text).toContain('Confirm no ******** is running');
+  expect(text).toContain('sibling lock directory');
+  expect(text).not.toContain('Saved');
+  expect(text).not.toContain('credential-lock-1561');
+  expect(text).not.toContain('/private');
+  expect(text).not.toContain('\u001b');
+  text = '';
+  out.error({ code: 'conflict', warningCodes: ['lock-cleanup', 'credential-lock-1561'] });
+  expect(text).toBe('Configuration changed since opening. Reload or cancel.\n');
+});

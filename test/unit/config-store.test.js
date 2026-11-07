@@ -329,3 +329,158 @@ it('contains non-busy lock creation failure without changing the original', asyn
   expect(await fs.readFile(file)).toEqual(bytes);
   expect(await fs.readdir(home)).toEqual(['.warp-sql-server-mcp.json']);
 });
+it.each(['inspection', 'owner-absent', 'owner-partial'])(
+  'reports only uncertain acquisition cleanup after %s failure',
+  async phase => {
+    const snapshot = await readConfigSnapshot(file);
+    const bytes = await fs.readFile(file);
+    const lock = snapshot.path + '.lock';
+    const fsApi = {
+      ...fs,
+      lstat: async p => {
+        if (p === lock && phase === 'inspection') throw new Error('credential-lock-1561');
+        return fs.lstat(p);
+      },
+      writeFile: async (p, ...args) => {
+        if (p === path.join(lock, 'owner.json')) {
+          if (phase === 'owner-partial') await fs.writeFile(p, '{"token":');
+          throw new Error('credential-lock-1561');
+        }
+        return fs.writeFile(p, ...args);
+      }
+    };
+    const error = await saveConfigSnapshot(snapshot, { SQL_SERVER_HOST: 'new' }, { fsApi }).catch(
+      e => e
+    );
+    expect(error.code).toBe('file-error');
+    expect(error.warningCodes).toEqual(
+      phase === 'owner-absent' ? undefined : ['lock-cleanup-uncertain']
+    );
+    expect(String(error)).not.toContain('credential-lock-1561');
+    const after = await readConfigSnapshot(file);
+    expect(await fs.readFile(file)).toEqual(bytes);
+    expect(after.identity).toEqual(snapshot.identity);
+    if (phase === 'owner-absent') {
+      await expect(fs.lstat(lock)).rejects.toMatchObject({ code: 'ENOENT' });
+    } else {
+      expect((await fs.lstat(lock)).isDirectory()).toBe(true);
+      if (phase === 'owner-partial')
+        expect(await fs.readFile(path.join(lock, 'owner.json'), 'utf8')).toBe('{"token":');
+      else expect(await fs.readdir(lock)).toEqual([]);
+    }
+  }
+);
+it.each(['readFile', 'unlink', 'rmdir'])(
+  'preserves failed save and original identity when lock %s cleanup fails',
+  async phase => {
+    const snapshot = await readConfigSnapshot(file);
+    const bytes = await fs.readFile(file);
+    const lock = snapshot.path + '.lock';
+    const fsApi = {
+      ...fs,
+      open: async (p, ...args) => {
+        if (String(p).includes('.tmp-')) throw new Error('credential-lock-1561');
+        return fs.open(p, ...args);
+      },
+      [phase]: async (p, ...args) => {
+        if (p === lock || p === path.join(lock, 'owner.json'))
+          throw new Error('credential-lock-1561');
+        return fs[phase](p, ...args);
+      }
+    };
+    const error = await saveConfigSnapshot(snapshot, { SQL_SERVER_HOST: 'new' }, { fsApi }).catch(
+      e => e
+    );
+    expect(error).toMatchObject({ code: 'file-error', warningCodes: ['lock-cleanup-uncertain'] });
+    expect(await fs.readFile(file)).toEqual(bytes);
+    expect((await readConfigSnapshot(file)).identity).toEqual(snapshot.identity);
+    expect((await fs.lstat(lock)).isDirectory()).toBe(true);
+  }
+);
+it.each(['conflict', 'cancelled'])(
+  'retains the primary %s outcome when lock cleanup is uncertain',
+  async code => {
+    const snapshot = await readConfigSnapshot(file);
+    const bytes = await fs.readFile(file);
+    const controller = new globalThis.AbortController();
+    const fsApi = {
+      ...fs,
+      writeFile: async (...args) => {
+        await fs.writeFile(...args);
+        if (code === 'cancelled') controller.abort();
+      },
+      readFile: async (p, ...args) => {
+        if (String(p).endsWith('owner.json')) throw new Error('credential-lock-1561');
+        return fs.readFile(p, ...args);
+      }
+    };
+    const baseline = code === 'conflict' ? { ...snapshot, contentHash: 'stale' } : snapshot;
+    const error = await saveConfigSnapshot(
+      baseline,
+      {},
+      { fsApi, signal: controller.signal }
+    ).catch(e => e);
+    expect(error).toMatchObject({ code, warningCodes: ['lock-cleanup-uncertain'] });
+    expect(await fs.readFile(file)).toEqual(bytes);
+    expect((await readConfigSnapshot(file)).identity).toEqual(snapshot.identity);
+  }
+);
+it.each(['token', 'identity'])(
+  'never removes a pre-publication replacement lock %s and reports uncertainty',
+  async replacement => {
+    const snapshot = await readConfigSnapshot(file);
+    const bytes = await fs.readFile(file);
+    const lock = snapshot.path + '.lock';
+    const replacementBytes = '{"token":"replacement-owner","pid":2147483647}';
+    const fsApi = {
+      ...fs,
+      open: async (p, ...args) => {
+        if (String(p).includes('.tmp-')) {
+          if (replacement === 'identity') {
+            await fs.rename(lock, lock + '.old');
+            await fs.mkdir(lock);
+          }
+          await fs.writeFile(path.join(lock, 'owner.json'), replacementBytes);
+          throw new Error('credential-lock-1561');
+        }
+        return fs.open(p, ...args);
+      }
+    };
+    const error = await saveConfigSnapshot(snapshot, {}, { fsApi }).catch(e => e);
+    expect(error).toMatchObject({ code: 'file-error', warningCodes: ['lock-cleanup-uncertain'] });
+    expect(await fs.readFile(path.join(lock, 'owner.json'), 'utf8')).toBe(replacementBytes);
+    expect(await fs.readFile(file)).toEqual(bytes);
+    expect((await readConfigSnapshot(file)).identity).toEqual(snapshot.identity);
+  }
+);
+it('preserves a synthetic dead-PID lock without consulting or taking over its owner', async () => {
+  const snapshot = await readConfigSnapshot(file);
+  const bytes = await fs.readFile(file);
+  const lock = snapshot.path + '.lock';
+  const owner = '{"token":"stale-owner","pid":2147483647}';
+  await fs.mkdir(lock);
+  await fs.writeFile(path.join(lock, 'owner.json'), owner);
+  const identity = await fs.lstat(lock);
+  const error = await saveConfigSnapshot(snapshot, {}).catch(e => e);
+  expect(error.code).toBe('lock-busy');
+  expect(error.warningCodes).toBeUndefined();
+  expect(await fs.readFile(path.join(lock, 'owner.json'), 'utf8')).toBe(owner);
+  expect((await fs.lstat(lock)).ino).toBe(identity.ino);
+  expect(await fs.readFile(file)).toEqual(bytes);
+});
+it('adds no cleanup warning after a failed save releases its verified lock', async () => {
+  const snapshot = await readConfigSnapshot(file);
+  const bytes = await fs.readFile(file);
+  const fsApi = {
+    ...fs,
+    open: async (p, ...args) => {
+      if (String(p).includes('.tmp-')) throw new Error('credential-lock-1561');
+      return fs.open(p, ...args);
+    }
+  };
+  const error = await saveConfigSnapshot(snapshot, {}, { fsApi }).catch(e => e);
+  expect(error.code).toBe('file-error');
+  expect(error.warningCodes).toBeUndefined();
+  expect(await fs.readFile(file)).toEqual(bytes);
+  expect(await fs.readdir(home)).toEqual(['.warp-sql-server-mcp.json']);
+});

@@ -286,3 +286,53 @@ it('standalone validation rejects startup variables before a worker or target di
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+it.each([59999, 60000, 60001])(
+  'requires clean success before the elapsed deadline, exit at %d with delayed timer',
+  async elapsed => {
+    vi.useFakeTimers();
+    const { child, spawnImpl } = setup();
+    let clock = 1000;
+    const p = runConfigValidation({ resolved, spawnImpl, now: () => clock });
+    child.emit('message', good);
+    clock += elapsed;
+    child.emit('exit', 0, null);
+    const r = await p;
+    if (elapsed < 60000) expect(r).toEqual(good);
+    else
+      expect(r).toMatchObject({
+        status: 'failure',
+        category: 'total-timeout',
+        cleanup: 'complete'
+      });
+    expect(child.send).toHaveBeenCalledTimes(1);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  }
+);
+it.each([59999, 60000, 60001])(
+  'keeps cancellation sticky before deadline and timeout priority after it, exit at %d',
+  async elapsed => {
+    vi.useFakeTimers();
+    const { child, spawnImpl } = setup();
+    const controller = new globalThis.AbortController();
+    let clock = 1000;
+    const p = runConfigValidation({
+      resolved,
+      spawnImpl,
+      signal: controller.signal,
+      now: () => clock
+    });
+    controller.abort();
+    child.emit('message', good);
+    clock += elapsed;
+    child.emit('exit', 0, null);
+    expect(await p).toMatchObject({
+      status: elapsed < 60000 ? 'cancelled' : 'failure',
+      category: elapsed < 60000 ? 'cancelled' : 'total-timeout',
+      cleanup: 'complete'
+    });
+    expect(child.send).toHaveBeenCalledTimes(2);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  }
+);

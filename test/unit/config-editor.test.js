@@ -603,3 +603,32 @@ it('reports an outer generic prompt failure without its raw bytes', async () => 
   expect(prompts.dispose).toHaveBeenCalledTimes(1);
   expect(text).not.toContain('credential-editor-1561');
 });
+it('keeps editing after failed Save and reports uncertain lock cleanup without claiming Saved', async () => {
+  const fail = new Error('credential-editor-1561\u001b[31m');
+  const publication = vi.spyOn(fs, 'link').mockRejectedValue(fail);
+  const remove = vi.spyOn(fs, 'rmdir').mockRejectedValue(fail);
+  const answers = ['save', true, 'cancel', true];
+  try {
+    expect(
+      await run(answers, {
+        inherited: {
+          HOME: home,
+          SQL_SERVER_USER: 'u',
+          SQL_SERVER_PASSWORD: 'credential-editor-1561'
+        }
+      })
+    ).toBe(130);
+    expect(answers).toHaveLength(0);
+    expect(text).toContain('Cannot access or save');
+    expect(text.match(/Lock cleanup could not be confirmed/g)).toHaveLength(1);
+    expect(text).toContain('Confirm no editor is running');
+    expect(text).not.toMatch(/^Saved[.,]/m);
+    expect(text).not.toContain('credential-editor-1561');
+    expect(text).not.toContain('\u001b');
+    await expect(fs.lstat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await fs.lstat(file + '.lock')).isDirectory()).toBe(true);
+  } finally {
+    publication.mockRestore();
+    remove.mockRestore();
+  }
+});

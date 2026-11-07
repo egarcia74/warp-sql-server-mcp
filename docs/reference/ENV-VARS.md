@@ -16,6 +16,10 @@ them from a local JSON file; see [Native MCP Client Setup](../user/MCP-CLIENT-SE
 - **Docker and container compatibility**: Standard environment variable approach
 - **Zero-config defaults**: Sensible defaults for most common use cases
 
+The CLI home JSON overlay fills inherited variables that are missing or empty.
+Dotenv preserves present entries (including empty strings) by default; an explicitly selected
+`DOTENV_OVERRIDE` or `DOTENV_CONFIG_OVERRIDE` can instead permit dotenv to overwrite them.
+
 ## Guided configuration
 
 Use `warp-sql-server-mcp config edit` for an interactive draft and explicit Save, or

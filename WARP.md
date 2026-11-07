@@ -134,7 +134,8 @@ lib/
 
 - `config edit` lazily loads a guided prompt adapter; draft, inherited and effective values remain separate.
 - `config validate` performs strict stored/effective checks and a fixed `SELECT 1` probe in a private child,
-  with a 60-second total deadline, 2-second graceful shutdown and 1-second termination confirmation.
+  with a 60-second operation deadline including normal cleanup, then up to 2 seconds for graceful
+  shutdown and 1 second for termination confirmation, plus OS scheduling.
 - Shared `lib/config/environment.js` preserves CLI home-file overlay and installed dotenv options,
   selected from the candidate environment with exact assignment provenance and quiet output.
 - `config-store.js` checks private-home/target identity, holds an exclusive sibling lock and atomically

@@ -101,7 +101,9 @@ identity and content before atomic publication. A conflicting editor must reload
 cancel; there is no forced overwrite or automatic merge. Busy/stale locks are not broken
 silently. Confirm that no editor is running before manually removing a stale lock.
 
-Errors or cancellation before publication preserve the old file. After rename/link publication,
+Errors or cancellation before publication preserve the old file. If lock cleanup cannot be
+confirmed, a separate warning accompanies the original failure; it does not mean Save succeeded.
+Confirm no editor is running before manually removing that sibling lock directory. After rename/link publication,
 Save is committed and reported as Saved even if durability or owned temporary-name cleanup
 cannot be confirmed. There are no persistent backups. A hard crash or an ordinary filesystem cleanup failure can leave a recognizable,
 mode-`0600` `.warp-sql-server-mcp.tmp-…` file containing credentials; inspect and remove only
@@ -121,7 +123,9 @@ editor without another discard prompt. Menu Cancel confirms discarding unsaved c
 
 Validation refuses nonempty `NODE_OPTIONS`, `NODE_V8_COVERAGE`, `LD_PRELOAD`, `LD_AUDIT`,
 `DYLD_INSERT_LIBRARIES` and `LD_DEBUG_OUTPUT`. Rerun in a shell without them. It does not strip
-these silently, change `NODE_ENV`, or remove normal TLS trust inputs. Save and start are unaffected.
+these silently, change `NODE_ENV`, or remove normal TLS trust inputs. These six exact checks guard
+against accidental preloads/diagnostics, not every loader variable or hostile code; the runtime,
+dependencies and operating-system environment remain trusted. Save and start are unaffected.
 
 New-command exit statuses:
 
