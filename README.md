@@ -157,6 +157,8 @@ and enable the needed tools.
 
 ### Verify the connection
 
+Use an approved non-production database for initial setup.
+
 First ask your client to call `get_server_info`. Confirm the intended host/database, TLS settings,
 and read-only `true`, destructive `false`, schema changes `false`. Then ask it to call
 `execute_query` in your approved database with:
