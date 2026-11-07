@@ -708,7 +708,9 @@ See **[docs/reference/ENV-VARS.md#security-configuration-examples](docs/referenc
 
 ### ⭐ **Method 1: CLI Tool Configuration (Recommended)**
 
-The easiest way to configure the MCP server with secure, managed credentials:
+The simplest local configuration uses a permission-restricted plaintext file. For native setup in
+Codex, Claude, Cursor, Gemini, Copilot CLI, OpenCode, Warp and VS Code, see
+[Native MCP Client Setup](docs/user/MCP-CLIENT-SETUP.md).
 
 #### **Installation & Setup**
 
@@ -740,17 +742,18 @@ connecting remotely. An inherited environment variable overrides the saved value
 
 **Benefits:**
 
-- ✅ **Secure credential storage** with file permissions (600)
+- ✅ **Local plaintext credential storage** with POSIX mode `0600` requested; review Windows ACLs
 - ✅ **No complex environment variables** in Warp settings
 - ✅ **Easy configuration updates** without touching Warp
 - ✅ **Password masking** and validation
-- ✅ **One-time setup** that works across all environments
+- ✅ **Shared setup** for clients running under the same home directory
 
 ### **Method 2: Manual Environment Variables (Advanced)**
 
-**⚠️ NOTE**: MCP servers run in isolated environments and do NOT
-automatically load `.env` files. All configuration must be explicitly provided
-through Warp's MCP configuration.
+**⚠️ NOTE**: Client environment inheritance and working directories vary. The CLI first fills
+missing or empty environment values from its home JSON config, then the server loads a working-directory
+`.env` without overriding existing variables. Use complete explicit client settings or the home config,
+not an assumed working directory. See [configuration precedence](docs/reference/ENV-VARS.md#environment-variable-precedence).
 
 #### **Required MCP Configuration**
 
@@ -855,8 +858,9 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=true           # Allow schema changes
 
 ### Connection Initialization
 
-The MCP server initializes the database connection pool at startup (not on first
-request) to eliminate timeout issues during initial MCP tool calls.
+The MCP server establishes stdio at startup. SQL connections are acquired lazily when a database
+operation needs one; `get_server_info` does not establish a database connection. Verify configuration
+first, then run `SELECT 1 AS mcp_ok` through `execute_query` against an approved database.
 
 The server communicates via stdio transport and provides structured responses
 for all database operations.
@@ -1995,5 +1999,5 @@ describe('new_tool security validation', () => {
 
 - **NTLM Authentication Errors**: Ensure proper authentication method is selected based on provided credentials
 - **SSL Certificate Issues**: The MCP server now automatically detects development environments and trusts certificates appropriately. For production deployments, set `SQL_SERVER_TRUST_CERT=false` explicitly.
-- **Missing Environment Variables**: MCP servers require explicit configuration - `.env` files are not loaded
-- **First Request Delays**: Connection pool initialization at startup eliminates timeout issues
+- **Missing Environment Variables**: Check client environment, CLI home config and working-directory `.env` precedence; GUI clients may use a different home or working directory
+- **First Request Delays**: Database connections are acquired lazily; MCP startup success does not prove SQL connectivity

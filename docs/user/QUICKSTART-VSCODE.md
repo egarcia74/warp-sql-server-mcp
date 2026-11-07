@@ -4,6 +4,9 @@
 
 Connect **GitHub Copilot** in VS Code directly to your **SQL Server** using MCP! 🤖
 
+For other clients, native Windows launchers and configuration precedence, see
+[Native MCP Client Setup](MCP-CLIENT-SETUP.md).
+
 ## What You Get
 
 - ✅ **GitHub Copilot** can query your SQL Server databases
@@ -14,9 +17,9 @@ Connect **GitHub Copilot** in VS Code directly to your **SQL Server** using MCP!
 ## Prerequisites
 
 - ✅ **Node.js 22.12+** installed
-- ✅ **SQL Server** running (localhost:1433)
+- ✅ Access to an approved **SQL Server** database with a least-privilege SQL login
 - ✅ **VS Code** with **GitHub Copilot** extension
-- ✅ **GitHub Copilot subscription** (required for MCP support)
+- ✅ A GitHub Copilot account/plan with agent tools enabled; organization policies may restrict MCP
 
 ## Step 1: Install MCP Server
 
@@ -74,23 +77,17 @@ restarting VS Code.
 2. **Enable the tools**: click the tools icon in the prompt box and tick the `sql-server`
    entry. Newly added MCP tools start unchecked.
 
-3. **Test database connectivity** - ask in natural language, or name a tool with `#`:
+3. **Verify configuration**: ask for `get_server_info` and confirm the intended host/database,
+   TLS and secure defaults before querying.
 
-```text
-List all databases on the SQL Server
+4. **Test database connectivity**: ask for `execute_query` in that approved database with:
+
+```sql
+SELECT 1 AS mcp_ok
 ```
 
-1. **Try schema exploration**:
-
-```text
-Show me the tables in the AdventureWorks database
-```
-
-1. **Ask for query help**:
-
-```text
-Find the top 10 customers by sales
-```
+A returned row proves SQL access. The MCP **Running** label alone does not test SQL credentials
+or permissions. Only explore schemas/data you are authorized to share with your AI client.
 
 ## 🎉 You're All Set
 
@@ -172,15 +169,9 @@ The MCP server runs in **secure mode** by default:
 - 🔒 **No destructive operations**: No INSERT/UPDATE/DELETE
 - 🔒 **No schema changes**: No CREATE/DROP/ALTER
 
-To modify security settings, edit your config file:
-
-```json
-{
-  "SQL_SERVER_READ_ONLY": "false",
-  "SQL_SERVER_ALLOW_DESTRUCTIVE_OPERATIONS": "true",
-  "SQL_SERVER_ALLOW_SCHEMA_CHANGES": "false"
-}
-```
+Keep these defaults for first setup. The home config stores credentials in plaintext; protect it
+and never commit it. `init` does not overwrite older configs, so review existing settings before
+connecting. Use a least-privilege database login as a separate permission boundary.
 
 > **🔒 Security configuration details:** See the [Environment Variables Reference](../reference/ENV-VARS.md#database-security-settings)
 > for complete security options, including examples for production, data analysis, and development modes.
@@ -215,7 +206,7 @@ To get log files of your own, set `LOG_FILE` (and `SECURITY_LOG_FILE` with
 
 - Verify SQL Server is running: `telnet localhost 1433`
 - Check your config file credentials: `warp-sql-server-mcp config`
-- Test the MCP server directly: `warp-sql-server-mcp start`
+- `warp-sql-server-mcp start` waits for an MCP client; use the verification steps above for a SQL test
 - Review the Copilot **Output** channel for errors
 
 **Permission errors?**

@@ -2,12 +2,15 @@
 
 > **Audience**: First-time users wiring the server into Warp Terminal
 
-Get your **SQL Server MCP** running in Warp in under 3 minutes! 🚀
+Connect **SQL Server MCP** to Warp using the shared CLI configuration.
+
+For other clients, native Windows launchers and configuration precedence, see
+[Native MCP Client Setup](MCP-CLIENT-SETUP.md).
 
 ## Prerequisites
 
 - ✅ **Node.js 22.12+** installed
-- ✅ **SQL Server** running (localhost:1433)
+- ✅ Access to an approved **SQL Server** database with a least-privilege SQL login
 - ✅ **Warp Terminal** installed
 
 ## Step 1: Install
@@ -45,17 +48,20 @@ npm install -g @egarcia74/warp-sql-server-mcp
    - **Command**: `warp-sql-server-mcp`
    - **Args**: `["start"]`
 
+The saved file contains plaintext credentials. Keep it out of source control. Retain TLS,
+certificate validation and read-only mode; `init` does not overwrite an existing configuration.
+
 ## Step 3: Test It
 
-**Try these commands in Warp:**
+Ask Warp to call `get_server_info` and verify your intended host/database and security flags.
+Then ask it to call `execute_query` in that approved database with:
 
-```text
-List all databases
+```sql
+SELECT 1 AS mcp_ok
 ```
 
-```text
-Show me tables in the master database
-```
+A returned row verifies SQL access. An MCP connected indicator only confirms the transport,
+not authentication or database permissions.
 
 ## 🎉 You're Done
 
