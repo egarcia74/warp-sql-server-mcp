@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { applyFileEnvironment, getConfigPath } from './lib/config/environment.js';
+import { projectSavedConfig } from './lib/cli/saved-config-display.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -119,13 +120,9 @@ function showConfig() {
 
   try {
     const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    const displayConfig = projectSavedConfig(config);
     console.log(`Configuration file: ${CONFIG_FILE}`);
     console.log('Current settings:');
-    // Mask sensitive values
-    const displayConfig = { ...config };
-    if (displayConfig.SQL_SERVER_PASSWORD) {
-      displayConfig.SQL_SERVER_PASSWORD = '***MASKED***';
-    }
     console.log(JSON.stringify(displayConfig, null, 2));
   } catch {
     console.error('❌ Failed to read configuration file: invalid or unreadable JSON');

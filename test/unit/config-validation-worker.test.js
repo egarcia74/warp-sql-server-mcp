@@ -72,3 +72,21 @@ it('cancels a pending request and never reports success', async () => {
   expect((await p).category).toBe('cancelled');
   expect(cancel).toHaveBeenCalledTimes(1);
 });
+it('cancellation during successful strict close cannot become success', async () => {
+  configure();
+  const controller = new globalThis.AbortController();
+  let finishClose;
+  const close = vi.fn(() => new Promise(resolve => (finishClose = resolve)));
+  const query = vi.fn().mockResolvedValue({ recordset: [{ mcp_ok: 1 }] });
+  sql.connect.mockResolvedValue({ connected: true, request: () => ({ query }), close });
+  const probe = runWorkerProbe({ signal: controller.signal });
+  await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+  controller.abort();
+  finishClose();
+  expect(await probe).toMatchObject({
+    status: 'cancelled',
+    category: 'cancelled',
+    cleanup: 'complete'
+  });
+  expect(query).toHaveBeenCalledExactlyOnceWith('SELECT 1 AS mcp_ok');
+});

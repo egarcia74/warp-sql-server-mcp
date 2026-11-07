@@ -260,3 +260,72 @@ it('cancels after temporary-file flush and before publication without changing t
   expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual(original);
   expect(await fs.readdir(home)).toEqual(['.warp-sql-server-mcp.json']);
 });
+it('contains non-ENOENT target inspection failure without changing stored bytes', async () => {
+  const bytes = await fs.readFile(file);
+  await expect(
+    readConfigSnapshot(file, {
+      fsApi: {
+        ...fs,
+        lstat: async () => {
+          throw Object.assign(new Error('credential-store-1561'), { code: 'EACCES' });
+        }
+      }
+    })
+  ).rejects.toMatchObject({ code: 'file-error' });
+  expect(await fs.readFile(file)).toEqual(bytes);
+});
+it('rejects a target changed after descriptor reading instead of blessing the new bytes', async () => {
+  let inspections = 0;
+  const fsApi = {
+    ...fs,
+    lstat: async p => {
+      if (++inspections === 2) await fs.writeFile(file, '{"SQL_SERVER_HOST":"external"}');
+      return fs.lstat(p);
+    }
+  };
+  await expect(readConfigSnapshot(file, { fsApi })).rejects.toMatchObject({ code: 'conflict' });
+  expect(await fs.readFile(file, 'utf8')).toBe('{"SQL_SERVER_HOST":"external"}');
+});
+it('rejects nonobject and unserializable drafts before locks or publication', async () => {
+  const snapshot = await readConfigSnapshot(file);
+  const cyclic = {};
+  cyclic.child = cyclic;
+  const bytes = await fs.readFile(file);
+  for (const values of [null, [], 3, { unknown: 1n }, cyclic]) {
+    await expect(saveConfigSnapshot(snapshot, values)).rejects.toMatchObject({
+      code: 'invalid-json'
+    });
+    expect(await fs.readFile(file)).toEqual(bytes);
+    expect(await fs.readdir(home)).toEqual(['.warp-sql-server-mcp.json']);
+  }
+});
+it('does not delete a lock whose owner token cannot be read after publication', async () => {
+  const snapshot = await readConfigSnapshot(file);
+  const fsApi = {
+    ...fs,
+    readFile: async (p, ...args) => {
+      if (String(p).endsWith('owner.json')) throw new Error('credential-store-1561');
+      return fs.readFile(p, ...args);
+    }
+  };
+  const saved = await saveConfigSnapshot(snapshot, { SQL_SERVER_HOST: 'new' }, { fsApi });
+  expect(saved.committed).toBe(true);
+  expect(saved.warningCodes).toContain('lock-cleanup');
+  expect(JSON.parse(await fs.readFile(file, 'utf8')).SQL_SERVER_HOST).toBe('new');
+  expect(JSON.parse(await fs.readFile(file + '.lock/owner.json', 'utf8')).pid).toBe(process.pid);
+});
+it('contains non-busy lock creation failure without changing the original', async () => {
+  const snapshot = await readConfigSnapshot(file);
+  const bytes = await fs.readFile(file);
+  const fsApi = {
+    ...fs,
+    mkdir: async () => {
+      throw Object.assign(new Error('credential-store-1561'), { code: 'EACCES' });
+    }
+  };
+  await expect(
+    saveConfigSnapshot(snapshot, { SQL_SERVER_HOST: 'new' }, { fsApi })
+  ).rejects.toMatchObject({ code: 'file-error' });
+  expect(await fs.readFile(file)).toEqual(bytes);
+  expect(await fs.readdir(home)).toEqual(['.warp-sql-server-mcp.json']);
+});

@@ -56,5 +56,17 @@ it('redacts both raw and sanitized known-password forms without changing stored 
   const out = createConfigOutput({ secrets: [secret] });
   expect(out.safe('review-secret-1559')).toBe('********');
   expect(out.safe(secret)).toBe('********');
-  expect(secret).toBe('review-\u001b[31msecret-1559');
+  const draft = {
+    SQL_SERVER_PASSWORD: secret,
+    SQL_SERVER_HOST: secret,
+    unknown: { ordinary: 'preserved' }
+  };
+  const bytes = JSON.stringify(draft);
+  out.review(draft, { environment: {}, sources: {} });
+  expect(JSON.stringify(draft)).toBe(bytes);
+});
+
+it('preserves non-BMP text while removing terminal and bidi controls', () => {
+  const output = createConfigOutput();
+  expect(output.safe('😀\u001b[31m🚀\u0001\u0080\u202e\u2066')).toBe('😀🚀');
 });

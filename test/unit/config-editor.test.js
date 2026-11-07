@@ -351,3 +351,255 @@ it.each(['inherited', 'file'])(
     expect(await fs.readFile(file, 'utf8')).toBe(bytes);
   }
 );
+it('declining password removal preserves the original saved value and bytes', async () => {
+  const bytes = JSON.stringify({
+    SQL_SERVER_USER: 'u',
+    SQL_SERVER_PASSWORD: 'credential-editor-1561',
+    SQL_SERVER_TRUST_CERT: 'false'
+  });
+  await fs.writeFile(file, bytes);
+  expect(
+    await run(['authentication', 'SQL_SERVER_PASSWORD', 'remove', false, 'back', 'cancel'])
+  ).toBe(130);
+  expect(await fs.readFile(file, 'utf8')).toBe(bytes);
+  expect(text).not.toContain('credential-editor-1561');
+});
+it('declining a boolean security reduction restores the draft without saving', async () => {
+  const a = ['tls', 'SQL_SERVER_ENCRYPT', 'set', 'false', false, 'back', 'review', 'cancel', true];
+  expect(await run(a)).toBe(130);
+  expect(text).toContain('SQL_SERVER_ENCRYPT: true [draft]');
+  expect(text).not.toContain('SQL_SERVER_ENCRYPT: false [draft]');
+  await expect(fs.stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+});
+it('validates trimmed port input through the real field validator', async () => {
+  expect(
+    await run([
+      'connection',
+      'SQL_SERVER_PORT',
+      'set',
+      options => {
+        expect(options.validate(' 1559 ')).toBe(true);
+        expect(options.validate('15x')).not.toBe(true);
+        return ' 1559 ';
+      },
+      'back',
+      'review',
+      'cancel',
+      true
+    ])
+  ).toBe(130);
+  expect(text).toContain('SQL_SERVER_PORT: 1559 [draft]');
+});
+it('recovers from a field-prompt error and disposes the session exactly once', async () => {
+  const prompts = scripted([
+    'connection',
+    'SQL_SERVER_HOST',
+    () => {
+      throw new Error('credential-editor-1561');
+    },
+    'back',
+    'cancel',
+    true
+  ]);
+  prompts.dispose = vi.fn();
+  expect(await run([], { prompts })).toBe(130);
+  expect(prompts.dispose).toHaveBeenCalledTimes(1);
+  expect(text).not.toContain('credential-editor-1561');
+});
+it('recovers from a review output failure instead of discarding the draft', async () => {
+  const renderer = output();
+  renderer.review = () => {
+    throw new Error('credential-editor-1561');
+  };
+  expect(await run(['review', 'cancel', true], { output: renderer })).toBe(130);
+  expect(text).toContain('The operation failed.');
+  expect(text).not.toContain('credential-editor-1561');
+});
+it('refuses unsupported worker startup values without spawning or printing them', async () => {
+  const validateImpl = vi.fn();
+  expect(
+    await run(['validate', 'cancel', true], {
+      inherited: {
+        HOME: home,
+        SQL_SERVER_USER: 'u',
+        SQL_SERVER_PASSWORD: 'credential-editor-1561',
+        NODE_OPTIONS: 'credential-startup-1561'
+      },
+      validateImpl
+    })
+  ).toBe(130);
+  expect(validateImpl).not.toHaveBeenCalled();
+  expect(text).toContain('NODE_OPTIONS');
+  expect(text).not.toContain('credential-startup-1561');
+});
+it('menu probe cancellation returns to the editor without saving', async () => {
+  const prompts = scripted(['validate', true, 'cancel', true]);
+  const select = prompts.select;
+  prompts.select = options =>
+    options.message === 'Validation running.' ? Promise.resolve('cancel-probe') : select(options);
+  prompts.dispose = vi.fn();
+  const validateImpl = vi.fn(
+    ({ signal }) =>
+      new Promise(resolve =>
+        signal.addEventListener(
+          'abort',
+          () => resolve({ status: 'cancelled', category: 'cancelled', cleanup: 'complete' }),
+          { once: true }
+        )
+      )
+  );
+  expect(
+    await run([], {
+      prompts,
+      inherited: {
+        HOME: home,
+        SQL_SERVER_USER: 'u',
+        SQL_SERVER_PASSWORD: 'credential-editor-1561'
+      },
+      validateImpl
+    })
+  ).toBe(130);
+  expect(validateImpl).toHaveBeenCalledTimes(1);
+  expect(prompts.dispose).toHaveBeenCalledTimes(1);
+  expect(text).toContain('Validation cancelled.');
+  await expect(fs.stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+});
+it('forwards first and repeated session cancellation into an active probe', async () => {
+  const controller = new globalThis.AbortController();
+  let began, finish;
+  const started = new Promise(resolve => (began = resolve));
+  const prompts = scripted(['validate', true]);
+  prompts.dispose = vi.fn();
+  const validateImpl = ({ signal }) => {
+    began(signal);
+    return new Promise(resolve => (finish = resolve));
+  };
+  const running = run([], {
+    prompts,
+    signal: controller.signal,
+    inherited: { HOME: home, SQL_SERVER_USER: 'u', SQL_SERVER_PASSWORD: 'credential-editor-1561' },
+    validateImpl
+  });
+  const probeSignal = await started;
+  let aborts = 0;
+  probeSignal.addEventListener('abort', () => aborts++);
+  controller.abort('SIGINT');
+  controller.signal.dispatchEvent(new globalThis.Event('abort'));
+  expect(aborts).toBe(2);
+  finish({ status: 'cancelled', category: 'cancelled', cleanup: 'complete' });
+  expect(await running).toBe(130);
+  expect(prompts.dispose).toHaveBeenCalledTimes(1);
+});
+it('returns SIGTERM from the main-loop abort and disposes once', async () => {
+  const controller = new globalThis.AbortController();
+  const prompts = scripted([
+    () => {
+      controller.abort('SIGTERM');
+      return 'unknown';
+    }
+  ]);
+  prompts.dispose = vi.fn();
+  expect(await run([], { prompts, signal: controller.signal })).toBe(143);
+  expect(prompts.dispose).toHaveBeenCalledTimes(1);
+});
+it('uses the lazy adapter only for interactive terminals', async () => {
+  const prompts = scripted(['cancel', true]);
+  prompts.dispose = vi.fn();
+  const create = vi.fn().mockResolvedValue(prompts);
+  vi.doMock('../../lib/cli/config-prompts.js', () => ({ createPromptAdapter: create }));
+  try {
+    expect(
+      await editConfigCommand({
+        cwd,
+        inherited: { HOME: home },
+        output: output(),
+        input: { isTTY: true },
+        terminal: { isTTY: true }
+      })
+    ).toBe(130);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(prompts.dispose).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.doUnmock('../../lib/cli/config-prompts.js');
+  }
+});
+it('rejects Windows case-colliding stored values before any prompt and labels Windows limits', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'win32' });
+  try {
+    await fs.writeFile(file, '{"SQL_SERVER_HOST":"first","sql_server_host":"second"}');
+    expect(await run([])).toBe(2);
+    expect(text).toContain('Saved keys collide');
+    await fs.unlink(file);
+    text = '';
+    expect(await run(['cancel', true])).toBe(130);
+    expect(text).toContain('DACL');
+  } finally {
+    Object.defineProperty(process, 'platform', descriptor);
+  }
+});
+it('reports a committed directory-close warning as Saved without pretending rollback', async () => {
+  const open = fs.open;
+  const parent = await fs.realpath(home);
+  const spy = vi.spyOn(fs, 'open').mockImplementation(async (p, ...args) => {
+    const handle = await open(p, ...args);
+    if (p !== parent) return handle;
+    return new Proxy(handle, {
+      get: (target, key) =>
+        key === 'close'
+          ? async () => {
+              await target.close();
+              throw new Error('credential-editor-1561');
+            }
+          : typeof target[key] === 'function'
+            ? target[key].bind(target)
+            : target[key]
+    });
+  });
+  try {
+    expect(
+      await run(['save', true], {
+        inherited: {
+          HOME: home,
+          SQL_SERVER_USER: 'u',
+          SQL_SERVER_PASSWORD: 'credential-editor-1561'
+        }
+      })
+    ).toBe(0);
+    expect(JSON.parse(await fs.readFile(file, 'utf8')).SQL_SERVER_TRUST_CERT).toBe('false');
+    expect(text).toContain('Saved, but directory durability');
+    expect(text).not.toContain('credential-editor-1561');
+  } finally {
+    spy.mockRestore();
+  }
+});
+it('recovers from a failed atomic publication without saving partial content', async () => {
+  const spy = vi.spyOn(fs, 'link').mockRejectedValue(new Error('credential-editor-1561'));
+  try {
+    expect(
+      await run(['save', true, 'cancel', true], {
+        inherited: {
+          HOME: home,
+          SQL_SERVER_USER: 'u',
+          SQL_SERVER_PASSWORD: 'credential-editor-1561'
+        }
+      })
+    ).toBe(130);
+    expect(text).toContain('Cannot access or save');
+    expect(text).not.toContain('credential-editor-1561');
+    await expect(fs.stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+  } finally {
+    spy.mockRestore();
+  }
+});
+it('reports an outer generic prompt failure without its raw bytes', async () => {
+  const prompts = scripted([
+    () => {
+      throw new Error('credential-editor-1561');
+    }
+  ]);
+  prompts.dispose = vi.fn();
+  expect(await run([], { prompts })).toBe(2);
+  expect(prompts.dispose).toHaveBeenCalledTimes(1);
+  expect(text).not.toContain('credential-editor-1561');
+});

@@ -21,7 +21,10 @@ starts MCP nor changes TLS flags after a certificate error. No password or arbit
 command-line options are supported.
 
 `init` still creates the existing template once. Bare `config` still displays the saved file
-with its password masked. `start`, help and version commands retain their existing roles.
+with password aliases and known saved credential copies masked, including nested scalar values.
+Only secret-bearing display values may become mask strings; ordinary unknown JSON values/types,
+empty values and escaped controls are preserved. This display never resolves dotenv/environment
+values or changes the saved file. `start`, help and version commands retain their existing roles.
 Use `start` when registering this server in an MCP client.
 
 ## Saved and effective values

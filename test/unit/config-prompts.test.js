@@ -48,3 +48,28 @@ it('never reconstructs known passwords in renderer-backed prompt messages or def
   expect(calls[0][1]).toMatchObject({ message: '********', default: '********' });
   adapter.dispose();
 });
+it('sanitizes string/object select choices while retaining values and per-prompt cancellation', async () => {
+  calls.length = 0;
+  const stream = new PassThrough();
+  const controller = new globalThis.AbortController();
+  const renderer = createConfigOutput({ secrets: ['credential-prompt-1561'] });
+  const adapter = await createPromptAdapter({ input: stream, output: stream, renderer });
+  await adapter.select({
+    message: 'choose',
+    signal: controller.signal,
+    choices: [
+      'credential-prompt-1561',
+      {
+        name: 'credential-prompt-1561\u001b[31m',
+        description: 'credential-prompt-1561😀',
+        value: 'keep-original-value'
+      }
+    ]
+  });
+  expect(calls[0][1].choices).toEqual([
+    '********',
+    { name: '********', description: '********😀', value: 'keep-original-value' }
+  ]);
+  expect(calls[0][2].signal).toBe(controller.signal);
+  adapter.dispose();
+});

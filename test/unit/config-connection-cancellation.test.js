@@ -76,3 +76,14 @@ it('strict close surfaces failure after clearing state while default swallowing 
   await expect(manager.close()).resolves.toBeUndefined();
   expect(manager.pool).toBe(null);
 });
+it('finishes retry backoff, removes the abort listener and makes the next ordered attempt', async () => {
+  const pool = { connected: true, close: vi.fn().mockResolvedValue() };
+  sql.connect.mockRejectedValueOnce(new Error('transient')).mockResolvedValueOnce(pool);
+  const controller = new globalThis.AbortController();
+  const remove = vi.spyOn(controller.signal, 'removeEventListener');
+  const manager = new ConnectionManager({ maxRetries: 2, retryDelay: 1 });
+  expect(await manager.connect({ signal: controller.signal })).toBe(pool);
+  expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+  expect(sql.connect).toHaveBeenCalledTimes(2);
+  await manager.close({ throwOnError: true });
+});
