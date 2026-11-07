@@ -24,8 +24,10 @@ warp-sql-server-mcp --version
 warp-sql-server-mcp init
 ```
 
-For reproducible installations, pin a supported version, for example
-`npm install -g @egarcia74/warp-sql-server-mcp@2.1.2`, and review newer security releases deliberately.
+For reproducible installations, select a supported release and replace `<version>` in the package
+specifier `@egarcia74/warp-sql-server-mcp@<version>` before installing. Review newer security releases
+deliberately. Version numbers in the [verification record](#compatibility-and-maintenance) describe
+past checks, not a recommendation to stay on that release.
 
 Edit the generated file locally:
 
@@ -84,6 +86,9 @@ not be available across projects. Merge JSON entries into existing files, preser
 The short commands below assume a macOS/Linux executable on PATH. For native Windows and GUI
 launchers, use the [absolute Node/CLI recipe](#windows-and-gui-launchers).
 
+Dates beside the source links below record documentation review, not runtime testing. See
+[compatibility and maintenance](#compatibility-and-maintenance) for the execution checks performed.
+
 ### Codex
 
 ```bash
@@ -103,7 +108,7 @@ Trusted projects can use `.codex/config.toml`. Local CLI, IDE and desktop surfac
 for the same Codex host. Start a new session or restart the relevant client, inspect `/mcp`, then
 [verify SQL access](#verify-the-connection). Hosted web sessions do not automatically use this file.
 
-Source: [OpenAI MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
+Source (reviewed 2026-11-07): [OpenAI MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).
 
 ### Claude Code
 
@@ -117,7 +122,7 @@ stored in `~/.claude.json`. `--scope project` writes `.mcp.json` and requires pr
 Keep options before `--`. Start a new session and inspect `/mcp`. `mcp list` and `mcp get` may
 health-check servers, so they are not guaranteed to be configuration-only reads.
 
-Source: [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp).
+Source (reviewed 2026-11-07): [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp).
 
 ### Claude Desktop
 
@@ -144,7 +149,7 @@ the GUI cannot find npm's executable. Do not assume `${VAR}` expands in Desktop 
 setup avoids that dependency. Standalone Claude Code does not automatically use Desktop chat's config.
 For other desktop builds, confirm app availability and the config location in their current guide.
 
-Sources: [MCP local-server guide](https://modelcontextprotocol.io/docs/develop/connect-local-servers),
+Sources (reviewed 2026-11-07): [MCP local-server guide](https://modelcontextprotocol.io/docs/develop/connect-local-servers),
 [Claude desktop guidance](https://code.claude.com/docs/en/desktop).
 
 ### Cursor
@@ -167,7 +172,7 @@ Enable the server in MCP settings and check its available tools; reload the serv
 configuration changes if needed. View **Output → MCP Logs** for failures. Local configuration does
 not automatically configure Cloud Agents.
 
-Source: [Cursor MCP documentation](https://cursor.com/docs/mcp).
+Source (reviewed 2026-11-07): [Cursor MCP documentation](https://cursor.com/docs/mcp).
 
 ### Gemini CLI
 
@@ -182,17 +187,19 @@ intended. Start a new session and inspect `/mcp`. Do not add `--trust`, which by
 For environment-only credentials, explicitly map password variables as described
 [below](#alternative-environment-injection); sensitive inherited names are filtered.
 
-Sources: [Gemini MCP documentation](https://geminicli.com/docs/tools/mcp-server/),
+Sources (reviewed 2026-11-07): [Gemini MCP documentation](https://geminicli.com/docs/tools/mcp-server/),
 [Gemini configuration](https://geminicli.com/docs/reference/configuration/).
 
 ### GitHub Copilot CLI
 
 In an interactive session, enter **`/mcp add`**. Choose a local/stdio server, name it `sql-server`,
-and use command `warp-sql-server-mcp start`. Set the server's environment to include its actual
-home directory, for example `{"HOME":"/home/alex"}` on Linux or `{"HOME":"/Users/alex"}` on macOS.
-Then inspect **`/mcp show sql-server`** and [verify SQL access](#verify-the-connection).
+and use command `warp-sql-server-mcp start`. Set `HOME` in the server environment to the actual
+absolute directory containing your saved configuration. Then inspect **`/mcp show sql-server`**
+and [verify SQL access](#verify-the-connection).
 
-The user file is `~/.copilot/mcp-config.json`. An equivalent entry is:
+The user file is `~/.copilot/mcp-config.json`. **Template only:** replace `<absolute home directory>`
+with the directory containing `.warp-sql-server-mcp.json` before enabling the server. A missing home
+file does not stop startup; the server may instead use its working-directory `.env` or defaults:
 
 ```json
 {
@@ -201,15 +208,14 @@ The user file is `~/.copilot/mcp-config.json`. An equivalent entry is:
       "type": "local",
       "command": "warp-sql-server-mcp",
       "args": ["start"],
-      "env": { "HOME": "/home/alex" },
+      "env": { "HOME": "<absolute home directory>" },
       "tools": ["get_server_info", "execute_query"]
     }
   }
 }
 ```
 
-Replace HOME with the actual directory containing your configuration. The current vendor guide
-only guarantees PATH inheritance; this CLI needs HOME or USERPROFILE. The example enables just
+The current vendor guide only guarantees PATH inheritance; this CLI needs HOME or USERPROFILE. The example enables just
 the two verification tools; add other tool names for your workflow. `tools: ["*"]` enables every
 tool, not a least-privilege subset. Reload/restart the session after manually editing configuration.
 
@@ -218,7 +224,7 @@ does not expose that subcommand in its help. The interactive/config-file route a
 dependency. Copilot CLI does not read VS Code's `servers`-root `.vscode/mcp.json`. Newer project
 configuration and trust behavior are documented separately by the vendor.
 
-Source: [GitHub Copilot CLI MCP documentation](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
+Source (reviewed 2026-11-07): [GitHub Copilot CLI MCP documentation](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
 
 ### OpenCode
 
@@ -241,7 +247,7 @@ Start a new session and run `opencode mcp list` to inspect status. `opencode mcp
 interactive. Unlike the other JSON examples, OpenCode uses `mcp`, a command array, and
 `environment` for environment overrides. Do not copy an `mcpServers` entry unchanged.
 
-Sources: [OpenCode MCP documentation](https://docs.opencode.ai/docs/mcp-servers/),
+Sources (reviewed 2026-11-07): [OpenCode MCP documentation](https://docs.opencode.ai/docs/mcp-servers/),
 [configuration locations](https://docs.opencode.ai/docs/config/),
 [CLI commands](https://docs.opencode.ai/docs/cli/).
 
@@ -251,7 +257,7 @@ In **Settings → MCP**, add `sql-server`, command `warp-sql-server-mcp`, argume
 Start/enable the server, inspect its tools and [verify SQL access](#verify-the-connection).
 See the [existing Warp quickstart](QUICKSTART.md) for client logs and usage.
 
-Source: [Warp MCP documentation](https://docs.warp.dev/agents/capabilities/mcp/).
+Source (reviewed 2026-11-07): [Warp MCP documentation](https://docs.warp.dev/agents/capabilities/mcp/).
 
 ### GitHub Copilot in VS Code
 
@@ -274,7 +280,7 @@ name `sql-server`, then choose user/global or workspace scope. The workspace fil
 Start/restart the entry in `mcp.json`, choose Copilot Agent mode and enable the needed tools.
 See the [VS Code quickstart](QUICKSTART-VSCODE.md).
 
-Source: [VS Code MCP documentation](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+Source (reviewed 2026-11-07): [VS Code MCP documentation](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
 
 ## Windows and GUI launchers
 
@@ -301,23 +307,22 @@ gemini mcp add --scope user --transport stdio sql-server "$Node" "$McpCli" start
 ```
 
 For GUI clients or Copilot CLI's JSON file, substitute the discovered literal values into the
-correct client wrapper. This illustrates a command/args server entry, not a full client file:
+correct client wrapper. **Template only:** replace all three placeholders with the values printed
+above before starting. This illustrates a command/args server entry, not a full client file:
 
 ```json
 {
-  "command": "C:\\Program Files\\nodejs\\node.exe",
-  "args": [
-    "C:\\Users\\Alex\\AppData\\Roaming\\npm\\node_modules\\@egarcia74\\warp-sql-server-mcp\\cli.js",
-    "start"
-  ],
-  "env": { "HOME": "C:\\Users\\Alex" }
+  "command": "<absolute path to node.exe>",
+  "args": ["<absolute path to cli.js>", "start"],
+  "env": { "HOME": "<absolute home directory>" }
 }
 ```
 
-Use actual paths, not the illustrative Alex path or PowerShell variables in JSON. JSON backslashes
-must be escaped. Retain fields required by the chosen client, including its type and tool selection.
-OpenCode needs `command: [nodePath, cliPath, "start"]` and `environment`; TOML can use single-quoted
-literal Windows paths. Do not switch to `index.js`, which would skip home configuration loading.
+Do not paste placeholders or PowerShell variables into your final JSON. Escape Windows backslashes:
+for example, `"C:\\Tools\\node.exe"` in JSON represents the path `C:\Tools\node.exe`. Retain fields
+required by the chosen client, including its type and tool selection. OpenCode needs
+`command: [nodePath, cliPath, "start"]` and `environment`; TOML can use single-quoted literal Windows
+paths. Do not switch to `index.js`, which would skip home configuration loading.
 
 On macOS/Linux, obtain the equivalent values with `command -v node` and `npm root -g`, then use
 the absolute Node path and `<global npm root>/@egarcia74/warp-sql-server-mcp/cli.js` with `start`.

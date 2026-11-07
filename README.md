@@ -213,15 +213,15 @@ SQL_SERVER_ALLOW_SCHEMA_CHANGES=false         # No schema changes
 
 > **📖 Complete Reference**: See **[docs/reference/ENV-VARS.md](docs/reference/ENV-VARS.md)** for comprehensive documentation of all environment variables, defaults, and context-aware behavior.
 
-| Variable                | Required     | Default         | Description              |
-| ----------------------- | ------------ | --------------- | ------------------------ |
-| `SQL_SERVER_HOST`       | No           | `localhost`     | SQL Server hostname      |
-| `SQL_SERVER_PORT`       | No           | `1433`          | SQL Server port          |
-| `SQL_SERVER_DATABASE`   | No           | `master`        | Initial database         |
-| `SQL_SERVER_USER`       | For SQL Auth | -               | Database username        |
-| `SQL_SERVER_PASSWORD`   | For SQL Auth | -               | Database password        |
-| `SQL_SERVER_ENCRYPT`    | No           | `true`          | Enable SSL/TLS           |
-| `SQL_SERVER_TRUST_CERT` | No           | _context-aware_ | Trust server certificate |
+| Variable                | Required     | Default                              | Description              |
+| ----------------------- | ------------ | ------------------------------------ | ------------------------ |
+| `SQL_SERVER_HOST`       | No           | `localhost`                          | SQL Server hostname      |
+| `SQL_SERVER_PORT`       | No           | `1433`                               | SQL Server port          |
+| `SQL_SERVER_DATABASE`   | No           | `master`                             | Initial database         |
+| `SQL_SERVER_USER`       | For SQL Auth | -                                    | Database username        |
+| `SQL_SERVER_PASSWORD`   | For SQL Auth | -                                    | Database password        |
+| `SQL_SERVER_ENCRYPT`    | No           | `true`                               | Enable SSL/TLS           |
+| `SQL_SERVER_TRUST_CERT` | No           | _context-aware_; CLI `init`: `false` | Trust server certificate |
 
 > **💡 Authentication**: The cross-platform quickstart uses SQL authentication. The implementation has an NTLM branch, but integrated Windows sign-on must be validated separately for your environment.
 > **💡 SSL Certificates**: New CLI configs explicitly set `SQL_SERVER_TRUST_CERT=false`.
