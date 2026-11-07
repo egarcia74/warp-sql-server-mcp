@@ -194,8 +194,9 @@ Sources (reviewed 2026-11-07): [Gemini MCP documentation](https://geminicli.com/
 
 In an interactive session, enter **`/mcp add`**. Choose a local/stdio server, name it `sql-server`,
 and use command `warp-sql-server-mcp start`. Set `HOME` in the server environment to the actual
-absolute directory containing your saved configuration. Then inspect **`/mcp show sql-server`**
-and [verify SQL access](#verify-the-connection).
+absolute directory containing your saved configuration. Then inspect **`/mcp show sql-server`**.
+Before querying, call `get_server_info` and confirm the expected host and database, following the
+[connection verification steps](#verify-the-connection).
 
 The user file is `~/.copilot/mcp-config.json`. **Template only:** replace `<absolute home directory>`
 with the directory containing `.warp-sql-server-mcp.json` before enabling the server. A missing home

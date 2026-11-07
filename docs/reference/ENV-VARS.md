@@ -453,6 +453,8 @@ For `warp-sql-server-mcp start` (or `node /absolute/path/to/cli.js start`):
    `HOME` is absent or empty. A missing file is allowed; malformed JSON stops startup.
 2. Each saved value fills an environment variable that is missing **or empty**. A nonempty
    inherited/client environment variable wins over the saved value.
+   **Warning:** Empty environment values do not clear saved credentials. The CLI can fill them from
+   the home config, so partial overrides can connect to an unintended database.
 3. The server loads `.env` from its **working directory**, without overriding existing variables.
 4. The server applies built-in defaults, including context-aware certificate trust unless
    `SQL_SERVER_TRUST_CERT` is the exact lowercase string `true` or `false`. Use those exact values;
