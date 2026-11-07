@@ -21,7 +21,8 @@ Do not install the deprecated unscoped package. The examples use a global instal
 ```bash
 npm install -g @egarcia74/warp-sql-server-mcp
 warp-sql-server-mcp --version
-warp-sql-server-mcp init
+warp-sql-server-mcp config edit
+warp-sql-server-mcp config validate
 ```
 
 For reproducible installations, select a supported release and replace `<version>` in the package
@@ -29,7 +30,10 @@ specifier `@egarcia74/warp-sql-server-mcp@<version>` before installing. Review n
 deliberately. Version numbers in the [verification record](#compatibility-and-maintenance) describe
 past checks, not a recommendation to stay on that release.
 
-Edit the generated file locally:
+Use the guided menu to review and explicitly save your settings, then validate separately.
+Validation runs a fixed read-only probe and never writes your configuration.
+See [Guided Configuration](CONFIGURATION-CLI.md) for warnings, cancellation and statuses.
+`init` remains available for a create-once template, or edit the file locally:
 
 - macOS/Linux: `~/.warp-sql-server-mcp.json`
 - Native Windows: normally `%USERPROFILE%\.warp-sql-server-mcp.json`

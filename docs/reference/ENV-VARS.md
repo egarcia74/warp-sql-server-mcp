@@ -16,6 +16,23 @@ them from a local JSON file; see [Native MCP Client Setup](../user/MCP-CLIENT-SE
 - **Docker and container compatibility**: Standard environment variable approach
 - **Zero-config defaults**: Sensible defaults for most common use cases
 
+The CLI home JSON overlay fills inherited variables that are missing or empty.
+Dotenv preserves present entries (including empty strings) by default; an explicitly selected
+`DOTENV_OVERRIDE` or `DOTENV_CONFIG_OVERRIDE` can instead permit dotenv to overwrite them.
+
+## Guided configuration
+
+Use `warp-sql-server-mcp config edit` for an interactive draft and explicit Save, or
+`warp-sql-server-mcp config validate` for a bounded fixed read-only probe without saving.
+See [Guided Configuration](../user/CONFIGURATION-CLI.md) for stored/effective checks, explicit-empty
+semantics, source labels, plaintext storage and authentication/platform limitations.
+
+New-command integer checks accept finite integral JSON numbers or whole decimal digit strings,
+without signs, exponent/hex notation, partial parses or whitespace. Changed editor values are strings;
+unchanged values keep their JSON types. Recognized booleans accept JSON booleans or exact lowercase
+`true`/`false` strings. New-command maximum connection attempts (`SQL_SERVER_MAX_RETRIES`) is 1..10.
+Existing runtime/start parser compatibility is unchanged.
+
 ## Quick Reference
 
 | Variable                                                                              | Default     | Context-Aware | Description            |
@@ -455,19 +472,31 @@ For `warp-sql-server-mcp start` (or `node /absolute/path/to/cli.js start`):
    inherited/client environment variable wins over the saved value.
    **Warning:** Empty environment values do not clear saved credentials. The CLI can fill them from
    the home config, so partial overrides can connect to an unintended database.
-3. The server loads `.env` from its **working directory**, without overriding existing variables.
+3. The server loads dotenv, normally `.env` from its **working directory**. `DOTENV_PATH` can select
+   another filename. Existing values win by default; `DOTENV_OVERRIDE=true` allows dotenv to replace
+   inherited or saved values, including explicit empty values.
 4. The server applies built-in defaults, including context-aware certificate trust unless
    `SQL_SERVER_TRUST_CERT` is the exact lowercase string `true` or `false`. Use those exact values;
    empty or misspelled values also trigger detection. New CLI configs explicitly set `false`.
 
 Launching `node index.js` directly skips the CLI home-config step. It still loads the working
-directory's `.env`. There is no CLI `--config` option; a server name in your MCP client does not
+directory's dotenv source with the same options. There is no CLI `--config` option; a server name in your MCP client does not
 select a different database profile.
 
 Use one complete connection configuration per server. Passing empty values is not a reliable way
 to clear saved credentials, and mixing partial client overrides with a home config can connect to
 an unintended database. Do not rely on a GUI client's working directory or shell environment;
 see the [environment injection guidance](../user/MCP-CLIENT-SETUP.md#alternative-environment-injection).
+
+Dotenv resolves `DOTENV_PATH`, `DOTENV_ENCODING`, `DOTENV_OVERRIDE` and `DOTENV_FAST` after
+home-file overlay, with direct names taking nullish precedence over `DOTENV_CONFIG_*` fallbacks.
+An empty direct alias blocks its fallback: path/encoding defaults to `.env`/UTF-8; boolean false
+tokens are `false`, `0`, `no`, `off` and empty (case-insensitive). Other strings enable the boolean.
+Selected paths use the working directory or candidate native home for leading `~`. Each path is
+one filename, not a comma list or JSON array; this dotenv implementation has no vault handling.
+Loaded controls do not reload a second source. Quiet/debug are fixed to quiet/disabled for clean
+protocol output. See [the CLI guide](../user/CONFIGURATION-CLI.md#saved-and-effective-values)
+for provenance, missing/unreadable source handling and isolated validation.
 
 ## Best Practices
 

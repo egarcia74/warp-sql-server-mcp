@@ -21,6 +21,7 @@ doc template, and the generated site. Start from [`TEMPLATE.md`](TEMPLATE.md).
 
 Getting productive quickly:
 
+- **[Guided Configuration](user/CONFIGURATION-CLI.md)** - Interactive editing, safe saves and bounded connection validation
 - **[Native MCP Client Setup](user/MCP-CLIENT-SETUP.md)** - Codex, Claude, Cursor, Gemini, Copilot CLI, OpenCode, Warp and VS Code
 - **[Quick Start - Warp Terminal](user/QUICKSTART.md)** - 5-minute setup for Warp Terminal
 - **[Quick Start - VS Code](user/QUICKSTART-VSCODE.md)** - 5-minute setup for GitHub Copilot in VS Code
