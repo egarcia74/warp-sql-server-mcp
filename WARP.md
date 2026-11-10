@@ -133,6 +133,9 @@ lib/
 ##### **Configuration CLI**
 
 - `config edit` lazily loads a guided prompt adapter; draft, inherited and effective values remain separate.
+  Each field shows the draft, effective value here and source before/after editing, distinguishes
+  blocking overrides from replaceable fallbacks, and keeps passwords hidden. Launch-context copy
+  makes clear that inherited provenance cannot identify an original shell or MCP-client file.
 - `config validate` performs strict stored/effective checks and a fixed `SELECT 1` probe in a private child,
   with a 60-second operation deadline including normal cleanup, then up to 2 seconds for graceful
   shutdown and 1 second for termination confirmation, plus OS scheduling.

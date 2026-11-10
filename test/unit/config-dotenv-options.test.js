@@ -203,3 +203,34 @@ it.each(['DOTENV_FAST', 'DOTENV_CONFIG_FAST'])(
     }
   }
 );
+
+it.each([
+  [{}, {}, '.env', false, 'default-host'],
+  [{ DOTENV_CONFIG_PATH: 'alternate.env' }, {}, 'alternate.env', false, 'alternate-host'],
+  [{ DOTENV_CONFIG_PATH: 'alternate.env' }, { DOTENV_PATH: '.env' }, '.env', false, 'default-host'],
+  [
+    { DOTENV_PATH: 'alternate.env', DOTENV_OVERRIDE: 'yes' },
+    {},
+    'alternate.env',
+    true,
+    'alternate-host'
+  ]
+])(
+  'returns the path and override actually selected for provenance %#',
+  (inherited, fileValues, file, override, host) => {
+    const resolved = resolveEffectiveConfig({ inherited, fileValues, cwd });
+    expect(resolved.dotenv).toEqual({ path: path.join(cwd, file), override });
+    expect(resolved.environment.SQL_SERVER_HOST).toBe(host);
+    expect(resolved.sources.SQL_SERVER_HOST).toBe('dotenv');
+  }
+);
+
+it('retains selected metadata when loaded controls name another file and override mode', () => {
+  fs.writeFileSync(
+    path.join(cwd, '.env'),
+    'DOTENV_PATH=alternate.env\nDOTENV_OVERRIDE=true\nSQL_SERVER_HOST=selected-host\n'
+  );
+  const resolved = resolveEffectiveConfig({ inherited: {}, fileValues: {}, cwd });
+  expect(resolved.dotenv).toEqual({ path: path.join(cwd, '.env'), override: false });
+  expect(resolved.environment.SQL_SERVER_HOST).toBe('selected-host');
+});

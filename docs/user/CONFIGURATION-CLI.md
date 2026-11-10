@@ -47,7 +47,25 @@ their contents and distinguishes the draft from effective settings and their sou
    dotenv assignment `[dotenv]`. The runtime may still apply built-in defaults.
 4. The runtime applies defaults and contextual certificate trust.
 
-Removing a saved key can expose a value from another source. Keep preserves an existing empty
+Selecting a field now shows its **File value (draft)**, **Effective here** and winning **Source**
+before you choose an action, and again after an accepted change. **Leave unchanged** keeps the
+draft as it is. The source names the inherited environment variable, JSON draft, selected dotenv
+file (including its override mode), built-in default, contextual default or absence. Passwords
+remain hidden with a fixed mask; not set and explicitly empty are distinguished.
+
+A warning explains when changing the JSON will not change the effective value: a nonempty
+inherited value or an overriding dotenv assignment still wins, even if it currently matches the
+draft. Normal dotenv values and empty inherited values can instead be replaceable fallbacks;
+the editor says when setting a file value can replace them. Removing a saved value can reveal
+such a fallback immediately. No action here changes the environment or the dotenv file.
+
+**Effective here** reflects the editor's captured inherited environment and working directory,
+not a separately running server. Dotenv is reread when resolving the display, but the inherited
+environment remains the snapshot captured when the editor opened. Your MCP client can launch
+with a different environment or working directory. Inherited variables do not retain whether
+they originally came from a shell profile, MCP client configuration or another launcher.
+
+Removing a saved key can expose a value from another source. Leave unchanged preserves an existing empty
 value and JSON type. Changed boolean/numeric editor values are stored as strings. On Windows,
 environment keys are case-insensitive and the worker receives one canonical key per name;
 new commands reject case-colliding saved or inherited keys. POSIX keys remain case-sensitive.
@@ -72,7 +90,7 @@ connection attempts maps to `SQL_SERVER_MAX_RETRIES` and accepts 1 through 10.
 See the [environment reference](../reference/ENV-VARS.md) for settings and ranges.
 
 Review always labels password presence/source using a fixed mask. Environment and dotenv
-credentials are never copied into the draft. Password actions are Keep, Replace with hidden
+credentials are never copied into the draft. Password actions are Leave unchanged, Replace with hidden
 entry, and explicitly confirmed Remove; replacement preserves whitespace and does not echo
 password length. Empty replacement is rejected: use Remove instead.
 
