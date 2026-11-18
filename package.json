@@ -151,10 +151,10 @@
   },
   "overrides": {
     "eslint": {
-      "minimatch": "11.0.3"
+      "minimatch": "11.0.5"
     },
     "@eslint/config-array": {
-      "minimatch": "11.0.3"
+      "minimatch": "11.0.5"
     },
     "markdownlint": {
       "micromark-extension-math": {
