@@ -7,12 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-19
+
 ### Added
 
 - Guided `config edit` with explicit Save/Cancel, hidden password actions, source-aware review,
-  safety acknowledgments and conflict-aware atomic file publication. See #1559.
+  safety acknowledgments and conflict-aware atomic file publication. See #1561.
 - Noninteractive `config validate` with strict local checks and an isolated, bounded fixed
-  read-only SQL probe, private error classification and required connection cleanup.
+  read-only SQL probe, private error classification and required connection cleanup. See #1561.
+- Configuration fields now show the draft file value, effective value and winning source from
+  inherited environment variables, saved JSON, dotenv or defaults. Override warnings explain when
+  editing the file will not change the effective value, and passwords remain masked. See #1575.
+- Native MCP client setup guides cover configuration, launch behavior and troubleshooting beyond
+  Warp and VS Code. See #1560.
+
+### Changed
+
+- Runtime and development dependencies and GitHub Actions were updated throughout this release
+  window. See the full comparison for individual updates.
 
 ## [2.1.2] - 2026-11-05
 
@@ -1588,7 +1600,8 @@ This release represents a significant architectural evolution with enterprise-gr
   - Improved navigation for new users
   - Better documentation discoverability
 
-[Unreleased]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.1.2...HEAD
+[Unreleased]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.1.2...v2.2.0
 [2.1.2]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.0.1...v2.1.1
 [2.0.1]: https://github.com/egarcia74/warp-sql-server-mcp/compare/v2.0.0...v2.0.1
