@@ -121,7 +121,7 @@
     "url": "https://github.com/egarcia74/warp-sql-server-mcp/issues"
   },
   "dependencies": {
-    "@inquirer/prompts": "7.10.1",
+    "@inquirer/prompts": "8.7.5",
     "@modelcontextprotocol/sdk": "^1.17.5",
     "dotenv": "^18.0.4",
     "mssql": "^11.0.1",
