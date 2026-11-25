@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { URL } from 'node:url';
 import { writeDocsHtml } from './write-html.js';
 
 /**
@@ -17,7 +18,22 @@ function generateLandingPageHTML() {
   }
 
   const toolsData = JSON.parse(fs.readFileSync(toolsDataPath, 'utf8'));
-  const { version, tools } = toolsData;
+  const manifest = JSON.parse(
+    fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+  );
+  const nodeRange = manifest?.engines?.node;
+  if (typeof nodeRange !== 'string' || nodeRange.trim() === '') {
+    throw new Error('package.json must define a nonempty engines.node range.');
+  }
+
+  return renderLandingPageHTML(toolsData, nodeRange);
+}
+
+function renderLandingPageHTML({ version, tools }, nodeRange) {
+  const escapedNodeRange = nodeRange
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 
   // Generate tool list HTML
   const toolListHTML = tools
@@ -123,7 +139,7 @@ function generateLandingPageHTML() {
         <p>Model Context Protocol server for SQL Server integration with Warp terminal</p>
         <div>
             <span class="badge">v${version}</span>
-            <span class="badge">Node.js 18+</span>
+            <span class="badge">Node.js ${escapedNodeRange}</span>
             <span class="badge">MCP</span>
             <span class="badge">SQL Server</span>
             <span class="badge">${tools.length} Tools</span>
